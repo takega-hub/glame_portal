@@ -25,10 +25,6 @@ const nextConfig = {
       },
     ];
   },
-  // Увеличиваем таймаут для длительных запросов (генерация контент-плана через LLM)
-  serverRuntimeConfig: {
-    // Next.js не поддерживает прямой таймаут для rewrites, но axios на клиенте уже настроен
-  },
 }
 
 module.exports = nextConfig

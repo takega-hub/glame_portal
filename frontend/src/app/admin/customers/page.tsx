@@ -753,11 +753,12 @@ export default function AdminCustomersPage() {
                         const timestamp = logEntry.timestamp 
                           ? new Date(logEntry.timestamp).toLocaleTimeString('ru-RU')
                           : '';
-                        const message = logEntry.message || logEntry;
+                        const message = logEntry.message ?? (typeof logEntry === 'string' ? logEntry : '');
+                        const messageStr = typeof message === 'string' ? message : (message && typeof message === 'object' && 'message' in message ? (message as { message: string }).message : String(message));
                         return (
                           <div key={index} className="text-xs text-gray-600 font-mono">
                             {timestamp && <span className="text-gray-400">{timestamp} </span>}
-                            {message}
+                            {messageStr}
                           </div>
                         );
                       })}

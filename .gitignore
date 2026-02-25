@@ -13,7 +13,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Только корневая lib (Python), не frontend/src/lib
+/lib/
 lib64/
 parts/
 sdist/
