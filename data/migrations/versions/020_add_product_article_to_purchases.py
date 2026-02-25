@@ -18,15 +18,8 @@ depends_on = None
 def upgrade():
     # Добавляем поле product_article в purchase_history
     op.add_column('purchase_history', sa.Column('product_article', sa.String(100), nullable=True))
-    
-    # Создаем индекс для быстрого поиска по артикулу
+    # Индекс для быстрого поиска по артикулу (индекс по product_id уже есть из 019_create_purchase_history)
     op.create_index('ix_purchase_history_product_article', 'purchase_history', ['product_article'])
-    
-    # Добавляем индекс для product_id, если его еще нет
-    try:
-        op.create_index('ix_purchase_history_product_id', 'purchase_history', ['product_id'])
-    except:
-        pass  # Индекс уже существует
 
 
 def downgrade():
