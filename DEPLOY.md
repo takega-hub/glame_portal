@@ -165,11 +165,16 @@ nano .env
 docker compose -f infra/docker-compose.prod.yml up -d --build
 ```
 
-После поднятия контейнеров — миграции БД:
+Дождитесь окончания сборки всех образов (в т.ч. backend). Затем — миграции БД:
 
 ```bash
+# убедиться, что контейнер backend запущен
+docker ps | grep glame_backend
+
 docker exec -it glame_backend alembic upgrade head
 ```
+
+Если контейнера `glame_backend` нет — проверьте логи: `docker compose -f infra/docker-compose.prod.yml logs backend`.
 
 ### Проверка
 
