@@ -123,7 +123,7 @@ export default function ProductDetailsPage() {
         if (isCurrentProductVariant) {
           // Текущий товар - это вариант, устанавливаем его как активный
           // Проверяем, есть ли он в списке вариантов, если нет - добавляем его логику
-          const variantInList = data?.variants?.some(v => v.id === product.id);
+          const variantInList = data?.variants?.some((v: Product) => v.id === product.id);
           if (variantInList) {
             setActiveVariantId(product.id);
           } else {
