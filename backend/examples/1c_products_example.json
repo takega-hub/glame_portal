@@ -1,0 +1,57 @@
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440001",
+    "code": "00001",
+    "name": "Колье Antura",
+    "brand": "Antura",
+    "price": 8900.00,
+    "category": "necklace",
+    "images": [
+      "https://example.com/images/necklace1.jpg",
+      "https://example.com/images/necklace1_detail.jpg"
+    ],
+    "tags": ["романтичный", "вечерний", "элегантный"],
+    "description": "Изысканное колье от Antura для особых случаев. Выполнено из качественных материалов.",
+    "is_active": true
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440002",
+    "code": "00002",
+    "name": "Серьги Uno de 50",
+    "brand": "Uno de 50",
+    "price": 7200.00,
+    "category": "earrings",
+    "images": [
+      "https://example.com/images/earrings1.jpg"
+    ],
+    "tags": ["повседневный", "стильный", "уникальный"],
+    "description": "Яркие серьги в стиле Uno de 50. Подходят для ежедневного ношения.",
+    "is_active": true
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440003",
+    "code": "00003",
+    "name": "Браслет GLAME",
+    "brand": "GLAME",
+    "price": 4500.00,
+    "category": "bracelet",
+    "images": [],
+    "tags": ["минималистичный", "повседневный"],
+    "description": "Элегантный браслет для ежедневного ношения.",
+    "is_active": true
+  },
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440004",
+    "code": "00004",
+    "name": "Кольцо с бриллиантом",
+    "brand": "GLAME",
+    "price": 15000.00,
+    "category": "ring",
+    "images": [
+      "https://example.com/images/ring1.jpg"
+    ],
+    "tags": ["премиум", "свадебный", "элегантный"],
+    "description": "Роскошное кольцо с бриллиантом для особых случаев.",
+    "is_active": true
+  }
+]

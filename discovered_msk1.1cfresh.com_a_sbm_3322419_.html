@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <base href="/a/sbm/3322419/en/" />
+    <title>1C:Enterprise</title>
+    <link rel="shortcut icon" href="e1csys/mngsrv/favicon.ico?sysver=8.5.1.1165" />
+    <link rel="apple-touch-icon" href="e1csys/mngsrv/touchIcon.png?sysver=8.5.1.1165" />
+    <link rel="mask-icon" color="red" href="e1csys/mngsrv/_logo.svg?sysver=8.5.1.1165" />
+    <meta name="application-name" content="1C:Enterprise" />
+    <meta name="msapplication-TileColor" content="#ffdd00" />
+    <meta name="msapplication-square70x70logo" content="e1csys/mngsrv/tileSmall.png?sysver=8.5.1.1165" />
+    <meta name="msapplication-square150x150logo" content="e1csys/mngsrv/tileMedium.png?sysver=8.5.1.1165" />
+    <link rel="manifest" href="manifest.json?sysver=8.5.1.1165" crossorigin="use-credentials" />
+    <script type="text/javascript">
+        var BASE = "/a/sbm/3322419/en";
+        var LANG = "en";
+        var REDIRECT = true;
+        var OPENIDRELYINGPARTY = true;
+        var SPLASHTOPBRANDINGIMAGE = false;
+        var SPLASHBOTTOMBRANDINGIMAGE = false;
+        var HASBRANDING = false;
+        var DISABLESPLASH = false;
+        var EXITURL = "";
+        var OIDCALLOWSTANDARDAUTHENTICATION = "";
+        var VERSION = "8.5.1.1165";
+        var INTERFACETHEME = "";
+        var BRAND1 = "";
+        var BRAND2 = "";
+        var VENDORPREFIX = "1c.";
+        var ANSQUERY = undefined;
+        var E1CIB = "e1cib";
+        var ZONES = "/3322419";
+    </script>
+    <style>
+.splash {position: relative; width: 600px; border-radius: 16px; box-shadow: 0 8px 28px 0 rgba(var(--colorBack90Rgb),0.2)}
+.splashArea {background-repeat: no-repeat; background-position: 0 0; width: 100%; height: 256px; overflow: hidden; border-radius: 16px 16px 0 0;background-image: url(e1csys/mngcore/splashTop.svg?sysver=8.5.1.1165);}
+.splashInterp {background-position: 0 0; background-repeat: no-repeat; width: 100%; height: 64px; border-radius: 0 0 16px 16px;background-image: url(e1csys/mngcore/splashBottom.svg?sysver=8.5.1.1165);}
+.loadProgress {position: relative; width: 100%; height: 4px; margin-top: -2px; overflow: hidden; background: var(--colorBack50);}
+.frameSplash {display: -ms-flexbox; -ms-flex-direction: column; -ms-flex-pack: center; -ms-flex-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; position: absolute; top: 0; right: 0; bottom: 0; left: 0;}
+.themeDark .splashArea {background-image: url(e1csys/mngcore/splashTopDark.svg?sysver=8.5.1.1165);}
+.themeDark .splashInterp {background-image: url(e1csys/mngcore/splashBottomDark.svg?sysver=8.5.1.1165);}
+@media (prefers-color-scheme:dark) {
+    body:not(.themeLight) .splashArea {background-image: url(e1csys/mngcore/splashTopDark.svg?sysver=8.5.1.1165);}
+    body:not(.themeLight) .splashInterp {background-image: url(e1csys/mngcore/splashBottomDark.svg?sysver=8.5.1.1165);}
+}
+@media (max-device-width: 960px) {.frameSplash {transform: scale(0.5);}}
+    </style>
+    <style id="BootstrapColors">:root{color-scheme:only light;--colorBack10:#f2f2f2;--colorBack50:#999999;--colorBack90Rgb:64,64,64;}@media(prefers-color-scheme:dark){:root{color-scheme:only dark;--colorBack10:#404040;--colorBack50:#999999;--colorBack90Rgb:242,242,242;}}body{background-color:var(--colorBack10)}</style>
+</head>
+<body class="" onload="start()">
+    <div id="openidconnectconfig" style="display:none"></div>
+    <div class="frameSplash">
+        <div id="splash" class="splash" style="visibility: hidden;">
+            <div class="splashArea"></div>
+            <div class="loadProgress"></div>
+            <div class="splashInterp">&nbsp;</div>
+        </div>
+    </div>
+    <script type="text/javascript">
+        function start()
+        {
+            function isStorageSupported()
+            {
+                try
+                {
+                    var testKey = 'test';
+                    var storage = window.sessionStorage;
+                    storage.setItem(testKey, '1');
+                    storage.removeItem(testKey);
+
+                    return true;
+                }
+                catch (error)
+                {
+                    return false;
+                }
+            }
+
+            function getFromStorage(key)
+            {
+                if (isStorageSupported())
+                    return sessionStorage.getItem(key)
+
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++)
+                {
+                    var values = cookies[i].split('=');
+                    var str = values[0];
+                    str = str.replace(/(^\s*)

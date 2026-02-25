@@ -1,0 +1,58 @@
+{
+  "connection": [
+    {
+      "name": "Web Services доступны",
+      "status": false,
+      "details": "Status: 500"
+    },
+    {
+      "name": "Сервис продаж доступен",
+      "status": false,
+      "details": "WSDL статус: 500"
+    }
+  ],
+  "methods": [
+    {
+      "method": "ПолучитьПродажиПериод",
+      "success": false,
+      "error": "'latin-1' codec can't encode characters in position 22-42: ordinal not in range(256)"
+    },
+    {
+      "method": "ПолучитьПродажиЗаДень",
+      "success": false,
+      "error": "'latin-1' codec can't encode characters in position 22-42: ordinal not in range(256)"
+    },
+    {
+      "method": "ПолучитьСуммуПродаж",
+      "success": false,
+      "error": "'latin-1' codec can't encode characters in position 22-40: ordinal not in range(256)"
+    }
+  ],
+  "rest": [
+    {
+      "endpoint": "/hs/sales/api/v1/test",
+      "status": 404,
+      "available": false,
+      "response_time": 0.381312
+    },
+    {
+      "endpoint": "/hs/data/health",
+      "status": 404,
+      "available": false,
+      "response_time": 0.22105
+    },
+    {
+      "endpoint": "/hs/statistics/ping",
+      "status": 404,
+      "available": false,
+      "response_time": 0.132103
+    },
+    {
+      "endpoint": "/hs/integration/status",
+      "status": 404,
+      "available": false,
+      "response_time": 0.146601
+    }
+  ],
+  "sample_data": null
+}

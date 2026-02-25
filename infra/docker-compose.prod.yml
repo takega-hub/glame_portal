@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: glame_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-glame_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-glame_password}
+      POSTGRES_DB: ${POSTGRES_DB:-glame_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-glame_user} -d ${POSTGRES_DB:-glame_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: glame_qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: glame_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile.prod
+    container_name: glame_backend
+    restart: unless-stopped
+    environment:
+      # DB (inside docker network)
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${POSTGRES_USER:-glame_user}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-glame_password}
+      DB_NAME: ${POSTGRES_DB:-glame_db}
+      # Services
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379
+      # Secrets / config
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    volumes:
+      - backend_uploads:/app/backend/uploads
+      - backend_static:/app/backend/static
+      - backend_generated_messages:/app/backend/backend/generated_messages
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: glame_frontend
+    restart: unless-stopped
+    environment:
+      # Frontend will call /api on the same origin (nginx will proxy it)
+      NEXT_PUBLIC_API_URL: ""
+      NODE_ENV: production
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: glame_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  redis_data:
+  backend_uploads:
+  backend_static:
+  backend_generated_messages:
+

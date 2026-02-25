@@ -1,0 +1,20 @@
+FROM python:3.11-slim
+
+# We mirror repo layout so Alembic can find migrations via backend/alembic.ini:
+# script_location = ../data/migrations
+WORKDIR /app/backend
+
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+
+# Backend code
+COPY backend/app /app/backend/app
+COPY backend/alembic.ini /app/backend/alembic.ini
+
+# Alembic migrations live outside backend/ in this repo
+COPY data/migrations /app/data/migrations
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+

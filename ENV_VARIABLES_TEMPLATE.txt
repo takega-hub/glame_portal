@@ -1,0 +1,88 @@
+# ==============================================
+# ШАБЛОН ПЕРЕМЕННЫХ ОКРУЖЕНИЯ
+# Скопируйте эти переменные в ваш .env файл
+# ==============================================
+
+# ----- Яндекс.Метрика -----
+# Получить: https://metrika.yandex.ru
+YANDEX_METRIKA_COUNTER_ID=12345678
+YANDEX_METRIKA_OAUTH_TOKEN=your_yandex_oauth_token_here
+
+# ----- Instagram Graph API -----
+# Получить: https://developers.facebook.com
+INSTAGRAM_ACCESS_TOKEN=your_instagram_access_token_here
+INSTAGRAM_BUSINESS_ACCOUNT_ID=your_instagram_business_account_id
+
+# ----- ВКонтакте API -----
+# Получить: https://vk.com/apps?act=manage
+VK_ACCESS_TOKEN=your_vk_access_token_here
+VK_GROUP_ID=your_vk_group_id
+VK_API_VERSION=5.131
+
+# ----- Telegram Bot API -----
+# Получить: @BotFather в Telegram
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+TELEGRAM_CHANNEL_USERNAME=your_channel_username
+
+# ----- 1С API (опционально) -----
+# Настроить в вашей конфигурации 1С
+ONEC_API_URL=http://your-1c-server:port/base/odata/standard.odata
+ONEC_API_TOKEN=your_1c_api_token_if_needed
+ONEC_SALES_ENDPOINT=/api/sales
+
+# ----- FTP для счетчиков -----
+# Настраивается через API, не требует переменных окружения
+# Но можно добавить для удобства:
+# FTP_DEFAULT_HOST=ftp.example.com
+# FTP_DEFAULT_USERNAME=user
+# FTP_DEFAULT_PASSWORD=password
+# FTP_DEFAULT_DIRECTORY=/counters
+
+# ==============================================
+# ИНСТРУКЦИИ ПО НАСТРОЙКЕ
+# ==============================================
+
+# 1. ЯНДЕКС.МЕТРИКА
+# - Зарегистрируйтесь на https://metrika.yandex.ru
+# - Создайте счетчик или используйте существующий
+# - ID счетчика найдете в URL: https://metrika.yandex.ru/dashboard?id=XXXXXXXX
+# - Для получения OAuth токена:
+#   https://oauth.yandex.ru/authorize?response_type=token&client_id=YOUR_CLIENT_ID
+# - Права: metrika:read
+
+# 2. INSTAGRAM GRAPH API
+# - Создайте приложение на https://developers.facebook.com
+# - Подключите Instagram Business Account
+# - Получите долгоживущий Access Token (60 дней)
+# - Необходимые права: instagram_basic, instagram_manage_insights
+# - Инструкция: https://developers.facebook.com/docs/instagram-api/getting-started
+
+# 3. ВКОНТАКТЕ API
+# - Создайте приложение: https://vk.com/apps?act=manage
+# - Получите Access Token
+# - Необходимые права: stats, groups, wall, stories (опционально: ads)
+# - ID группы найдете в URL: https://vk.com/club12345678 -> 12345678
+
+# 4. TELEGRAM BOT API
+# - Откройте Telegram и найдите @BotFather
+# - Отправьте команду /newbot
+# - Следуйте инструкциям для создания бота
+# - Скопируйте полученный токен
+# - Для работы с каналом: добавьте бота в администраторы канала
+
+# 5. 1С API
+# - Настройте HTTP-сервис в вашей конфигурации 1С
+# - Создайте endpoint для получения данных о продажах
+# - Если используете OData - укажите URL базы
+# - Настройте аутентификацию (Basic Auth или Token)
+
+# ==============================================
+# ТЕСТИРОВАНИЕ
+# ==============================================
+
+# После настройки переменных окружения:
+# 1. Перезапустите backend
+# 2. Проверьте доступность API: 
+#    curl http://localhost:8000/api/analytics/yandex-metrika/metrics?days=7
+# 3. Откройте Dashboard: http://localhost:3000/analytics
+# 4. Нажмите "Синхронизировать" на каждой панели

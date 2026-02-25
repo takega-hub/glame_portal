@@ -1,0 +1,379 @@
+{
+  "groups": [
+    {
+      "Code": "00-00000308",
+      "Description": "AGafi",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "b1b9a380-ba4b-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00002421",
+      "Description": "Antura",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "e4932850-e9a1-11f0-9656-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "БП-00006455",
+      "Description": "Eva Rites",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "24ed72b6-ae7e-11f0-8734-fa163e37d763",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00001099",
+      "Description": "Kalliope",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00002132",
+      "Description": "Madreperla",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "6344ec92-ba7c-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000545",
+      "Description": "Men",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "60972366-ac30-11f0-8d47-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00001910",
+      "Description": "NEW",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "832e94c0-ba74-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00002288",
+      "Description": "Pearl",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "aaada5bc-c25e-11f0-8314-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000895",
+      "Description": "Raganella Princess",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "5c28ee40-b1bc-11f0-9252-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00001060",
+      "Description": "SALE",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "95ce49cc-b27c-11f0-9252-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000501",
+      "Description": "UNOde50",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "e9e0f25c-ba48-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000205",
+      "Description": "Браслеты",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "15ed6158-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000002",
+      "Description": "Каффы",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "6ba5bd26-ba4a-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000427",
+      "Description": "Колье",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "ac20c128-a921-11f0-9b8f-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000061",
+      "Description": "Кольца",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "d11d8f3c-ba48-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00001044",
+      "Description": "Подарочная упаковка",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "c0a8b51e-b26e-11f0-9252-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000001",
+      "Description": "Подарочные сертификаты",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "74f1d2b0-a411-11f0-96fc-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000292",
+      "Description": "Прочее",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "b1ad5210-ba4b-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00002136",
+      "Description": "Сlaudio Canzian",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "667d8de2-ba7c-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000619",
+      "Description": "Серьги",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "ea4cdda0-ba48-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    }
+  ],
+  "products": [
+    {
+      "Code": "НФ-00001224",
+      "Description": "Браслет Kalliope жесткий с тонкими изгибами",
+      "Артикул": "KL02204004",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "15d539a2-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001212",
+      "Description": "Браслет Kalliope мятый полусферами",
+      "Артикул": "KL02204033",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "0bce5146-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001239",
+      "Description": "Браслет Kalliope с прозрачной ювелирной смолой зеленого цвета",
+      "Артикул": "KL0220421/1",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "22796d68-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001238",
+      "Description": "Браслет Kalliope с ювелирной смолой белого цвета",
+      "Артикул": "KL0220421",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "2188f2de-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001217",
+      "Description": "Браслет Kalliope с ювелирной смолой черного цвета",
+      "Артикул": "KL02204034",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "1021ea14-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001221",
+      "Description": "Брошь Kalliope мятая с чернением и фианитом",
+      "Артикул": "KL02211002",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "134949a8-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001230",
+      "Description": "Кольцо Kalliope мятое",
+      "Артикул": "KL02201039",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "1ab93dce-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001219",
+      "Description": "Кольцо Kalliope мятое минималистичное",
+      "Артикул": "KL02201001",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "11aa95de-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001220",
+      "Description": "Кольцо Kalliope мятое минималистичное с чернением",
+      "Артикул": "KL02201001/1",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "12730fc8-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001231",
+      "Description": "Кольцо Kalliope мятое с чернением",
+      "Артикул": "KL02201039/1",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "1b746b30-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001234",
+      "Description": "Кольцо Kalliope с белой ювелирной смолой",
+      "Артикул": "KL02201064",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "1d933af4-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001235",
+      "Description": "Кольцо Kalliope с прозрачной ювелирной смолой зеленого цвета",
+      "Артикул": "KL02201064/1",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "1e570308-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001215",
+      "Description": "Кольцо Kalliope с ювелирной смолой черного цвета",
+      "Артикул": "KL02201075",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "0e8c375e-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001222",
+      "Description": "Кольцо Kalliope широкое мятое",
+      "Артикул": "KL02201003",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "14158090-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001223",
+      "Description": "Кольцо Kalliope широкое мятое с чернением",
+      "Артикул": "KL02201003/1",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "14e47c10-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001216",
+      "Description": "Кулон Kalliope с кулоном бегунком с черной ювелирной смолой",
+      "Артикул": "KL02205075",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "0f65ee54-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001214",
+      "Description": "Кулон Kalliope с мятым элементом и полусферами",
+      "Артикул": "KL02205074",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "0dc51bba-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001236",
+      "Description": "Серьги Kalliope акцентные с белой ювелирной смолой",
+      "Артикул": "KL02202055",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "1f253c00-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001237",
+      "Description": "Серьги Kalliope акцентные с прозрачной ювелирной смолой зеленого цвета",
+      "Артикул": "KL02202055/1",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "203f8ba4-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    },
+    {
+      "Code": "НФ-00001229",
+      "Description": "Серьги Kalliope круглой формы акцентные с чернением",
+      "Артикул": "KL02202074",
+      "Parent_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "Ref_Key": "19f27a86-ba46-11f0-836e-fa163e4cc04e",
+      "IsFolder": false
+    }
+  ],
+  "top_level_groups": [
+    {
+      "Code": "00-00000308",
+      "Description": "AGafi",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "b1b9a380-ba4b-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00002421",
+      "Description": "Antura",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "e4932850-e9a1-11f0-9656-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "БП-00006455",
+      "Description": "Eva Rites",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "24ed72b6-ae7e-11f0-8734-fa163e37d763",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00001099",
+      "Description": "Kalliope",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "93c6d638-b99f-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00002132",
+      "Description": "Madreperla",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "6344ec92-ba7c-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000545",
+      "Description": "Men",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "60972366-ac30-11f0-8d47-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00001910",
+      "Description": "NEW",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "832e94c0-ba74-11f0-836e-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "НФ-00002288",
+      "Description": "Pearl",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "aaada5bc-c25e-11f0-8314-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00000895",
+      "Description": "Raganella Princess",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "5c28ee40-b1bc-11f0-9252-fa163e4cc04e",
+      "IsFolder": true
+    },
+    {
+      "Code": "00-00001060",
+      "Description": "SALE",
+      "Parent_Key": "00000000-0000-0000-0000-000000000000",
+      "Ref_Key": "95ce49cc-b27c-11f0-9252-fa163e4cc04e",
+      "IsFolder": true
+    }
+  ],
+  "products_in_groups": 76
+}

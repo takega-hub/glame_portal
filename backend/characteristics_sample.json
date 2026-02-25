@@ -1,0 +1,324 @@
+[
+  {
+    "Ref_Key": "7b2d7f84-ba6f-11f0-836e-fa163e4cc04e",
+    "DataVersion": "AAAAAAAAAAE=",
+    "DeletionMark": false,
+    "Owner": "7a7ae40a-ba6f-11f0-836e-fa163e4cc04e",
+    "Owner_Type": "StandardODATA.Catalog_Номенклатура",
+    "Code": "000000513",
+    "Description": "Биколор, Без вставки, UNOde50, 40-45, Позолота, серебро, Сплав ZAMAK, Карабин",
+    "НаименованиеДляПечати": "Биколор, Без вставки, UNOde50, 40-45, Позолота, серебро, Сплав ZAMAK, Карабин",
+    "Артикул": "U10029/40-45",
+    "КиЗГИСМGTIN": "",
+    "ФайлКартинки_Key": "00000000-0000-0000-0000-000000000000",
+    "Недействителен": false,
+    "ДополнительныеРеквизиты": [
+      {
+        "Ref_Key": "7b2d7f84-ba6f-11f0-836e-fa163e4cc04e",
+        "LineNumber": "1",
+        "Свойство_Key": "eeeda4b4-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "65690cb2-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "7b2d7f84-ba6f-11f0-836e-fa163e4cc04e",
+        "LineNumber": "2",
+        "Свойство_Key": "e191e564-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "7b07bfa6-ba6f-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "7b2d7f84-ba6f-11f0-836e-fa163e4cc04e",
+        "LineNumber": "3",
+        "Свойство_Key": "e634d752-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "43fcdefc-ba6e-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "7b2d7f84-ba6f-11f0-836e-fa163e4cc04e",
+        "LineNumber": "4",
+        "Свойство_Key": "d0cc8306-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "be003744-ba6e-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "7b2d7f84-ba6f-11f0-836e-fa163e4cc04e",
+        "LineNumber": "5",
+        "Свойство_Key": "cc6012f6-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "43fae3c2-ba6e-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "7b2d7f84-ba6f-11f0-836e-fa163e4cc04e",
+        "LineNumber": "6",
+        "Свойство_Key": "c5cc748e-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "4c1b75d0-ba6e-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "7b2d7f84-ba6f-11f0-836e-fa163e4cc04e",
+        "LineNumber": "7",
+        "Свойство_Key": "66bdeeec-b9ae-11f0-836e-fa163e4cc04e",
+        "Значение": "671ce79a-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      }
+    ],
+    "Predefined": false,
+    "PredefinedDataName": ""
+  },
+  {
+    "Ref_Key": "fbdb0322-ba74-11f0-836e-fa163e4cc04e",
+    "DataVersion": "AAAAAAAAAAE=",
+    "DeletionMark": false,
+    "Owner": "fb12623c-ba74-11f0-836e-fa163e4cc04e",
+    "Owner_Type": "StandardODATA.Catalog_Номенклатура",
+    "Code": "000001555",
+    "Description": "Биколор, Без вставок, Bicolor, , Позолота, родий, , ",
+    "НаименованиеДляПечати": "Биколор, Без вставок, Bicolor, , Позолота, родий, , ",
+    "Артикул": "100037",
+    "КиЗГИСМGTIN": "",
+    "ФайлКартинки_Key": "00000000-0000-0000-0000-000000000000",
+    "Недействителен": false,
+    "ДополнительныеРеквизиты": [
+      {
+        "Ref_Key": "fbdb0322-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "1",
+        "Свойство_Key": "e191e564-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "67156c2c-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "fbdb0322-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "2",
+        "Свойство_Key": "cc6012f6-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "671acd48-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "fbdb0322-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "3",
+        "Свойство_Key": "c5cc748e-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "638401e0-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "fbdb0322-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "4",
+        "Свойство_Key": "66bdeeec-b9ae-11f0-836e-fa163e4cc04e",
+        "Значение": "671ce79a-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      }
+    ],
+    "Predefined": false,
+    "PredefinedDataName": ""
+  },
+  {
+    "Ref_Key": "f19e8e42-ba74-11f0-836e-fa163e4cc04e",
+    "DataVersion": "AAAAAAAAAAE=",
+    "DeletionMark": false,
+    "Owner": "f0f3e122-ba74-11f0-836e-fa163e4cc04e",
+    "Owner_Type": "StandardODATA.Catalog_Номенклатура",
+    "Code": "000001538",
+    "Description": "Биколор, Без вставок, Bicolor, , Позолота, родий, Сталь, Штифтовой",
+    "НаименованиеДляПечати": "Биколор, Без вставок, Bicolor, , Позолота, родий, Сталь, Штифтовой",
+    "Артикул": "80121",
+    "КиЗГИСМGTIN": "",
+    "ФайлКартинки_Key": "00000000-0000-0000-0000-000000000000",
+    "Недействителен": false,
+    "ДополнительныеРеквизиты": [
+      {
+        "Ref_Key": "f19e8e42-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "1",
+        "Свойство_Key": "eeeda4b4-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "0d86c02c-ba46-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "f19e8e42-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "2",
+        "Свойство_Key": "e191e564-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "67156c2c-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "f19e8e42-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "3",
+        "Свойство_Key": "e634d752-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "6260e800-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "f19e8e42-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "4",
+        "Свойство_Key": "cc6012f6-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "671acd48-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "f19e8e42-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "5",
+        "Свойство_Key": "c5cc748e-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "638401e0-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "f19e8e42-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "6",
+        "Свойство_Key": "66bdeeec-b9ae-11f0-836e-fa163e4cc04e",
+        "Значение": "671ce79a-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      }
+    ],
+    "Predefined": false,
+    "PredefinedDataName": ""
+  },
+  {
+    "Ref_Key": "16b9d308-ba75-11f0-836e-fa163e4cc04e",
+    "DataVersion": "AAAAAAAAAAE=",
+    "DeletionMark": false,
+    "Owner": "16206ccc-ba75-11f0-836e-fa163e4cc04e",
+    "Owner_Type": "StandardODATA.Catalog_Номенклатура",
+    "Code": "000001594",
+    "Description": "Биколор, Без вставок, Bicolor, , Позолота, родий, Сталь, Штифтовой",
+    "НаименованиеДляПечати": "Биколор, Без вставок, Bicolor, , Позолота, родий, Сталь, Штифтовой",
+    "Артикул": "210003",
+    "КиЗГИСМGTIN": "",
+    "ФайлКартинки_Key": "00000000-0000-0000-0000-000000000000",
+    "Недействителен": false,
+    "ДополнительныеРеквизиты": [
+      {
+        "Ref_Key": "16b9d308-ba75-11f0-836e-fa163e4cc04e",
+        "LineNumber": "1",
+        "Свойство_Key": "eeeda4b4-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "0d86c02c-ba46-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "16b9d308-ba75-11f0-836e-fa163e4cc04e",
+        "LineNumber": "2",
+        "Свойство_Key": "e191e564-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "67156c2c-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "16b9d308-ba75-11f0-836e-fa163e4cc04e",
+        "LineNumber": "3",
+        "Свойство_Key": "e634d752-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "6260e800-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "16b9d308-ba75-11f0-836e-fa163e4cc04e",
+        "LineNumber": "4",
+        "Свойство_Key": "cc6012f6-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "671acd48-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "16b9d308-ba75-11f0-836e-fa163e4cc04e",
+        "LineNumber": "5",
+        "Свойство_Key": "c5cc748e-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "638401e0-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "16b9d308-ba75-11f0-836e-fa163e4cc04e",
+        "LineNumber": "6",
+        "Свойство_Key": "66bdeeec-b9ae-11f0-836e-fa163e4cc04e",
+        "Значение": "671ce79a-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      }
+    ],
+    "Predefined": false,
+    "PredefinedDataName": ""
+  },
+  {
+    "Ref_Key": "b8be2100-ba74-11f0-836e-fa163e4cc04e",
+    "DataVersion": "AAAAAAAAAAE=",
+    "DeletionMark": false,
+    "Owner": "b805dad2-ba74-11f0-836e-fa163e4cc04e",
+    "Owner_Type": "StandardODATA.Catalog_Номенклатура",
+    "Code": "000001432",
+    "Description": "Биколор, Без вставок, Bicolor, , Позолота, родий, Ювелирный сплав, Булавка",
+    "НаименованиеДляПечати": "Биколор, Без вставок, Bicolor, , Позолота, родий, Ювелирный сплав, Булавка",
+    "Артикул": "74095",
+    "КиЗГИСМGTIN": "",
+    "ФайлКартинки_Key": "00000000-0000-0000-0000-000000000000",
+    "Недействителен": false,
+    "ДополнительныеРеквизиты": [
+      {
+        "Ref_Key": "b8be2100-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "1",
+        "Свойство_Key": "eeeda4b4-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "13d77fa2-ba46-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "b8be2100-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "2",
+        "Свойство_Key": "e191e564-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "67156c2c-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "b8be2100-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "3",
+        "Свойство_Key": "e634d752-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "614be348-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "b8be2100-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "4",
+        "Свойство_Key": "cc6012f6-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "671acd48-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "b8be2100-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "5",
+        "Свойство_Key": "c5cc748e-b9b9-11f0-836e-fa163e4cc04e",
+        "Значение": "638401e0-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      },
+      {
+        "Ref_Key": "b8be2100-ba74-11f0-836e-fa163e4cc04e",
+        "LineNumber": "6",
+        "Свойство_Key": "66bdeeec-b9ae-11f0-836e-fa163e4cc04e",
+        "Значение": "671ce79a-b9bc-11f0-836e-fa163e4cc04e",
+        "Значение_Type": "StandardODATA.Catalog_ЗначенияСвойствОбъектов",
+        "ТекстоваяСтрока": ""
+      }
+    ],
+    "Predefined": false,
+    "PredefinedDataName": ""
+  }
+]
