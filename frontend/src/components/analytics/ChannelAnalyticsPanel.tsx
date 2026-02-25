@@ -211,7 +211,7 @@ export function ChannelAnalyticsPanel() {
         )}
       </CardHeader>
       <CardContent>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs defaultValue="comparison" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="comparison">Сравнение</TabsTrigger>
             <TabsTrigger value="conversion">Конверсия</TabsTrigger>
