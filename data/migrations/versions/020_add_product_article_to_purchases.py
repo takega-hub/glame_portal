@@ -1,7 +1,7 @@
 """add product_article to purchase_history
 
 Revision ID: 020_add_product_article_to_purchases
-Revises: 019_create_purchase_history
+Revises: 019_widen_alembic_version
 Create Date: 2025-01-29 21:00:00.000000
 
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '020_add_product_article_to_purchases'
-down_revision = '019_create_purchase_history'
+down_revision = '019_widen_alembic_version'
 branch_labels = None
 depends_on = None
 
