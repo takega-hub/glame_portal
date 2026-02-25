@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -93,13 +93,33 @@ def create_refresh_token(data: dict) -> str:
     return encoded_jwt
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+PORTAL_BASIC_AUTH_ONLY = os.getenv("PORTAL_BASIC_AUTH_ONLY", "").lower() in ("1", "true", "yes")
+PORTAL_INTERNAL_EMAIL = "portal@internal"
+
+async def get_current_user(request: Request, token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
+    # Режим «только Basic Auth»: если nginx передал X-Remote-User после Basic Auth — считаем пользователя админом
+    if PORTAL_BASIC_AUTH_ONLY:
+        remote_user = request.headers.get("X-Remote-User")
+        if remote_user:
+            result = await db.execute(select(User).where(User.email == PORTAL_INTERNAL_EMAIL))
+            user = result.scalar_one_or_none()
+            if user is None:
+                user = User(
+                    email=PORTAL_INTERNAL_EMAIL,
+                    role="admin",
+                    is_customer=False,
+                )
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+            return user
+
     if not token:
         raise credentials_exception
     

@@ -3,6 +3,19 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { auth, User } from '@/lib/auth';
 
+const SKIP_APP_AUTH = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SKIP_APP_AUTH === 'true';
+
+/** Пользователь «портал» при входе только через Basic Auth (без повторного логина в приложении) */
+const PORTAL_FAKE_USER: User = {
+  id: 'portal-admin',
+  email: 'admin@portal',
+  phone: null,
+  persona: null,
+  is_customer: false,
+  loyalty_points: null,
+  role: 'admin',
+};
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -20,6 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (SKIP_APP_AUTH) {
+      setUser(PORTAL_FAKE_USER);
+      setLoading(false);
+      return;
+    }
     // Проверяем, есть ли сохраненный токен
     if (auth.isAuthenticated()) {
       loadUser();

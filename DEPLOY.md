@@ -198,6 +198,8 @@ docker exec -it glame_backend alembic upgrade head
 
 Портал закрыт одним пользователем: **admin**. Файл паролей: `infra/.htpasswd`.
 
+**Повторный вход в приложении отключён:** после ввода логина/пароля Basic Auth страница «Вход в систему» внутри портала не показывается — разделы (Покупатели, AI Маркетолог и др.) открываются сразу. Это задаётся переменными `PORTAL_BASIC_AUTH_ONLY=true` (backend) и `NEXT_PUBLIC_SKIP_APP_AUTH=true` (frontend при сборке); по умолчанию они уже включены в `infra/docker-compose.prod.yml`. Чтобы снова требовать логин в приложении, в `infra/.env` задайте `PORTAL_BASIC_AUTH_ONLY=false` и `NEXT_PUBLIC_SKIP_APP_AUTH=false`, затем пересоберите фронт и перезапустите backend.
+
 **Сменить пароль для admin:**
 
 На сервере из корня проекта (файл `infra/.htpasswd` будет перезаписан на хосте):

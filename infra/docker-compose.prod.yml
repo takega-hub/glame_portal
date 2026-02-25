@@ -59,6 +59,8 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      # Режим «только Basic Auth»: не требовать JWT, если nginx передал X-Remote-User
+      PORTAL_BASIC_AUTH_ONLY: ${PORTAL_BASIC_AUTH_ONLY:-true}
     volumes:
       - backend_uploads:/app/backend/uploads
       - backend_static:/app/backend/static
@@ -75,10 +77,11 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SKIP_APP_AUTH: ${NEXT_PUBLIC_SKIP_APP_AUTH:-true}
     container_name: glame_frontend
     restart: unless-stopped
     environment:
-      # Frontend will call /api on the same origin (nginx will proxy it)
       NEXT_PUBLIC_API_URL: ""
       NODE_ENV: production
     depends_on:
