@@ -107,8 +107,8 @@ def build_database_url():
             username_encoded = quote_plus(str(username), safe='')
             password_encoded = quote_plus(str(password), safe='')
             
-            # Формируем URL только из ASCII символов
-            database_url = f"postgresql://{username_encoded}:{password_encoded}@{hostname}:{port}/{database}"
+            # Формируем URL только из ASCII символов (psycopg3 — в образе нет psycopg2)
+            database_url = f"postgresql+psycopg://{username_encoded}:{password_encoded}@{hostname}:{port}/{database}"
             
             # Финальная проверка - должен быть только ASCII
             database_url.encode('ascii')
@@ -140,8 +140,8 @@ def build_database_url():
         username_encoded = quote_plus(DB_USER_str, safe='')
         password_encoded = quote_plus(DB_PASSWORD_str, safe='')
         
-        # Формируем URL
-        database_url = f"postgresql://{username_encoded}:{password_encoded}@{DB_HOST_str}:{DB_PORT}/{DB_NAME_str}"
+        # Формируем URL (psycopg3 — в образе нет psycopg2)
+        database_url = f"postgresql+psycopg://{username_encoded}:{password_encoded}@{DB_HOST_str}:{DB_PORT}/{DB_NAME_str}"
         
         # Проверяем, что URL содержит только ASCII
         database_url.encode('ascii')
@@ -149,11 +149,11 @@ def build_database_url():
     except UnicodeDecodeError as e:
         print(f"Error: Unicode decode error building database URL: {e}")
         # Fallback на простой вариант
-        return "postgresql://glame_user:glame_password@localhost:5433/glame_db"
+        return "postgresql+psycopg://glame_user:glame_password@localhost:5433/glame_db"
     except Exception as e:
         print(f"Error building database URL: {e}")
-        # Fallback на простой вариант
-        return "postgresql://glame_user:glame_password@localhost:5433/glame_db"
+        # Fallback на простой вариант (psycopg3)
+        return "postgresql+psycopg://glame_user:glame_password@localhost:5433/glame_db"
 
 # Строим URL подключения
 database_url = build_database_url()

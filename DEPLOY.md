@@ -440,6 +440,47 @@ chmod +x scripts/restore_qdrant_from_snapshot.sh
 | Деплой/обновление из Git на сервере | — | `./scripts/deploy_from_git.sh` |
 | Восстановление Qdrant | — | `scripts/restore_qdrant_from_snapshot.sh <snapshot_file> <collection_name>` |
 
+### Port 80 уже занят (address already in use)
+
+Если при запуске nginx появляется ошибка `failed to bind host port 0.0.0.0:80/tcp: address already in use`:
+
+1. **Узнать, кто слушает порт 80** (на сервере):
+   ```bash
+   ss -tlnp | grep :80
+   # или
+   netstat -tlnp | grep :80
+   ```
+   Часто это системный nginx, apache2 или caddy.
+
+2. **Вариант А — освободить порт 80** (если другой веб-сервер не нужен):
+   ```bash
+   sudo systemctl stop nginx    # или apache2, caddy
+   sudo systemctl disable nginx # чтобы не стартовал после перезагрузки
+   docker compose -f infra/docker-compose.prod.yml up -d
+   ```
+
+3. **Вариант Б — оставить порт 80 другому сервису, GLAME на 8080**  
+   В `infra/.env` (или в переменных окружения перед `docker compose`) задайте:
+   ```bash
+   NGINX_HTTP_PORT=8080
+   ```
+   Затем:
+   ```bash
+   docker compose -f infra/docker-compose.prod.yml up -d
+   ```
+   Сайт будет доступен по адресу `http://portal.glamejewelry.ru:8080`. Если на хосте уже есть nginx/caddy на 80 с SSL, настройте в нём proxy_pass на `http://127.0.0.1:8080`.
+
+### Переменная OPENROUTER_API_KEY не задана
+
+Предупреждение `The "OPENROUTER_API_KEY" variable is not set` означает, что ключ OpenRouter не передан в compose. Без него не будут работать функции, использующие OpenRouter (например, генерация текстов). Задайте переменную в `infra/.env`:
+```bash
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+И при необходимости `JWT_SECRET_KEY`. Затем перезапустите стек:
+```bash
+docker compose -f infra/docker-compose.prod.yml up -d
+```
+
 ### Если сборка Docker падает (frontend/backend)
 
 - **Полный лог сборки** (чтобы увидеть реальную ошибку):  
