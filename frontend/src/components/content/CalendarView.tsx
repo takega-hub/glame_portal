@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, momentLocalizer } from 'react-big-calendar';
+import { Calendar, momentLocalizer, type View } from 'react-big-calendar';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { ContentItemDTO } from '@/lib/api';
@@ -111,8 +111,8 @@ export default function CalendarView({ items, onSelectSlot, onSelectEvent }: Cal
   };
 
   // Обработчик изменения вида календаря
-  const handleViewChange = (view: CalendarView) => {
-    setCurrentView(view);
+  const handleViewChange = (view: View) => {
+    setCurrentView((view === 'work_week' ? 'week' : view) as CalendarView);
   };
 
   // Обработчик навигации по датам

@@ -146,7 +146,7 @@ export default function BatchMessageGenerator() {
 
       const request: BatchGenerateRequest = {
         event: {
-          type: finalEventType,
+          type: finalEventType as BatchGenerateRequest['event']['type'],
           brand: brand || undefined,
           store: autoDetectStore ? undefined : (store || undefined), // Если автопределение включено, не передаем store
         },

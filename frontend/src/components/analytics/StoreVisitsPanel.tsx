@@ -287,15 +287,16 @@ export function StoreVisitsPanel() {
                       month: 'long', 
                       day: 'numeric' 
                     })}
-                    formatter={(value: any, name: string) => {
-                      if (name === 'Посетители') {
+                    formatter={(value: any, name: string | undefined) => {
+                      const label = name ?? '';
+                      if (label === 'Посетители') {
                         return [value.toLocaleString(), 'Посетители'];
-                      } else if (name === 'Выручка') {
+                      } else if (label === 'Выручка') {
                         return [`₽${value.toLocaleString()}`, 'Выручка'];
-                      } else if (name === 'Заказы') {
+                      } else if (label === 'Заказы') {
                         return [value.toLocaleString(), 'Заказы'];
                       }
-                      return [value, name];
+                      return [value, label];
                     }}
                   />
                   <Legend />

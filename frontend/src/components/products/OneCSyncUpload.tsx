@@ -15,7 +15,7 @@ export default function OneCSyncUpload({ onSyncComplete }: OneCSyncUploadProps) 
   const [error, setError] = useState<string | null>(null);
   const [updateExisting, setUpdateExisting] = useState(true);
   const [deactivateMissing, setDeactivateMissing] = useState(false);
-  const [syncMethod, setSyncMethod] = useState<'file' | 'yml' | 'xml'>('xml');
+  const [syncMethod, setSyncMethod] = useState<'file' | 'yml' | 'xml' | 'api'>('xml');
   const [syncStocks, setSyncStocks] = useState(false);
   const [syncStores, setSyncStores] = useState(true);
   const [testLimit, setTestLimit] = useState<number | null>(null); // Ограничение для тестовой загрузки
@@ -785,13 +785,13 @@ export default function OneCSyncUpload({ onSyncComplete }: OneCSyncUploadProps) 
       <div className="mt-4 flex gap-2">
         <button
           onClick={handleUpload}
-          disabled={
+          disabled={Boolean(
             (syncMethod === 'file' && !file) ||
             (syncMethod === 'yml' && !ymlUrl) ||
             (syncMethod === 'xml' && !xmlUrl) ||
             loading ||
             (syncProgress && syncProgress.status === 'running')
-          }
+          )}
           className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
             ((syncMethod === 'file' && !file) ||
              (syncMethod === 'yml' && !ymlUrl) ||

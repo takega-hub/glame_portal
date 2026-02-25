@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { api, StylistResponse } from '@/lib/api';
-import { ChatMessage, QuickAction } from '@/types';
+import { ChatMessage, LookWithProducts, QuickAction } from '@/types';
 import ProductCard from '../products/ProductCard';
 import LookCard from '../looks/LookCard';
 import { analytics, getSessionId, getUserId } from '@/lib/analytics';
@@ -423,9 +423,15 @@ export default function ChatInterface({ userId }: ChatInterfaceProps = {}) {
               <div>
                 <h3 className="text-lg font-semibold mb-2">Рекомендованные образы:</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {currentResponse.looks.map((look) => (
-                    <LookCard key={look.id} look={look} />
-                  ))}
+                  {currentResponse.looks.map((look) => {
+                    const normalized = {
+                      ...look,
+                      product_ids: (look as LookWithProducts).product_ids ?? look.products?.map((p) => p.id) ?? [],
+                      description: (look as LookWithProducts).description ?? null,
+                      image_url: (look as LookWithProducts).image_url ?? null,
+                    };
+                    return <LookCard key={normalized.id} look={normalized as LookWithProducts} />;
+                  })}
                 </div>
               </div>
             )}

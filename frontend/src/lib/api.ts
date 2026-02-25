@@ -471,7 +471,13 @@ export const api = {
   async syncProductsFromXML(xmlUrl: string, params?: {
     updateExisting?: boolean;
     asyncMode?: boolean;
-  }): Promise<{ status: string; message: string; task_id?: string; status_url?: string }> {
+  }): Promise<{
+    status: string;
+    message: string;
+    task_id?: string;
+    status_url?: string;
+    products?: { created?: number; updated?: number; skipped?: number; error_count?: number; deactivated?: number };
+  }> {
     const response = await apiClient.post('/api/products/sync-xml', null, {
       params: {
         xml_url: xmlUrl,
@@ -1549,6 +1555,11 @@ export interface OneCSyncResponse {
     errors: number;
     deactivated: number;
   };
+  details?: {
+    products?: { created?: number; updated?: number; skipped?: number; error_count?: number; deactivated?: number };
+    stocks?: { created?: number; updated?: number; skipped?: number; error_count?: number } | null;
+    stores?: { created?: number; updated?: number; skipped?: number; error_count?: number; deactivated?: number } | null;
+  };
 }
 
 export interface OneCSyncStatus {
@@ -1685,6 +1696,14 @@ export const communication = {
       params: { brand, limit }
     });
     return response.data;
+  },
+
+  async getAvailableBrands(limit: number = 100): Promise<{ brands: Array<{ brand: string; client_count: number }>; count: number }> {
+    const response = await apiClient.get<{ status: string; brands: Array<{ brand: string; client_count: number }>; count: number }>(
+      '/api/communication/brands/available',
+      { params: { limit } }
+    );
+    return { brands: response.data.brands ?? [], count: response.data.count ?? 0 };
   },
 
   async getClientData(clientId: string): Promise<any> {

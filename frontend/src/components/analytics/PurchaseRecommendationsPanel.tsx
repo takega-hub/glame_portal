@@ -15,6 +15,7 @@ import {
 interface PurchaseRecommendation {
   product_name?: string | null;
   product_article?: string | null;
+  product_id_1c?: string | null;
   category?: string | null;
   brand?: string | null;
   current_stock?: number | null;

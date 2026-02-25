@@ -807,7 +807,7 @@ export default function KnowledgeBaseUpload() {
                   <div className="flex gap-2 ml-4">
                     <label className="cursor-pointer">
                       <input
-                        ref={(el) => replaceFileInputRefs.current[doc.id] = el}
+                        ref={(el) => { replaceFileInputRefs.current[doc.id] = el; }}
                         type="file"
                         accept=".pdf,.json,application/pdf,application/json"
                         className="hidden"

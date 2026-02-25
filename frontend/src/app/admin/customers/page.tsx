@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { apiClient } from '@/lib/api';
@@ -21,7 +21,7 @@ interface Customer {
   last_purchase_date: string | null;
 }
 
-export default function AdminCustomersPage() {
+function AdminCustomersContent() {
   const { user, isAuthenticated, loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -811,5 +811,13 @@ export default function AdminCustomersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminCustomersPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Загрузка...</div>}>
+      <AdminCustomersContent />
+    </Suspense>
   );
 }

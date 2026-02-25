@@ -58,7 +58,7 @@ export default function ProductVariantsTable({
         counts.set(key, (counts.get(key) || 0) + 1);
       });
     });
-    return [...counts.entries()]
+    return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([key]) => key)
       .slice(0, 6);
