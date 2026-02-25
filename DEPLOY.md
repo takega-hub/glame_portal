@@ -159,9 +159,18 @@ nano .env
 
 ## 4. Первый запуск
 
+**Перед первым запуском** создайте файл паролей для Basic Auth (иначе nginx будет падать в цикле Restarting):
+
+```bash
+cd ~/glame-platform/infra
+docker run --rm -it -v "$(pwd):/data" -w /data httpd:alpine htpasswd -c .htpasswd admin
+```
+Введите пароль для пользователя `admin` (например `changeme`). Проверьте: `ls -la .htpasswd`.
+
 Из **корня проекта** на сервере:
 
 ```bash
+cd ~/glame-platform
 docker compose -f infra/docker-compose.prod.yml up -d --build
 ```
 
@@ -439,6 +448,10 @@ chmod +x scripts/restore_qdrant_from_snapshot.sh
 | Обновление кода (архив без Git) | `scripts/update_server.ps1 ...` (без -UseGit) | — |
 | Деплой/обновление из Git на сервере | — | `./scripts/deploy_from_git.sh` |
 | Восстановление Qdrant | — | `scripts/restore_qdrant_from_snapshot.sh <snapshot_file> <collection_name>` |
+
+### Nginx в цикле Restarting (connection failure в браузере)
+
+Если `docker ps` показывает у `glame_nginx` статус **Restarting**: чаще всего на сервере нет файла `infra/.htpasswd`. Проверьте логи: `docker logs glame_nginx --tail 30`. Создайте файл (см. раздел «Первый запуск» выше) и перезапустите: `docker compose -f infra/docker-compose.prod.yml up -d nginx`.
 
 ### Port 80 уже занят (address already in use)
 
