@@ -547,7 +547,10 @@ export function SalesPanel() {
                 visitsByStoreMap.get(s.name)!.set(key, s.visitors ?? 0);
               });
             });
-            const allDates = new Set([...salesMap.keys(), ...visitsMap.keys()]);
+            const allDates = new Set([
+              ...Array.from(salesMap.keys()),
+              ...Array.from(visitsMap.keys()),
+            ]);
             const storeNames = Array.from(storeNamesSet);
             const hasPerStore = storeNames.length > 0;
             const combinedData = Array.from(allDates)
