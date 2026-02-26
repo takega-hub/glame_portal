@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Calendar } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { fetchJson } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -12,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ComposedChart, BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 type Period = "today" | "yesterday" | "week" | "month" | "quarter" | "year" | "custom";
 
@@ -29,9 +31,12 @@ interface SalesDetail {
   channel?: string;
 }
 
+type VisitorsByStore = Record<string, { visitor_count: number; store_name: string }>;
+
 export function SalesPanel() {
   const [aggregated, setAggregated] = useState<any>(null);
   const [byStore, setByStore] = useState<any>(null);
+  const [visitorsByStore, setVisitorsByStore] = useState<VisitorsByStore>({});
   const [stores, setStores] = useState<any[]>([]);
   const [salesDetails, setSalesDetails] = useState<SalesDetail[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,6 +48,15 @@ export function SalesPanel() {
   const [selectedStoreId, setSelectedStoreId] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+  const [chartSalesDaily, setChartSalesDaily] = useState<{ daily_data: Array<{ date: string; revenue: number; orders: number; items_sold: number }> } | null>(null);
+  const [chartVisitsDaily, setChartVisitsDaily] = useState<{
+    daily_data: Array<{
+      date: string;
+      visitors: number;
+      stores?: Array<{ name: string; visitors: number }>;
+    }>;
+  } | null>(null);
+  const [loadingCharts, setLoadingCharts] = useState(false);
 
   const fetchMetrics = async () => {
     try {
@@ -68,11 +82,11 @@ export function SalesPanel() {
         url += `store_id=${encodeURIComponent(selectedStoreId)}&`;
       }
       
-      const response = await fetch(url);
-      const data = await response.json();
+      const { data } = await fetchJson<{ status?: string; aggregated?: any; by_store?: any; visitors_by_store?: VisitorsByStore }>(url);
       if (data.status === 'success') {
         setAggregated(data.aggregated);
         setByStore(data.by_store || {});
+        setVisitorsByStore(data.visitors_by_store || {});
       }
     } catch (err) {
       console.error(err);
@@ -101,9 +115,8 @@ export function SalesPanel() {
         url += `period=${period}`;
       }
       
-      const response = await fetch(url, { method: 'POST' });
-      const data = await response.json();
-      
+      const { data } = await fetchJson<{ status?: string; message?: string; detail?: string; inserted?: number; updated?: number; skipped?: number; total_records?: number }>(url, { method: 'POST' });
+
       if (data.status === 'success') {
         // Сохраняем результат синхронизации для отображения
         setSyncResult({
@@ -142,12 +155,10 @@ export function SalesPanel() {
   const syncStoreVisits = async () => {
     setSyncingVisits(true);
     try {
-      const response = await fetch('/api/analytics/store-visits/sync', {
+      const { data } = await fetchJson<{ status?: string }>('/api/analytics/store-visits/sync', {
         method: 'POST',
       });
-      const data = await response.json();
       if (data.status === 'success') {
-        // Обновляем данные после синхронизации
         await fetchMetrics();
       } else {
         console.error('Ошибка синхронизации посещаемости:', data);
@@ -161,8 +172,7 @@ export function SalesPanel() {
 
   const fetchStores = async () => {
     try {
-      const response = await fetch('/api/analytics/stores');
-      const data = await response.json();
+      const { data } = await fetchJson<{ status?: string; stores?: any[] }>('/api/analytics/stores');
       if (data.status === 'success') {
         setStores(data.stores || []);
       }
@@ -196,8 +206,7 @@ export function SalesPanel() {
       
       url += 'limit=100';
       
-      const response = await fetch(url);
-      const data = await response.json();
+      const { data } = await fetchJson<{ status?: string; sales?: SalesDetail[] }>(url);
       if (data.status === 'success') {
         setSalesDetails(data.sales || []);
       }
@@ -208,11 +217,78 @@ export function SalesPanel() {
     }
   };
 
+  // Для «Сегодня» и «Вчера» — недельный график (7 дней), для остальных периодов — по выбранному
+  const getChartDays = useCallback((): number => {
+    if (period === 'today' || period === 'yesterday') return 7;
+    if (period === 'week') return 7;
+    if (period === 'month') return 30;
+    if (period === 'quarter') return 92;
+    if (period === 'year') return 365;
+    if (period === 'custom' && startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+    }
+    return 7;
+  }, [period, startDate, endDate]);
+
+  const fetchChartData = useCallback(async () => {
+    setLoadingCharts(true);
+    const chartDays = getChartDays();
+    try {
+      let salesUrl = '/api/analytics/1c-sales/daily?auto_sync=true&';
+      if (period === 'today' || period === 'yesterday') {
+        salesUrl += `days=${chartDays}`;
+      } else if (period === 'custom' && startDate && endDate) {
+        const startISO = new Date(startDate + 'T00:00:00').toISOString();
+        const endISO = new Date(endDate + 'T23:59:59').toISOString();
+        salesUrl += `start_date=${encodeURIComponent(startISO)}&end_date=${encodeURIComponent(endISO)}`;
+      } else {
+        salesUrl += `period=${period}`;
+      }
+      const storeForChart = selectedStoreId && selectedStoreId !== 'all'
+        ? stores.find(s => (s.external_id || s.name) === selectedStoreId)
+        : null;
+      const storeIdForSales = storeForChart?.id;
+      const storeIdForVisits = storeForChart?.id ?? (selectedStoreId !== 'all' ? selectedStoreId : undefined);
+      if (storeIdForSales) {
+        salesUrl += `&store_id=${encodeURIComponent(storeIdForSales)}`;
+      }
+      let visitsUrl = `/api/analytics/store-visits/daily?days=${chartDays}`;
+      if (storeIdForVisits) visitsUrl += `&store_id=${encodeURIComponent(storeIdForVisits)}`;
+
+      const [salesRes, visitsRes] = await Promise.all([
+        fetchJson<{ status?: string; daily_data?: Array<{ date: string; revenue: number; orders: number; items_sold: number }> }>(salesUrl),
+        fetchJson<{ status?: string; daily_data?: Array<{ date: string; visitors: number; stores?: Array<{ name: string; visitors: number }> }> }>(visitsUrl),
+      ]);
+      if (salesRes.data.status === 'success' && salesRes.data.daily_data) {
+        setChartSalesDaily({ daily_data: salesRes.data.daily_data });
+      } else {
+        setChartSalesDaily(null);
+      }
+      if (visitsRes.data.status === 'success' && visitsRes.data.daily_data) {
+        setChartVisitsDaily({ daily_data: visitsRes.data.daily_data });
+      } else {
+        setChartVisitsDaily(null);
+      }
+    } catch (err) {
+      console.error('Ошибка загрузки данных для графиков:', err);
+      setChartSalesDaily(null);
+      setChartVisitsDaily(null);
+    } finally {
+      setLoadingCharts(false);
+    }
+  }, [period, startDate, endDate, selectedStoreId, stores, getChartDays]);
+
   useEffect(() => { 
     fetchStores();
     fetchMetrics(); 
     fetchSalesDetails();
   }, [period, startDate, endDate, selectedStoreId]);
+
+  useEffect(() => {
+    fetchChartData();
+  }, [fetchChartData]);
 
   const getPeriodLabel = (p: Period): string => {
     const labels: Record<Period, string> = {
@@ -415,6 +491,26 @@ export function SalesPanel() {
                 </button>
               </div>
               <p className="text-2xl font-bold text-gray-900">{totalVisitors.toLocaleString('ru-RU')}</p>
+              {Object.keys(visitorsByStore).length > 0 && (() => {
+                const byName: Record<string, number> = {};
+                for (const v of Object.values(visitorsByStore)) {
+                  const name = v?.store_name;
+                  if (name && byName[name] === undefined) byName[name] = v.visitor_count;
+                }
+                const list = Object.entries(byName);
+                return list.length > 0 ? (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <p className="text-xs text-gray-500 mb-1">По магазинам:</p>
+                    <ul className="text-xs text-gray-700 space-y-0.5">
+                      {list.map(([name, count]) => (
+                        <li key={name}>
+                          {name}: <span className="font-medium">{count.toLocaleString('ru-RU')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null;
+              })()}
             </div>
             <div className="bg-gray-100 p-4 rounded-lg">
               <p className="text-sm text-gray-600">Средний чек</p>
@@ -426,6 +522,109 @@ export function SalesPanel() {
             </div>
           </div>
         )}
+
+        {/* Объединённый график: выручка и посещаемость по дате */}
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Выручка и посещаемость по дням</h3>
+          {loadingCharts ? (
+            <div className="h-[340px] flex items-center justify-center text-gray-500">Загрузка...</div>
+          ) : (() => {
+            const salesMap = new Map<string, number>();
+            (chartSalesDaily?.daily_data || []).forEach((d) => {
+              const key = d.date.split('T')[0];
+              salesMap.set(key, d.revenue ?? 0);
+            });
+            const visitsDaily = chartVisitsDaily?.daily_data || [];
+            const visitsMap = new Map<string, number>();
+            const visitsByStoreMap = new Map<string, Map<string, number>>();
+            const storeNamesSet = new Set<string>();
+            visitsDaily.forEach((d) => {
+              const key = d.date.split('T')[0];
+              visitsMap.set(key, d.visitors ?? 0);
+              (d.stores || []).forEach((s) => {
+                storeNamesSet.add(s.name);
+                if (!visitsByStoreMap.has(s.name)) visitsByStoreMap.set(s.name, new Map());
+                visitsByStoreMap.get(s.name)!.set(key, s.visitors ?? 0);
+              });
+            });
+            const allDates = new Set([...salesMap.keys(), ...visitsMap.keys()]);
+            const storeNames = Array.from(storeNamesSet);
+            const hasPerStore = storeNames.length > 0;
+            const combinedData = Array.from(allDates)
+              .sort()
+              .map((date) => {
+                const row: Record<string, string | number> = {
+                  date,
+                  revenue: salesMap.get(date) ?? 0,
+                  visitors: visitsMap.get(date) ?? 0,
+                };
+                storeNames.forEach((name) => {
+                  row[name] = visitsByStoreMap.get(name)?.get(date) ?? 0;
+                });
+                return row;
+              });
+            let maxVisitors = 0;
+            combinedData.forEach((row) => {
+              const v = Number(row.visitors ?? 0);
+              if (v > maxVisitors) maxVisitors = v;
+              storeNames.forEach((name) => {
+                const vv = Number(row[name] ?? 0);
+                if (vv > maxVisitors) maxVisitors = vv;
+              });
+            });
+            const rightDomain = maxVisitors > 0 ? [0, Math.ceil(maxVisitors * 1.1)] as const : undefined;
+            if (combinedData.length === 0) {
+              return (
+                <div className="h-[340px] flex items-center justify-center text-gray-500 border border-dashed border-gray-300 rounded-lg">
+                  Нет данных за период
+                </div>
+              );
+            }
+            const visitLineColors = ['#4f46e5', '#059669', '#dc2626', '#d97706', '#7c3aed', '#0d9488'];
+            return (
+              <ResponsiveContainer width="100%" height={340}>
+                <ComposedChart data={combinedData} margin={{ top: 8, right: 48, left: 8, bottom: 24 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(v) => new Date(v).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                    angle={-45}
+                    textAnchor="end"
+                    height={56}
+                  />
+                  <YAxis yAxisId="left" orientation="left" tickFormatter={(v) => `₽${v >= 1000 ? (v / 1000) + 'k' : v}`} />
+                  <YAxis yAxisId="right" orientation="right" domain={rightDomain} />
+                  <Tooltip
+                    labelFormatter={(label) => new Date(label).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                    formatter={(value: number, name: string) => {
+                      if (name === 'revenue' || name === 'Выручка') return [`₽${Number(value).toLocaleString('ru-RU', { minimumFractionDigits: 2 })}`, 'Выручка'];
+                      return [Number(value).toLocaleString('ru-RU'), name];
+                    }}
+                  />
+                  <Legend />
+                  <Bar yAxisId="left" dataKey="revenue" fill="#b8860b" name="Выручка" radius={[4, 4, 0, 0]} />
+                  {hasPerStore
+                    ? storeNames.map((name, i) => (
+                        <Line
+                          key={name}
+                          yAxisId="right"
+                          type="monotone"
+                          dataKey={name}
+                          stroke={visitLineColors[i % visitLineColors.length]}
+                          strokeWidth={2}
+                          name={name}
+                          dot={{ r: 3 }}
+                          activeDot={{ r: 5 }}
+                        />
+                      ))
+                    : (
+                      <Line yAxisId="right" type="monotone" dataKey="visitors" stroke="#4f46e5" strokeWidth={2} name="Посещаемость" dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            );
+          })()}
+        </div>
         
         {/* Таблица детальных продаж */}
         <div className="mt-6">

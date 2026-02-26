@@ -24,6 +24,37 @@ class LookGenerationService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.recommendation_service = RecommendationService(db)
+
+    @staticmethod
+    def _extract_product_combination(product: Product) -> Optional[str]:
+        """
+        Извлекает значение параметра "Сочетание" из specifications товара.
+        """
+        specs = product.specifications if isinstance(product.specifications, dict) else {}
+        for key in ("Сочетание", "сочетание", "combination", "Combination"):
+            value = specs.get(key)
+            if value is None:
+                continue
+            if isinstance(value, list):
+                value = value[0] if value else None
+            if value is None:
+                continue
+            text = str(value).strip()
+            if text:
+                return text
+        return None
+
+    def _get_dominant_combination(self, products: List[Product]) -> Optional[str]:
+        counts: Dict[str, int] = {}
+        for product in products:
+            combo = self._extract_product_combination(product)
+            if not combo:
+                continue
+            counts[combo] = counts.get(combo, 0) + 1
+        if not counts:
+            return None
+        combo, count = max(counts.items(), key=lambda item: item[1])
+        return combo if count >= 2 else None
     
     async def generate_look(
         self,
@@ -34,7 +65,8 @@ class LookGenerationService:
         persona: Optional[str] = None,
         user_request: Optional[str] = None,
         generate_image: bool = True,
-        use_default_model: bool = False
+        use_default_model: bool = False,
+        digital_model: Optional[str] = None,
     ) -> Look:
         """
         Генерация образа на основе правил клиента и трендов
@@ -100,7 +132,8 @@ class LookGenerationService:
             client_requirements=client_requirements,
             style=style,
             mood=mood,
-            persona=persona
+            persona=persona,
+            require_images=True,
         )
         
         # 8. Валидация образа
@@ -122,7 +155,9 @@ class LookGenerationService:
             generation_metadata={
                 "persona": persona,
                 "client_requirements": client_requirements,
-                "generation_method": "ai_agent"
+                "generation_method": "ai_agent",
+                "digital_model": digital_model,
+                "combination": self._get_dominant_combination(validated_products),
             },
             fashion_trends=trends[:5],  # Сохраняем первые 5 трендов
             client_requirements=client_requirements
@@ -139,16 +174,21 @@ class LookGenerationService:
                     {
                         "name": p.name,
                         "description": p.description,
+                        "category": p.category,
                         "images": p.images or []
                     }
                     for p in validated_products
                 ]
+                safe_model = image_generation_service._sanitize_profile_name(digital_model)
                 
                 # Генерируем изображение и ждем завершения
                 image_url = await image_generation_service.generate_look_image(
                     look_description=look_description,
                     products=products_data,
-                    use_default_model=use_default_model
+                    use_default_model=use_default_model,
+                    model_profile=safe_model,
+                    asset_group=f"look_images/models/{safe_model}" if safe_model else "look_images",
+                    filename_prefix=f"look_{safe_model}" if safe_model else "look",
                 )
                 
                 if image_url:
@@ -237,7 +277,8 @@ class LookGenerationService:
         style: Optional[str] = None,
         mood: Optional[str] = None,
         persona: Optional[str] = None,
-        limit: int = 5
+        limit: int = 5,
+        require_images: bool = False,
     ) -> List[Product]:
         """
         Подбор товаров для образа с учетом разнообразия и исключения уже использованных
@@ -292,7 +333,8 @@ class LookGenerationService:
                 tags=None,  # Сначала без тегов для более широкого выбора
                 limit=limit * 2,
                 exclude_ids=list(exclude_ids),
-                randomize=True  # Включаем рандомизацию
+                randomize=True,  # Включаем рандомизацию
+                require_images=require_images,
             )
             products.extend(category_products)
             # Добавляем найденные товары в исключения для следующей итерации
@@ -306,7 +348,8 @@ class LookGenerationService:
                 category=None,
                 limit=limit * 2,
                 exclude_ids=list(exclude_ids),
-                randomize=True
+                randomize=True,
+                require_images=require_images,
             )
             products.extend(tag_products)
             exclude_ids.update(p.id for p in tag_products)
@@ -326,7 +369,8 @@ class LookGenerationService:
                 style_products = await self.recommendation_service.search_products(
                     query_text=search_query,
                     limit=limit * 2,
-                    only_active=True
+                    only_active=True,
+                    require_images=require_images,
                 )
                 # Фильтруем уже добавленные
                 style_products = [p for p in style_products if p.id not in exclude_ids]
@@ -341,7 +385,8 @@ class LookGenerationService:
                 category=None,
                 limit=limit * 3,
                 exclude_ids=list(used_product_ids),  # Исключаем только недавно использованные
-                randomize=True
+                randomize=True,
+                require_images=require_images,
             )
             products.extend(random_products)
         
@@ -370,6 +415,23 @@ class LookGenerationService:
             filtered_products.append(product)
         
         # Убираем дубликаты и обеспечиваем разнообразие категорий
+        # Дополнительно повышаем шанс красивого образа:
+        # товары с одинаковым значением параметра "Сочетание" приоритизируются.
+        combination_counts: Dict[str, int] = {}
+        for product in filtered_products:
+            combo = self._extract_product_combination(product)
+            if combo:
+                combination_counts[combo] = combination_counts.get(combo, 0) + 1
+        preferred_combination: Optional[str] = None
+        if combination_counts:
+            candidate_combo, candidate_count = max(combination_counts.items(), key=lambda item: item[1])
+            if candidate_count >= 2:
+                preferred_combination = candidate_combo
+                filtered_products = sorted(
+                    filtered_products,
+                    key=lambda p: 0 if self._extract_product_combination(p) == preferred_combination else 1,
+                )
+
         seen_ids = set()
         unique_products = []
         category_counts = {}  # Отслеживаем количество товаров по категориям

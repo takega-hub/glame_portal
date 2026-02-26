@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { api, apiClient } from '@/lib/api';
+import { api, apiClient, type ContentItemMediaEntry } from '@/lib/api';
 import CalendarView from './CalendarView';
 import * as XLSX from 'xlsx';
 
@@ -66,11 +66,18 @@ export default function ContentAgent() {
   const [itemsError, setItemsError] = useState<string | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [generatingItemId, setGeneratingItemId] = useState<string | null>(null);
+  const [mediaActionItemId, setMediaActionItemId] = useState<string | null>(null);
+  const [mediaActionLabel, setMediaActionLabel] = useState<string>('');
+  const [mediaNoTextOnImageByItem, setMediaNoTextOnImageByItem] = useState<Record<string, boolean>>({});
+  const [mediaStyleIntensityByItem, setMediaStyleIntensityByItem] = useState<Record<string, 'classic' | 'bold' | 'edgy'>>({});
   const [generatedContentPreview, setGeneratedContentPreview] = useState<{
     itemId: string;
     generated: Record<string, any>;
   } | null>(null);
   const [regenerateFeedback, setRegenerateFeedback] = useState<string>('');
+  const [textEditItemId, setTextEditItemId] = useState<string | null>(null);
+  const [textEditValue, setTextEditValue] = useState<string>('');
+  const [textEditSavingItemId, setTextEditSavingItemId] = useState<string | null>(null);
 
   const [yandexLoading, setYandexLoading] = useState(false);
   const [yandexError, setYandexError] = useState<string | null>(null);
@@ -193,8 +200,26 @@ export default function ContentAgent() {
   const [jewelryLightboxUrl, setJewelryLightboxUrl] = useState<string | null>(null);
   const jewelryAbortRef = useRef<AbortController | null>(null);
 
-  const jewelryImageFullUrl = (url: string) =>
-    url.startsWith('/') ? `${process.env.NEXT_PUBLIC_API_URL || ''}${url}` : url;
+  const jewelryImageFullUrl = (url: string) => {
+    if (!url) return '';
+    let normalized = url.trim();
+    if (!normalized.startsWith('/')) {
+      if (normalized.startsWith('look_images/')) normalized = `/${normalized}`;
+      else if (normalized.startsWith('content_media/')) normalized = `/${normalized}`;
+      else return normalized;
+    }
+
+    // Backward compatibility: old urls could be /look_images/... instead of /static/look_images/...
+    if (normalized.startsWith('/look_images/')) {
+      normalized = `/static${normalized}`;
+    } else if (normalized.startsWith('/content_media/')) {
+      normalized = `/static${normalized}`;
+    }
+
+    const apiBase = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+    const isAbsolute = apiBase.startsWith('http://') || apiBase.startsWith('https://');
+    return isAbsolute ? `${apiBase}${normalized}` : normalized;
+  };
 
   const icsUrl = useMemo(() => {
     if (!planId) return null;
@@ -640,6 +665,7 @@ export default function ContentAgent() {
   const onGeneratePlan = async () => {
     if (loading) return;
     setError(null);
+    const beforePlanIds = new Set((savedPlans || []).map((p: any) => p.id));
 
     if (channels.length === 0) {
       setError('Выберите хотя бы один канал');
@@ -678,23 +704,66 @@ export default function ContentAgent() {
         await refreshSavedPlans();
       }
     } catch (e: any) {
-      setError(e.response?.data?.detail || 'Ошибка генерации плана');
+      const detail = e.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((d: { msg?: string; message?: string }) => d?.msg ?? d?.message ?? String(d)).join('; ')
+          : detail != null
+            ? String(detail)
+            : e.message || 'Ошибка генерации плана';
+
+      // Fallback: иногда backend успевает сохранить план, но клиент получает 500 на ответе.
+      // В этом случае автоматически подгружаем новый план без ручного обновления страницы.
+      let recovered = false;
+      try {
+        const latestPlans = await api.listContentPlans({ limit: 20 });
+        const candidateByRange = (latestPlans || []).find(
+          (p: any) =>
+            !beforePlanIds.has(p.id) &&
+            typeof p.start_date === 'string' &&
+            typeof p.end_date === 'string' &&
+            p.start_date.startsWith(startDate) &&
+            p.end_date.startsWith(endDate)
+        );
+        const candidateAnyNew = (latestPlans || []).find((p: any) => !beforePlanIds.has(p.id));
+        const recoveredPlan = candidateByRange || candidateAnyNew || null;
+
+        if (recoveredPlan?.id) {
+          await loadPlan(recoveredPlan.id);
+          await refreshSavedPlans();
+          setError('План был сохранен, но ответ сервера вернул ошибку. План загружен автоматически.');
+          recovered = true;
+        }
+      } catch (recoveryError) {
+        console.warn('Plan recovery after generation error failed:', recoveryError);
+      }
+
+      if (!recovered) {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const onGenerateItem = async (itemId: string, feedback?: string) => {
+  const onGenerateItem = async (itemId: string, feedback?: string, autoApply: boolean = false) => {
     setItemsError(null);
     setGeneratingItemId(itemId);
     setRegenerateFeedback('');
     try {
       const result = await api.generateContentForItem(itemId, feedback);
       if (result && result.item_id && result.generated) {
-        setGeneratedContentPreview({
-          itemId: result.item_id,
-          generated: result.generated,
-        });
+        if (autoApply) {
+          await api.applyGeneratedContent(result.item_id, result.generated);
+          setGeneratedContentPreview(null);
+          await refreshItems();
+        } else {
+          setGeneratedContentPreview({
+            itemId: result.item_id,
+            generated: result.generated,
+          });
+        }
       } else {
         throw new Error('Неверный формат ответа от сервера');
       }
@@ -731,7 +800,104 @@ export default function ContentAgent() {
 
   const onRegenerateWithFeedback = () => {
     if (!generatedContentPreview) return;
-    onGenerateItem(generatedContentPreview.itemId, regenerateFeedback || undefined);
+    // Перегенерация должна заменить старую версию текста сразу после получения нового результата.
+    onGenerateItem(generatedContentPreview.itemId, regenerateFeedback || undefined, true);
+  };
+
+  const onStartManualTextEdit = (item: any) => {
+    const currentText =
+      item?.generated_text ||
+      item?.generated?.generated_text ||
+      item?.generated?.text ||
+      item?.generated?.content ||
+      '';
+    setTextEditItemId(item.id);
+    setTextEditValue(String(currentText));
+  };
+
+  const extractGeneratedTextFromResponse = (generated: Record<string, any> | undefined): string => {
+    if (!generated || typeof generated !== 'object') return '';
+    const direct = generated.generated_text || generated.text || generated.content;
+    if (typeof direct === 'string' && direct.trim()) return direct.trim();
+
+    const raw = generated.raw_response;
+    if (typeof raw === 'string' && raw.trim()) {
+      const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      const candidate = (fenced?.[1] || raw).trim();
+      try {
+        const parsed = JSON.parse(candidate);
+        const parsedText = parsed?.generated_text || parsed?.text || parsed?.content;
+        if (typeof parsedText === 'string' && parsedText.trim()) return parsedText.trim();
+      } catch {
+        const match = raw.match(/"text"\s*:\s*"((?:\\.|[^"\\])*)"/);
+        if (match?.[1]) {
+          try {
+            return JSON.parse(`"${match[1]}"`).trim();
+          } catch {
+            return match[1].trim();
+          }
+        }
+      }
+    }
+    return '';
+  };
+
+  const onCancelManualTextEdit = () => {
+    setTextEditItemId(null);
+    setTextEditValue('');
+  };
+
+  const onRegenerateTextInEditor = async (item: any) => {
+    setItemsError(null);
+    setGeneratingItemId(item.id);
+    try {
+      const result = await api.generateContentForItem(item.id);
+      const nextText = extractGeneratedTextFromResponse(result?.generated || {});
+      if (!nextText) {
+        throw new Error('Не удалось извлечь текст из ответа генерации');
+      }
+      setTextEditItemId(item.id);
+      setTextEditValue(nextText);
+    } catch (e: any) {
+      setItemsError(e.response?.data?.detail || e.message || 'Ошибка перегенерации текста');
+    } finally {
+      setGeneratingItemId(null);
+    }
+  };
+
+  const onSaveManualTextEdit = async (item: any) => {
+    const targetPlanId = item?.plan_id || planId;
+    if (!targetPlanId) {
+      setItemsError('Не удалось сохранить текст: не найден plan_id');
+      return;
+    }
+    setItemsError(null);
+    setTextEditSavingItemId(item.id);
+    try {
+      const nextText = textEditValue ?? '';
+      await api.updateContentItem(targetPlanId, item.id, { generated_text: nextText });
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === item.id
+            ? {
+                ...it,
+                generated_text: nextText,
+                generated: {
+                  ...(it.generated || {}),
+                  generated_text: nextText,
+                  text: nextText,
+                },
+              }
+            : it
+        )
+      );
+      onCancelManualTextEdit();
+      await refreshItems(targetPlanId);
+    } catch (e: any) {
+      setItemsError(e.response?.data?.detail || e.message || 'Ошибка сохранения текста');
+    } finally {
+      setTextEditSavingItemId(null);
+    }
   };
 
   const onPublishItem = async (itemId: string) => {
@@ -741,6 +907,196 @@ export default function ContentAgent() {
       await refreshItems();
     } catch (e: any) {
       setItemsError(e.response?.data?.detail || 'Ошибка публикации');
+    }
+  };
+
+  const getItemMedia = (item: any): ContentItemMediaEntry[] => {
+    const media = item?.generated?.media?.items;
+    return Array.isArray(media) ? media : [];
+  };
+
+  const getActiveMedia = (item: any): ContentItemMediaEntry | null => {
+    const mediaItems = getItemMedia(item);
+    return mediaItems.find((m) => m?.is_active) || mediaItems[0] || null;
+  };
+
+  const getNoTextOnImage = (itemId: string) => mediaNoTextOnImageByItem[itemId] ?? true;
+  const getStyleIntensity = (itemId: string) => mediaStyleIntensityByItem[itemId] ?? 'classic';
+
+  const waitForMediaReady = async (
+    itemId: string,
+    mediaId?: string,
+    mediaUrl?: string,
+    timeoutMs: number = 45000
+  ) => {
+    const startedAt = Date.now();
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    while (Date.now() - startedAt < timeoutMs) {
+      try {
+        const mediaRes = await api.getItemMedia(itemId);
+        const mediaItems = Array.isArray(mediaRes?.media) ? mediaRes.media : [];
+        const target =
+          mediaItems.find((m) => (mediaId ? m.id === mediaId : false)) ||
+          mediaItems.find((m) => (mediaUrl ? m.url === mediaUrl : false));
+
+        if (target) {
+          const fullUrl = jewelryImageFullUrl(target.url || mediaUrl || '');
+          if (!fullUrl) return true;
+          try {
+            const check = await fetch(fullUrl, { method: 'HEAD', cache: 'no-store' });
+            if (check.ok || check.status === 405) {
+              return true;
+            }
+          } catch {
+            // ignore and continue polling
+          }
+        }
+      } catch {
+        // ignore and continue polling
+      }
+
+      await sleep(1200);
+    }
+
+    return false;
+  };
+
+  const updateItemMediaState = (
+    itemId: string,
+    updater: (current: ContentItemMediaEntry[]) => ContentItemMediaEntry[]
+  ) => {
+    setItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== itemId) return it;
+        const current = getItemMedia(it);
+        const updated = updater(current);
+        const generated = it.generated && typeof it.generated === 'object' ? { ...it.generated } : {};
+        const mediaContainer =
+          generated.media && typeof generated.media === 'object' ? { ...generated.media } : {};
+        mediaContainer.items = updated;
+        generated.media = mediaContainer;
+        return { ...it, generated };
+      })
+    );
+  };
+
+  const onGeneratePhotoForItem = async (itemId: string) => {
+    setItemsError(null);
+    setMediaActionItemId(itemId);
+    setMediaActionLabel('Генерация фото...');
+    try {
+      const res = await api.generateItemPhoto(itemId, undefined, {
+        no_text_on_image: getNoTextOnImage(itemId),
+        style_intensity: getStyleIntensity(itemId),
+      });
+      updateItemMediaState(itemId, (current) => [
+        ...current.map((m) => ({ ...m, is_active: false })),
+        { ...res.media, is_active: true },
+      ]);
+      setMediaActionLabel('Проверка готовности изображения...');
+      await waitForMediaReady(itemId, res.media?.id, res.media?.url);
+      await refreshItems();
+    } catch (e: any) {
+      setItemsError(e.response?.data?.detail || e.message || 'Ошибка генерации фото');
+    } finally {
+      setMediaActionItemId(null);
+      setMediaActionLabel('');
+    }
+  };
+
+  const onUploadPhotoForItem = (itemId: string) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setItemsError(null);
+      setMediaActionItemId(itemId);
+      setMediaActionLabel('Загрузка фото...');
+      try {
+        const res = await api.uploadItemMedia(itemId, file);
+        updateItemMediaState(itemId, (current) => [
+          ...current.map((m) => ({ ...m, is_active: false })),
+          { ...res.media, is_active: true },
+        ]);
+        setMediaActionLabel('Проверка загруженного изображения...');
+        await waitForMediaReady(itemId, res.media?.id, res.media?.url, 15000);
+        await refreshItems();
+      } catch (e: any) {
+        setItemsError(e.response?.data?.detail || e.message || 'Ошибка загрузки фото');
+      } finally {
+        setMediaActionItemId(null);
+        setMediaActionLabel('');
+      }
+    };
+    input.click();
+  };
+
+  const onSetActiveMedia = async (itemId: string, mediaId: string) => {
+    setItemsError(null);
+    setMediaActionItemId(itemId);
+    setMediaActionLabel('Обновление активного фото...');
+    try {
+      await api.setActiveItemMedia(itemId, mediaId);
+      updateItemMediaState(itemId, (current) =>
+        current.map((m) => ({ ...m, is_active: m.id === mediaId }))
+      );
+      await refreshItems();
+    } catch (e: any) {
+      setItemsError(e.response?.data?.detail || e.message || 'Ошибка выбора активного фото');
+    } finally {
+      setMediaActionItemId(null);
+      setMediaActionLabel('');
+    }
+  };
+
+  const onDeleteMedia = async (itemId: string, mediaId: string) => {
+    if (!confirm('Удалить это фото?')) return;
+    setItemsError(null);
+    setMediaActionItemId(itemId);
+    setMediaActionLabel('Удаление фото...');
+    try {
+      await api.deleteItemMedia(itemId, mediaId);
+      updateItemMediaState(itemId, (current) => {
+        const filtered = current.filter((m) => m.id !== mediaId);
+        if (filtered.length > 0 && !filtered.some((m) => m.is_active)) {
+          filtered[0] = { ...filtered[0], is_active: true };
+        }
+        return filtered;
+      });
+      await refreshItems();
+    } catch (e: any) {
+      setItemsError(e.response?.data?.detail || e.message || 'Ошибка удаления фото');
+    } finally {
+      setMediaActionItemId(null);
+      setMediaActionLabel('');
+    }
+  };
+
+  const onRegenerateMedia = async (itemId: string, mediaId: string) => {
+    const revisionDescription = window.prompt('Пожелания для перегенерации фото (опционально):') || undefined;
+    setItemsError(null);
+    setMediaActionItemId(itemId);
+    setMediaActionLabel('Перегенерация фото...');
+    try {
+      const res = await api.regenerateItemMedia(itemId, mediaId, revisionDescription, {
+        no_text_on_image: getNoTextOnImage(itemId),
+        style_intensity: getStyleIntensity(itemId),
+      });
+      updateItemMediaState(itemId, (current) => [
+        ...current.map((m) => ({ ...m, is_active: false })),
+        { ...res.media, is_active: true },
+      ]);
+      setMediaActionLabel('Проверка готовности изображения...');
+      await waitForMediaReady(itemId, res.media?.id, res.media?.url);
+      await refreshItems();
+    } catch (e: any) {
+      setItemsError(e.response?.data?.detail || e.message || 'Ошибка перегенерации фото');
+    } finally {
+      setMediaActionItemId(null);
+      setMediaActionLabel('');
     }
   };
 
@@ -1951,23 +2307,246 @@ export default function ContentAgent() {
                                   {generatingItemId === it.id ? 'Генерация...' : 'Сгенерировать'}
                                 </button>
                                 <button
+                                  onClick={() => onGeneratePhotoForItem(it.id)}
+                                  disabled={mediaActionItemId === it.id}
+                                  className="px-3 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg transition text-xs font-medium disabled:opacity-50"
+                                >
+                                  {mediaActionItemId === it.id ? 'Фото...' : 'Сгенерировать фото'}
+                                </button>
+                                <button
                                   onClick={() => onPublishItem(it.id)}
-                                  disabled={!it.generated_text}
+                                  disabled={!it.generated_text && !getActiveMedia(it)}
                                   className="px-3 py-2 bg-white border border-gray-300 text-gray-800 hover:bg-gray-50 rounded-lg transition text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   Опубликовать
                                 </button>
                               </div>
-                              {it.generated_text && (
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                                <label className="inline-flex items-center gap-1 text-gray-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={getNoTextOnImage(it.id)}
+                                    onChange={(e) =>
+                                      setMediaNoTextOnImageByItem((prev) => ({
+                                        ...prev,
+                                        [it.id]: e.target.checked,
+                                      }))
+                                    }
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  Без текста на фото
+                                </label>
+                                <label className="inline-flex items-center gap-1 text-gray-700">
+                                  <span>Style:</span>
+                                  <select
+                                    value={getStyleIntensity(it.id)}
+                                    onChange={(e) =>
+                                      setMediaStyleIntensityByItem((prev) => ({
+                                        ...prev,
+                                        [it.id]: e.target.value as 'classic' | 'bold' | 'edgy',
+                                      }))
+                                    }
+                                    className="px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 text-xs"
+                                  >
+                                    <option value="classic">classic</option>
+                                    <option value="bold">bold</option>
+                                    <option value="edgy">edgy</option>
+                                  </select>
+                                </label>
+                              </div>
+                              {mediaActionItemId === it.id && (
+                                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-xs">
+                                  <span className="inline-block w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+                                  <span>{mediaActionLabel || 'Обработка фото...'}</span>
+                                </div>
+                              )}
+                              {(it.generated_text || textEditItemId === it.id) && (
                                 <details className="mt-2">
                                   <summary className="text-xs text-gold-600 cursor-pointer">Показать текст</summary>
-                                  <textarea
-                                    readOnly
-                                    className="w-full mt-2 px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 font-mono text-xs"
-                                    rows={6}
-                                    value={it.generated_text}
-                                  />
+                                  {textEditItemId === it.id ? (
+                                    <div className="mt-2">
+                                      <textarea
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 font-mono text-xs"
+                                        rows={8}
+                                        value={textEditValue}
+                                        onChange={(e) => setTextEditValue(e.target.value)}
+                                      />
+                                      <div className="mt-2 flex gap-2">
+                                        <button
+                                          onClick={() => onRegenerateTextInEditor(it)}
+                                          disabled={generatingItemId === it.id || textEditSavingItemId === it.id}
+                                          className="px-3 py-1.5 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
+                                        >
+                                          {generatingItemId === it.id ? 'Перегенерация...' : 'Перегенерация'}
+                                        </button>
+                                        <button
+                                          onClick={() => onSaveManualTextEdit(it)}
+                                          disabled={textEditSavingItemId === it.id}
+                                          className="px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
+                                        >
+                                          {textEditSavingItemId === it.id ? 'Сохранение...' : 'Сохранить текст'}
+                                        </button>
+                                        <button
+                                          onClick={onCancelManualTextEdit}
+                                          disabled={textEditSavingItemId === it.id}
+                                          className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+                                        >
+                                          Отмена
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-2">
+                                      <textarea
+                                        readOnly
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 font-mono text-xs"
+                                        rows={6}
+                                        value={it.generated_text}
+                                      />
+                                      <div className="mt-2 flex gap-2">
+                                        <button
+                                          onClick={() => onRegenerateTextInEditor(it)}
+                                          disabled={generatingItemId === it.id}
+                                          className="px-3 py-1.5 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
+                                        >
+                                          {generatingItemId === it.id ? 'Перегенерация...' : 'Перегенерация'}
+                                        </button>
+                                        <button
+                                          onClick={() => onStartManualTextEdit(it)}
+                                          className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                                        >
+                                          Редактировать текст вручную
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </details>
+                              )}
+                              {getItemMedia(it).length > 0 && (
+                                <div className="mt-2 border border-gray-200 rounded-lg p-2 bg-gray-50">
+                                  <div className="text-xs font-medium text-gray-700 mb-2">Фото для публикации</div>
+                                  {getActiveMedia(it) && (
+                                    <div className="mb-3">
+                                      <div className="text-xs font-medium text-gray-700 mb-2">
+                                        Превью публикации (Instagram)
+                                      </div>
+                                      <div className="max-w-[360px] bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                                        <div className="px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-yellow-400 p-[1px]">
+                                              <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-[10px] font-semibold text-gray-800">
+                                                G
+                                              </div>
+                                            </div>
+                                            <div className="leading-tight">
+                                              <div className="text-xs font-semibold text-gray-900">glame</div>
+                                              <div className="text-[10px] text-gray-500">Промо-публикация</div>
+                                            </div>
+                                          </div>
+                                          <span className="text-gray-400 text-sm">•••</span>
+                                        </div>
+
+                                        <div className="relative">
+                                          <img
+                                            src={jewelryImageFullUrl(getActiveMedia(it)!.url)}
+                                            alt="Instagram preview"
+                                            className="w-full aspect-square object-cover cursor-zoom-in"
+                                            onClick={() =>
+                                              setJewelryLightboxUrl(jewelryImageFullUrl(getActiveMedia(it)!.url))
+                                            }
+                                          />
+                                          {mediaActionItemId === it.id && (
+                                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                                              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/90 text-gray-900 text-xs">
+                                                <span className="inline-block w-3 h-3 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+                                                <span>{mediaActionLabel || 'Обработка...'}</span>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="px-3 py-2">
+                                          <div className="flex items-center justify-between text-sm mb-1">
+                                            <div className="flex items-center gap-3 text-gray-700">
+                                              <span>♡</span>
+                                              <span>💬</span>
+                                              <span>✈</span>
+                                            </div>
+                                            <span className="text-gray-700">🔖</span>
+                                          </div>
+                                          <div className="text-[11px] text-gray-900 font-medium mb-1">
+                                            glame
+                                          </div>
+                                          <p className="text-[12px] text-gray-800 whitespace-pre-wrap leading-snug">
+                                            {it.generated_text ||
+                                              `${it.hook ? `${it.hook}\n` : ''}${it.cta || ''}`.trim() ||
+                                              'Текст публикации появится после генерации контента.'}
+                                          </p>
+                                          <div className="text-[10px] text-gray-400 mt-2 uppercase tracking-wide">
+                                            {formatDateTime(it.scheduled_at)}
+                                          </div>
+                                          <div className="text-[10px] text-gray-500 mt-1">
+                                            Нажмите на фото, чтобы открыть полный размер
+                                          </div>
+                                          <div className="mt-3 flex flex-wrap gap-2">
+                                            <button
+                                              onClick={() => onRegenerateMedia(it.id, getActiveMedia(it)!.id)}
+                                              disabled={mediaActionItemId === it.id}
+                                              className="px-3 py-1.5 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50"
+                                            >
+                                              Перегенерировать фото
+                                            </button>
+                                            <button
+                                              onClick={() => onDeleteMedia(it.id, getActiveMedia(it)!.id)}
+                                              disabled={mediaActionItemId === it.id}
+                                              className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                                            >
+                                              Удалить фото
+                                            </button>
+                                            <button
+                                              onClick={() => onUploadPhotoForItem(it.id)}
+                                              disabled={mediaActionItemId === it.id}
+                                              className="px-3 py-1.5 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 disabled:opacity-50"
+                                            >
+                                              Добавить свое фото
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  {getItemMedia(it).length > 1 && (
+                                    <div className="mt-2">
+                                      <div className="text-[11px] text-gray-600 mb-2">
+                                        Варианты фото (нажмите, чтобы сделать активным):
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        {getItemMedia(it).map((media) => (
+                                          <button
+                                            key={media.id}
+                                            onClick={() => onSetActiveMedia(it.id, media.id)}
+                                            disabled={mediaActionItemId === it.id}
+                                            className={`relative p-0.5 rounded border ${
+                                              media.is_active ? 'border-green-500' : 'border-gray-300'
+                                            } disabled:opacity-50`}
+                                            title={`v${media.version} · ${media.source}`}
+                                          >
+                                            <img
+                                              src={jewelryImageFullUrl(media.url)}
+                                              alt="variant"
+                                              className="w-14 h-14 object-cover rounded"
+                                            />
+                                            {media.is_active && (
+                                              <span className="absolute -top-2 -right-2 bg-green-600 text-white rounded-full w-4 h-4 text-[9px] leading-4">
+                                                ✓
+                                              </span>
+                                            )}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               )}
                             </td>
                           </tr>

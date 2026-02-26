@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 type ModelOption = {
   id: string;
@@ -31,6 +33,8 @@ function buildModelLabel(model: any): ModelOption {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const { logout } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +62,14 @@ export default function SettingsPage() {
   const [imageModelsError, setImageModelsError] = useState<string | null>(null);
   const [imageModels, setImageModels] = useState<ModelOption[]>([]);
   const [imageSearch, setImageSearch] = useState<string>('');
+
+  // Смена пароля
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
   const effectiveSelection = useMemo(() => {
     if (selectedModel === '__custom__') return customModel.trim();
@@ -236,6 +248,31 @@ export default function SettingsPage() {
       setError(e.response?.data?.detail || e.message || 'Не удалось сохранить настройки модели генерации изображений');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onChangePassword = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordError('Новый пароль должен быть не короче 6 символов.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Пароли не совпадают.');
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await api.changePassword(currentPassword || null, newPassword);
+      setPasswordSuccess('Пароль успешно изменён.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (e: any) {
+      setPasswordError(e.response?.data?.detail || e.message || 'Не удалось изменить пароль.');
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -436,6 +473,82 @@ export default function SettingsPage() {
             </div>
           </>
         )}
+      </div>
+
+      {/* Смена пароля */}
+      <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">Смена пароля</h2>
+        {passwordError && (
+          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{passwordError}</div>
+        )}
+        {passwordSuccess && (
+          <div className="mb-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+            {passwordSuccess}
+          </div>
+        )}
+        <div className="space-y-4 max-w-md">
+          <div>
+            <label htmlFor="current-password" className="block text-sm font-medium text-gray-700 mb-1">
+              Текущий пароль
+            </label>
+            <input
+              id="current-password"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Оставьте пустым, если пароль ещё не задан"
+              autoComplete="current-password"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+            />
+          </div>
+          <div>
+            <label htmlFor="new-password" className="block text-sm font-medium text-gray-700 mb-1">
+              Новый пароль
+            </label>
+            <input
+              id="new-password"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Не короче 6 символов"
+              autoComplete="new-password"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+            />
+          </div>
+          <div>
+            <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 mb-1">
+              Подтверждение нового пароля
+            </label>
+            <input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Повторите новый пароль"
+              autoComplete="new-password"
+              className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+            />
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onChangePassword}
+              disabled={passwordSaving}
+              className="px-5 py-2.5 bg-gold-500 text-white rounded-lg hover:bg-gold-600 disabled:opacity-50 transition font-semibold"
+            >
+              {passwordSaving ? 'Сохранение…' : 'Изменить пароль'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                logout();
+                router.push('/login');
+              }}
+              className="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-700 font-medium"
+            >
+              Выйти
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -200,6 +200,8 @@ docker exec -it glame_backend alembic upgrade head
 
 **Повторный вход в приложении отключён:** после ввода логина/пароля Basic Auth страница «Вход в систему» внутри портала не показывается — разделы (Покупатели, AI Маркетолог и др.) открываются сразу. Это задаётся переменными `PORTAL_BASIC_AUTH_ONLY=true` (backend) и `NEXT_PUBLIC_SKIP_APP_AUTH=true` (frontend при сборке); по умолчанию они уже включены в `infra/docker-compose.prod.yml`. Чтобы снова требовать логин в приложении, в `infra/.env` задайте `PORTAL_BASIC_AUTH_ONLY=false` и `NEXT_PUBLIC_SKIP_APP_AUTH=false`, затем пересоберите фронт и перезапустите backend.
 
+Чтобы при переходе во вкладки Покупатели / AI Маркетолог / Аналитика браузер не запрашивал пароль повторно, запросы к API должны идти на тот же хост (через nginx): в prod оставляйте `NEXT_PUBLIC_API_URL` пустым. Фронт отправляет запросы с учётными данными (Basic Auth) за счёт `withCredentials: true`.
+
 **Сменить пароль для admin:**
 
 На сервере из корня проекта (файл `infra/.htpasswd` будет перезаписан на хосте):
@@ -325,7 +327,18 @@ crontab -e
 
 ### 10.1 Восстановление PostgreSQL
 
-Контейнеры должны быть запущены. Укажите путь к скопированному dump:
+Контейнеры должны быть запущены. Укажите путь к скопированному dump.
+
+**Если на сервере БД уже создана миграциями** (пустая с таблицами) и при восстановлении появляются ошибки вида `relation "users" already exists` или `multiple primary keys`, используйте пересоздание БД:
+
+```bash
+chmod +x scripts/restore_postgres_docker.sh
+./scripts/restore_postgres_docker.sh --recreate ./backups/glame_db_YYYYMMDDTHHMMSSZ.dump
+```
+
+Флаг `--recreate` завершает соединения с БД, удаляет её, создаёт заново и восстанавливает дамп в пустую БД. После восстановления миграции Alembic выполнять не нужно (схема уже в дампе).
+
+Обычное восстановление (без пересоздания):
 
 ```bash
 ./scripts/restore_postgres_docker.sh ./backups/glame_db_YYYYMMDDTHHMMSSZ.dump

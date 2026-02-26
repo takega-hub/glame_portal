@@ -19,6 +19,16 @@ class RecommendationService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.persona_service = PersonaService(db)
+
+    @staticmethod
+    def _product_has_images(product: Product) -> bool:
+        images = product.images
+        if not isinstance(images, list) or len(images) == 0:
+            return False
+        for img in images:
+            if isinstance(img, str) and img.strip():
+                return True
+        return False
     
     async def recommend_products(
         self,
@@ -27,7 +37,8 @@ class RecommendationService:
         category: Optional[str] = None,
         limit: int = 10,
         exclude_ids: Optional[List[UUID]] = None,
-        randomize: bool = True
+        randomize: bool = True,
+        require_images: bool = False,
     ) -> List[Product]:
         """
         Подбор товаров на основе критериев
@@ -53,16 +64,18 @@ class RecommendationService:
         if category:
             query = query.where(Product.category == category)
         
-        # Фильтрация по тегам (исправленная версия для JSONB)
+        # Фильтрация по тегам.
+        # В проекте поле Product.tags хранится как JSON и в некоторых БД-драйверах
+        # contains() может генерировать несовместимый SQL. Поэтому используем
+        # безопасный текстовый fallback через CAST(... AS TEXT) ILIKE.
         if tags:
-            from sqlalchemy import or_
+            from sqlalchemy import or_, cast, String
             tag_conditions = []
             for tag in tags:
-                # Правильный способ работы с JSONB в PostgreSQL
-                # Используем оператор @> (contains) для проверки наличия тега в массиве
-                tag_conditions.append(
-                    Product.tags.contains([tag])
-                )
+                if not tag:
+                    continue
+                like_pattern = f"%{str(tag).lower()}%"
+                tag_conditions.append(cast(Product.tags, String).ilike(like_pattern))
             if tag_conditions:
                 query = query.where(or_(*tag_conditions))
         
@@ -74,6 +87,9 @@ class RecommendationService:
         
         result = await self.db.execute(query)
         products = list(result.scalars().all())
+
+        if require_images:
+            products = [p for p in products if self._product_has_images(p)]
         
         # Если рандомизация включена, перемешиваем и берем нужное количество
         if randomize and len(products) > limit:
@@ -124,6 +140,7 @@ class RecommendationService:
         query_text: str,
         limit: int = 8,
         only_active: bool = True,
+        require_images: bool = False,
     ) -> List[Product]:
         """
         Текстовый поиск товаров (для ContentAgent промптов).
@@ -159,7 +176,10 @@ class RecommendationService:
 
         q = q.limit(limit)
         result = await self.db.execute(q)
-        return list(result.scalars().all())
+        products = list(result.scalars().all())
+        if require_images:
+            products = [p for p in products if self._product_has_images(p)]
+        return products
     
     async def recommend_looks_with_generation(
         self,

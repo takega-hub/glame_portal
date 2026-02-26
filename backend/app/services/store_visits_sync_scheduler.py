@@ -56,12 +56,14 @@ async def run_nightly_store_visits_sync() -> None:
         
         logger.info("Starting nightly store visits sync from FTP")
         
-        # Запускаем скрипт синхронизации
+        # Запускаем скрипт синхронизации (UTF-8, чтобы не падать на cp1251 под Windows)
         result = subprocess.run(
             [sys.executable, str(script_path)],
             cwd=str(project_root),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=600  # 10 минут таймаут
         )
         

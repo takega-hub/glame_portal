@@ -159,6 +159,7 @@ async def get_products_paged(
     material: Optional[str] = None,
     vstavka: Optional[str] = None,  # Вставка
     pokrytie: Optional[str] = None,  # Покрытие
+    sochetanie: Optional[str] = None,  # Сочетание
     razmer: Optional[str] = None,  # Размер
     tip_zamka: Optional[str] = None,  # Тип замка
     color: Optional[str] = None,  # Цвет
@@ -284,6 +285,18 @@ async def get_products_paged(
             )
             filters.append(pokrytie_condition)
             logger.info(f"Фильтр по покрытию: '{pokrytie_filter}'")
+        if sochetanie:
+            sochetanie_filter = sochetanie.strip()
+            sochetanie_sql = text("LOWER(specifications->>'Сочетание') = LOWER(:sochetanie_value)").bindparams(
+                sochetanie_value=sochetanie_filter
+            )
+            filters.append(
+                and_(
+                    Product.specifications.isnot(None),
+                    sochetanie_sql
+                )
+            )
+            logger.info(f"Фильтр по сочетанию: '{sochetanie_filter}'")
         if razmer:
             razmer_filter = razmer.strip()
             razmer_sql = text("LOWER(specifications->>'Размер') = LOWER(:razmer_value)").bindparams(razmer_value=razmer_filter)

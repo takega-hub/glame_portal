@@ -739,6 +739,45 @@ async def sync_ftp_store_visits(
         raise HTTPException(status_code=500, detail=f"Ошибка синхронизации: {str(e)}")
 
 
+def _run_store_visits_sync() -> tuple[bool, str]:
+    """
+    Запуск синхронизации данных счетчиков посещаемости с FTP и запись в БД.
+    Возвращает (success, message).
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    project_root = Path(__file__).parent.parent.parent.parent
+    script_path = project_root / "sync_ftp_stores.py"
+    if not script_path.exists():
+        return False, f"Скрипт синхронизации не найден: {script_path}"
+
+    try:
+        logger.info("Starting store visits sync from FTP")
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=600,
+        )
+        if result.returncode == 0:
+            logger.info("Store visits sync finished successfully")
+            return True, result.stdout or "Синхронизация посещаемости выполнена"
+        error_msg = result.stderr or "Неизвестная ошибка"
+        logger.warning(f"Store visits sync failed: {error_msg}")
+        return False, error_msg
+    except subprocess.TimeoutExpired:
+        logger.warning("Store visits sync timed out")
+        return False, "Синхронизация посещаемости превысила время ожидания"
+    except Exception as e:
+        logger.warning(f"Store visits sync error: {e}", exc_info=True)
+        return False, str(e)
+
+
 @router.post("/store-visits/sync")
 async def sync_store_visits_manual(db: AsyncSession = Depends(get_db)):
     """
@@ -746,50 +785,10 @@ async def sync_store_visits_manual(db: AsyncSession = Depends(get_db)):
     
     Запускает синхронизацию посещаемости вручную
     """
-    import subprocess
-    import sys
-    from pathlib import Path
-    
-    try:
-        # Находим путь к скрипту sync_ftp_stores.py (он находится в корне проекта)
-        project_root = Path(__file__).parent.parent.parent.parent
-        script_path = project_root / "sync_ftp_stores.py"
-        
-        if not script_path.exists():
-            raise HTTPException(status_code=500, detail=f"Скрипт синхронизации не найден: {script_path}")
-        
-        logger.info("Starting manual store visits sync from FTP")
-        
-        # Запускаем скрипт синхронизации
-        result = subprocess.run(
-            [sys.executable, str(script_path)],
-            cwd=str(project_root),
-            capture_output=True,
-            text=True,
-            timeout=600  # 10 минут таймаут
-        )
-        
-        if result.returncode == 0:
-            logger.info("Manual store visits sync finished successfully")
-            return {
-                "status": "success",
-                "message": "Синхронизация посещаемости выполнена успешно",
-                "output": result.stdout
-            }
-        else:
-            error_msg = result.stderr or "Неизвестная ошибка"
-            logger.error(f"Manual store visits sync failed: {error_msg}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Ошибка синхронизации: {error_msg}"
-            )
-            
-    except subprocess.TimeoutExpired:
-        logger.error("Manual store visits sync timed out")
-        raise HTTPException(status_code=500, detail="Синхронизация превысила время ожидания (10 минут)")
-    except Exception as e:
-        logger.error(f"Manual store visits sync error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Ошибка синхронизации: {str(e)}")
+    success, message = _run_store_visits_sync()
+    if success:
+        return {"status": "success", "message": "Синхронизация посещаемости выполнена успешно", "output": message}
+    raise HTTPException(status_code=500, detail=message)
 
 
 @router.get("/stores")
@@ -966,9 +965,35 @@ async def get_store_visits_daily(
             func.sum(StoreVisit.revenue).label('revenue')
         ).join(Store, StoreVisit.store_id == Store.id)
         
-        # Фильтр по магазину если указан
-        if store_id:
-            query = query.where(Store.id == store_id)
+        # Фильтр по магазину: та же логика, что в метриках (1c-sales) — по имени и алиасам FTP (CENTRUM, YALTA),
+        # чтобы график посещаемости показывал те же данные, что и карточка «Посещаемость»
+        selected_store_name = None
+        if store_id and store_id != "all":
+            try:
+                if isinstance(store_id, str) and len(store_id) == 36 and store_id.count("-") == 4:
+                    store_by_id = await db.execute(select(Store.name).where(Store.id == UUID(store_id)).limit(1))
+                    row = store_by_id.scalar_one_or_none()
+                    if row is not None:
+                        selected_store_name = row if isinstance(row, str) else row[0]
+            except (ValueError, TypeError):
+                pass
+            if selected_store_name is None:
+                store_query = await db.execute(
+                    select(Store.name).where(
+                        or_(Store.external_id == store_id, Store.name == store_id)
+                    ).limit(1)
+                )
+                row = store_query.scalar_one_or_none()
+                if row is not None:
+                    selected_store_name = row if isinstance(row, str) else row[0]
+            if selected_store_name:
+                names_to_match = [selected_store_name]
+                store_name_lower = selected_store_name.lower()
+                if "центрум" in store_name_lower or "centrum" in store_name_lower:
+                    names_to_match.append("CENTRUM")
+                if "ялта" in store_name_lower or "yalta" in store_name_lower:
+                    names_to_match.append("YALTA")
+                query = query.where(Store.name.in_(names_to_match))
         
         # Текущий период
         current_query = query.where(
@@ -1324,14 +1349,16 @@ async def sync_1c_sales(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Синхронизация продаж из 1С в БД
-    
+    Синхронизация продаж из 1С в БД.
+    После синхронизации продаж автоматически обновляет данные счетчиков посещаемости по всем магазинам (FTP) и записывает их в БД.
+
     Поддерживает:
     - Периоды: today, yesterday, week, month, quarter, year
     - Индивидуальный диапазон дат (start_date, end_date)
     - Инкрементальную синхронизацию (только новые данные)
     - Полную синхронизацию (перезапись существующих)
     """
+    import asyncio
     try:
         # Определяем период
         if period:
@@ -1342,7 +1369,7 @@ async def sync_1c_sales(
         else:
             end = datetime.now()
             start = end - timedelta(days=days)
-        
+
         # Используем новый сервис синхронизации
         async with OneCSalesSyncService(db) as sync_service:
             result = await sync_service.sync_period(
@@ -1350,12 +1377,23 @@ async def sync_1c_sales(
                 end_date=end,
                 incremental=incremental
             )
-            
-            logger.info(f"Синхронизация завершена: {result}")
-            
+
+            logger.info(f"Синхронизация продаж завершена: {result}")
+
+            # При каждой синхронизации продаж обновляем данные счетчиков посещаемости по всем магазинам и пишем в БД
+            visits_ok, visits_msg = await asyncio.get_event_loop().run_in_executor(
+                None, _run_store_visits_sync
+            )
+            result["store_visits_synced"] = visits_ok
+            result["store_visits_message"] = visits_msg
+            if not visits_ok:
+                logger.warning(f"Синхронизация посещаемости после продаж: {visits_msg}")
+
             return {
                 "status": "success",
-                "message": "Синхронизация успешно завершена",
+                "message": "Синхронизация успешно завершена" + (
+                    "; посещаемость обновлена." if visits_ok else "; посещаемость не обновлена (см. store_visits_message)."
+                ),
                 **result
             }
     except Exception as e:
@@ -2157,21 +2195,28 @@ async def get_1c_sales_metrics(
             )
         )
         
-        # Фильтр по магазину (если указан external_id из 1С, находим магазин по названию)
+        # Фильтр по магазину (если указан external_id из 1С, находим магазин и учитываем альясные названия из FTP)
+        selected_store_name = None
         if store_id and store_id != "all":
-            # Находим магазин по external_id (UUID из 1С) или по названию
             store_query = await db.execute(
                 select(Store.name).where(
                     or_(
                         Store.external_id == store_id,
-                        Store.name == store_id  # Если external_id не задан, ищем по названию
+                        Store.name == store_id
                     )
                 )
             )
-            store_name = store_query.scalar()
-            if store_name:
-                # Фильтруем по названию магазина (счетчики привязаны к названиям)
-                visit_query = visit_query.where(Store.name == store_name)
+            selected_store_name = store_query.scalar()
+            if selected_store_name:
+                # Счетчики FTP пишутся под именами CENTRUM, YALTA; в 1С магазины могут называться "Центрум 2", "Ялта" и т.д.
+                # Добавляем альясные названия, чтобы при выборе магазина из списка показывалась посещаемость
+                names_to_match = [selected_store_name]
+                store_name_lower = selected_store_name.lower()
+                if "центрум" in store_name_lower or "centrum" in store_name_lower:
+                    names_to_match.append("CENTRUM")
+                if "ялта" in store_name_lower or "yalta" in store_name_lower:
+                    names_to_match.append("YALTA")
+                visit_query = visit_query.where(Store.name.in_(names_to_match))
         
         visit_query = visit_query.group_by(Store.name, Store.external_id)
         visit_result = await db.execute(visit_query)
@@ -2207,10 +2252,27 @@ async def get_1c_sales_metrics(
                     # Данные уже учтены в total_visitors, но нужно убедиться, что они в visitors_by_store
                     pass
         
+        # При фильтре по одному магазину показываем в разбивке только его название (из 1С), без дубликата CENTRUM/Ялта
+        if store_id and store_id != "all" and selected_store_name and total_visitors > 0:
+            visitors_by_store[store_id] = {
+                "visitor_count": total_visitors,
+                "store_name": selected_store_name
+            }
+            visitors_by_store[selected_store_name] = {
+                "visitor_count": total_visitors,
+                "store_name": selected_store_name
+            }
+            # Убираем альясные названия из разбивки, чтобы не показывать "CENTRUM: 33" и "Центрум 2: 33" одновременно
+            store_name_lower = selected_store_name.lower()
+            if "центрум" in store_name_lower or "centrum" in store_name_lower:
+                visitors_by_store.pop("CENTRUM", None)
+            if "ялта" in store_name_lower or "yalta" in store_name_lower:
+                visitors_by_store.pop("YALTA", None)
+
         logger.info(f"Общая посещаемость: {total_visitors}, по магазинам: {visitors_by_store}")
     except Exception as e:
         logger.warning(f"Ошибка получения данных о посещаемости: {e}", exc_info=True)
-    
+
     # Добавляем посещаемость в aggregated
     aggregated["total_visitors"] = total_visitors
     

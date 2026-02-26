@@ -8,9 +8,13 @@ from datetime import datetime
 import logging
 import asyncio
 import time
+import re
+from pathlib import Path
 
 from app.database.connection import get_db, AsyncSessionLocal
 from app.models.look import Look
+from app.models.content_item import ContentItem
+from app.models.product import Product
 from app.agents.stylist_agent import StylistAgent
 
 logger = logging.getLogger(__name__)
@@ -37,6 +41,217 @@ class LookGenerateRequest(BaseModel):
     user_request: Optional[str] = None
     generate_image: bool = True
     use_default_model: bool = False
+    digital_model: Optional[str] = None
+
+
+class DigitalModelInfo(BaseModel):
+    id: str
+    name: str
+    source_images: List[str]
+    source_images_count: int
+    portfolio_images_count: int
+    portfolio_images: List[str]
+
+
+def _sanitize_model_name(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    cleaned = re.sub(r"[^a-zA-Z0-9_\- ]+", "", str(value)).strip()
+    if not cleaned:
+        return None
+    return re.sub(r"\s+", "_", cleaned).lower()
+
+
+def _discover_digital_models() -> List[dict]:
+    models_root = Path("static/models")
+    if not models_root.exists():
+        return []
+
+    exts = {".jpg", ".jpeg", ".png", ".webp"}
+    model_dirs = sorted([p for p in models_root.iterdir() if p.is_dir()], key=lambda p: p.name.lower())
+    models: List[dict] = []
+
+    for model_dir in model_dirs:
+        files = sorted(
+            [p for p in model_dir.iterdir() if p.is_file() and p.suffix.lower() in exts],
+            key=lambda p: p.name.lower(),
+        )
+        models.append(
+            {
+                "id": model_dir.name,
+                "name": model_dir.name.replace("_", " "),
+                "source_images": [f"/static/models/{model_dir.name}/{f.name}" for f in files],
+                "source_images_count": len(files),
+            }
+        )
+
+    if models:
+        return models
+
+    # Backward compatibility: если изображения лежат прямо в static/models
+    root_files = sorted(
+        [p for p in models_root.iterdir() if p.is_file() and p.suffix.lower() in exts],
+        key=lambda p: p.name.lower(),
+    )
+    if root_files:
+        return [
+            {
+                "id": "default",
+                "name": "default",
+                "source_images": [f"/static/models/{f.name}" for f in root_files],
+                "source_images_count": len(root_files),
+            }
+        ]
+
+    return []
+
+
+def _collect_portfolio_images_for_model(model_id: str, looks: List[Look], content_items: List[ContentItem]) -> List[str]:
+    exts = {".jpg", ".jpeg", ".png", ".webp"}
+    model_norm = _sanitize_model_name(model_id) or ""
+    urls: List[str] = []
+    seen: set[str] = set()
+
+    def add_url(url: Optional[str]):
+        if not url:
+            return
+        normalized = str(url).strip()
+        if not normalized:
+            return
+        if normalized.startswith("/static/lcimages/"):
+            normalized = normalized.replace("/static/lcimages/", "/static/look_images/")
+        if normalized not in seen:
+            seen.add(normalized)
+            urls.append(normalized)
+
+    # 1) Из образов (Look): явная привязка по generation_metadata.digital_model
+    for look in looks:
+        metadata = look.generation_metadata or {}
+        look_model = _sanitize_model_name(metadata.get("digital_model"))
+        if look_model != model_norm:
+            continue
+        if isinstance(look.image_urls, list):
+            for image_data in look.image_urls:
+                if isinstance(image_data, dict):
+                    add_url(image_data.get("url"))
+                else:
+                    add_url(str(image_data))
+        add_url(look.image_url)
+
+    # 2) Из content_items: по spec.media_task.model_profile / persona_type
+    for item in content_items:
+        spec = item.spec if isinstance(item.spec, dict) else {}
+        media_task = spec.get("media_task") if isinstance(spec.get("media_task"), dict) else {}
+        profile = _sanitize_model_name(
+            media_task.get("model_id")
+            or media_task.get("model_profile")
+            or media_task.get("persona_type")
+            or item.persona
+        )
+        if profile != model_norm:
+            continue
+        generated = item.generated if isinstance(item.generated, dict) else {}
+        media = generated.get("media") if isinstance(generated.get("media"), dict) else {}
+        media_items = media.get("items") if isinstance(media.get("items"), list) else []
+        for media_item in media_items:
+            if isinstance(media_item, dict):
+                add_url(media_item.get("url"))
+
+    # 3) Из файлов (fallback): по имени файла, если в нем встречается model_id
+    look_model_dir = Path("static/look_images/models") / model_norm
+    if look_model_dir.exists():
+        for file_path in sorted(look_model_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            if file_path.is_file() and file_path.suffix.lower() in exts:
+                add_url(f"/static/look_images/models/{model_norm}/{file_path.name}")
+
+    look_images_dir = Path("static/look_images")
+    if look_images_dir.exists():
+        for file_path in sorted(look_images_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            if not file_path.is_file() or file_path.suffix.lower() not in exts:
+                continue
+            stem_norm = _sanitize_model_name(file_path.stem) or ""
+            if model_norm and model_norm in stem_norm:
+                add_url(f"/static/look_images/{file_path.name}")
+
+    content_images_dir = Path("static/content_post_images")
+    if content_images_dir.exists():
+        for file_path in sorted(content_images_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            if not file_path.is_file() or file_path.suffix.lower() not in exts:
+                continue
+            stem_norm = _sanitize_model_name(file_path.stem) or ""
+            if model_norm and model_norm in stem_norm:
+                add_url(f"/static/content_post_images/{file_path.name}")
+
+    return urls
+
+
+async def _ensure_look_has_catalog_products(
+    db: AsyncSession,
+    look: Look,
+    require_image_refs: bool = False,
+) -> None:
+    """
+    Гарантирует, что у образа есть товары из каталога.
+    Если product_ids пустой — подбираем 3-5 активных товаров и сохраняем в look.
+    """
+    if look.product_ids and len(look.product_ids) > 0:
+        # Если ID уже есть — проверяем, что такие товары реально существуют в каталоге.
+        existing_ids: List[UUID] = []
+        for pid in look.product_ids:
+            try:
+                existing_ids.append(UUID(str(pid)))
+            except (ValueError, TypeError):
+                continue
+        if existing_ids:
+            existing_products_result = await db.execute(select(Product).where(Product.id.in_(existing_ids)))
+            existing_products = list(existing_products_result.scalars().all())
+            if existing_products:
+                if not require_image_refs:
+                    return
+                has_image_refs = any(
+                    isinstance(p.images, list) and any(isinstance(img, str) and img.strip() for img in p.images)
+                    for p in existing_products
+                )
+                if has_image_refs:
+                    return
+
+    stylist_agent = StylistAgent(db)
+    rec = stylist_agent.recommendation_service
+    metadata = look.generation_metadata or {}
+    persona = metadata.get("persona")
+
+    # Сначала пробуем осмысленный текстовый подбор по описанию/стилю/настроению.
+    query_text = " ".join(
+        [part for part in [look.style or "", look.mood or "", look.description or "", look.name or ""] if part]
+    ).strip()
+    products = await rec.search_products(
+        query_text=query_text or "украшения",
+        limit=5,
+        only_active=True,
+        require_images=True,
+    )
+
+    # Если текстовый поиск дал мало результатов — добираем из общего каталога.
+    if len(products) < 3:
+        fallback_products = await rec.recommend_products(
+            persona=persona,
+            limit=5,
+            randomize=True,
+            require_images=True,
+        )
+        existing_ids = {p.id for p in products}
+        for p in fallback_products:
+            if p.id not in existing_ids:
+                products.append(p)
+            if len(products) >= 5:
+                break
+
+    if not products:
+        return
+
+    look.product_ids = [str(p.id) for p in products[:5]]
+    await db.commit()
+    await db.refresh(look)
 
 
 class LookTryOnRequest(BaseModel):
@@ -59,6 +274,7 @@ async def get_looks(
     limit: int = Query(100, ge=1, le=100),
     style: Optional[str] = None,
     mood: Optional[str] = None,
+    digital_model: Optional[str] = Query(None, description="ID цифровой модели для фильтрации портфолио"),
     db: AsyncSession = Depends(get_db)
 ):
     query = select(Look)
@@ -68,9 +284,20 @@ async def get_looks(
     if mood:
         query = query.where(Look.mood == mood)
     
-    query = query.offset(skip).limit(limit)
+    if not digital_model:
+        query = query.offset(skip).limit(limit)
     result = await db.execute(query)
-    looks = result.scalars().all()
+    looks = list(result.scalars().all())
+
+    if digital_model:
+        digital_model_norm = _sanitize_model_name(digital_model)
+        filtered = []
+        for look in looks:
+            metadata = look.generation_metadata or {}
+            model_value = metadata.get("digital_model")
+            if _sanitize_model_name(model_value) == digital_model_norm:
+                filtered.append(look)
+        looks = filtered[skip : skip + limit]
     
     # Конвертируем UUID в строки для ответа
     looks_list = []
@@ -109,10 +336,41 @@ async def get_looks(
             "status": look.status,
             "approval_status": look.approval_status,
             "try_on_image_url": try_on_image_url,
+            "generation_metadata": look.generation_metadata or {},
         }
         looks_list.append(look_dict)
     
     return looks_list
+
+
+@router.get("/models", response_model=List[DigitalModelInfo])
+async def get_digital_models(db: AsyncSession = Depends(get_db)):
+    """Список цифровых моделей (ядро + статистика портфолио)"""
+    models = _discover_digital_models()
+    if not models:
+        return []
+
+    looks_result = await db.execute(select(Look))
+    looks = list(looks_result.scalars().all())
+    content_items_result = await db.execute(select(ContentItem))
+    content_items = list(content_items_result.scalars().all())
+
+    items: List[dict] = []
+    for model in models:
+        model_id = model["id"]
+        portfolio_images = _collect_portfolio_images_for_model(
+            model_id=model_id,
+            looks=looks,
+            content_items=content_items,
+        )
+        items.append(
+            {
+                **model,
+                "portfolio_images_count": len(portfolio_images),
+                "portfolio_images": portfolio_images,
+            }
+        )
+    return items
 
 
 @router.get("/{look_id}", response_model=dict)
@@ -123,6 +381,8 @@ async def get_look(look_id: UUID, db: AsyncSession = Depends(get_db)):
         look = result.scalar_one_or_none()
         if not look:
             raise HTTPException(status_code=404, detail="Look not found")
+
+        await _ensure_look_has_catalog_products(db, look, require_image_refs=True)
         
         # Получаем продукты для образа
         from app.agents.stylist_agent import StylistAgent
@@ -163,6 +423,7 @@ async def get_look(look_id: UUID, db: AsyncSession = Depends(get_db)):
             "status": look.status,
             "approval_status": look.approval_status,
             "try_on_image_url": try_on_image_url,
+            "generation_metadata": look.generation_metadata or {},
             "products": [
                 {
                     "id": str(p.id),
@@ -197,6 +458,26 @@ async def generate_look(request: LookGenerateRequest):
         
         async with AsyncSessionLocal() as db:
             agent = StylistAgent(db)
+            available_models = _discover_digital_models()
+            available_model_ids = {m["id"] for m in available_models}
+            available_model_by_norm = {
+                (_sanitize_model_name(m["id"]) or ""): m["id"] for m in available_models
+            }
+
+            selected_model = request.digital_model
+            if selected_model:
+                selected_norm = _sanitize_model_name(selected_model) or ""
+                if selected_model not in available_model_ids:
+                    # Принимаем model_id в любом регистре и в нормализованном виде
+                    mapped = available_model_by_norm.get(selected_norm)
+                    if not mapped:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Цифровая модель '{selected_model}' не найдена в static/models",
+                        )
+                    selected_model = mapped
+            if not selected_model and available_models:
+                selected_model = available_models[0]["id"]
             
             result = await agent.generate_look_for_user(
                 user_id=user_id,
@@ -206,13 +487,16 @@ async def generate_look(request: LookGenerateRequest):
                 persona=request.persona,
                 user_request=request.user_request,
                 generate_image=request.generate_image,
-                use_default_model=request.use_default_model
+                use_default_model=request.use_default_model,
+                digital_model=selected_model,
             )
             
             elapsed_time = time.time() - start_time
             logger.info(f"Генерация образа завершена за {elapsed_time:.2f} секунд. Look ID: {result.get('id')}")
             
             return result
+    except HTTPException:
+        raise
     except asyncio.TimeoutError:
         elapsed_time = time.time() - start_time
         logger.warning(f"Таймаут при генерации образа после {elapsed_time:.2f} секунд")
@@ -346,6 +630,7 @@ async def update_look(
             "status": look.status,
             "approval_status": look.approval_status,
             "try_on_image_url": try_on_image_url,
+            "generation_metadata": look.generation_metadata or {},
             "products": [
                 {
                     "id": str(p.id),
@@ -435,24 +720,30 @@ async def delete_test_looks(
 async def generate_look_image_endpoint(
     look_id: UUID,
     use_default_model: bool = Query(False),
+    digital_model: Optional[str] = Query(None, description="ID цифровой модели"),
     db: AsyncSession = Depends(get_db)
 ):
     """Генерация изображения для существующего образа"""
     from app.services.image_generation_service import image_generation_service
     
     try:
+        result = await db.execute(select(Look).where(Look.id == look_id))
+        look = result.scalar_one_or_none()
+        if not look:
+            raise HTTPException(status_code=404, detail="Образ не найден")
+
+        await _ensure_look_has_catalog_products(db, look, require_image_refs=True)
+
         image_url = await image_generation_service.generate_look_image_from_look(
             look_id=look_id,
-            use_default_model=use_default_model
+            use_default_model=use_default_model,
+            digital_model=digital_model,
         )
         
         if not image_url:
             raise HTTPException(status_code=404, detail="Образ не найден или не удалось сгенерировать изображение")
         
         # Обновляем образ с URL изображения
-        result = await db.execute(select(Look).where(Look.id == look_id))
-        look = result.scalar_one_or_none()
-        
         if look:
             # Добавляем новое изображение в массив image_urls
             if look.image_urls is None:
@@ -483,6 +774,8 @@ async def generate_look_image_endpoint(
             "current_image_index": look.current_image_index if look else None,
             "use_default_model": use_default_model
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Ошибка при генерации изображения образа")
         raise HTTPException(status_code=500, detail=f"Ошибка при генерации изображения: {str(e)}")

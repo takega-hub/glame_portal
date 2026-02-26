@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { fetchJson } from '@/lib/utils';
 
 type Period = "today" | "yesterday" | "week" | "month" | "quarter" | "year" | "custom";
 
@@ -55,9 +56,7 @@ export function ChannelAnalyticsPanel() {
         url += 'days=30';
       }
       
-      const response = await fetch(url);
-      const data = await response.json();
-      
+      const { data } = await fetchJson<{ channels?: Channel[] }>(url);
       if (data.channels) {
         setComparison(data.channels);
       }
@@ -81,9 +80,7 @@ export function ChannelAnalyticsPanel() {
         url += 'days=30';
       }
       
-      const response = await fetch(url);
-      const data = await response.json();
-      
+      const { data } = await fetchJson<{ channels?: unknown }>(url);
       if (data.channels) {
         setConversion(data);
       }
@@ -109,9 +106,7 @@ export function ChannelAnalyticsPanel() {
       
       url += 'period_type=week';
       
-      const response = await fetch(url);
-      const data = await response.json();
-      
+      const { data } = await fetchJson<{ trends?: unknown }>(url);
       if (data.trends) {
         setTrends(data);
       }

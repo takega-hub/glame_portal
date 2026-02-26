@@ -170,6 +170,8 @@ look_images_dir = static_dir / "look_images"
 look_images_dir.mkdir(exist_ok=True)
 jewelry_processed_dir = static_dir / "jewelry_processed"
 jewelry_processed_dir.mkdir(exist_ok=True)
+content_post_images_dir = static_dir / "content_post_images"
+content_post_images_dir.mkdir(exist_ok=True)
 
 # Директория для загруженных файлов
 uploads_dir = Path("uploads")
@@ -177,6 +179,9 @@ uploads_dir.mkdir(exist_ok=True)
 
 # Монтируем статические файлы
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+# Backward compatibility: старые ссылки могли сохраняться как /look_images/<file>
+app.mount("/look_images", StaticFiles(directory=str(look_images_dir)), name="look_images")
+app.mount("/content_post_images", StaticFiles(directory=str(content_post_images_dir)), name="content_post_images")
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 

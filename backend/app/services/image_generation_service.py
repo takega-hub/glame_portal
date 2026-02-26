@@ -3,6 +3,7 @@ import httpx
 import base64
 import logging
 import asyncio
+import re
 from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
 from pathlib import Path
@@ -25,6 +26,8 @@ class ImageGenerationService:
         self.storage_type = os.getenv("STORAGE_TYPE", "local")
         self.local_storage_dir = Path("static/look_images")
         self.local_storage_dir.mkdir(parents=True, exist_ok=True)
+        self.models_root_dir = Path("static/models")
+        self.models_root_dir.mkdir(parents=True, exist_ok=True)
     
     def set_db_session(self, db_session: AsyncSession):
         """Устанавливает сессию БД для сервиса"""
@@ -54,31 +57,36 @@ class ImageGenerationService:
         self,
         image_data: bytes,
         filename: str,
-        content_type: str = "image/png"
+        content_type: str = "image/png",
+        storage_subdir: str = "look_images",
     ) -> str:
         """Загрузка изображения в хранилище (local или S3)"""
+        safe_subdir = (storage_subdir or "look_images").strip().strip("/").replace("\\", "/")
+        if not safe_subdir:
+            safe_subdir = "look_images"
         if self.storage_type == "s3":
             if not self.s3_bucket_name:
                 raise ValueError("S3_BUCKET_NAME is not set")
             try:
                 self.s3_client.put_object(
                     Bucket=self.s3_bucket_name,
-                    Key=f"looks/{filename}",
+                    Key=f"{safe_subdir}/{filename}",
                     Body=image_data,
                     ContentType=content_type,
                     ACL='public-read'
                 )
-                return f"https://{self.s3_bucket_name}.s3.amazonaws.com/looks/{filename}"
+                return f"https://{self.s3_bucket_name}.s3.amazonaws.com/{safe_subdir}/{filename}"
             except Exception as e:
                 logger.error(f"Error uploading to S3: {e}")
                 raise
         else:
             # Local storage
-            file_path = self.local_storage_dir / filename
+            target_dir = Path("static") / safe_subdir
+            target_dir.mkdir(parents=True, exist_ok=True)
+            file_path = target_dir / filename
             with open(file_path, "wb") as f:
                 f.write(image_data)
-            # Убеждаемся, что путь правильный (исправляем возможные опечатки)
-            return f"/static/look_images/{filename}"
+            return f"/static/{safe_subdir}/{filename}"
     
     async def _get_model_from_settings(self) -> Optional[str]:
         """Получает модель для генерации изображений из БД настроек"""
@@ -98,11 +106,77 @@ class ImageGenerationService:
             return None
         return None
 
+    @staticmethod
+    def _sanitize_profile_name(value: Optional[str]) -> Optional[str]:
+        if not value:
+            return None
+        cleaned = re.sub(r"[^a-zA-Z0-9_\- ]+", "", str(value)).strip()
+        if not cleaned:
+            return None
+        return re.sub(r"\s+", "_", cleaned).lower()
+
+    def _discover_model_reference_images(self, model_profile: Optional[str], limit: int = 4) -> List[str]:
+        """
+        Возвращает список URL референс-фото типажа из static/models.
+        Логика:
+        1) если указан profile — ищем подпапку profile;
+        2) если не найдено — берем первую подпапку;
+        3) если подпапок нет — берем изображения из корня static/models.
+        """
+        try:
+            if not self.models_root_dir.exists():
+                return []
+
+            exts = {".jpg", ".jpeg", ".png", ".webp"}
+            subdirs = sorted([p for p in self.models_root_dir.iterdir() if p.is_dir()], key=lambda p: p.name.lower())
+            profile_norm = self._sanitize_profile_name(model_profile)
+
+            selected_dir: Optional[Path] = None
+            if profile_norm and subdirs:
+                selected_dir = next(
+                    (d for d in subdirs if self._sanitize_profile_name(d.name) == profile_norm),
+                    None
+                )
+                if not selected_dir:
+                    selected_dir = next(
+                        (d for d in subdirs if profile_norm in self._sanitize_profile_name(d.name)),
+                        None
+                    )
+
+            if not selected_dir and subdirs:
+                selected_dir = subdirs[0]
+
+            source_dir = selected_dir or self.models_root_dir
+            files = sorted(
+                [p for p in source_dir.iterdir() if p.is_file() and p.suffix.lower() in exts],
+                key=lambda p: p.name.lower(),
+            )[:limit]
+            urls = [f"/static/models/{f.relative_to(self.models_root_dir).as_posix()}" for f in files]
+
+            if urls:
+                logger.info(
+                    "Using %s model reference images from %s (profile=%s)",
+                    len(urls),
+                    source_dir.as_posix(),
+                    model_profile or "auto",
+                )
+            else:
+                logger.info(
+                    "No model reference images found in %s (profile=%s)",
+                    source_dir.as_posix(),
+                    model_profile or "auto",
+                )
+            return urls
+        except Exception as e:
+            logger.warning("Could not discover model reference images: %s", e)
+            return []
+
     async def _generate_with_openrouter(
         self,
         prompt: str,
         model: Optional[str] = None,
-        product_images: Optional[List[str]] = None
+        product_images: Optional[List[str]] = None,
+        reference_images: Optional[List[str]] = None,
     ) -> Optional[bytes]:
         """Генерация изображения через OpenRouter API с использованием chat/completions и modalities"""
         if not self.api_key:
@@ -125,13 +199,20 @@ class ImageGenerationService:
                     "X-Title": "GLAME AI Platform",
                 }
                 
-                # Формируем messages с изображениями товаров, если они есть
+                # Формируем messages с референс-изображениями (типаж + товары), если они есть
                 messages_content = []
                 
-                # Добавляем изображения товаров в промпт
+                # Сначала используем фото товаров (критично для точной передачи изделий),
+                # затем изображения типажа модели.
+                image_sources: List[str] = []
                 if product_images:
+                    image_sources.extend(product_images)
+                if reference_images:
+                    image_sources.extend(reference_images)
+
+                if image_sources:
                     loaded_images_count = 0
-                    for img_url in product_images[:5]:  # Максимум 5 изображений
+                    for img_url in image_sources[:8]:  # Максимум 8 референсов
                         if not img_url:
                             continue
                         
@@ -216,9 +297,9 @@ class ImageGenerationService:
                             continue
                     
                     if loaded_images_count > 0:
-                        logger.info(f"Successfully loaded {loaded_images_count} product images for generation")
+                        logger.info(f"Successfully loaded {loaded_images_count} reference images for generation")
                     else:
-                        logger.warning("No product images could be loaded, generating without reference images")
+                        logger.warning("No reference images could be loaded, generating without image references")
                 
                 # Добавляем текстовый промпт
                 messages_content.append({
@@ -416,7 +497,10 @@ class ImageGenerationService:
         self,
         look_description: Dict[str, Any],
         products: List[Dict[str, Any]],
-        use_default_model: bool = False
+        use_default_model: bool = False,
+        model_profile: Optional[str] = None,
+        asset_group: str = "look_images",
+        filename_prefix: str = "look",
     ) -> Optional[str]:
         """
         Генерация изображения образа
@@ -438,15 +522,23 @@ class ImageGenerationService:
         
         # Собираем URL изображений товаров для включения в генерацию
         product_image_urls = []
+        seen_product_urls = set()
         for product in products:
             product_images = product.get("images", [])
             if product_images and isinstance(product_images, list):
-                # Берем первое изображение каждого товара
-                img_url = product_images[0]
-                if img_url:
-                    product_image_urls.append(img_url)
+                # Берем до 3 фото каждого украшения, чтобы точнее передать форму и посадку.
+                for img_url in product_images[:3]:
+                    if isinstance(img_url, str) and img_url.strip() and img_url not in seen_product_urls:
+                        product_image_urls.append(img_url)
+                        seen_product_urls.add(img_url)
         
-        logger.info(f"Начало генерации изображения образа (включено изображений товаров: {len(product_image_urls)})")
+        model_reference_urls = self._discover_model_reference_images(model_profile=model_profile, limit=4)
+        logger.info(
+            "Начало генерации изображения образа (типажей: %s, товарных фото: %s, profile=%s)",
+            len(model_reference_urls),
+            len(product_image_urls),
+            model_profile or "auto",
+        )
         
         # Получаем модель из настроек
         model = await self._get_model_from_settings() or self.model
@@ -458,22 +550,33 @@ class ImageGenerationService:
         # 1. Пробуем OpenRouter (правильный формат с modalities для моделей генерации изображений)
         # Передаем изображения товаров для включения в генерацию
         logger.info("Попытка генерации через OpenRouter...")
-        image_data = await self._generate_with_openrouter(prompt, model, product_image_urls)
+        image_data = await self._generate_with_openrouter(
+            prompt,
+            model,
+            product_images=product_image_urls,
+            reference_images=model_reference_urls,
+        )
         
         # 2. Если не получилось, пробуем Replicate (для Flux и других моделей)
         if not image_data:
             logger.info("Генерация через OpenRouter не удалась, пробуем Replicate...")
             image_data = await self._generate_with_replicate(prompt, model)
         
-        # 3. Если не получилось, используем типовую модель
+        # 3. Если не получилось — не возвращаем "пустую" модель,
+        # чтобы не вводить в заблуждение изображением без нужных товаров.
         if not image_data:
-            logger.info("AI image generation failed, falling back to default model")
-            return await self._generate_on_default_model(look_description, products)
+            logger.warning("AI image generation failed; returning None to avoid product mismatch")
+            return None
         
         # Сохраняем изображение
         logger.info("Сохранение сгенерированного изображения...")
-        filename = f"look_{uuid4()}.png"
-        image_url = await self._upload_image_to_storage(image_data, filename)
+        safe_prefix = (filename_prefix or "look").strip().replace(" ", "_")
+        filename = f"{safe_prefix}_{uuid4()}.png"
+        image_url = await self._upload_image_to_storage(
+            image_data,
+            filename,
+            storage_subdir=asset_group,
+        )
         
         logger.info(f"Генерация изображения образа полностью завершена: {image_url}")
         return image_url
@@ -489,9 +592,30 @@ class ImageGenerationService:
         style = look_description.get("style", "")
         mood = look_description.get("mood", "")
         
-        # Описание товаров
-        product_names = [p.get("name", "") for p in products[:5]]
-        product_descriptions = [p.get("description", "") for p in products[:5] if p.get("description")]
+        # Описание товаров + строгий checklist по обязательной примерке
+        def infer_wear_zone(product: Dict[str, Any]) -> str:
+            category = str(product.get("category") or "").lower()
+            name_text = str(product.get("name") or "").lower()
+            source = f"{category} {name_text}"
+            if any(token in source for token in ("серьг", "серьги", "earring")):
+                return "уши (на обеих ушах, если это пара)"
+            if any(token in source for token in ("кольц", "ring")):
+                return "пальцы руки"
+            if any(token in source for token in ("браслет", "bracelet")):
+                return "запястье"
+            if any(token in source for token in ("колье", "цеп", "подвес", "necklace", "chain", "pendant")):
+                return "шея/декольте"
+            return "на модели в естественной зоне ношения"
+
+        product_names = [p.get("name", "") for p in products[:6]]
+        must_wear_lines: List[str] = []
+        for idx, product in enumerate(products[:6], start=1):
+            pname = str(product.get("name") or f"Изделие {idx}").strip()
+            pdesc = str(product.get("description") or "").strip()
+            wear_zone = infer_wear_zone(product)
+            details = f" — {pdesc[:180]}" if pdesc else ""
+            must_wear_lines.append(f"{idx}. {pname}{details}. Где видно: {wear_zone}.")
+        must_wear_block = "\n".join(must_wear_lines) if must_wear_lines else "Список изделий отсутствует."
         
         prompt = f"""Профессиональная фотография модного образа для украшений GLAME.
 
@@ -502,15 +626,25 @@ class ImageGenerationService:
 
 Украшения в образе: {', '.join(product_names)}
 
+MUST-WEAR (ОБЯЗАТЕЛЬНО НАДЕТЬ И ПОКАЗАТЬ КАЖДОЕ ИЗДЕЛИЕ):
+{must_wear_block}
+
 Требования к изображению:
 - Высокое качество, профессиональная фотография
 - Элегантная модель в стиле GLAME
-- Украшения должны быть четко видны
+- Украшения из MUST-WEAR должны быть четко видны и действительно надеты на модели
 - Стиль соответствует описанию: {style}
 - Настроение: {mood}
 - Светлая, чистая композиция
 - Фон нейтральный, не отвлекающий внимание от украшений
 - Фотография для каталога премиальных украшений
+- Модельная съемка: выразительные позы, смелые модные ракурсы, премиальная editorial эстетика
+- Сфокусируйся на стиле, пластике позы, свете и композиции
+- СТРОГО: используй фото украшений как референсы и собери единый образ ИМЕННО из изделий из MUST-WEAR
+- СТРОГО: сохрани характерные формы, фактуру, посадку и оттенки каждого украшения из референсов
+- СТРОГО: не добавляй украшения, которых нет в MUST-WEAR
+- СТРОГО: не добавляй текст на изображение
+- СТРОГО: без надписей, букв, логотипов, watermark, плашек, баннеров
 
 Стиль фотографии: fashion photography, editorial style, luxury jewelry photography"""
         
@@ -561,22 +695,26 @@ class ImageGenerationService:
                 except Exception as e:
                     logger.warning(f"Error using try-on API for default model: {e}")
         
-        # Fallback: возвращаем URL типовой модели
-        # В реальной реализации здесь можно создать композицию изображений
-        # Проверяем, существует ли файл
+        # Fallback 1: возвращаем URL типовой модели из legacy-файла
         default_model_path = Path("static") / "default_glame_model.jpg"
-        if not default_model_path.exists():
-            # Если файл не существует, возвращаем None вместо несуществующего URL
-            logger.warning(f"Default model image not found at {default_model_path}. Returning None.")
-            return None
-        
-        logger.info(f"Using default GLAME model: {self.default_model_url}")
-        return self.default_model_url
+        if default_model_path.exists():
+            logger.info(f"Using default GLAME model: {self.default_model_url}")
+            return self.default_model_url
+
+        # Fallback 2: если legacy-файла нет, берем первое фото из цифровых моделей static/models
+        model_refs = self._discover_model_reference_images(model_profile=None, limit=1)
+        if model_refs:
+            logger.info("Legacy default model not found, using first digital model source image: %s", model_refs[0])
+            return model_refs[0]
+
+        logger.warning(f"Default model image not found at {default_model_path}, and no digital model source images available.")
+        return None
     
     async def generate_look_image_from_look(
         self,
         look_id: UUID,
-        use_default_model: bool = False
+        use_default_model: bool = False,
+        digital_model: Optional[str] = None,
     ) -> Optional[str]:
         """
         Генерация изображения для существующего образа
@@ -630,6 +768,8 @@ class ImageGenerationService:
                 "style": look.style or "",
                 "mood": look.mood or ""
             }
+            metadata = look.generation_metadata or {}
+            selected_model = self._sanitize_profile_name(digital_model or metadata.get("digital_model"))
             
             # Формируем список товаров с изображениями
             products_list = []
@@ -637,6 +777,7 @@ class ImageGenerationService:
                 product_dict = {
                     "name": p.name or "",
                     "description": p.description or "",
+                    "category": p.category or "",
                     "images": []
                 }
                 # Обрабатываем изображения товаров
@@ -659,7 +800,10 @@ class ImageGenerationService:
                 image_url = await self.generate_look_image(
                     look_description=look_description,
                     products=products_list,
-                    use_default_model=use_default_model
+                    use_default_model=use_default_model,
+                    model_profile=selected_model,
+                    asset_group=f"look_images/models/{selected_model}" if selected_model else "look_images",
+                    filename_prefix=f"look_{selected_model}" if selected_model else "look",
                 )
                 return image_url
             finally:

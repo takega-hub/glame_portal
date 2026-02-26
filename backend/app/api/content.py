@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Body, UploadFile, File, Form
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi.responses import PlainTextResponse, JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from pydantic import BaseModel
@@ -13,7 +13,11 @@ from app.models.content_publication import ContentPublication
 from app.models.product import Product
 from app.models.user import User
 from app.api.auth import get_current_user, get_current_user_optional
-from uuid import UUID
+from uuid import UUID, uuid4
+from pathlib import Path
+import json
+import ast
+import re
 import logging
 import anyio
 
@@ -26,6 +30,7 @@ from app.services.jewelry_photo_service import (
     JewelryPhotoServiceError,
     ModelDoesNotSupportImageError,
 )
+from app.services.image_generation_service import ImageGenerationService
 
 router = APIRouter()
 
@@ -59,6 +64,73 @@ async def generate_content(request: ContentGenerateRequest, db: AsyncSession = D
         raise HTTPException(status_code=500, detail=f"Error generating content: {str(e)}")
 
 
+def _ensure_json_serializable(obj: Any) -> Any:
+    """Рекурсивно приводит данные к типам, допустимым в JSON (избегаем 500 при сериализации ответа)."""
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return {str(k): _ensure_json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_ensure_json_serializable(v) for v in obj]
+    if isinstance(obj, (str, int, float, bool)):
+        if isinstance(obj, float) and (obj != obj or obj == float("inf") or obj == float("-inf")):
+            return None
+        return obj
+    if hasattr(obj, "__str__"):
+        return str(obj)
+    return None
+
+
+def _extract_generated_text(generated: Any) -> Optional[str]:
+    """
+    Надежно извлекает текст публикации из generated-пакета, включая fallback для raw_response.
+    """
+    if not isinstance(generated, dict):
+        return None
+
+    for key in ("generated_text", "text", "content"):
+        value = generated.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    raw = generated.get("raw_response")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+
+    raw_text = raw.strip()
+
+    # Пытаемся распарсить fenced JSON или обычный JSON/py-dict.
+    parse_candidates: List[str] = [raw_text]
+    fenced_match = re.search(r"```(?:json)?\s*(.*?)\s*```", raw_text, flags=re.IGNORECASE | re.DOTALL)
+    if fenced_match:
+        parse_candidates.insert(0, fenced_match.group(1).strip())
+
+    for candidate in parse_candidates:
+        parsed: Any = None
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            try:
+                parsed = ast.literal_eval(candidate)
+            except Exception:
+                parsed = None
+        if isinstance(parsed, dict):
+            for key in ("generated_text", "text", "content"):
+                value = parsed.get(key)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+
+    # Последний fallback: достаем "text" из сырой строки JSON regex-ом.
+    text_match = re.search(r'"text"\s*:\s*"((?:\\.|[^"\\])*)"', raw_text, flags=re.DOTALL)
+    if text_match:
+        try:
+            return bytes(text_match.group(1), "utf-8").decode("unicode_escape").strip()
+        except Exception:
+            return text_match.group(1).strip()
+
+    return None
+
+
 def _parse_iso_datetime(value: str) -> datetime:
     """
     Парсинг ISO даты/времени.
@@ -79,6 +151,217 @@ def _parse_iso_datetime(value: str) -> datetime:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=dt_timezone.utc)
     return dt
+
+
+CONTENT_MEDIA_DIR = Path("static/content_media")
+CONTENT_MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+LOOK_IMAGES_DIR = Path("static/look_images")
+LOOK_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+CONTENT_POST_IMAGES_DIR = Path("static/content_post_images")
+CONTENT_POST_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+CONTENT_MEDIA_MAX_BYTES = 15 * 1024 * 1024  # 15 MB
+CONTENT_MEDIA_ALLOWED_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+
+
+def _normalize_media_url(url: str) -> str:
+    normalized = (url or "").strip()
+    if not normalized:
+        return ""
+    if normalized.startswith("look_images/"):
+        normalized = f"/{normalized}"
+    elif normalized.startswith("content_media/"):
+        normalized = f"/{normalized}"
+    if normalized.startswith("/look_images/"):
+        normalized = f"/static{normalized}"
+    elif normalized.startswith("/content_media/"):
+        normalized = f"/static{normalized}"
+    elif normalized.startswith("/content_post_images/"):
+        normalized = f"/static{normalized}"
+    return normalized
+
+
+def _media_url_exists(url: str) -> bool:
+    if not url:
+        return False
+    static_prefix_map = {
+        "/static/look_images/": LOOK_IMAGES_DIR,
+        "/static/content_media/": CONTENT_MEDIA_DIR,
+        "/static/content_post_images/": CONTENT_POST_IMAGES_DIR,
+    }
+    for prefix, root_dir in static_prefix_map.items():
+        if url.startswith(prefix):
+            name = url.replace(prefix, "").strip()
+            if not name or "/" in name or "\\" in name:
+                return False
+            # Пробуем несколько базовых директорий, т.к. backend может стартовать из разных cwd
+            candidates = [
+                root_dir / name,  # cwd == backend
+                Path("backend") / root_dir / name,  # cwd == repo root
+            ]
+            return any(p.is_file() for p in candidates)
+    # Для внешних URL и data-uri не проверяем существование локально
+    return True
+
+
+def _normalize_generated_media(generated: Any) -> Dict[str, Any]:
+    generated_dict = generated.copy() if isinstance(generated, dict) else {}
+    media = generated_dict.get("media")
+    if not isinstance(media, dict):
+        media = {}
+
+    raw_items = media.get("items")
+    items: List[Dict[str, Any]] = []
+    if isinstance(raw_items, list):
+        for idx, raw in enumerate(raw_items):
+            if not isinstance(raw, dict):
+                continue
+            url = _normalize_media_url(str(raw.get("url") or "").strip())
+            if not url:
+                continue
+            if not _media_url_exists(url):
+                continue
+            media_id = str(raw.get("id") or uuid4())
+            item = {
+                **raw,
+                "id": media_id,
+                "type": str(raw.get("type") or "photo"),
+                "url": url,
+                "source": str(raw.get("source") or "ai"),
+                "is_active": bool(raw.get("is_active", False)),
+                "version": int(raw.get("version") or (idx + 1)),
+                "created_at": str(raw.get("created_at") or datetime.now(tz=dt_timezone.utc).isoformat()),
+            }
+            items.append(item)
+
+    if items and not any(bool(i.get("is_active")) for i in items):
+        items[-1]["is_active"] = True
+
+    media["items"] = items
+    generated_dict["media"] = media
+    return generated_dict
+
+
+def _append_media_item(generated_dict: Dict[str, Any], media_item: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = _normalize_generated_media(generated_dict)
+    media = normalized.get("media", {})
+    items = media.get("items", [])
+    for item in items:
+        item["is_active"] = False
+    items.append(media_item)
+    media["items"] = items
+    normalized["media"] = media
+    return normalized
+
+
+def _find_media_item(items: List[Dict[str, Any]], media_id: str) -> Optional[Dict[str, Any]]:
+    for item in items:
+        if str(item.get("id")) == str(media_id):
+            return item
+    return None
+
+
+def _is_placeholder_model_id(value: Optional[str]) -> bool:
+    normalized = (value or "").strip().lower()
+    return normalized in {"", "default", "auto", "none", "null", "unknown", "не указана", "не_указана"}
+
+
+def _resolve_effective_model_id(
+    image_service: ImageGenerationService,
+    raw_candidates: List[Optional[str]],
+) -> str:
+    # 1) first non-placeholder explicit value
+    for candidate in raw_candidates:
+        if candidate is None:
+            continue
+        candidate_raw = str(candidate).strip()
+        candidate_sanitized = image_service._sanitize_profile_name(candidate_raw)
+        if candidate_sanitized and not _is_placeholder_model_id(candidate_sanitized):
+            return candidate_sanitized
+        if candidate_raw and not _is_placeholder_model_id(candidate_raw):
+            return candidate_raw
+
+    # 2) fallback to discovered local model folders (static/models/<model_id>)
+    try:
+        if image_service.models_root_dir.exists():
+            subdirs = sorted(
+                [p for p in image_service.models_root_dir.iterdir() if p.is_dir()],
+                key=lambda p: p.name.lower(),
+            )
+            for directory in subdirs:
+                directory_id = image_service._sanitize_profile_name(directory.name) or directory.name.strip().lower()
+                if directory_id and not _is_placeholder_model_id(directory_id):
+                    return directory_id
+    except Exception:
+        # keep robust fallback below
+        pass
+
+    # 3) final fallback
+    return "default"
+
+
+def _sync_media_from_files(
+    generated_dict: Dict[str, Any],
+    item_id: UUID,
+    plan_id: UUID,
+    channel: Optional[str],
+) -> Dict[str, Any]:
+    """
+    Подтягивает «осиротевшие» файлы постинга из static/content_post_images по паттерну post_<item_id>_*.png
+    и добавляет их в generated.media.items, если их нет в БД JSON.
+    """
+    normalized = _normalize_generated_media(generated_dict)
+    media = normalized.get("media", {})
+    items = media.get("items", [])
+    existing_urls = {str(m.get("url")) for m in items}
+    changed = False
+
+    patterns = [f"post_{item_id}_*.png", f"post_*_{item_id}_*.png"]
+    found_set = set()
+    found_files = []
+    for pattern in patterns:
+        for file_path in CONTENT_POST_IMAGES_DIR.glob(pattern):
+            if file_path not in found_set:
+                found_set.add(file_path)
+                found_files.append(file_path)
+    found_files = sorted(found_files)
+    for file_path in found_files:
+        url = f"/static/content_post_images/{file_path.name}"
+        if url in existing_urls:
+            continue
+        mtime_iso = datetime.fromtimestamp(file_path.stat().st_mtime, tz=dt_timezone.utc).isoformat()
+        items.append(
+            {
+                "id": str(uuid4()),
+                "type": "photo",
+                "url": url,
+                "source": "ai",
+                "is_active": False,
+                "version": len(items) + 1,
+                "created_at": mtime_iso,
+                "provider": "image_generation_service",
+                "use_case": "social_post",
+                "content_item_id": str(item_id),
+                "plan_id": str(plan_id),
+                "channel": channel,
+                "note": "auto-linked from content_post_images",
+            }
+        )
+        existing_urls.add(url)
+        changed = True
+
+    if items and not any(bool(i.get("is_active")) for i in items):
+        items[-1]["is_active"] = True
+        changed = True
+
+    if changed:
+        media["items"] = items
+        normalized["media"] = media
+    return normalized
 
 
 class ContentPlanGenerateRequest(BaseModel):
@@ -147,6 +430,8 @@ class ContentItemUpdateRequest(BaseModel):
     cjm_stage: Optional[str] = None
     goal: Optional[str] = None
     spec: Optional[Dict[str, Any]] = None
+    generated: Optional[Dict[str, Any]] = None
+    generated_text: Optional[str] = None
     status: Optional[str] = None
 
 
@@ -232,7 +517,23 @@ async def generate_content_plan(
             goal=request.goal,
             campaign_context=request.campaign_context,
         )
-        logger.info(f"Plan generated successfully, items count: {len(structured.get('items', []))}")
+        logger.info(f"Plan generated successfully, structured keys: {list(structured.keys()) if isinstance(structured, dict) else type(structured)}, items count: {len(structured.get('items', [])) if isinstance(structured, dict) else 0}")
+        if not isinstance(structured, dict):
+            raise HTTPException(
+                status_code=500,
+                detail="Ответ AI имел неверный формат. Попробуйте снова."
+            )
+        if "raw_response" in structured or "parse_error" in structured:
+            parse_err = structured.get("parse_error", "")
+            excerpt = (structured.get("raw_response") or "")[:300]
+            logger.warning(f"LLM returned non-JSON or parse failed: {parse_err}. Excerpt: {excerpt[:150]}...")
+            detail_msg = parse_err or "AI не вернул валидный JSON плана."
+            raise HTTPException(
+                status_code=500,
+                detail=f"{detail_msg} Попробуйте снова или уменьшите период."
+            )
+    except HTTPException:
+        raise
     except ValueError as e:
         # Специальная обработка для ошибок конфигурации (например, отсутствие API ключа)
         error_msg = str(e)
@@ -263,26 +564,37 @@ async def generate_content_plan(
         )
 
     if not request.save:
-        return ContentPlanGenerateResponse(plan=structured.get("plan", {}), items=structured.get("items", []), plan_id=None)
+        plan_payload = structured.get("plan") if isinstance(structured.get("plan"), dict) else {}
+        items_payload = structured.get("items") if isinstance(structured.get("items"), list) else []
+        payload = {
+            "plan": _ensure_json_serializable(plan_payload),
+            "items": _ensure_json_serializable(items_payload),
+            "plan_id": None,
+        }
+        body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        return Response(content=body_bytes, status_code=200, media_type="application/json; charset=utf-8")
 
     try:
         logger.info("Saving plan to database...")
         start_dt = _parse_iso_datetime(request.start_date)
         end_dt = _parse_iso_datetime(request.end_date)
 
+        plan_dict = structured.get("plan") or {}
+        plan_title = plan_dict.get("title") if isinstance(plan_dict, dict) else None
         plan = ContentPlan(
-            name=request.name or structured.get("plan", {}).get("title"),
+            name=request.name or plan_title,
             status="draft",
             start_date=start_dt,
             end_date=end_dt,
             timezone=request.timezone,
+            user_id=current_user.id if current_user else None,
             inputs={
                 "channels": request.channels,
                 "frequency_rules": request.frequency_rules,
                 "persona": request.persona,
                 "goal": request.goal,
                 "campaign_context": request.campaign_context,
-                "llm_plan": structured.get("plan", {}),
+                "llm_plan": plan_dict,
             },
         )
         db.add(plan)
@@ -319,11 +631,31 @@ async def generate_content_plan(
         await db.commit()
         logger.info(f"Plan saved successfully with {len(items)} items")
 
-        return ContentPlanGenerateResponse(
-            plan=structured.get("plan", {}),
-            items=structured.get("items", []),
-            plan_id=str(plan.id),
-        )
+        # Гарантируем dict/list и JSON-сериализуемость — иначе клиент получает 500 без detail
+        plan_payload = structured.get("plan")
+        items_payload = structured.get("items")
+        if not isinstance(plan_payload, dict):
+            plan_payload = {}
+        if not isinstance(items_payload, list):
+            items_payload = []
+
+        try:
+            payload = {
+                "plan": _ensure_json_serializable(plan_payload),
+                "items": _ensure_json_serializable(items_payload),
+                "plan_id": str(plan.id),
+            }
+            body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            return Response(content=body_bytes, status_code=200, media_type="application/json; charset=utf-8")
+        except Exception as e:
+            logger.error(f"Response serialization error: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Ошибка формирования ответа: {str(e)}. План сохранён (ID: {plan.id}), обновите список планов."
+            )
+    except HTTPException:
+        await db.rollback()
+        raise
     except Exception as e:
         await db.rollback()
         error_msg = str(e)
@@ -623,6 +955,7 @@ async def get_content_plan_items(
             
             # Конвертируем UUID в строки для каждого слота
             items_dto = []
+            media_cleanup_applied = False
             for item in items:
                 try:
                     # Создаем словарь с данными, конвертируя UUID в строки
@@ -636,6 +969,33 @@ async def get_content_plan_items(
                     if generated_value is not None and not isinstance(generated_value, dict):
                         logger.warning(f"Item {item.id} has non-dict generated: {type(generated_value)}, converting to dict")
                         generated_value = {} if generated_value else None
+                    elif isinstance(generated_value, dict):
+                        normalized_generated = _normalize_generated_media(generated_value)
+                        synced_generated = _sync_media_from_files(
+                            normalized_generated,
+                            item.id,
+                            item.plan_id,
+                            item.channel,
+                        )
+                        if synced_generated != generated_value:
+                            item.generated = synced_generated
+                            generated_value = synced_generated
+                            media_cleanup_applied = True
+
+                        extracted_text = _extract_generated_text(generated_value)
+                        if extracted_text:
+                            if item.generated_text != extracted_text:
+                                item.generated_text = extracted_text
+                                media_cleanup_applied = True
+                            if (
+                                generated_value.get("generated_text") != extracted_text
+                                or generated_value.get("text") != extracted_text
+                            ):
+                                generated_value = generated_value.copy()
+                                generated_value["generated_text"] = extracted_text
+                                generated_value["text"] = extracted_text
+                                item.generated = generated_value
+                                media_cleanup_applied = True
                     
                     item_dict = {
                         "id": str(item.id),
@@ -664,6 +1024,9 @@ async def get_content_plan_items(
                     logger.error(f"Item data: id={item.id}, plan_id={item.plan_id}, status={item.status}")
                     # Продолжаем обработку остальных элементов
                     continue
+            
+            if media_cleanup_applied:
+                await db.commit()
             
             logger.info(f"Returning {len(items_dto)} items as DTOs (processed {len(items)} total)")
             return items_dto
@@ -831,6 +1194,15 @@ async def update_content_item(
             item.goal = request.goal
         if request.spec is not None:
             item.spec = request.spec
+        if request.generated is not None:
+            item.generated = request.generated
+        if request.generated_text is not None:
+            item.generated_text = request.generated_text
+            generated_dict = item.generated if isinstance(item.generated, dict) else {}
+            generated_dict = generated_dict.copy()
+            generated_dict["generated_text"] = request.generated_text
+            generated_dict["text"] = request.generated_text
+            item.generated = generated_dict
         if request.status is not None:
             # Валидация статуса
             valid_statuses = ["planned", "draft", "ready", "approved", "scheduled", "published", "failed", "cancelled"]
@@ -1137,12 +1509,11 @@ async def bulk_generate_content(
                 generated_dict = generated if isinstance(generated, dict) else {"raw_response": str(generated)}
                 item.generated = generated_dict
                 # Извлекаем текст из generated
-                item.generated_text = (
-                    generated_dict.get("generated_text") or 
-                    generated_dict.get("text") or 
-                    generated_dict.get("content") or
-                    str(generated_dict)
-                )
+                extracted_text = _extract_generated_text(generated_dict)
+                if extracted_text:
+                    generated_dict["generated_text"] = extracted_text
+                    generated_dict["text"] = extracted_text
+                item.generated_text = extracted_text
                 item.status = "ready"
                 item.updated_at = datetime.now(dt_timezone.utc)
                 
@@ -1268,6 +1639,10 @@ async def generate_content_for_item(
 
         # НЕ сохраняем в БД, только возвращаем результат для предпросмотра
         generated_dict = generated if isinstance(generated, dict) else {"raw_response": str(generated)}
+        extracted_text = _extract_generated_text(generated_dict)
+        if extracted_text:
+            generated_dict["generated_text"] = extracted_text
+            generated_dict["text"] = extracted_text
         
         return GenerateItemContentResponse(
             item_id=str(item.id),
@@ -1315,9 +1690,27 @@ async def apply_generated_content(
     if not item:
         raise HTTPException(status_code=404, detail="Content item not found")
 
-    # Сохраняем сгенерированный контент
-    item.generated = request.generated
-    item.generated_text = request.generated.get("text") if isinstance(request.generated, dict) else None
+    # Сохраняем сгенерированный текст, не теряя уже существующий media-блок
+    existing_generated = item.generated if isinstance(item.generated, dict) else {}
+    existing_media = _normalize_generated_media(existing_generated).get("media")
+
+    incoming_generated = request.generated if isinstance(request.generated, dict) else {}
+    merged_generated = incoming_generated.copy()
+    incoming_media = merged_generated.get("media")
+    has_incoming_media_items = (
+        isinstance(incoming_media, dict)
+        and isinstance(incoming_media.get("items"), list)
+        and len(incoming_media.get("items", [])) > 0
+    )
+    if isinstance(existing_media, dict) and existing_media.get("items") and not has_incoming_media_items:
+        merged_generated["media"] = existing_media
+
+    item.generated = merged_generated
+    extracted_text = _extract_generated_text(merged_generated)
+    if extracted_text:
+        merged_generated["generated_text"] = extracted_text
+        merged_generated["text"] = extracted_text
+    item.generated_text = extracted_text
     item.status = "draft" if item.status == "planned" else item.status
 
     await db.commit()
@@ -1341,6 +1734,415 @@ class PublishItemResponse(BaseModel):
     item_id: str
     publication_id: str
     status: str
+
+
+class GenerateItemPhotoRequest(BaseModel):
+    revision_description: Optional[str] = None
+    no_text_on_image: bool = True
+    style_intensity: str = "classic"  # classic | bold | edgy
+
+
+class ContentItemMediaEntry(BaseModel):
+    id: str
+    type: str = "photo"
+    url: str
+    source: str = "ai"  # ai | manual
+    is_active: bool = False
+    version: int = 1
+    created_at: str
+    prompt_used: Optional[str] = None
+    provider: Optional[str] = None
+    note: Optional[str] = None
+    parent_media_id: Optional[str] = None
+    use_case: Optional[str] = None
+    content_item_id: Optional[str] = None
+    plan_id: Optional[str] = None
+    channel: Optional[str] = None
+
+
+class ContentItemMediaListResponse(BaseModel):
+    item_id: str
+    media: List[ContentItemMediaEntry]
+    active_media_id: Optional[str] = None
+
+
+class ContentItemMediaActionResponse(BaseModel):
+    item_id: str
+    media: ContentItemMediaEntry
+    active_media_id: Optional[str] = None
+    message: str
+
+
+class RegenerateMediaRequest(BaseModel):
+    revision_description: Optional[str] = None
+    no_text_on_image: bool = True
+    style_intensity: str = "classic"  # classic | bold | edgy
+
+
+async def _generate_photo_for_item(
+    db: AsyncSession,
+    item: ContentItem,
+    revision_description: Optional[str] = None,
+    base_media: Optional[Dict[str, Any]] = None,
+    no_text_on_image: bool = True,
+    style_intensity: str = "classic",
+) -> Dict[str, str]:
+    spec_dict = item.spec if isinstance(item.spec, dict) else {}
+    media_task = spec_dict.get("media_task") if isinstance(spec_dict.get("media_task"), dict) else {}
+    style = str(
+        media_task.get("style")
+        or "editorial fashion jewelry shoot, bold styling, dynamic angles, confident poses"
+    )
+    mood = str(media_task.get("mood") or "premium")
+    model_profile_raw_candidates: List[Optional[str]] = [
+        media_task.get("model_id"),
+        media_task.get("model_profile"),
+        media_task.get("persona_type"),
+        item.persona,
+    ]
+    assets_needed = media_task.get("assets_needed")
+    assets_text = ", ".join(assets_needed) if isinstance(assets_needed, list) else ""
+    intensity = (style_intensity or "classic").strip().lower()
+    if intensity not in {"classic", "bold", "edgy"}:
+        intensity = "classic"
+
+    context_lines = [
+        f"Канал: {item.channel}",
+        f"Формат: {item.content_type}",
+        f"Тема: {item.topic or 'не указана'}",
+        f"Визуальная задача: {media_task.get('goal') or 'стильная модельная съемка украшения'}",
+        f"Характер кадра: дерзкие ракурсы, выразительные позы, fashion-editorial подача",
+    ]
+    if assets_text:
+        context_lines.append(f"Нужные ассеты: {assets_text}")
+    if base_media and base_media.get("prompt_used"):
+        context_lines.append(f"Базовый промпт предыдущей версии: {base_media.get('prompt_used')}")
+    if revision_description and revision_description.strip():
+        context_lines.append(f"Пожелания к переделке: {revision_description.strip()}")
+
+    if intensity == "classic":
+        context_lines.append("Интенсивность стиля: classic — элегантно, сдержанно, премиально.")
+    elif intensity == "bold":
+        context_lines.append("Интенсивность стиля: bold — более смелая подача, выразительные позы и свет.")
+    else:
+        context_lines.append("Интенсивность стиля: edgy — дерзкий editorial, сильная модная драматургия кадра.")
+
+    if no_text_on_image:
+        context_lines.append("Важно: не добавляй никакой текст на изображение.")
+        context_lines.append("Запрещены надписи, буквы, логотипы, водяные знаки, баннеры и подписи.")
+        context_lines.append("Коммуникация должна передаваться только визуалом, без typography.")
+
+    prompt_used = "\n".join(context_lines)
+    image_service = ImageGenerationService(db=db)
+    model_profile = _resolve_effective_model_id(image_service, model_profile_raw_candidates)
+
+    look_description = {
+        "name": item.topic or "GLAME social content photo",
+        "description": prompt_used,
+        "style": style,
+        "mood": mood,
+        "model_profile": model_profile,
+    }
+
+    safe_model_profile = image_service._sanitize_profile_name(model_profile) or "default"
+    image_url = await image_service.generate_look_image(
+        look_description=look_description,
+        products=[],
+        use_default_model=False,
+        model_profile=model_profile,
+        asset_group="content_post_images",
+        filename_prefix=f"post_{safe_model_profile}_{item.id}",
+    )
+    if not image_url:
+        raise HTTPException(
+            status_code=500,
+            detail="Не удалось сгенерировать фото для слота. Проверьте модель генерации изображений в настройках.",
+        )
+    return {"url": str(image_url), "prompt_used": prompt_used}
+
+
+@router.get("/items/{item_id}/media", response_model=ContentItemMediaListResponse)
+async def get_item_media(item_id: UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ContentItem).where(ContentItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Content item not found")
+
+    generated_dict = _normalize_generated_media(item.generated)
+    generated_dict = _sync_media_from_files(generated_dict, item.id, item.plan_id, item.channel)
+    if item.generated != generated_dict:
+        item.generated = generated_dict
+        await db.commit()
+        await db.refresh(item)
+    media_items = generated_dict.get("media", {}).get("items", [])
+    active_item = next((m for m in media_items if m.get("is_active")), None)
+    return ContentItemMediaListResponse(
+        item_id=str(item.id),
+        media=media_items,
+        active_media_id=str(active_item.get("id")) if active_item else None,
+    )
+
+
+@router.post("/items/{item_id}/generate-photo", response_model=ContentItemMediaActionResponse)
+async def generate_photo_for_item(
+    item_id: UUID,
+    request: GenerateItemPhotoRequest = Body(GenerateItemPhotoRequest()),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(ContentItem).where(ContentItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Content item not found")
+
+    generated_dict = _normalize_generated_media(item.generated)
+    media_items = generated_dict.get("media", {}).get("items", [])
+    next_version = len(media_items) + 1
+
+    photo_result = await _generate_photo_for_item(
+        db=db,
+        item=item,
+        revision_description=request.revision_description,
+        no_text_on_image=request.no_text_on_image,
+        style_intensity=request.style_intensity,
+    )
+    media_item = {
+        "id": str(uuid4()),
+        "type": "photo",
+        "url": photo_result["url"],
+        "source": "ai",
+        "is_active": True,
+        "version": next_version,
+        "created_at": datetime.now(tz=dt_timezone.utc).isoformat(),
+        "prompt_used": photo_result.get("prompt_used"),
+        "provider": "image_generation_service",
+        "note": request.revision_description,
+        "parent_media_id": None,
+        "use_case": "social_post",
+        "content_item_id": str(item.id),
+        "plan_id": str(item.plan_id),
+        "channel": item.channel,
+    }
+
+    item.generated = _append_media_item(generated_dict, media_item)
+    if item.status == "planned":
+        item.status = "draft"
+    await db.commit()
+    await db.refresh(item)
+
+    return ContentItemMediaActionResponse(
+        item_id=str(item.id),
+        media=media_item,
+        active_media_id=media_item["id"],
+        message="Фото успешно сгенерировано",
+    )
+
+
+@router.post("/items/{item_id}/media/upload", response_model=ContentItemMediaActionResponse)
+async def upload_item_media(
+    item_id: UUID,
+    file: UploadFile = File(...),
+    note: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(ContentItem).where(ContentItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Content item not found")
+
+    content_type = (file.content_type or "").lower()
+    if content_type not in CONTENT_MEDIA_ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Допускаются только изображения: JPEG, PNG, WEBP.")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Файл пустой.")
+    if len(file_bytes) > CONTENT_MEDIA_MAX_BYTES:
+        raise HTTPException(status_code=400, detail="Файл превышает лимит 15 MB.")
+
+    ext = CONTENT_MEDIA_ALLOWED_TYPES.get(content_type, ".png")
+    filename = f"{item_id}_{uuid4().hex}{ext}"
+    target_path = CONTENT_MEDIA_DIR / filename
+    target_path.write_bytes(file_bytes)
+    media_url = f"/static/content_media/{filename}"
+
+    generated_dict = _normalize_generated_media(item.generated)
+    media_items = generated_dict.get("media", {}).get("items", [])
+    next_version = len(media_items) + 1
+    media_item = {
+        "id": str(uuid4()),
+        "type": "photo",
+        "url": media_url,
+        "source": "manual",
+        "is_active": True,
+        "version": next_version,
+        "created_at": datetime.now(tz=dt_timezone.utc).isoformat(),
+        "prompt_used": None,
+        "provider": "manual_upload",
+        "note": (note or "").strip() or None,
+        "parent_media_id": None,
+    }
+
+    item.generated = _append_media_item(generated_dict, media_item)
+    if item.status == "planned":
+        item.status = "draft"
+    await db.commit()
+    await db.refresh(item)
+
+    return ContentItemMediaActionResponse(
+        item_id=str(item.id),
+        media=media_item,
+        active_media_id=media_item["id"],
+        message="Фото успешно загружено",
+    )
+
+
+@router.post("/items/{item_id}/media/{media_id}/set-active", response_model=ContentItemMediaActionResponse)
+async def set_active_item_media(
+    item_id: UUID,
+    media_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(ContentItem).where(ContentItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Content item not found")
+
+    generated_dict = _normalize_generated_media(item.generated)
+    media_items = generated_dict.get("media", {}).get("items", [])
+    target = _find_media_item(media_items, media_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Медиа-элемент не найден")
+
+    for media_item in media_items:
+        media_item["is_active"] = str(media_item.get("id")) == str(media_id)
+
+    item.generated = generated_dict
+    await db.commit()
+    await db.refresh(item)
+
+    return ContentItemMediaActionResponse(
+        item_id=str(item.id),
+        media=target,
+        active_media_id=str(target["id"]),
+        message="Активное фото обновлено",
+    )
+
+
+@router.delete("/items/{item_id}/media/{media_id}")
+async def delete_item_media(
+    item_id: UUID,
+    media_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(ContentItem).where(ContentItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Content item not found")
+
+    generated_dict = _normalize_generated_media(item.generated)
+    media_items = generated_dict.get("media", {}).get("items", [])
+    target = _find_media_item(media_items, media_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Медиа-элемент не найден")
+
+    media_items = [m for m in media_items if str(m.get("id")) != str(media_id)]
+    if media_items and not any(bool(m.get("is_active")) for m in media_items):
+        media_items[0]["is_active"] = True
+    generated_dict["media"]["items"] = media_items
+    item.generated = generated_dict
+
+    url = str(target.get("url") or "")
+    static_prefix_map = {
+        "/static/content_media/": CONTENT_MEDIA_DIR,
+        "/static/look_images/": LOOK_IMAGES_DIR,
+        "/static/content_post_images/": CONTENT_POST_IMAGES_DIR,
+        "/content_media/": CONTENT_MEDIA_DIR,
+        "/look_images/": LOOK_IMAGES_DIR,
+        "/content_post_images/": CONTENT_POST_IMAGES_DIR,
+    }
+    for prefix, root_dir in static_prefix_map.items():
+        if url.startswith(prefix):
+            name = url.replace(prefix, "").strip()
+            if name and "/" not in name and "\\" not in name:
+                candidates = [
+                    root_dir / name,  # cwd == backend
+                    Path("backend") / root_dir / name,  # cwd == repo root
+                ]
+                for file_path in candidates:
+                    if file_path.exists() and file_path.is_file():
+                        file_path.unlink()
+                        break
+            break
+
+    await db.commit()
+    await db.refresh(item)
+
+    active_item = next((m for m in media_items if m.get("is_active")), None)
+    return {
+        "item_id": str(item.id),
+        "deleted": True,
+        "active_media_id": str(active_item.get("id")) if active_item else None,
+        "message": "Фото удалено",
+    }
+
+
+@router.post("/items/{item_id}/media/{media_id}/regenerate", response_model=ContentItemMediaActionResponse)
+async def regenerate_item_media(
+    item_id: UUID,
+    media_id: str,
+    request: RegenerateMediaRequest = Body(RegenerateMediaRequest()),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(ContentItem).where(ContentItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Content item not found")
+
+    generated_dict = _normalize_generated_media(item.generated)
+    media_items = generated_dict.get("media", {}).get("items", [])
+    base_media = _find_media_item(media_items, media_id)
+    if not base_media:
+        raise HTTPException(status_code=404, detail="Базовый медиа-элемент не найден")
+
+    next_version = len(media_items) + 1
+    photo_result = await _generate_photo_for_item(
+        db=db,
+        item=item,
+        revision_description=request.revision_description,
+        base_media=base_media,
+        no_text_on_image=request.no_text_on_image,
+        style_intensity=request.style_intensity,
+    )
+    media_item = {
+        "id": str(uuid4()),
+        "type": "photo",
+        "url": photo_result["url"],
+        "source": "ai",
+        "is_active": True,
+        "version": next_version,
+        "created_at": datetime.now(tz=dt_timezone.utc).isoformat(),
+        "prompt_used": photo_result.get("prompt_used"),
+        "provider": "image_generation_service",
+        "note": request.revision_description,
+        "parent_media_id": str(media_id),
+        "use_case": "social_post",
+        "content_item_id": str(item.id),
+        "plan_id": str(item.plan_id),
+        "channel": item.channel,
+    }
+
+    item.generated = _append_media_item(generated_dict, media_item)
+    if item.status == "planned":
+        item.status = "draft"
+    await db.commit()
+    await db.refresh(item)
+
+    return ContentItemMediaActionResponse(
+        item_id=str(item.id),
+        media=media_item,
+        active_media_id=media_item["id"],
+        message="Фото успешно перегенерировано",
+    )
 
 
 @router.post("/items/{item_id}/publish", response_model=PublishItemResponse)

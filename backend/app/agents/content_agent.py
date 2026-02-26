@@ -143,7 +143,15 @@ GLAME - это место, где стиль становится отражен
                         "tone": "теплый, премиальный, вдохновляющий",
                         "length": "коротко/средне/длинно",
                         "assets_needed": ["фото продукта", "видео примерка"],
-                        "hashtags": ["#glame", "#украшения"]
+                        "hashtags": ["#glame", "#украшения"],
+                        "media_task": {
+                            "type": "photo",
+                            "goal": "Поддержать публикацию визуалом под тему слота",
+                            "style": "премиальная editorial fashion-фотография, дерзкие ракурсы, выразительные позы, без текста на изображении",
+                            "assets_needed": ["студийное фото украшения", "чистый фон"],
+                            "model_profile": "default",
+                            "status": "ready_for_generation"
+                        }
                     }
                 }
             ]
@@ -170,6 +178,7 @@ Timezone: {timezone}
 - В items добавь равномерное распределение по периодам и каналам.
 - Учитывай разнообразие: product spotlight, storytelling, UGC, education, promo, engagement.
 - scheduled_at должен быть ISO datetime со смещением (например, +03:00).
+- Для каждого item добавь в spec.media_task структурированное задание на фото (type=photo, goal, style, assets_needed, model_profile, status).
 """
 
         structured = await self.llm.generate_structured(

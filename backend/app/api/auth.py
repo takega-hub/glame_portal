@@ -54,6 +54,11 @@ class VerifyCardRequest(BaseModel):
     card_number: str
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: Optional[str] = None  # не обязателен для portal@internal без пароля
+    new_password: str
+
+
 class Token(BaseModel):
     access_token: str
     refresh_token: str
@@ -382,6 +387,36 @@ async def read_users_me(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
         )
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Смена пароля текущего пользователя."""
+    if len(body.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Новый пароль должен быть не короче 6 символов",
+        )
+    has_hash = getattr(current_user, "password_hash", None) and current_user.password_hash
+    if has_hash:
+        if not body.current_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Укажите текущий пароль",
+            )
+        if not verify_password(body.current_password, current_user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Неверный текущий пароль",
+            )
+    current_user.password_hash = hash_password(body.new_password)
+    await db.commit()
+    await db.refresh(current_user)
+    return {"message": "Пароль успешно изменён"}
 
 
 @router.post("/login-by-card", response_model=Token)

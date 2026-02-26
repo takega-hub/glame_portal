@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
+import { fetchJson } from '@/lib/utils';
 
 export function VKPanel() {
   const [metrics, setMetrics] = useState<any[]>([]);
@@ -12,9 +13,8 @@ export function VKPanel() {
   const fetchMetrics = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/analytics/vk/metrics?days=30');
-      const data = await response.json();
-      if (data.status === 'success') setMetrics(data.metrics);
+      const { data } = await fetchJson<{ status?: string; metrics?: any[] }>('/api/analytics/vk/metrics?days=30');
+      if (data.status === 'success') setMetrics(data.metrics ?? []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -25,7 +25,7 @@ export function VKPanel() {
   const syncData = async () => {
     try {
       setLoading(true);
-      await fetch('/api/analytics/vk/sync', { method: 'POST' });
+      await fetchJson('/api/analytics/vk/sync', { method: 'POST' });
       await fetchMetrics();
     } catch (err) {
       console.error(err);

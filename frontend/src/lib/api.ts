@@ -10,8 +10,11 @@ import axios from 'axios';
 // Set NEXT_PUBLIC_API_URL=http://localhost:8000 if you want to bypass the proxy.
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
+// withCredentials: true — браузер отправляет cookies и HTTP Basic Auth при запросах к тому же origin,
+// чтобы при входе через nginx (Basic Auth) не запрашивался пароль при каждом заходе в Покупатели/Маркетолог/Аналитику
 export const apiClient = axios.create({
   baseURL: API_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -46,6 +49,7 @@ apiClient.interceptors.response.use(
         if (refreshToken) {
           const response = await axios.post(`${API_URL}/api/auth/refresh`, null, {
             params: { refresh_token: refreshToken },
+            withCredentials: true,
           });
           
           const { access_token, refresh_token } = response.data;
@@ -56,13 +60,19 @@ apiClient.interceptors.response.use(
           return apiClient(originalRequest);
         }
       } catch (refreshError) {
-        // Если refresh token невалиден, перенаправляем на логин
         localStorage.removeItem('glame_access_token');
         localStorage.removeItem('glame_refresh_token');
         localStorage.removeItem('glame_user');
         
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = '/login';
+          // Режим «только Basic Auth»: при 401 перезагружаем страницу, чтобы nginx снова запросил Basic Auth,
+          // а не перенаправляем на форму логина приложения
+          const skipAppAuth = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SKIP_APP_AUTH === 'true';
+          if (skipAppAuth) {
+            window.location.reload();
+          } else {
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(refreshError);
       }
@@ -183,6 +193,24 @@ export interface ContentItemDTO {
   published_at?: string | null;
 }
 
+export interface ContentItemMediaEntry {
+  id: string;
+  type: string;
+  url: string;
+  source: string;
+  is_active: boolean;
+  version: number;
+  created_at: string;
+  prompt_used?: string | null;
+  provider?: string | null;
+  note?: string | null;
+  parent_media_id?: string | null;
+  use_case?: string | null;
+  content_item_id?: string | null;
+  plan_id?: string | null;
+  channel?: string | null;
+}
+
 export interface ContentItemCreateRequest {
   scheduled_at: string; // ISO datetime string
   timezone?: string;
@@ -210,6 +238,8 @@ export interface ContentItemUpdateRequest {
   cjm_stage?: string;
   goal?: string;
   spec?: Record<string, any>;
+  generated?: Record<string, any>;
+  generated_text?: string;
   status?: string;
 }
 
@@ -355,6 +385,15 @@ export interface KnowledgeStats {
   total_documents: number;
   vector_size: number;
   distance: string;
+}
+
+export interface DigitalModelInfo {
+  id: string;
+  name: string;
+  source_images: string[];
+  source_images_count: number;
+  portfolio_images_count: number;
+  portfolio_images: string[];
 }
 
 export interface KnowledgeDocument {
@@ -508,8 +547,14 @@ export const api = {
     limit?: number;
     style?: string;
     mood?: string;
+    digital_model?: string;
   }) {
     const response = await apiClient.get('/api/looks', { params });
+    return response.data;
+  },
+
+  async getDigitalModels(): Promise<DigitalModelInfo[]> {
+    const response = await apiClient.get<DigitalModelInfo[]>('/api/looks/models');
     return response.data;
   },
 
@@ -527,6 +572,7 @@ export const api = {
     user_request?: string;
     generate_image?: boolean;
     use_default_model?: boolean;
+    digital_model?: string;
   }) {
     try {
       const response = await apiClient.post('/api/looks/generate', request, {
@@ -553,13 +599,14 @@ export const api = {
 
   async generateLookImage(
     lookId: string,
-    useDefaultModel: boolean = false
+    useDefaultModel: boolean = false,
+    digitalModel?: string
   ): Promise<{ look_id: string; image_url: string; use_default_model: boolean }> {
     const response = await apiClient.post<{ look_id: string; image_url: string; use_default_model: boolean }>(
       `/api/looks/${lookId}/generate-image`,
       null,
       {
-        params: { use_default_model: useDefaultModel },
+        params: { use_default_model: useDefaultModel, digital_model: digitalModel },
         timeout: 300000, // 5 минут для генерации изображения (увеличено из-за длительной генерации)
       }
     );
@@ -597,10 +644,11 @@ export const api = {
     product_ids?: string[];
     regenerate_image?: boolean;
     use_default_model?: boolean;
+    digital_model?: string;
   }) {
     // Если запрашивается перегенерация изображения, используем отдельный endpoint
     if (request.regenerate_image) {
-      return await api.generateLookImage(lookId, request.use_default_model || false);
+      return await api.generateLookImage(lookId, request.use_default_model || false, request.digital_model);
     }
     
     const response = await apiClient.put(`/api/looks/${lookId}`, request, {
@@ -878,6 +926,95 @@ export const api = {
     return response.data;
   },
 
+  async getItemMedia(itemId: string): Promise<{
+    item_id: string;
+    media: ContentItemMediaEntry[];
+    active_media_id?: string | null;
+  }> {
+    const response = await apiClient.get(`/api/content/items/${itemId}/media`);
+    return response.data;
+  },
+
+  async generateItemPhoto(
+    itemId: string,
+    revisionDescription?: string,
+    options?: {
+      no_text_on_image?: boolean;
+      style_intensity?: 'classic' | 'bold' | 'edgy';
+    }
+  ): Promise<{
+    item_id: string;
+    media: ContentItemMediaEntry;
+    active_media_id?: string | null;
+    message: string;
+  }> {
+    const response = await apiClient.post(`/api/content/items/${itemId}/generate-photo`, {
+      revision_description: revisionDescription || undefined,
+      no_text_on_image: options?.no_text_on_image ?? true,
+      style_intensity: options?.style_intensity ?? 'classic',
+    });
+    return response.data;
+  },
+
+  async uploadItemMedia(itemId: string, file: File, note?: string): Promise<{
+    item_id: string;
+    media: ContentItemMediaEntry;
+    active_media_id?: string | null;
+    message: string;
+  }> {
+    const form = new FormData();
+    form.append('file', file);
+    if (note?.trim()) {
+      form.append('note', note.trim());
+    }
+    const response = await apiClient.post(`/api/content/items/${itemId}/media/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async setActiveItemMedia(itemId: string, mediaId: string): Promise<{
+    item_id: string;
+    media: ContentItemMediaEntry;
+    active_media_id?: string | null;
+    message: string;
+  }> {
+    const response = await apiClient.post(`/api/content/items/${itemId}/media/${mediaId}/set-active`);
+    return response.data;
+  },
+
+  async deleteItemMedia(itemId: string, mediaId: string): Promise<{
+    item_id: string;
+    deleted: boolean;
+    active_media_id?: string | null;
+    message: string;
+  }> {
+    const response = await apiClient.delete(`/api/content/items/${itemId}/media/${mediaId}`);
+    return response.data;
+  },
+
+  async regenerateItemMedia(
+    itemId: string,
+    mediaId: string,
+    revisionDescription?: string,
+    options?: {
+      no_text_on_image?: boolean;
+      style_intensity?: 'classic' | 'bold' | 'edgy';
+    }
+  ): Promise<{
+    item_id: string;
+    media: ContentItemMediaEntry;
+    active_media_id?: string | null;
+    message: string;
+  }> {
+    const response = await apiClient.post(`/api/content/items/${itemId}/media/${mediaId}/regenerate`, {
+      revision_description: revisionDescription || undefined,
+      no_text_on_image: options?.no_text_on_image ?? true,
+      style_intensity: options?.style_intensity ?? 'classic',
+    });
+    return response.data;
+  },
+
   getContentPlanIcsUrl(planId: string) {
     return `${API_URL}/api/content/plans/${planId}/export/ics`;
   },
@@ -1136,6 +1273,14 @@ export const api = {
 
   async setImageGenerationModelSettings(request: ImageGenerationModelSettingsUpdateRequest): Promise<ImageGenerationModelSettingsResponse> {
     const response = await apiClient.put<ImageGenerationModelSettingsResponse>('/api/settings/image-generation-model', request);
+    return response.data;
+  },
+
+  async changePassword(currentPassword: string | null, newPassword: string): Promise<{ message: string }> {
+    const response = await apiClient.post<{ message: string }>('/api/auth/change-password', {
+      current_password: currentPassword ?? undefined,
+      new_password: newPassword,
+    });
     return response.data;
   },
 

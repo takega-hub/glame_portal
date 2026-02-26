@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { LookWithProducts } from '@/types';
+import type { DigitalModelInfo } from '@/lib/api';
 import PhotoTryOn from '@/components/looks/PhotoTryOn';
 import ProductCard from '@/components/products/ProductCard';
 import Link from 'next/link';
@@ -21,6 +22,9 @@ export default function LookDetailsPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [regeneratingImage, setRegeneratingImage] = useState(false);
+  const [digitalModels, setDigitalModels] = useState<DigitalModelInfo[]>([]);
+  const [imageGenerationMode, setImageGenerationMode] = useState<'default' | 'digital'>('digital');
+  const [selectedDigitalModel, setSelectedDigitalModel] = useState<string>('');
   const [deleting, setDeleting] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [deletingImageIndex, setDeletingImageIndex] = useState<number | null>(null);
@@ -52,6 +56,21 @@ export default function LookDetailsPage() {
         setLoading(false);
       });
   }, [lookId]);
+
+  useEffect(() => {
+    api
+      .getDigitalModels()
+      .then((data) => {
+        const models = Array.isArray(data) ? data : [];
+        setDigitalModels(models);
+        if (models.length > 0) {
+          setSelectedDigitalModel((prev) => prev || models[0].id);
+        }
+      })
+      .catch((e) => {
+        console.error('Ошибка загрузки цифровых моделей:', e);
+      });
+  }, []);
 
   const handleApprove = async () => {
     if (!look || look.approval_status === 'approved') return;
@@ -99,14 +118,23 @@ export default function LookDetailsPage() {
     }
   };
 
-  const handleRegenerateImage = async (useDefaultModel: boolean = false) => {
+  const handleRegenerateImage = async () => {
     if (!look) return;
+    if (imageGenerationMode === 'digital' && !selectedDigitalModel) {
+      setError('Выберите цифровую модель для генерации изображения');
+      return;
+    }
     
     setRegeneratingImage(true);
     setError(null);
     try {
       // Используем отдельный endpoint для генерации изображения с увеличенным таймаутом
-      const result = await api.generateLookImage(look.id, useDefaultModel);
+      const useDefaultModel = imageGenerationMode === 'default';
+      const result = await api.generateLookImage(
+        look.id,
+        useDefaultModel,
+        useDefaultModel ? undefined : selectedDigitalModel
+      );
       
       // Обновляем образ с новым изображением
       if (result && result.image_url) {
@@ -313,9 +341,58 @@ export default function LookDetailsPage() {
               })()}
               
               {/* Кнопки для генерации/перегенерации изображения */}
-              <div className="mt-4 flex flex-col space-y-2">
+              <div className="mt-4 space-y-3">
+                <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+                  <p className="mb-2 text-xs font-medium text-gray-700">Модель для генерации</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setImageGenerationMode('digital')}
+                      disabled={regeneratingImage}
+                      className={`px-3 py-1.5 text-xs rounded border transition ${
+                        imageGenerationMode === 'digital'
+                          ? 'bg-gold-100 border-gold-400 text-gold-800'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
+                      } disabled:opacity-50`}
+                    >
+                      Цифровая модель
+                    </button>
+                    <button
+                      onClick={() => setImageGenerationMode('default')}
+                      disabled={regeneratingImage}
+                      className={`px-3 py-1.5 text-xs rounded border transition ${
+                        imageGenerationMode === 'default'
+                          ? 'bg-indigo-100 border-indigo-400 text-indigo-800'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
+                      } disabled:opacity-50`}
+                    >
+                      Типовая модель
+                    </button>
+                  </div>
+                  {imageGenerationMode === 'digital' && (
+                    <div className="mt-2">
+                      <select
+                        value={selectedDigitalModel}
+                        onChange={(e) => setSelectedDigitalModel(e.target.value)}
+                        disabled={regeneratingImage || digitalModels.length === 0}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white text-gray-900 disabled:opacity-50"
+                      >
+                        {digitalModels.length === 0 ? (
+                          <option value="">Нет доступных цифровых моделей</option>
+                        ) : (
+                          digitalModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col space-y-2">
                 <button
-                  onClick={() => handleRegenerateImage(false)}
+                  onClick={handleRegenerateImage}
                   disabled={regeneratingImage}
                   className="w-full px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition disabled:opacity-50 text-sm flex items-center justify-center gap-2"
                 >
@@ -325,23 +402,12 @@ export default function LookDetailsPage() {
                       <span>Генерация изображения...</span>
                     </>
                   ) : (
-                    'Сгенерировать новое изображение'
+                    imageGenerationMode === 'default'
+                      ? 'Сгенерировать на типовой модели'
+                      : 'Сгенерировать на выбранной цифровой модели'
                   )}
                 </button>
-                <button
-                  onClick={() => handleRegenerateImage(true)}
-                  disabled={regeneratingImage}
-                  className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition disabled:opacity-50 text-sm flex items-center justify-center gap-2"
-                >
-                  {regeneratingImage ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                      <span>Генерация на модели...</span>
-                    </>
-                  ) : (
-                    'Сгенерировать на типовой модели'
-                  )}
-                </button>
+                </div>
               </div>
 
               {/* Галерея всех изображений с возможностью выбора основного и удаления */}

@@ -7,9 +7,10 @@ import LookCard from './LookCard';
 
 interface LookGeneratorProps {
   onLookGenerated?: (look: LookWithProducts) => void;
+  selectedDigitalModel?: string;
 }
 
-export default function LookGenerator({ onLookGenerated }: LookGeneratorProps) {
+export default function LookGenerator({ onLookGenerated, selectedDigitalModel }: LookGeneratorProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedLook, setGeneratedLook] = useState<LookWithProducts | null>(null);
@@ -35,6 +36,7 @@ export default function LookGenerator({ onLookGenerated }: LookGeneratorProps) {
         user_request: formData.user_request || undefined,
         generate_image: formData.generate_image,
         use_default_model: formData.use_default_model,
+        digital_model: selectedDigitalModel,
       });
 
       setGeneratedLook(result as LookWithProducts);
@@ -77,6 +79,11 @@ export default function LookGenerator({ onLookGenerated }: LookGeneratorProps) {
       <h2 className="text-xl font-semibold text-gray-900 mb-4">Генерация образа AI</h2>
       
       <div className="space-y-4">
+        {selectedDigitalModel && (
+          <div className="rounded-md border border-gold-200 bg-gold-50 px-3 py-2 text-sm text-gold-900">
+            Генерация выполняется на цифровой модели: <span className="font-semibold">{selectedDigitalModel}</span>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-1">
             Описание запроса

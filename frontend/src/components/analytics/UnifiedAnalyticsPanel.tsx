@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { fetchJson } from '@/lib/utils';
 
 export function UnifiedAnalyticsPanel() {
   const [data, setData] = useState<any>(null);
@@ -10,8 +11,7 @@ export function UnifiedAnalyticsPanel() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/api/analytics/unified?days=30');
-      const result = await response.json();
+      const { data: result } = await fetchJson<{ status?: string }>('/api/analytics/unified?days=30');
       if (result.status === 'success') setData(result);
     } catch (err) {
       console.error('Error fetching unified analytics:', err);

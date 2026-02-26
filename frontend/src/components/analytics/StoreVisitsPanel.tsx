@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
+import { fetchJson } from '@/lib/utils';
 
 export function StoreVisitsPanel() {
   const [status, setStatus] = useState<any>(null);
@@ -16,8 +17,7 @@ export function StoreVisitsPanel() {
 
   const fetchStores = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/analytics/stores');
-      const data = await response.json();
+      const { data } = await fetchJson<{ stores?: any[] }>('/api/analytics/stores');
       setStores(data.stores || []);
     } catch (err) {
       console.error('Error fetching stores:', err);
@@ -27,11 +27,10 @@ export function StoreVisitsPanel() {
   const fetchStatus = async () => {
     try {
       setLoading(true);
-      const url = selectedStoreId === 'all' 
-        ? 'http://localhost:8000/api/analytics/ftp/status'
-        : `http://localhost:8000/api/analytics/ftp/status?store_id=${selectedStoreId}`;
-      const response = await fetch(url);
-      const data = await response.json();
+      const url = selectedStoreId === 'all'
+        ? '/api/analytics/ftp/status'
+        : `/api/analytics/ftp/status?store_id=${selectedStoreId}`;
+      const { data } = await fetchJson(url);
       setStatus(data);
     } catch (err) {
       console.error('Error fetching store visits:', err);
@@ -43,10 +42,9 @@ export function StoreVisitsPanel() {
   const fetchDailyData = async () => {
     try {
       const url = selectedStoreId === 'all'
-        ? `http://localhost:8000/api/analytics/store-visits/daily?days=${days}`
-        : `http://localhost:8000/api/analytics/store-visits/daily?days=${days}&store_id=${selectedStoreId}`;
-      const response = await fetch(url);
-      const data = await response.json();
+        ? `/api/analytics/store-visits/daily?days=${days}`
+        : `/api/analytics/store-visits/daily?days=${days}&store_id=${selectedStoreId}`;
+      const { data } = await fetchJson(url);
       setDailyData(data);
     } catch (err) {
       console.error('Error fetching daily data:', err);
@@ -55,16 +53,11 @@ export function StoreVisitsPanel() {
 
   const fetchSalesData = async () => {
     try {
-      // Используем тот же период (days), что и для посещений
-      let url = `http://localhost:8000/api/analytics/1c-sales/daily?days=${days}&auto_sync=true`;
-      
-      // Добавляем фильтр по магазину, если выбран конкретный магазин
+      let url = `/api/analytics/1c-sales/daily?days=${days}&auto_sync=true`;
       if (selectedStoreId !== 'all') {
         url += `&store_id=${selectedStoreId}`;
       }
-      
-      const response = await fetch(url);
-      const data = await response.json();
+      const { data } = await fetchJson<{ status?: string }>(url);
       if (data.status === 'success') {
         setSalesData(data);
       }

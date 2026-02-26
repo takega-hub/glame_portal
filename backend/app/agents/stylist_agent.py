@@ -571,7 +571,8 @@ GLAME - это место, где стиль становится отражен
         persona: Optional[str] = None,
         user_request: Optional[str] = None,
         generate_image: bool = True,
-        use_default_model: bool = False
+        use_default_model: bool = False,
+        digital_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Генерация образа для пользователя
@@ -609,7 +610,8 @@ GLAME - это место, где стиль становится отражен
             persona=persona,
             user_request=user_request,
             generate_image=generate_image,
-            use_default_model=use_default_model
+            use_default_model=use_default_model,
+            digital_model=digital_model,
         )
         
         await self.db.commit()
