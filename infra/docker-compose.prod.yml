@@ -59,6 +59,12 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      # 1C OData/API (sales, customers, stocks)
+      ONEC_API_URL: ${ONEC_API_URL:-}
+      ONEC_API_TOKEN: ${ONEC_API_TOKEN:-}
+      ONEC_SALES_ENDPOINT: ${ONEC_SALES_ENDPOINT:-/AccumulationRegister_Продажи_RecordType}
+      ONEC_XML_URL: ${ONEC_XML_URL:-}
+      ONEC_XML_OFFERS_URL: ${ONEC_XML_OFFERS_URL:-}
       # Режим «только Basic Auth»: не требовать JWT, если nginx передал X-Remote-User
       PORTAL_BASIC_AUTH_ONLY: ${PORTAL_BASIC_AUTH_ONLY:-true}
     volumes:

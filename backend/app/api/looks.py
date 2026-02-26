@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Any
 from uuid import UUID
 from datetime import datetime
 import logging
@@ -10,6 +10,7 @@ import asyncio
 import time
 import re
 from pathlib import Path
+from urllib.parse import unquote
 
 from app.database.connection import get_db, AsyncSessionLocal
 from app.models.look import Look
@@ -183,6 +184,41 @@ def _collect_portfolio_images_for_model(model_id: str, looks: List[Look], conten
                 add_url(f"/static/content_post_images/{file_path.name}")
 
     return urls
+
+
+def _normalize_portfolio_url(url: Optional[str]) -> str:
+    """Нормализация URL изображений портфолио к /static/... формату."""
+    if not url:
+        return ""
+    normalized = unquote(str(url).strip())
+    if not normalized:
+        return ""
+    if normalized.startswith("/static/lcimages/"):
+        normalized = normalized.replace("/static/lcimages/", "/static/look_images/")
+    if normalized.startswith("look_images/"):
+        normalized = f"/{normalized}"
+    if normalized.startswith("/look_images/"):
+        normalized = normalized.replace("/look_images/", "/static/look_images/", 1)
+    if normalized.startswith("/content_post_images/"):
+        normalized = normalized.replace("/content_post_images/", "/static/content_post_images/", 1)
+    return normalized
+
+
+def _resolve_static_path_from_url(url: str) -> Optional[Path]:
+    """Преобразует URL /static/... в локальный путь static/... с защитой от path traversal."""
+    normalized = _normalize_portfolio_url(url)
+    if not normalized.startswith("/static/"):
+        return None
+    rel_path = normalized.removeprefix("/static/").lstrip("/")
+    base = Path("static").resolve()
+    target = (base / rel_path).resolve()
+    if str(target).startswith(str(base)):
+        return target
+    return None
+
+
+def _portfolio_urls_equal(a: Optional[str], b: Optional[str]) -> bool:
+    return _normalize_portfolio_url(a) == _normalize_portfolio_url(b)
 
 
 async def _ensure_look_has_catalog_products(
@@ -371,6 +407,144 @@ async def get_digital_models(db: AsyncSession = Depends(get_db)):
             }
         )
     return items
+
+
+@router.delete("/models/{model_id}/portfolio-image", response_model=dict)
+async def delete_portfolio_image(
+    model_id: str,
+    image_url: str = Query(..., description="URL изображения из портфолио"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Удаляет изображение из портфолио модели:
+    - удаляет файл из static (если существует),
+    - удаляет ссылки на это изображение из looks (image_url/image_urls/try_on_image_url),
+    - удаляет ссылки из content_items.generated.media.items для выбранной модели.
+    """
+    model_norm = _sanitize_model_name(model_id)
+    if not model_norm:
+        raise HTTPException(status_code=400, detail="Некорректный model_id")
+
+    target_url = _normalize_portfolio_url(image_url)
+    if not target_url:
+        raise HTTPException(status_code=400, detail="Некорректный image_url")
+
+    looks_result = await db.execute(select(Look))
+    looks = list(looks_result.scalars().all())
+    content_items_result = await db.execute(select(ContentItem))
+    content_items = list(content_items_result.scalars().all())
+
+    looks_updated = 0
+    look_refs_removed = 0
+    content_items_updated = 0
+    content_refs_removed = 0
+
+    # 1) Чистим ссылки в looks по модели
+    for look in looks:
+        metadata = look.generation_metadata or {}
+        look_model = _sanitize_model_name(metadata.get("digital_model"))
+        if look_model != model_norm:
+            continue
+
+        changed = False
+
+        if _portfolio_urls_equal(look.image_url, target_url):
+            look.image_url = None
+            changed = True
+            look_refs_removed += 1
+
+        if _portfolio_urls_equal(look.try_on_image_url, target_url):
+            look.try_on_image_url = None
+            changed = True
+            look_refs_removed += 1
+
+        if isinstance(look.image_urls, list):
+            new_image_urls: List[Any] = []
+            removed_in_list = 0
+            for image_data in look.image_urls:
+                candidate_url = image_data.get("url") if isinstance(image_data, dict) else str(image_data)
+                if _portfolio_urls_equal(candidate_url, target_url):
+                    removed_in_list += 1
+                    continue
+                new_image_urls.append(image_data)
+            if removed_in_list > 0:
+                look.image_urls = new_image_urls
+                look_refs_removed += removed_in_list
+                changed = True
+
+                if look.current_image_index is not None:
+                    if len(new_image_urls) == 0:
+                        look.current_image_index = None
+                    elif look.current_image_index >= len(new_image_urls):
+                        look.current_image_index = len(new_image_urls) - 1
+
+                if look.current_image_index is not None and len(new_image_urls) > 0:
+                    current_image = new_image_urls[look.current_image_index]
+                    look.image_url = current_image.get("url") if isinstance(current_image, dict) else str(current_image)
+
+        if changed:
+            looks_updated += 1
+
+    # 2) Чистим ссылки в content_items по модели
+    for item in content_items:
+        spec = item.spec if isinstance(item.spec, dict) else {}
+        media_task = spec.get("media_task") if isinstance(spec.get("media_task"), dict) else {}
+        profile = _sanitize_model_name(
+            media_task.get("model_id")
+            or media_task.get("model_profile")
+            or media_task.get("persona_type")
+            or item.persona
+        )
+        if profile != model_norm:
+            continue
+
+        generated = item.generated if isinstance(item.generated, dict) else {}
+        media = generated.get("media") if isinstance(generated.get("media"), dict) else {}
+        media_items = media.get("items") if isinstance(media.get("items"), list) else []
+        if not media_items:
+            continue
+
+        new_media_items = []
+        removed = 0
+        for media_item in media_items:
+            item_url = media_item.get("url") if isinstance(media_item, dict) else None
+            if _portfolio_urls_equal(item_url, target_url):
+                removed += 1
+                continue
+            new_media_items.append(media_item)
+
+        if removed > 0:
+            media["items"] = new_media_items
+            generated["media"] = media
+            item.generated = generated
+            content_items_updated += 1
+            content_refs_removed += removed
+
+    # 3) Удаляем файл из static
+    file_deleted = False
+    deleted_path = None
+    target_path = _resolve_static_path_from_url(target_url)
+    if target_path and target_path.exists() and target_path.is_file():
+        target_path.unlink()
+        file_deleted = True
+        deleted_path = str(target_path)
+
+    if looks_updated == 0 and content_items_updated == 0 and not file_deleted:
+        raise HTTPException(status_code=404, detail="Изображение не найдено в портфолио модели")
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "model_id": model_norm,
+        "image_url": target_url,
+        "looks_updated": looks_updated,
+        "look_refs_removed": look_refs_removed,
+        "content_items_updated": content_items_updated,
+        "content_refs_removed": content_refs_removed,
+        "file_deleted": file_deleted,
+        "deleted_path": deleted_path,
+    }
 
 
 @router.get("/{look_id}", response_model=dict)

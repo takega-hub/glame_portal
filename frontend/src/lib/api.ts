@@ -558,6 +558,13 @@ export const api = {
     return response.data;
   },
 
+  async deleteModelPortfolioImage(modelId: string, imageUrl: string) {
+    const response = await apiClient.delete(`/api/looks/models/${encodeURIComponent(modelId)}/portfolio-image`, {
+      params: { image_url: imageUrl },
+    });
+    return response.data;
+  },
+
   async getLook(id: string) {
     const response = await apiClient.get(`/api/looks/${id}`);
     return response.data;

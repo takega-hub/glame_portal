@@ -17,6 +17,7 @@ export default function LooksPage() {
   const [activeTab, setActiveTab] = useState<'list' | 'generate' | 'tryon'>('list');
   const [selectedLookId, setSelectedLookId] = useState<string | undefined>();
   const [portfolioSlideIndex, setPortfolioSlideIndex] = useState<number | null>(null);
+  const [deletingPortfolioUrl, setDeletingPortfolioUrl] = useState<string | null>(null);
   const selectedModel = digitalModels.find((m) => m.id === selectedDigitalModel) || null;
   const portfolioImages = selectedModel?.portfolio_images || [];
 
@@ -96,6 +97,30 @@ export default function LooksPage() {
   const showNextSlide = () => {
     if (!portfolioImages.length || portfolioSlideIndex === null) return;
     setPortfolioSlideIndex((portfolioSlideIndex + 1) % portfolioImages.length);
+  };
+
+  const handleDeletePortfolioImage = async (url: string) => {
+    if (!selectedModel) return;
+    const confirmed = window.confirm('Удалить это изображение из портфолио модели? Действие необратимо.');
+    if (!confirmed) return;
+
+    setDeletingPortfolioUrl(url);
+    setError(null);
+    try {
+      await api.deleteModelPortfolioImage(selectedModel.id, url);
+      await api.getDigitalModels().then((data) => {
+        const models = Array.isArray(data) ? data : [];
+        setDigitalModels(models);
+      });
+      if (portfolioSlideIndex !== null) {
+        setPortfolioSlideIndex(null);
+      }
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail;
+      setError(detail || 'Не удалось удалить изображение из портфолио');
+    } finally {
+      setDeletingPortfolioUrl(null);
+    }
   };
 
   return (
@@ -216,17 +241,34 @@ export default function LooksPage() {
                 {selectedModel.portfolio_images?.length ? (
                   <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
                     {selectedModel.portfolio_images.map((url, idx) => (
-                      <button
+                      <div
                         key={`${url}-${idx}`}
-                        onClick={() => openPortfolioSlider(idx)}
-                        className="group block overflow-hidden rounded-md border border-concrete-200 text-left"
+                        className="group relative overflow-hidden rounded-md border border-concrete-200"
                       >
-                        <img
-                          src={url}
-                          alt={`${selectedModel.name} portfolio ${idx + 1}`}
-                          className="h-36 w-full object-cover transition group-hover:scale-[1.02]"
-                        />
-                      </button>
+                        <button
+                          onClick={() => openPortfolioSlider(idx)}
+                          className="block w-full text-left"
+                        >
+                          <img
+                            src={url}
+                            alt={`${selectedModel.name} portfolio ${idx + 1}`}
+                            className="h-36 w-full object-cover transition group-hover:scale-[1.02]"
+                          />
+                        </button>
+                        <button
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void handleDeletePortfolioImage(url);
+                          }}
+                          disabled={deletingPortfolioUrl === url}
+                          className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-60"
+                          title="Удалить из портфолио"
+                          aria-label="Удалить из портфолио"
+                        >
+                          {deletingPortfolioUrl === url ? '...' : 'Удалить'}
+                        </button>
+                      </div>
                     ))}
                   </div>
                 ) : (
