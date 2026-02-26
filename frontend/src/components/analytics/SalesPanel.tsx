@@ -599,9 +599,13 @@ export function SalesPanel() {
                   <YAxis yAxisId="right" orientation="right" domain={rightDomain} />
                   <Tooltip
                     labelFormatter={(label) => new Date(label).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                    formatter={(value: number, name: string) => {
-                      if (name === 'revenue' || name === 'Выручка') return [`₽${Number(value).toLocaleString('ru-RU', { minimumFractionDigits: 2 })}`, 'Выручка'];
-                      return [Number(value).toLocaleString('ru-RU'), name];
+                    formatter={(value, name) => {
+                      const numericValue = Number(value ?? 0);
+                      const seriesName = String(name ?? '');
+                      if (seriesName === 'revenue' || seriesName === 'Выручка') {
+                        return [`₽${numericValue.toLocaleString('ru-RU', { minimumFractionDigits: 2 })}`, 'Выручка'];
+                      }
+                      return [numericValue.toLocaleString('ru-RU'), seriesName];
                     }}
                   />
                   <Legend />
