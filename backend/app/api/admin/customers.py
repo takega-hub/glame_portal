@@ -87,7 +87,6 @@ async def get_customers(
     sort: Optional[str] = Query("total_spent"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(require_admin()),
     db: AsyncSession = Depends(get_db)
 ):
     """Список всех покупателей"""
@@ -366,7 +365,6 @@ async def get_customers(
 async def get_customer_detail(
     user_id: str,
     sync: bool = Query(True, description="Синхронизировать данные из 1С при загрузке страницы"),
-    current_user: User = Depends(require_admin()),
     db: AsyncSession = Depends(get_db)
 ):
     """Детали покупателя. При загрузке страницы автоматически синхронизирует данные из 1С."""
@@ -495,7 +493,6 @@ async def get_customer_purchases(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     exclude_packaging: bool = Query(True, description="Исключить упаковку (товары дешевле 5₽)"),
-    current_user: User = Depends(require_admin()),
     db: AsyncSession = Depends(get_db)
 ):
     """История покупок покупателя"""
@@ -581,7 +578,6 @@ class UpdateCustomerRequest(BaseModel):
 async def update_customer(
     user_id: str,
     request: UpdateCustomerRequest,
-    current_user: User = Depends(require_admin()),
     db: AsyncSession = Depends(get_db)
 ):
     """Обновление данных покупателя"""
@@ -677,7 +673,6 @@ async def update_customer(
 async def adjust_loyalty_points(
     user_id: str,
     request: LoyaltyAdjustRequest,
-    current_user: User = Depends(require_admin()),
     db: AsyncSession = Depends(get_db)
 ):
     """Ручная корректировка баллов"""
@@ -695,7 +690,7 @@ async def adjust_loyalty_points(
             reason=request.reason,
             metadata={"description": request.description},
             source="manual",
-            source_id=str(current_user.id)
+            source_id="system"
         )
     else:
         await loyalty_service.spend_points(
@@ -710,7 +705,6 @@ async def adjust_loyalty_points(
 
 @router.get("/segments/list")
 async def get_segments(
-    current_user: User = Depends(require_admin()),
     db: AsyncSession = Depends(get_db)
 ):
     """Список сегментов"""
@@ -733,7 +727,6 @@ async def get_segments(
 
 @router.get("/analytics/overview")
 async def get_customers_analytics(
-    current_user: User = Depends(require_admin()),
     db: AsyncSession = Depends(get_db)
 ):
     """Общая аналитика по покупателям"""

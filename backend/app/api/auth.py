@@ -40,6 +40,7 @@ class UserResponse(BaseModel):
     is_customer: bool = False
     loyalty_points: int | None = None
     role: str | None = None
+    basic_username: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -63,6 +64,10 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
+
+
+class BasicInfoResponse(BaseModel):
+    basic_username: Optional[str] = None
 
 
 def hash_password(password: str) -> str:
@@ -295,6 +300,7 @@ async def get_current_user_optional(
 
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -321,6 +327,8 @@ async def read_users_me(
                 # Если не удалось перезагрузить, продолжаем с текущим объектом
                 logger.warning(f"Could not reload user {current_user.id}: {refresh_error}")
         
+        basic_username = request.headers.get("X-Remote-User")
+
         # Получаем роль безопасно
         user_role = getattr(current_user, 'role', None)
         is_customer = getattr(current_user, 'is_customer', False)
@@ -375,7 +383,8 @@ async def read_users_me(
             persona=persona_value,
             is_customer=is_customer,
             loyalty_points=loyalty_points_value,
-            role=user_role
+            role=user_role,
+            basic_username=basic_username
         )
     except HTTPException:
         raise
@@ -417,6 +426,13 @@ async def change_password(
     await db.commit()
     await db.refresh(current_user)
     return {"message": "Пароль успешно изменён"}
+
+
+@router.get("/basic-info", response_model=BasicInfoResponse)
+async def get_basic_info(request: Request):
+    header_user = request.headers.get("X-Remote-User")
+    env_user = os.getenv("FRONTEND_BASIC_AUTH_USER")
+    return BasicInfoResponse(basic_username=header_user or env_user)
 
 
 @router.post("/login-by-card", response_model=Token)

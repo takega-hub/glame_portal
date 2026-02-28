@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
@@ -18,19 +17,20 @@ interface PurchaseItem {
 
 export default function PurchasesPage() {
   const { user, isAuthenticated, loading } = useAuth();
-  const router = useRouter();
   const [purchases, setPurchases] = useState<PurchaseItem[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    } else if (isAuthenticated && user?.is_customer) {
-      loadPurchases();
+    if (!loading) {
+      if (isAuthenticated && user?.is_customer) {
+        loadPurchases();
+      } else {
+        setLoadingData(false);
+      }
     }
-  }, [loading, isAuthenticated, user, router, fromDate, toDate]);
+  }, [loading, isAuthenticated, user, fromDate, toDate]);
 
   const loadPurchases = async () => {
     try {

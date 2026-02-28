@@ -40,22 +40,21 @@ else:
     elif raw.startswith("postgres://"):
         raw = raw.replace("postgres://", "postgresql+psycopg://", 1)
 
-    # Авто-фикс для Windows: если в .env остался localhost:5432, а контейнер теперь на 5433
-    # (на 5432 часто висит локальный postgres.exe и мы подключаемся не туда).
+    # Авто-фикс порта только на Windows (когда локальный postgres.exe слушает 5432,
+    # а контейнерный Postgres проброшен на 5433). На Linux/macOS порт не трогаем.
     try:
-        p = urlparse(raw)
-        if p.hostname in ("localhost", "127.0.0.1") and (p.port == 5432 or p.port is None):
-            # Меняем только порт; остальное оставляем как есть
-            netloc = p.netloc
-            # netloc может быть user:pass@host:port или user:pass@host
-            if "@" in netloc:
-                creds, hostpart = netloc.split("@", 1)
-                host_only = hostpart.split(":", 1)[0]
-                netloc = f"{creds}@{host_only}:5433"
-            else:
-                host_only = netloc.split(":", 1)[0]
-                netloc = f"{host_only}:5433"
-            raw = urlunparse((p.scheme, netloc, p.path, p.params, p.query, p.fragment))
+        if sys.platform == "win32":
+            p = urlparse(raw)
+            if p.hostname in ("localhost", "127.0.0.1") and (p.port == 5432 or p.port is None):
+                netloc = p.netloc
+                if "@" in netloc:
+                    creds, hostpart = netloc.split("@", 1)
+                    host_only = hostpart.split(":", 1)[0]
+                    netloc = f"{creds}@{host_only}:5433"
+                else:
+                    host_only = netloc.split(":", 1)[0]
+                    netloc = f"{host_only}:5433"
+                raw = urlunparse((p.scheme, netloc, p.path, p.params, p.query, p.fragment))
     except Exception:
         pass
 

@@ -1,20 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import Link from 'next/link';
 import ChatInterface from '@/components/chat/ChatInterface';
 
 export default function CustomerStylistPage() {
   const { user, isAuthenticated, loading } = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [loading, isAuthenticated, router]);
+    // no redirect; access controlled at portal level
+  }, [loading, isAuthenticated]);
 
   if (loading) {
     return (

@@ -3,7 +3,12 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { auth, User } from '@/lib/auth';
 
-const SKIP_APP_AUTH = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SKIP_APP_AUTH === 'true';
+const SKIP_APP_AUTH =
+  typeof process !== 'undefined'
+    ? (process.env.NEXT_PUBLIC_SKIP_APP_AUTH
+        ? process.env.NEXT_PUBLIC_SKIP_APP_AUTH === 'true'
+        : true)
+    : true;
 
 /** Пользователь «портал» при входе только через Basic Auth (без повторного логина в приложении) */
 const PORTAL_FAKE_USER: User = {

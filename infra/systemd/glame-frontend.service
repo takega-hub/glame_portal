@@ -1,0 +1,15 @@
+[Unit]
+Description=Glame Frontend
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/glame-platform/frontend.env
+ExecStartPre=/usr/bin/env bash -lc 'cd "${ROOT_DIR:-/opt/glame-platform}/frontend" && npm ci && npm run build'
+ExecStart=/usr/bin/env bash -lc 'cd "${ROOT_DIR:-/opt/glame-platform}/frontend" && PORT="${FRONTEND_PORT:-3000}" npm run start'
+Restart=always
+RestartSec=3
+WorkingDirectory=/tmp
+
+[Install]
+WantedBy=multi-user.target

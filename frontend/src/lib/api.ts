@@ -65,9 +65,12 @@ apiClient.interceptors.response.use(
         localStorage.removeItem('glame_user');
         
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          // Режим «только Basic Auth»: при 401 перезагружаем страницу, чтобы nginx снова запросил Basic Auth,
-          // а не перенаправляем на форму логина приложения
-          const skipAppAuth = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SKIP_APP_AUTH === 'true';
+          const skipAppAuth =
+            typeof process !== 'undefined'
+              ? (process.env.NEXT_PUBLIC_SKIP_APP_AUTH
+                  ? process.env.NEXT_PUBLIC_SKIP_APP_AUTH === 'true'
+                  : true)
+              : true;
           if (skipAppAuth) {
             window.location.reload();
           } else {
@@ -365,6 +368,26 @@ export interface OpenRouterModelsResponse {
   fetched_at: number;
 }
 
+export interface OpenRouterModelStat {
+  model: string;
+  total_cost: number;
+  requests: number;
+}
+
+export interface OpenRouterDayStat {
+  date: string;
+  total_cost: number;
+  by_model: Record<string, number>;  // модель -> стоимость за день
+}
+
+export interface OpenRouterStatsResponse {
+  avg_daily: number;  // средние дневные траты ($/день)
+  remaining_credits: number;  // текущий остаток аккаунта ($)
+  days_left: number;  // примерное число дней (остаток делить на средний расход)
+  by_model: OpenRouterModelStat[];  // разбивка по моделям
+  by_day: OpenRouterDayStat[];  // данные по дням для гистограммы
+}
+
 export interface KnowledgeSearchResult {
   query: string;
   results: Array<{
@@ -410,6 +433,10 @@ export interface KnowledgeDocument {
   error_message: string | null;
   created_at: string;
   updated_at: string | null;
+}
+
+export interface BasicInfoResponse {
+  basic_username: string | null;
 }
 
 export const api = {
@@ -565,6 +592,36 @@ export const api = {
     return response.data;
   },
 
+  async createDigitalModel(name: string) {
+    const formData = new FormData();
+    formData.append('name', name);
+    const response = await apiClient.post('/api/looks/models', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async deleteDigitalModel(modelId: string) {
+    const response = await apiClient.delete(`/api/looks/models/${encodeURIComponent(modelId)}`);
+    return response.data;
+  },
+
+  async uploadModelSourceImages(modelId: string, files: File[]) {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+    const response = await apiClient.post(`/api/looks/models/${encodeURIComponent(modelId)}/source-images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  async deleteModelSourceImage(modelId: string, filename: string) {
+    const response = await apiClient.delete(`/api/looks/models/${encodeURIComponent(modelId)}/source-images/${encodeURIComponent(filename)}`);
+    return response.data;
+  },
+
   async getLook(id: string) {
     const response = await apiClient.get(`/api/looks/${id}`);
     return response.data;
@@ -685,6 +742,11 @@ export const api = {
 
   async deleteLookImage(lookId: string, imageIndex: number) {
     const response = await apiClient.delete(`/api/looks/${lookId}/image/${imageIndex}`);
+    return response.data;
+  },
+
+  async getBasicInfo(): Promise<BasicInfoResponse> {
+    const response = await apiClient.get<BasicInfoResponse>('/api/auth/basic-info');
     return response.data;
   },
 
@@ -1270,6 +1332,11 @@ export const api = {
 
   async getOpenRouterImageModels(params?: { force_refresh?: boolean }): Promise<OpenRouterModelsResponse> {
     const response = await apiClient.get<OpenRouterModelsResponse>('/api/settings/openrouter/image-models', { params });
+    return response.data;
+  },
+
+  async getOpenRouterStats(): Promise<OpenRouterStatsResponse> {
+    const response = await apiClient.get<OpenRouterStatsResponse>('/api/settings/openrouter/stats');
     return response.data;
   },
 
@@ -1861,5 +1928,226 @@ export const communication = {
   async getClientData(clientId: string): Promise<any> {
     const response = await apiClient.get(`/api/communication/clients/${clientId}/data`);
     return response.data.client;
+  },
+};
+
+// System Prompts API
+export interface SystemPromptVersion {
+  id: string;
+  agent_type: string;
+  version: number;
+  version_name?: string;
+  name: string;
+  description?: string;
+  system_prompt: string;
+  metadata: Record<string, any>;
+  is_active: boolean;
+  is_default: boolean;
+  marketer_review_status?: string;
+  marketer_feedback?: string;
+  created_by?: string;
+  approved_by?: string;
+  created_at: string;
+}
+
+export interface PromptGenerationRequest {
+  id: string;
+  agent_type: string;
+  user_description: string;
+  generated_prompt?: string;
+  status: string;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export const systemPrompts = {
+  // Get all prompt versions
+  async getVersions(agentType: string, includeInactive: boolean = true): Promise<SystemPromptVersion[]> {
+    const response = await apiClient.get<SystemPromptVersion[]>(
+      `/api/agent-system-prompts/${agentType}/versions`,
+      { params: { include_inactive: includeInactive } }
+    );
+    return response.data;
+  },
+
+  // Get active prompt
+  async getActive(agentType: string): Promise<SystemPromptVersion | null> {
+    const response = await apiClient.get<SystemPromptVersion | null>(
+      `/api/agent-system-prompts/${agentType}/active`
+    );
+    return response.data;
+  },
+
+  // Create new version
+  async createVersion(agentType: string, data: {
+    name: string;
+    system_prompt: string;
+    description?: string;
+    version_name?: string;
+    metadata?: Record<string, any>;
+  }): Promise<SystemPromptVersion> {
+    const response = await apiClient.post<SystemPromptVersion>(
+      `/api/agent-system-prompts/${agentType}/versions`,
+      data
+    );
+    return response.data;
+  },
+
+  // Activate version
+  async activateVersion(agentType: string, promptId: string): Promise<SystemPromptVersion> {
+    const response = await apiClient.post<SystemPromptVersion>(
+      `/api/agent-system-prompts/${agentType}/versions/${promptId}/activate`
+    );
+    return response.data;
+  },
+
+  // Submit for marketer review
+  async submitForReview(agentType: string, promptId: string): Promise<SystemPromptVersion> {
+    const response = await apiClient.put<SystemPromptVersion>(
+      `/api/agent-system-prompts/${agentType}/versions/${promptId}/marketer-review`,
+      { status: 'pending' }
+    );
+    return response.data;
+  },
+
+  // Review as marketer
+  async reviewAsMarketer(
+    agentType: string,
+    promptId: string,
+    status: 'approved' | 'rejected' | 'needs_revision',
+    feedback?: string
+  ): Promise<SystemPromptVersion> {
+    const response = await apiClient.put<SystemPromptVersion>(
+      `/api/agent-system-prompts/${agentType}/versions/${promptId}/marketer-review`,
+      { status, feedback }
+    );
+    return response.data;
+  },
+
+  // Get version history
+  async getVersionHistory(agentType: string, promptId: string): Promise<Array<{
+    id: string;
+    change_type: string;
+    change_comment?: string;
+    changed_by?: string;
+    changed_at: string;
+    previous_value?: Record<string, any>;
+    new_value?: Record<string, any>;
+  }>> {
+    const response = await apiClient.get(
+      `/api/agent-system-prompts/${agentType}/versions/${promptId}/history`
+    );
+    return response.data;
+  },
+
+  // Generate prompt from description
+  async generateFromDescription(agentType: string, data: {
+    user_description: string;
+    target_tone?: string;
+    target_audience?: string;
+    constraints?: string[];
+  }): Promise<PromptGenerationRequest> {
+    const response = await apiClient.post<PromptGenerationRequest>(
+      `/api/agent-system-prompts/${agentType}/generate-from-description`,
+      data
+    );
+    return response.data;
+  },
+
+  // Get generation requests
+  async getGenerationRequests(
+    agentType: string,
+    limit: number = 20,
+    status?: string
+  ): Promise<PromptGenerationRequest[]> {
+    const response = await apiClient.get<PromptGenerationRequest[]>(
+      `/api/agent-system-prompts/${agentType}/generation-requests`,
+      { params: { status, limit } }
+    );
+    return response.data;
+  },
+
+  // Create prompt from generation request
+  async createFromGenerationRequest(
+    agentType: string,
+    requestId: string,
+    name: string
+  ): Promise<SystemPromptVersion> {
+    const response = await apiClient.post<SystemPromptVersion>(
+      `/api/agent-system-prompts/${agentType}/generation-requests/${requestId}/create-prompt`,
+      { name }
+    );
+    return response.data;
+  },
+
+  // Update prompt version
+  async updateVersion(
+    agentType: string,
+    promptId: string,
+    data: {
+      name?: string;
+      description?: string;
+      system_prompt?: string;
+      version_name?: string;
+      metadata?: Record<string, any>;
+    }
+  ): Promise<SystemPromptVersion> {
+    const response = await apiClient.put<SystemPromptVersion>(
+      `/api/agent-system-prompts/${agentType}/versions/${promptId}`,
+      data
+    );
+    return response.data;
+  },
+};
+
+// Agent Interactions API
+export interface AgentInteractionTask {
+  id: string;
+  source_agent: string;
+  target_agent: string;
+  task_type: string;
+  task_context: Record<string, any>;
+  input_data: Record<string, any>;
+  priority: number;
+  status: string;
+  output_data?: Record<string, any>;
+  error_message?: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export const agentInteractions = {
+  // Get tasks for an agent
+  async getTasks(agentType: string, status?: string, limit: number = 20): Promise<AgentInteractionTask[]> {
+    const response = await apiClient.get<AgentInteractionTask[]>(
+      `/api/agent-interactions/${agentType}/tasks`,
+      { params: { status, limit } }
+    );
+    return response.data;
+  },
+
+  // Create a new task
+  async createTask(data: {
+    source_agent: string;
+    target_agent: string;
+    task_type: string;
+    input_data: Record<string, any>;
+    task_context?: Record<string, any>;
+    priority?: number;
+  }): Promise<AgentInteractionTask> {
+    const response = await apiClient.post<AgentInteractionTask>(
+      '/api/agent-interactions/tasks',
+      data
+    );
+    return response.data;
+  },
+
+  // Get task details
+  async getTask(taskId: string): Promise<AgentInteractionTask> {
+    const response = await apiClient.get<AgentInteractionTask>(
+      `/api/agent-interactions/tasks/${taskId}`
+    );
+    return response.data;
   },
 };

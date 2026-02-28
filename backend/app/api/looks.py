@@ -63,9 +63,56 @@ def _sanitize_model_name(value: Optional[str]) -> Optional[str]:
     return re.sub(r"\s+", "_", cleaned).lower()
 
 
+def _static_roots() -> List[Path]:
+    """
+    Возвращает существующие корни static для разных вариантов cwd:
+    - ./static            (когда backend запущен из backend/)
+    - ./backend/static    (когда backend запущен из repo root)
+    - <repo>/backend/static (по пути от текущего файла)
+    """
+    candidate_roots = [
+        Path("static"),
+        Path("backend/static"),
+        Path(__file__).resolve().parents[2] / "static",
+    ]
+    roots: List[Path] = []
+    seen: set[str] = set()
+    for root in candidate_roots:
+        try:
+            resolved = root.resolve()
+        except Exception:
+            continue
+        key = str(resolved)
+        if key in seen:
+            continue
+        seen.add(key)
+        if resolved.exists() and resolved.is_dir():
+            roots.append(resolved)
+    return roots
+
+
+def _first_existing_static_subdir(relative_subdir: str) -> Optional[Path]:
+    rel = relative_subdir.strip().strip("/").replace("\\", "/")
+    for root in _static_roots():
+        candidate = root / rel
+        if candidate.exists() and candidate.is_dir():
+            return candidate
+    return None
+
+
+def _iter_existing_static_subdirs(relative_subdir: str) -> List[Path]:
+    rel = relative_subdir.strip().strip("/").replace("\\", "/")
+    subdirs: List[Path] = []
+    for root in _static_roots():
+        candidate = root / rel
+        if candidate.exists() and candidate.is_dir():
+            subdirs.append(candidate)
+    return subdirs
+
+
 def _discover_digital_models() -> List[dict]:
-    models_root = Path("static/models")
-    if not models_root.exists():
+    models_root = _first_existing_static_subdir("models")
+    if not models_root:
         return []
 
     exts = {".jpg", ".jpeg", ".png", ".webp"}
@@ -159,14 +206,12 @@ def _collect_portfolio_images_for_model(model_id: str, looks: List[Look], conten
                 add_url(media_item.get("url"))
 
     # 3) Из файлов (fallback): по имени файла, если в нем встречается model_id
-    look_model_dir = Path("static/look_images/models") / model_norm
-    if look_model_dir.exists():
-        for file_path in sorted(look_model_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+    for look_model_root in _iter_existing_static_subdirs(f"look_images/models/{model_norm}"):
+        for file_path in sorted(look_model_root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
             if file_path.is_file() and file_path.suffix.lower() in exts:
                 add_url(f"/static/look_images/models/{model_norm}/{file_path.name}")
 
-    look_images_dir = Path("static/look_images")
-    if look_images_dir.exists():
+    for look_images_dir in _iter_existing_static_subdirs("look_images"):
         for file_path in sorted(look_images_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
             if not file_path.is_file() or file_path.suffix.lower() not in exts:
                 continue
@@ -174,13 +219,15 @@ def _collect_portfolio_images_for_model(model_id: str, looks: List[Look], conten
             if model_norm and model_norm in stem_norm:
                 add_url(f"/static/look_images/{file_path.name}")
 
-    content_images_dir = Path("static/content_post_images")
-    if content_images_dir.exists():
+    for content_images_dir in _iter_existing_static_subdirs("content_post_images"):
         for file_path in sorted(content_images_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
             if not file_path.is_file() or file_path.suffix.lower() not in exts:
                 continue
             stem_norm = _sanitize_model_name(file_path.stem) or ""
-            if model_norm and model_norm in stem_norm:
+            # Явно поддерживаем формат post_<model_id>_... для привязки к портфолио модели.
+            file_name_lower = file_path.name.lower()
+            has_model_prefix = bool(model_norm and file_name_lower.startswith(f"post_{model_norm}_"))
+            if model_norm and (model_norm in stem_norm or has_model_prefix):
                 add_url(f"/static/content_post_images/{file_path.name}")
 
     return urls
@@ -210,10 +257,13 @@ def _resolve_static_path_from_url(url: str) -> Optional[Path]:
     if not normalized.startswith("/static/"):
         return None
     rel_path = normalized.removeprefix("/static/").lstrip("/")
-    base = Path("static").resolve()
-    target = (base / rel_path).resolve()
-    if str(target).startswith(str(base)):
-        return target
+    for base in _static_roots():
+        try:
+            target = (base / rel_path).resolve()
+        except Exception:
+            continue
+        if str(target).startswith(str(base)):
+            return target
     return None
 
 
@@ -545,6 +595,223 @@ async def delete_portfolio_image(
         "file_deleted": file_deleted,
         "deleted_path": deleted_path,
     }
+
+
+@router.post("/models", response_model=dict)
+async def create_digital_model(
+    name: str = Form(..., description="Имя модели на латинице (будет использовано как ID папки)"),
+):
+    """
+    Создает новую цифровую модель:
+    - Валидирует имя (только латиница, цифры, подчеркивания, дефисы)
+    - Создает папку в static/models/{name}
+    """
+    # Валидация имени - только латинские буквы, цифры, подчеркивания, дефисы
+    if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*$', name):
+        raise HTTPException(
+            status_code=400,
+            detail="Имя модели должно начинаться с латинской буквы и содержать только латинские буквы, цифры, подчеркивания и дефисы"
+        )
+    
+    model_id = name.lower()
+    
+    # Находим корневую директорию static/models
+    models_root = _first_existing_static_subdir("models")
+    if not models_root:
+        # Если директории нет, создаем её в первом доступном static root
+        for root in _static_roots():
+            models_root = root / "models"
+            models_root.mkdir(parents=True, exist_ok=True)
+            break
+        if not models_root:
+            raise HTTPException(status_code=500, detail="Не удалось найти или создать директорию static/models")
+    
+    # Проверяем, не существует ли уже модель с таким именем
+    model_dir = models_root / model_id
+    if model_dir.exists():
+        raise HTTPException(status_code=409, detail=f"Модель '{model_id}' уже существует")
+    
+    # Создаем папку модели
+    try:
+        model_dir.mkdir(parents=True, exist_ok=False)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Не удалось создать папку модели: {str(e)}")
+    
+    return {
+        "success": True,
+        "model_id": model_id,
+        "name": model_id.replace("_", " ").title(),
+        "path": str(model_dir),
+        "message": f"Модель '{model_id}' успешно создана. Теперь вы можете загрузить исходные фотографии."
+    }
+
+
+@router.delete("/models/{model_id}", response_model=dict)
+async def delete_digital_model(
+    model_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Удаляет цифровую модель полностью:
+    - Удаляет папку с исходными фото из static/models/{model_id}
+    - Удаляет сгенерированные образы этой модели из look_images/models/{model_id}
+    - Не удаляет записи из БД (looks и content_items остаются, но без привязки к модели)
+    """
+    model_norm = _sanitize_model_name(model_id)
+    if not model_norm:
+        raise HTTPException(status_code=400, detail="Некорректный model_id")
+    
+    deleted_paths = []
+    errors = []
+    
+    # 1. Удаляем папку с исходными фото
+    models_root = _first_existing_static_subdir("models")
+    if models_root:
+        model_dir = models_root / model_norm
+        if model_dir.exists() and model_dir.is_dir():
+            try:
+                import shutil
+                shutil.rmtree(model_dir)
+                deleted_paths.append(str(model_dir))
+            except Exception as e:
+                errors.append(f"Не удалось удалить папку исходных фото: {str(e)}")
+    
+    # 2. Удаляем сгенерированные образы модели
+    for look_model_root in _iter_existing_static_subdirs(f"look_images/models/{model_norm}"):
+        if look_model_root.exists() and look_model_root.is_dir():
+            try:
+                import shutil
+                shutil.rmtree(look_model_root)
+                deleted_paths.append(str(look_model_root))
+            except Exception as e:
+                errors.append(f"Не удалось удалить папку сгенерированных образов: {str(e)}")
+    
+    if not deleted_paths and errors:
+        raise HTTPException(status_code=500, detail="; ".join(errors))
+    
+    return {
+        "success": True,
+        "model_id": model_norm,
+        "deleted_paths": deleted_paths,
+        "errors": errors if errors else None,
+        "message": f"Модель '{model_norm}' успешно удалена" if not errors else f"Модель '{model_norm}' удалена с ошибками"
+    }
+
+
+@router.post("/models/{model_id}/source-images", response_model=dict)
+async def upload_model_source_images(
+    model_id: str,
+    files: List[UploadFile] = File(..., description="Исходные фотографии модели (JPG, PNG, WebP)"),
+):
+    """
+    Загружает исходные фотографии для цифровой модели в static/models/{model_id}
+    """
+    model_norm = _sanitize_model_name(model_id)
+    if not model_norm:
+        raise HTTPException(status_code=400, detail="Некорректный model_id")
+    
+    # Находим директорию модели
+    models_root = _first_existing_static_subdir("models")
+    if not models_root:
+        raise HTTPException(status_code=404, detail="Директория static/models не найдена")
+    
+    model_dir = models_root / model_norm
+    if not model_dir.exists() or not model_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Модель '{model_norm}' не найдена")
+    
+    allowed_exts = {".jpg", ".jpeg", ".png", ".webp"}
+    uploaded_files = []
+    errors = []
+    
+    for file in files:
+        # Проверяем расширение файла
+        file_ext = Path(file.filename or "").suffix.lower()
+        if file_ext not in allowed_exts:
+            errors.append(f"Файл '{file.filename}': неподдерживаемый формат (требуется JPG, PNG или WebP)")
+            continue
+        
+        # Создаем безопасное имя файла
+        safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename or "image.jpg")
+        
+        # Если файл с таким именем уже существует, добавляем счетчик
+        target_path = model_dir / safe_filename
+        counter = 1
+        while target_path.exists():
+            stem = Path(safe_filename).stem
+            ext = Path(safe_filename).suffix
+            target_path = model_dir / f"{stem}_{counter}{ext}"
+            counter += 1
+        
+        try:
+            content = await file.read()
+            with open(target_path, "wb") as f:
+                f.write(content)
+            uploaded_files.append({
+                "original_name": file.filename,
+                "saved_name": target_path.name,
+                "path": f"/static/models/{model_norm}/{target_path.name}"
+            })
+        except Exception as e:
+            errors.append(f"Файл '{file.filename}': ошибка загрузки - {str(e)}")
+    
+    return {
+        "success": len(uploaded_files) > 0,
+        "model_id": model_norm,
+        "uploaded_count": len(uploaded_files),
+        "uploaded_files": uploaded_files,
+        "errors": errors if errors else None,
+        "message": f"Загружено {len(uploaded_files)} файлов" + (f" (с ошибками: {len(errors)})" if errors else "")
+    }
+
+
+@router.delete("/models/{model_id}/source-images/{filename}", response_model=dict)
+async def delete_model_source_image(
+    model_id: str,
+    filename: str,
+):
+    """
+    Удаляет исходное фото модели из static/models/{model_id}
+    """
+    model_norm = _sanitize_model_name(model_id)
+    if not model_norm:
+        raise HTTPException(status_code=400, detail="Некорректный model_id")
+    
+    # Безопасная обработка имени файла
+    safe_filename = Path(filename).name  # Убираем пути
+    
+    # Находим директорию модели
+    models_root = _first_existing_static_subdir("models")
+    if not models_root:
+        raise HTTPException(status_code=404, detail="Директория static/models не найдена")
+    
+    model_dir = models_root / model_norm
+    if not model_dir.exists() or not model_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Модель '{model_norm}' не найдена")
+    
+    target_file = model_dir / safe_filename
+    
+    # Проверяем, что файл действительно находится в директории модели (защита от path traversal)
+    try:
+        resolved_file = target_file.resolve()
+        resolved_model_dir = model_dir.resolve()
+        if not str(resolved_file).startswith(str(resolved_model_dir)):
+            raise HTTPException(status_code=400, detail="Некорректное имя файла")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Некорректное имя файла")
+    
+    if not target_file.exists() or not target_file.is_file():
+        raise HTTPException(status_code=404, detail=f"Файл '{safe_filename}' не найден")
+    
+    try:
+        target_file.unlink()
+        return {
+            "success": True,
+            "model_id": model_norm,
+            "filename": safe_filename,
+            "message": f"Файл '{safe_filename}' успешно удален"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Не удалось удалить файл: {str(e)}")
 
 
 @router.get("/{look_id}", response_model=dict)

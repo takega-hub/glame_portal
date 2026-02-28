@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/auth/AuthProvider';
+import OpenRouterStatsPanel from './OpenRouterStatsPanel';
 
 type ModelOption = {
   id: string;
@@ -34,7 +35,7 @@ function buildModelLabel(model: any): ModelOption {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +71,7 @@ export default function SettingsPage() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [basicUsername, setBasicUsername] = useState<string | null>(null);
 
   const effectiveSelection = useMemo(() => {
     if (selectedModel === '__custom__') return customModel.trim();
@@ -160,6 +162,14 @@ export default function SettingsPage() {
     loadModels();
     loadImageModelSettings();
     loadImageModels();
+    api
+      .getBasicInfo()
+      .then((info) => {
+        setBasicUsername(info.basic_username);
+      })
+      .catch(() => {
+        setBasicUsername(null);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -280,6 +290,9 @@ export default function SettingsPage() {
     <div className="max-w-3xl mx-auto p-6">
       <h1 className="text-3xl font-bold text-gray-800 mb-2">Настройки</h1>
       <p className="text-gray-600 mb-6">Конфигурация моделей OpenRouter для LLM и генерации изображений.</p>
+
+      {/* Панель статистики OpenRouter */}
+      <OpenRouterStatsPanel />
 
       {/* Настройки LLM модели */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -478,6 +491,12 @@ export default function SettingsPage() {
       {/* Смена пароля */}
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Смена пароля</h2>
+        {(basicUsername || user?.email) && (
+          <p className="mb-3 text-sm text-gray-600">
+            Текущий пользователь (Basic):{' '}
+            <span className="font-semibold text-gray-900">{basicUsername || user?.email}</span>
+          </p>
+        )}
         {passwordError && (
           <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{passwordError}</div>
         )}
@@ -541,7 +560,11 @@ export default function SettingsPage() {
               type="button"
               onClick={() => {
                 logout();
-                router.push('/login');
+                if (typeof window !== 'undefined') {
+                  window.location.href = '/api/auth/logout-basic';
+                } else {
+                  router.push('/login');
+                }
               }}
               className="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-700 font-medium"
             >
@@ -553,4 +576,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

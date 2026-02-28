@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Any, Dict
 from datetime import datetime, timezone as dt_timezone, timedelta
 from app.database.connection import get_db
-from app.agents.content_agent import ContentAgent
+from app.agents.advanced_content_agent import AdvancedContentAgent as ContentAgent
 from app.models.content_plan import ContentPlan
 from app.models.content_item import ContentItem
 from app.models.content_publication import ContentPublication

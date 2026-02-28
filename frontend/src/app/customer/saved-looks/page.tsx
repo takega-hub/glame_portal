@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
@@ -18,18 +17,19 @@ interface SavedLook {
 
 export default function SavedLooksPage() {
   const { user, isAuthenticated, loading } = useAuth();
-  const router = useRouter();
   const [savedLooks, setSavedLooks] = useState<SavedLook[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState<'favorite' | 'generated'>('favorite');
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    } else if (isAuthenticated && user?.is_customer) {
-      loadSavedLooks();
+    if (!loading) {
+      if (isAuthenticated && user?.is_customer) {
+        loadSavedLooks();
+      } else {
+        setLoadingData(false);
+      }
     }
-  }, [loading, isAuthenticated, user, router, activeTab]);
+  }, [loading, isAuthenticated, user, activeTab]);
 
   const loadSavedLooks = async () => {
     try {

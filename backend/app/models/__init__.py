@@ -20,6 +20,15 @@ from app.models.customer_segment import CustomerSegment
 from app.models.user_segment import UserSegment
 from app.models.product_catalog_section import ProductCatalogSection
 from app.models.customer_message import CustomerMessage
+from app.models.agent_system_prompt import AgentSystemPrompt, AgentPromptVersionHistory, AgentPromptGenerationRequest
+from app.models.agent_interaction import (
+    AgentInteractionTask,
+    AgentInteractionLog,
+    AgentValidationRule,
+    AgentContentHandoff,
+    InteractionStatus,
+    TaskPriority
+)
 
 __all__ = [
     "User",
@@ -44,4 +53,13 @@ __all__ = [
     "UserSegment",
     "ProductCatalogSection",
     "CustomerMessage",
+    "AgentSystemPrompt",
+    "AgentPromptVersionHistory",
+    "AgentPromptGenerationRequest",
+    "AgentInteractionTask",
+    "AgentInteractionLog",
+    "AgentValidationRule",
+    "AgentContentHandoff",
+    "InteractionStatus",
+    "TaskPriority",
 ]

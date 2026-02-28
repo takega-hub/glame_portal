@@ -810,10 +810,13 @@ E Вести на сайт, онлайн-подбор
   "cta": "призыв к действию"
 }}"""
             
+            # Получаем системный промпт из БД
+            system_prompt = await self.get_active_system_prompt(self.db, "communication", self.SYSTEM_PROMPT)
+            
             # Генерируем ответ через LLM
             response_text = await self.generate_response(
                 prompt=prompt,
-                system_prompt=self.SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 temperature=0.7,
                 max_tokens=500
             )

@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api import products, looks, auth, stylist, content, analytics, stores, persona, marketing
 from app.api import onec_sync, knowledge, catalog_sections
 from app.api import settings, look_tryon, customer_cabinet, ai_marketer, communication
+from app.api import agent_system_prompts, agent_interactions
 from app.api.admin import customers as admin_customers, onec_customers
 from app.services.customer_sync_scheduler import (
     start_customer_sync_scheduler,
@@ -162,6 +163,8 @@ app.include_router(admin_customers.router, prefix="/api/admin/customers", tags=[
 app.include_router(onec_customers.router, prefix="/api/admin/1c", tags=["admin-1c"])
 app.include_router(ai_marketer.router, prefix="/api/ai-marketer", tags=["ai-marketer"])
 app.include_router(communication.router, prefix="/api/communication", tags=["communication"])
+app.include_router(agent_system_prompts.router, prefix="/api/agent-system-prompts", tags=["agent-system-prompts"])
+app.include_router(agent_interactions.router, prefix="/api/agent-interactions", tags=["agent-interactions"])
 
 # Статические файлы для изображений
 static_dir = Path("static")

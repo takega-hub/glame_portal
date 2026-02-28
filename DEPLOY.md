@@ -518,3 +518,15 @@ docker compose -f infra/docker-compose.prod.yml up -d
 - Убедитесь, что в репозитории есть `frontend/package-lock.json` (нужен для `npm ci` в Dockerfile).
 
 См. также [README.md](README.md).
+
+Вводить нужно только команды, без root@...#:
+
+cd ~/glame-platform/infradocker compose -f docker-compose.prod.yml restart backend
+
+Если не запустится (контейнер не создан), тогда:
+
+docker compose -f docker-compose.prod.yml up -d backend
+
+И проверка:
+
+docker compose -f docker-compose.prod.yml psdocker compose -f docker-compose.prod.yml logs -f backend

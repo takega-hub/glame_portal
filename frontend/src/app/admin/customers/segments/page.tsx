@@ -16,19 +16,17 @@ interface Segment {
 }
 
 export default function CustomerSegmentsPage() {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { loading } = useAuth();
   const router = useRouter();
   const [segments, setSegments] = useState<Segment[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || user?.role !== 'admin')) {
-      router.push('/login');
-    } else if (isAuthenticated && user?.role === 'admin') {
+    if (!loading) {
       loadSegments();
     }
-  }, [loading, isAuthenticated, user, router]);
+  }, [loading, router]);
 
   const loadSegments = async () => {
     try {

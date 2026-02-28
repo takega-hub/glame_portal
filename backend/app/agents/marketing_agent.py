@@ -76,9 +76,12 @@ class MarketingAgent(BaseAgent):
 Будь конкретным и практичным."""
         
         try:
+            # Получаем системный промпт из БД
+            system_prompt = await self.get_active_system_prompt(self.db, "marketer", self.BRAND_SYSTEM_PROMPT)
+            
             analysis = await self.generate_response(
                 prompt=prompt,
-                system_prompt=self.BRAND_SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 temperature=0.5,
                 max_tokens=2000
             )
@@ -150,9 +153,12 @@ class MarketingAgent(BaseAgent):
 Будь конкретным и практичным. Учитывай специфику бренда GLAME."""
         
         try:
+            # Получаем системный промпт из БД
+            system_prompt = await self.get_active_system_prompt(self.db, "marketer", self.BRAND_SYSTEM_PROMPT)
+            
             strategy = await self.generate_response(
                 prompt=prompt,
-                system_prompt=self.BRAND_SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 temperature=0.7,
                 max_tokens=2500
             )
@@ -205,9 +211,12 @@ ID плана: {plan_id}
 Будь конкретным и практичным."""
         
         try:
+            # Получаем системный промпт из БД
+            system_prompt = await self.get_active_system_prompt(self.db, "marketer", self.BRAND_SYSTEM_PROMPT)
+            
             optimization = await self.generate_response(
                 prompt=prompt,
-                system_prompt=self.BRAND_SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 temperature=0.6,
                 max_tokens=2000
             )
@@ -294,9 +303,12 @@ ID плана: {plan_id}
 Будь конкретным и обоснуй предсказания."""
         
         try:
+            # Получаем системный промпт из БД
+            system_prompt = await self.get_active_system_prompt(self.db, "marketer", self.BRAND_SYSTEM_PROMPT)
+            
             prediction = await self.generate_response(
                 prompt=prompt,
-                system_prompt=self.BRAND_SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 temperature=0.5,
                 max_tokens=1500
             )

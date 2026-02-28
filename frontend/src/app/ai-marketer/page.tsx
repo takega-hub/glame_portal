@@ -31,20 +31,18 @@ interface DashboardData {
 }
 
 export default function AIMarketerPage() {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { loading } = useAuth();
   const router = useRouter();
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const [opportunities, setOpportunities] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || (user?.role !== 'admin' && user?.role !== 'ai_marketer'))) {
-      router.push('/login');
-    } else if (isAuthenticated && (user?.role === 'admin' || user?.role === 'ai_marketer')) {
+    if (!loading) {
       loadDashboard();
       loadOpportunities();
     }
-  }, [loading, isAuthenticated, user, router]);
+  }, [loading]);
 
   const loadDashboard = async () => {
     try {

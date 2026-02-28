@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import { api, apiClient, type ContentItemMediaEntry } from '@/lib/api';
 import CalendarView from './CalendarView';
 import * as XLSX from 'xlsx';
+import SystemPromptPanel from './SystemPromptPanel';
 
 const CHANNELS = [
   { value: 'website_main', label: 'Главная страница сайта' },
@@ -130,6 +131,7 @@ export default function ContentAgent() {
   const [itemFilterSearch, setItemFilterSearch] = useState<string>('');
   const [itemFilterDateFrom, setItemFilterDateFrom] = useState<string>('');
   const [itemFilterDateTo, setItemFilterDateTo] = useState<string>('');
+  const [showPromptSettings, setShowPromptSettings] = useState(false);
 
   // Product Description states
   const [productsWithoutDesc, setProductsWithoutDesc] = useState<Array<{
@@ -1705,11 +1707,40 @@ export default function ContentAgent() {
 
   return (
     <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Content Agent</h1>
-      <p className="text-gray-700 mb-6">
-        Календарный контент‑план → генерация контента по слотам → экспорт/синк в Яндекс.Календарь.
-      </p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Content Agent</h1>
+          <p className="text-gray-700">
+            Календарный контент‑план → генерация контента по слотам → экспорт/синк в Яндекс.Календарь.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowPromptSettings(!showPromptSettings)}
+          className={`px-4 py-2 rounded-lg shadow-sm text-sm font-medium transition-colors ${
+            showPromptSettings
+              ? 'bg-gold-500 text-white hover:bg-gold-600'
+              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
+        >
+          {showPromptSettings ? '← Вернуться к планировщику' : '⚙️ Настройки системных промптов'}
+        </button>
+      </div>
 
+      {showPromptSettings ? (
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <SystemPromptPanel agentType="content-agent" />
+          
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <h3 className="text-blue-800 font-medium mb-2">Подсказка</h3>
+            <p className="text-blue-700 text-sm">
+              Здесь вы можете настроить базовые инструкции для AI Content Agent.
+              Вы можете создавать новые версии, генерировать их из описания и выбирать активную версию,
+              которая будет использоваться при генерации контент-планов и постов.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
         {/* Сохранённые планы */}
         <div className="bg-white rounded-lg shadow-md p-6 h-full flex flex-col">
@@ -3613,6 +3644,8 @@ export default function ContentAgent() {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

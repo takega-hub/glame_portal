@@ -49,7 +49,7 @@ interface PurchaseHistoryResponse {
 }
 
 export default function CustomerDetailPage() {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { loading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const customerId = params.id as string;
@@ -66,12 +66,10 @@ export default function CustomerDetailPage() {
   const [loadingPurchases, setLoadingPurchases] = useState(false);
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || user?.role !== 'admin')) {
-      router.push('/login');
-    } else if (isAuthenticated && user?.role === 'admin') {
+    if (!loading) {
       loadCustomer();
     }
-  }, [loading, isAuthenticated, user, router, customerId]);
+  }, [loading, router, customerId]);
 
   // Загружаем историю покупок при переключении на вкладку
   useEffect(() => {

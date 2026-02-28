@@ -17,18 +17,16 @@ interface SegmentAnalysis {
 }
 
 export default function SegmentsAnalysisPage() {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { loading } = useAuth();
   const router = useRouter();
   const [segments, setSegments] = useState<SegmentAnalysis[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    if (!loading && (!isAuthenticated || (user?.role !== 'admin' && user?.role !== 'ai_marketer'))) {
-      router.push('/login');
-    } else if (isAuthenticated && (user?.role === 'admin' || user?.role === 'ai_marketer')) {
+    if (!loading) {
       loadSegments();
     }
-  }, [loading, isAuthenticated, user, router]);
+  }, [loading]);
 
   const loadSegments = async () => {
     try {

@@ -1,0 +1,14 @@
+[Unit]
+Description=Glame Backend
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/glame-platform/backend.env
+ExecStart=/usr/bin/env bash -lc 'cd "${ROOT_DIR:-/opt/glame-platform}/backend" && if [ -f "${VENV_PATH:-${ROOT_DIR:-/opt/glame-platform}/backend/venv}/bin/activate" ]; then source "${VENV_PATH:-${ROOT_DIR:-/opt/glame-platform}/backend/venv}/bin/activate"; fi && uvicorn app.main:app --host 127.0.0.1 --port "${BACKEND_PORT:-8000}"'
+Restart=always
+RestartSec=3
+WorkingDirectory=/tmp
+
+[Install]
+WantedBy=multi-user.target

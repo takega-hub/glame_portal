@@ -127,8 +127,9 @@ export default function ChatInterface({ userId }: ChatInterfaceProps = {}) {
             }
           },
           (error) => {
+            const errorMessage = error?.message || `Код ошибки: ${error?.code || 'неизвестно'}`;
             setLocationError('Не удалось получить геолокацию');
-            console.error('Geolocation error:', error);
+            console.error('Geolocation error:', errorMessage, error);
           }
         );
       }

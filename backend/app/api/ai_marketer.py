@@ -10,10 +10,8 @@ from typing import Optional, List
 from uuid import UUID
 
 from app.database.connection import get_db
-from app.models.user import User
 from app.models.customer_segment import CustomerSegment
 from app.models.user_segment import UserSegment
-from app.api.dependencies import require_marketer
 from app.services.ai_segmentation_service import AISegmentationService
 from app.services.customer_analytics_service import CustomerAnalyticsService
 
@@ -30,7 +28,6 @@ class CampaignGenerateRequest(BaseModel):
 
 @router.get("/dashboard")
 async def get_dashboard(
-    current_user: User = Depends(require_marketer()),
     db: AsyncSession = Depends(get_db)
 ):
     """Дашборд с основными метриками"""
@@ -75,7 +72,6 @@ async def get_dashboard(
 
 @router.get("/segments/analysis")
 async def get_segments_analysis(
-    current_user: User = Depends(require_marketer()),
     db: AsyncSession = Depends(get_db)
 ):
     """Детальный анализ сегментов"""
@@ -123,7 +119,6 @@ async def get_segments_analysis(
 
 @router.post("/segments/auto-generate")
 async def auto_generate_segments(
-    current_user: User = Depends(require_marketer()),
     db: AsyncSession = Depends(get_db)
 ):
     """Автоматическая сегментация AI"""
@@ -139,7 +134,6 @@ async def auto_generate_segments(
 @router.get("/customers/{user_id}/insights")
 async def get_customer_insights(
     user_id: str,
-    current_user: User = Depends(require_marketer()),
     db: AsyncSession = Depends(get_db)
 ):
     """AI инсайты по покупателю"""
@@ -178,7 +172,6 @@ async def get_customer_insights(
 @router.post("/campaigns/generate")
 async def generate_campaign(
     request: CampaignGenerateRequest,
-    current_user: User = Depends(require_marketer()),
     db: AsyncSession = Depends(get_db)
 ):
     """Генерация персонализированной кампании"""
@@ -194,7 +187,6 @@ async def generate_campaign(
 
 @router.get("/opportunities")
 async def get_opportunities(
-    current_user: User = Depends(require_marketer()),
     db: AsyncSession = Depends(get_db)
 ):
     """AI поиск возможностей"""

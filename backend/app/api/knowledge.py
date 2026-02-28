@@ -657,11 +657,26 @@ async def get_knowledge_stats(collection_name: str = Query("brand_philosophy"), 
             r = await client.get(f"{qdrant_url}/collections/{collection_name}")
             r.raise_for_status()
             data = r.json().get("result", {})
+            points_count = (data or {}).get("points_count")
+
+            # Fallback: если points_count отсутствует или равен 0, используем точный подсчёт
+            # через /points/count (актуально для разных версий Qdrant и пустого кеша метаданных).
+            if points_count in (None, 0):
+                try:
+                    cr = await client.post(
+                        f"{qdrant_url}/collections/{collection_name}/points/count",
+                        json={"exact": True}
+                    )
+                    cr.raise_for_status()
+                    points_count = (cr.json().get("result") or {}).get("count", 0)
+                except Exception:
+                    # Безопасный фолбэк — оставляем 0, чтобы не ронять ручку
+                    points_count = 0
 
         vectors = (data.get("config", {}) or {}).get("params", {}).get("vectors", {}) or {}
         return {
             "collection_name": collection_name,
-            "total_documents": data.get("points_count", 0) or 0,
+            "total_documents": points_count or 0,
             "vector_size": vectors.get("size"),
             "distance": vectors.get("distance"),
         }

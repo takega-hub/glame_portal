@@ -149,6 +149,35 @@ class BaseAgent(ABC):
         
         return "\n\n".join(formatted_parts)
     
+    async def get_active_system_prompt(self, db: Any, agent_type: str, fallback_prompt: str) -> str:
+        """
+        Получение активного системного промпта из БД.
+        
+        Args:
+            db: Сессия базы данных (AsyncSession)
+            agent_type: Тип агента (content-agent, stylist, marketer, etc.)
+            fallback_prompt: Промпт по умолчанию, если в БД ничего не найдено
+        """
+        from app.models.agent_system_prompt import AgentSystemPrompt
+        from sqlalchemy import select
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            query = select(AgentSystemPrompt).where(
+                AgentSystemPrompt.agent_type == agent_type,
+                AgentSystemPrompt.is_active == True
+            )
+            result = await db.execute(query)
+            prompt_obj = result.scalar_one_or_none()
+            if prompt_obj and prompt_obj.system_prompt:
+                logger.info(f"Используется системный промпт из БД для {agent_type} (версия {prompt_obj.version})")
+                return prompt_obj.system_prompt
+        except Exception as e:
+            logger.warning(f"Ошибка при получении системного промпта для {agent_type} из БД: {e}. Используется fallback.")
+            
+        return fallback_prompt
+
     async def generate_response(
         self,
         prompt: str,

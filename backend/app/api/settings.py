@@ -49,6 +49,20 @@ class OpenRouterModelsResponse(BaseModel):
     cached: bool = False
     fetched_at: float
 
+class OpenRouterKeyInfo(BaseModel):
+    data: Dict[str, Any]
+
+class OpenRouterUsagePoint(BaseModel):
+    date: str
+    total_cost: float
+    requests: int
+
+class OpenRouterUsageResponse(BaseModel):
+    days: int
+    by_day: List[OpenRouterUsagePoint]
+    by_model: List[Dict[str, Any]]
+    by_purpose: List[Dict[str, Any]] = []
+
 
 # simple in-memory cache (per process)
 _models_cache: Optional[List[Dict[str, Any]]] = None
@@ -311,6 +325,110 @@ async def list_openrouter_image_models(force_refresh: bool = False):
     return OpenRouterModelsResponse(models=normalized, cached=False, fetched_at=now)
 
 
+@router.get("/openrouter/key", response_model=OpenRouterKeyInfo)
+async def get_openrouter_key_info():
+    """
+    Возвращает информацию о текущем API ключе OpenRouter:
+    лимиты, оставшиеся кредиты, агрегированное использование (день/неделя/месяц).
+    """
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OPENROUTER_API_KEY не установлен на backend.")
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://glame.ai",
+        "X-Title": "GLAME AI Platform",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(f"{base_url}/key", headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            # Ответ спецификации уже содержит поле data
+            return OpenRouterKeyInfo(data=data.get("data") or data)
+    except httpx.HTTPStatusError as e:
+        detail = (e.response.text or "")[:500]
+        raise HTTPException(status_code=502, detail=f"OpenRouter /key error: HTTP {e.response.status_code}. {detail}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch OpenRouter key info: {str(e)}")
+
+
+@router.get("/openrouter/usage", response_model=OpenRouterUsageResponse)
+async def get_openrouter_usage(days: int = 7):
+    """
+    Попытка получить детализацию расходов через OpenRouter /api/v1/activity (если доступно для ключа).
+    Возвращает:
+    - by_day: траты по дням
+    - by_model: траты по моделям
+    - by_purpose: пусто (может наполняться локальным логированием в будущем)
+    """
+    if days not in (7, 30):
+        days = 7
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OPENROUTER_API_KEY не установлен на backend.")
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://glame.ai",
+        "X-Title": "GLAME AI Platform",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # /activity возвращает 30 последних дней; фильтруем по days на backend
+            resp = await client.get(f"{base_url}/activity", headers=headers)
+            resp.raise_for_status()
+            data = resp.json() or {}
+            rows = list(data.get("data") or [])
+    except httpx.HTTPStatusError as e:
+        # Если endpoint недоступен для ключа — возвращаем пустую детализацию
+        if e.response.status_code in (401, 403, 404):
+            return OpenRouterUsageResponse(days=days, by_day=[], by_model=[], by_purpose=[])
+        detail = (e.response.text or "")[:500]
+        raise HTTPException(status_code=502, detail=f"OpenRouter /activity error: HTTP {e.response.status_code}. {detail}")
+    except Exception as e:
+        return OpenRouterUsageResponse(days=days, by_day=[], by_model=[], by_purpose=[])
+
+    # Агрегация
+    from collections import defaultdict
+    by_day_map: Dict[str, Dict[str, Any]] = {}
+    by_model_map: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"model": "", "total_cost": 0.0, "requests": 0})
+
+    # Берём только последние 'days' по дате
+    # /activity дата в формате YYYY-MM-DD
+    rows_sorted = sorted(rows, key=lambda r: r.get("date") or "")
+    if days == 7:
+        rows_sorted = rows_sorted[-7:]
+    elif days == 30:
+        rows_sorted = rows_sorted[-30:]
+
+    for r in rows_sorted:
+        date_str = str(r.get("date"))
+        model = str(r.get("model") or r.get("model_permaslug") or "unknown")
+        cost = float(r.get("usage") or 0.0)
+        reqs = int(r.get("requests") or 0)
+        # По дням
+        if date_str not in by_day_map:
+            by_day_map[date_str] = {"date": date_str, "total_cost": 0.0, "requests": 0}
+        by_day_map[date_str]["total_cost"] += cost
+        by_day_map[date_str]["requests"] += reqs
+        # По моделям
+        bm = by_model_map[model]
+        bm["model"] = model
+        bm["total_cost"] += cost
+        bm["requests"] += reqs
+
+    by_day = [
+        OpenRouterUsagePoint(date=k, total_cost=round(v["total_cost"], 6), requests=v["requests"])
+        for k, v in sorted(by_day_map.items())
+    ]
+    by_model = sorted(by_model_map.values(), key=lambda x: x["total_cost"], reverse=True)
+
+    return OpenRouterUsageResponse(days=days, by_day=by_day, by_model=by_model, by_purpose=[])
+
 def _filter_image_generation_models_raw(raw_models: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Фильтрует модели для генерации изображений из сырого списка OpenRouter.
@@ -534,3 +652,174 @@ async def set_image_generation_model_settings(
             ),
         )
 
+
+class OpenRouterModelStat(BaseModel):
+    model: str
+    total_cost: float
+    requests: int
+
+
+class OpenRouterDayStat(BaseModel):
+    date: str
+    total_cost: float
+    by_model: Dict[str, float]  # модель -> стоимость за день
+
+
+class OpenRouterStatsResponse(BaseModel):
+    avg_daily: float  # средние дневные траты ($/день)
+    remaining_credits: float  # текущий остаток аккаунта ($)
+    days_left: float  # примерное число дней (остаток делить на средний расход)
+    by_model: List[OpenRouterModelStat]  # разбивка по моделям
+    by_day: List[OpenRouterDayStat]  # данные по дням для гистограммы
+
+
+@router.get("/openrouter/stats", response_model=OpenRouterStatsResponse)
+async def get_openrouter_stats():
+    """
+    Возвращает статистику использования OpenRouter:
+    - avg_daily: средние дневные траты ($/день) — из /auth/key
+    - remaining_credits: текущий остаток ($) — из /credits (Management API) или limit_remaining из /auth/key
+    - days_left: примерное число дней хватит средств
+    - by_model: разбивка расходов по моделям
+    - by_day: данные по дням для гистограммы
+    """
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    management_key = os.getenv("OPENROUTER_MANAGEMENT_API_KEY")
+    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OPENROUTER_API_KEY не установлен на backend.")
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://glame.ai",
+        "X-Title": "GLAME AI Platform",
+    }
+    
+    avg_daily = 0.0
+    remaining_credits = 0.0
+    limit_remaining = None  # может быть null для безлимитных ключей
+    by_model: List[OpenRouterModelStat] = []
+    by_day_map: Dict[str, Dict[str, Any]] = {}
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Получаем данные из /auth/key (информация о ключе)
+            try:
+                key_resp = await client.get(f"{base_url}/auth/key", headers=headers)
+                key_resp.raise_for_status()
+                key_data = key_resp.json()
+                
+                key_info = key_data.get("data", key_data)
+                if key_info and isinstance(key_info, dict):
+                    # Извлекаем limit_remaining (баланс ключа)
+                    limit_remaining = key_info.get("limit_remaining")
+                    if limit_remaining is not None:
+                        remaining_credits = float(limit_remaining)
+                    
+                    # Извлекаем usage для расчета средних трат
+                    usage_daily = key_info.get("usage_daily")
+                    usage_weekly = key_info.get("usage_weekly")
+                    usage_monthly = key_info.get("usage_monthly")
+                    
+                    # Вычисляем средние дневные траты
+                    if isinstance(usage_daily, (int, float)) and usage_daily > 0:
+                        avg_daily = float(usage_daily)
+                    elif isinstance(usage_weekly, (int, float)) and usage_weekly > 0:
+                        avg_daily = float(usage_weekly) / 7.0
+                    elif isinstance(usage_monthly, (int, float)) and usage_monthly > 0:
+                        avg_daily = float(usage_monthly) / 30.0
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to fetch /auth/key: {e}")
+            
+            # Получаем разбивку по моделям из /activity
+            try:
+                activity_resp = await client.get(f"{base_url}/activity", headers=headers)
+                activity_resp.raise_for_status()
+                activity_data = activity_resp.json()
+                rows = list(activity_data.get("data") or [])
+                
+                from collections import defaultdict
+                by_model_map: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"model": "", "total_cost": 0.0, "requests": 0})
+                
+                for r in rows:
+                    model = str(r.get("model") or r.get("model_permaslug") or "unknown")
+                    cost = float(r.get("usage") or 0.0)
+                    reqs = int(r.get("requests") or 0)
+                    date_str = str(r.get("date") or "")
+                    
+                    # Агрегируем по моделям
+                    bm = by_model_map[model]
+                    bm["model"] = model
+                    bm["total_cost"] += cost
+                    bm["requests"] += reqs
+                    
+                    # Агрегируем по дням для гистограммы
+                    if date_str:
+                        if date_str not in by_day_map:
+                            by_day_map[date_str] = {"date": date_str, "total_cost": 0.0, "by_model": {}}
+                        by_day_map[date_str]["total_cost"] += cost
+                        if model not in by_day_map[date_str]["by_model"]:
+                            by_day_map[date_str]["by_model"][model] = 0.0
+                        by_day_map[date_str]["by_model"][model] += cost
+                
+                by_model = [
+                    OpenRouterModelStat(
+                        model=v["model"],
+                        total_cost=round(v["total_cost"], 6),
+                        requests=v["requests"]
+                    )
+                    for v in sorted(by_model_map.values(), key=lambda x: x["total_cost"], reverse=True)
+                ]
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to fetch /activity: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch OpenRouter stats: {str(e)}")
+    
+    # Получаем остаток через Management API (если ключ установлен)
+    # Остаток = total_credits - total_usage
+    if management_key:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                mgmt_headers = {
+                    "Authorization": f"Bearer {management_key}",
+                    "Content-Type": "application/json",
+                }
+                credits_resp = await client.get("https://openrouter.ai/api/v1/credits", headers=mgmt_headers)
+                credits_resp.raise_for_status()
+                credits_data = credits_resp.json()
+                
+                credits_info = credits_data.get("data", credits_data)
+                if isinstance(credits_info, dict):
+                    total_credits = float(credits_info.get("total_credits") or 0.0)
+                    total_usage = float(credits_info.get("total_usage") or 0.0)
+                    remaining_credits = total_credits - total_usage
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to fetch /credits: {e}")
+    
+    # Считаем сколько дней хватит
+    days_left = 0.0
+    if avg_daily > 0 and remaining_credits > 0:
+        days_left = round(remaining_credits / avg_daily, 1)
+    
+    # Формируем данные по дням для гистограммы
+    by_day = [
+        OpenRouterDayStat(
+            date=k,
+            total_cost=round(v["total_cost"], 6),
+            by_model={model: round(cost, 6) for model, cost in v["by_model"].items()}
+        )
+        for k, v in sorted(by_day_map.items())
+    ]
+    
+    return OpenRouterStatsResponse(
+        avg_daily=round(avg_daily, 4),
+        remaining_credits=round(remaining_credits, 4),
+        days_left=days_left,
+        by_model=by_model,
+        by_day=by_day
+    )

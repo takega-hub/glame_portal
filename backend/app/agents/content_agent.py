@@ -78,10 +78,13 @@ GLAME - это место, где стиль становится отражен
 3. Достигает цели: {goal or 'вдохновить'}
 4. Отражает философию GLAME"""
         
+        # Получаем системный промпт из БД
+        system_prompt = await self.get_active_system_prompt(self.db, "content-agent", self.BRAND_SYSTEM_PROMPT)
+        
         # Генерируем контент
         content = await self.generate_response(
             prompt=prompt,
-            system_prompt=self.BRAND_SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             temperature=0.8
         )
         

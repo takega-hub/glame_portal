@@ -22,7 +22,7 @@ interface Customer {
 }
 
 function AdminCustomersContent() {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -99,64 +99,28 @@ function AdminCustomersContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    console.log('AdminCustomersPage - useEffect:', { loading, isAuthenticated, user: user ? { id: user.id, email: user.email, role: user.role } : null });
-    
-    // Ждем загрузки данных пользователя
-    if (loading) {
-      console.log('AdminCustomersPage - Still loading...');
-      return;
-    }
-    
-    // Если не авторизован - редирект на логин
-    if (!isAuthenticated) {
-      console.log('AdminCustomersPage - Not authenticated, redirecting to login');
-      router.push('/login');
-      return;
-    }
-    
-    // Если пользователь загружен и роль admin - загружаем данные
-    if (user && user.role === 'admin') {
-      console.log('AdminCustomersPage - User is admin, loading data');
-      loadStats();
-      // Загружаем сегменты только один раз
-      if (!segmentsLoadedRef.current) {
-        loadSegments();
-      }
-      // loadCustomers будет вызван через другой useEffect
-    } else if (user) {
-      // Пользователь авторизован, но не админ - просто не загружаем данные
-      console.log('AdminCustomersPage - User is not admin, role:', user.role);
-      setLoadingData(false);
-    } else {
-      // Пользователь еще не загружен
-      console.log('AdminCustomersPage - User not loaded yet');
+    if (loading) return;
+    loadStats();
+    if (!segmentsLoadedRef.current) {
+      loadSegments();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, isAuthenticated, user?.id, user?.role, router]); // Используем только стабильные зависимости, loadStats и loadSegments стабильны благодаря useCallback
+  }, [loading]);
 
   // Debounce для поиска и фильтра сегмента
   useEffect(() => {
-    // Не загружаем, если еще не загружен пользователь
-    if (loading || !user || user.role !== 'admin') {
-      return;
-    }
-
-    // Сбрасываем на первую страницу при изменении фильтров
+    if (loading) return;
     setCurrentPage(1);
-  }, [search, segmentFilter, loading, user]);
+  }, [search, segmentFilter, loading]);
 
   // Загружаем данные при изменении страницы, фильтров или поиска
   useEffect(() => {
-    if (loading || !user || user.role !== 'admin') {
-      return;
-    }
-
+    if (loading) return;
     const timer = setTimeout(() => {
       loadCustomers();
-    }, search || segmentFilter ? 500 : 0); // Задержка только для поиска/фильтра
-
+    }, search || segmentFilter ? 500 : 0);
     return () => clearTimeout(timer);
-  }, [currentPage, search, segmentFilter, loadCustomers, loading, user]);
+  }, [currentPage, search, segmentFilter, loadCustomers, loading]);
 
   const pollTaskStatus = async (taskId: string) => {
     const maxAttempts = 3600; // Максимум 1 час (каждые 2 секунды)
@@ -307,74 +271,7 @@ function AdminCustomersContent() {
     );
   }
 
-  // Показываем загрузку пока данные загружаются
-  if (loading || loadingData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Загрузка данных пользователя...</p>
-          <p className="mt-2 text-sm text-gray-400">Проверка прав доступа...</p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Если не авторизован - показываем сообщение (не редиректим, чтобы увидеть что происходит)
-  if (!isAuthenticated || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600 mb-2">Требуется авторизация</p>
-          <Link href="/login" className="text-pink-600 hover:text-pink-700 mt-4 inline-block">
-            Войти в систему
-          </Link>
-        </div>
-      </div>
-    );
-  }
-  
-  // Показываем сообщение только если пользователь загружен и точно не админ
-  // ВРЕМЕННО: разрешаем доступ всем авторизованным для отладки
-  const isAdmin = user.role === 'admin';
-  
-  if (!isAdmin) {
-    console.log('AdminCustomersPage - Access denied, user role:', user.role);
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600 mb-2">Доступ запрещен</p>
-          <p className="text-sm text-gray-500 mb-4">
-            Для доступа к этому разделу требуется роль администратора.
-            <br />
-            Ваша роль: <strong>{user.role || 'не установлена'}</strong>
-            <br />
-            Email: {user.email || 'N/A'}
-            <br />
-            is_customer: {user.is_customer ? 'true' : 'false'}
-          </p>
-          <div className="mt-4 space-x-4">
-            <Link href="/" className="text-pink-600 hover:text-pink-700 inline-block">
-              Вернуться на главную
-            </Link>
-            <button
-              onClick={() => {
-                console.log('Current user:', user);
-                localStorage.removeItem('glame_user');
-                window.location.reload();
-              }}
-              className="text-blue-600 hover:text-blue-700 inline-block ml-4"
-            >
-              Очистить кэш и обновить
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  
-  // Если дошли сюда - пользователь админ, показываем контент
-  console.log('AdminCustomersPage - Rendering admin content for user:', user.email, 'role:', user.role);
+ 
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
@@ -31,17 +30,18 @@ interface LoyaltyInfo {
 
 export default function LoyaltyPage() {
   const { user, isAuthenticated, loading } = useAuth();
-  const router = useRouter();
   const [loyaltyInfo, setLoyaltyInfo] = useState<LoyaltyInfo | null>(null);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    } else if (isAuthenticated && user?.is_customer) {
-      loadLoyaltyInfo();
+    if (!loading) {
+      if (isAuthenticated && user?.is_customer) {
+        loadLoyaltyInfo();
+      } else {
+        setLoadingData(false);
+      }
     }
-  }, [loading, isAuthenticated, user, router]);
+  }, [loading, isAuthenticated, user]);
 
   const loadLoyaltyInfo = async () => {
     try {

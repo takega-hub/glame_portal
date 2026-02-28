@@ -4,6 +4,8 @@ CommerceML - стандартный формат обмена данными м�
 """
 import httpx
 import logging
+import os
+import re
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any, Optional
 from io import BytesIO
@@ -16,6 +18,12 @@ class CommerceMLXMLService:
     
     def __init__(self):
         self.client: Optional[httpx.AsyncClient] = None
+        # Управление проверкой сертификата через переменную окружения
+        # По умолчанию включена (безопасно). Установите COMMERCE_ML_ALLOW_INSECURE=true
+        # чтобы разрешить загрузку с отключенной проверкой сертификата/имени хоста.
+        allow_insecure = os.getenv("COMMERCE_ML_ALLOW_INSECURE", "false").lower() in ("1", "true", "yes")
+        # Храним флаг для повторной попытки при SSL-ошибках
+        self.allow_insecure = allow_insecure
     
     async def __aenter__(self):
         return self
@@ -28,7 +36,8 @@ class CommerceMLXMLService:
         """Создает HTTP клиент если его нет"""
         if self.client:
             return
-        self.client = httpx.AsyncClient(timeout=120.0, verify=True)
+        # Создаем безопасный клиент по умолчанию
+        self.client = httpx.AsyncClient(timeout=120.0, verify=True, follow_redirects=True)
     
     async def download_xml_from_url(self, url: str) -> bytes:
         """
@@ -53,8 +62,35 @@ class CommerceMLXMLService:
             logger.error(f"HTTP ошибка при скачивании XML: {e.response.status_code}")
             raise ValueError(f"Не удалось скачать XML файл: HTTP {e.response.status_code}")
         except httpx.RequestError as e:
-            logger.error(f"Ошибка запроса при скачивании XML: {e}")
-            raise ValueError(f"Ошибка при скачивании XML файла: {str(e)}")
+            # Специальная обработка SSL ошибок с возможным обходом
+            msg = str(e)
+            logger.error(f"Ошибка запроса при скачивании XML: {msg}")
+            ssl_problem = "CERTIFICATE_VERIFY_FAILED" in msg or "certificate verify failed" in msg
+            if ssl_problem and self.allow_insecure:
+                logger.warning("SSL валидация не пройдена, пробуем повторно с verify=False (COMMERCE_ML_ALLOW_INSECURE=true)")
+                async with httpx.AsyncClient(timeout=120.0, verify=False, follow_redirects=True) as insecure_client:
+                    try:
+                        response = await insecure_client.get(url)
+                        response.raise_for_status()
+                        logger.info(f"XML скачан в небезопасном режиме ({len(response.content)} байт)")
+                        return response.content
+                    except Exception as e2:
+                        logger.error(f"Повторная попытка с verify=False не удалась: {e2}")
+                        # Не выбрасываем сразу, попробуем HTTP fallback ниже, если он разрешен
+            # Опциональный fallback на HTTP, если включено окружением
+            allow_http_fallback = os.getenv("COMMERCE_ML_HTTP_FALLBACK", "false").lower() in ("1", "true", "yes")
+            if (ssl_problem or "Name or service not known" in msg) and allow_http_fallback and url.startswith("https://"):
+                http_url = "http://" + url[len("https://"):]
+                logger.warning(f"Пробуем HTTP fallback для URL: {http_url}")
+                try:
+                    response = await self.client.get(http_url)
+                    response.raise_for_status()
+                    logger.info(f"XML скачан по HTTP ({len(response.content)} байт)")
+                    return response.content
+                except Exception as e3:
+                    logger.error(f"HTTP fallback не удался: {e3}")
+                    # Продолжаем к общему исключению ниже
+            raise ValueError(f"Ошибка при скачивании XML файла: {msg}")
         except Exception as e:
             logger.error(f"Неожиданная ошибка при скачивании XML: {e}", exc_info=True)
             raise

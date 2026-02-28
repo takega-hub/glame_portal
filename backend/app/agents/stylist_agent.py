@@ -363,11 +363,14 @@ GLAME - это место, где стиль становится отражен
 - Используй конкретные названия товаров
 - Опирайся на контекст бренда при объяснении, почему образы подходят"""
         
+        # Получаем системный промпт из БД
+        system_prompt = await self.get_active_system_prompt(self.db, "stylist", self.BRAND_SYSTEM_PROMPT)
+        
         # Генерируем ответ
         try:
             reply = await self.generate_response(
                 prompt=prompt,
-                system_prompt=self.BRAND_SYSTEM_PROMPT,
+                system_prompt=system_prompt,
                 temperature=0.8,
                 max_tokens=3000  # Увеличиваем лимит токенов для более полных ответов
             )

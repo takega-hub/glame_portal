@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
@@ -30,18 +29,19 @@ interface PurchaseStats {
 
 export default function CustomerCabinetPage() {
   const { user, isAuthenticated, loading } = useAuth();
-  const router = useRouter();
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [stats, setStats] = useState<PurchaseStats | null>(null);
   const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    } else if (isAuthenticated && user?.is_customer) {
-      loadData();
+    if (!loading) {
+      if (isAuthenticated && user?.is_customer) {
+        loadData();
+      } else {
+        setLoadingData(false);
+      }
     }
-  }, [loading, isAuthenticated, user, router]);
+  }, [loading, isAuthenticated, user]);
 
   const loadData = async () => {
     try {
