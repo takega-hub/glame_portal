@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="description" content="Лаконичные украшения из серебра. Каталог, карточка товара, корзина и оформление заказа.">
+  <meta name="theme-color" content="#ffffff">
+  <title>GLAME Storefront</title>
+  <link rel="icon" type="image/png" href="./brand_assets/logos/glame_sign.png">
+  <link rel="stylesheet" href="./storefront.css">
+</head>
+<body>
+  <div class="promo-strip">Бесплатная доставка от 10 000 руб.</div>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <nav class="main-nav main-nav-left" id="main-nav">
+        <a href="#" id="menu-open-link">Меню</a>
+        <a href="#/catalog">Каталог</a>
+        <a href="#/looks">Образы</a>
+      </nav>
+      <a class="brand brand-center" href="#/home" aria-label="GLAME">
+        <img class="brand-logo" src="./brand_assets/logos/glame_logo black.png" alt="GLAME">
+      </a>
+      <div class="topbar-actions">
+        <button id="search-btn" class="icon-btn icon-only" type="button" aria-label="Поиск" title="Поиск">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><line x1="16" y1="16" x2="21" y2="21"></line></svg>
+        </button>
+        <button id="auth-btn" class="icon-btn icon-only" type="button" aria-label="Кабинет" title="Кабинет">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20c-4 0-7-2-7-4.5S8 11 12 11s7 2 7 4.5S16 20 12 20z"></path><circle cx="12" cy="7" r="3.2"></circle></svg>
+        </button>
+        <button id="cart-btn" class="icon-btn icon-only cart-btn" type="button" aria-label="Корзина" title="Корзина">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10l-1 11H8L7 8z"></path><path d="M9 8V6a3 3 0 0 1 6 0v2"></path></svg>
+          <span id="cart-count">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <aside id="side-drawer" class="side-drawer hidden" aria-hidden="true">
+    <button type="button" class="side-drawer-backdrop" data-drawer-close="1" aria-label="Закрыть меню"></button>
+    <div class="side-drawer-panel">
+      <nav class="side-drawer-nav">
+        <a href="#/home" data-drawer-close="1">Главная</a>
+        <a href="#/catalog?sort=new" data-drawer-close="1">Новинки</a>
+        <a href="#/catalog?section=collections" data-drawer-close="1">Коллекции</a>
+        <a href="#/catalog" data-drawer-close="1">Каталог</a>
+        <a href="#/certificate" data-drawer-close="1">Сертификат</a>
+        <a href="#/service" data-drawer-close="1">Сервис</a>
+        <a href="#/stores" data-drawer-close="1">Магазины</a>
+      </nav>
+      <div class="side-drawer-auth">
+        <button id="drawer-auth-btn" type="button" class="drawer-auth-btn" data-drawer-close="1">Войти</button>
+      </div>
+      <div class="side-drawer-footer">
+        <div class="muted">GLAME.JEWELRY</div>
+        <div class="drawer-phone">Новости и коллекции в соцсетях</div>
+      </div>
+      <div class="side-drawer-decor" aria-hidden="true"></div>
+    </div>
+  </aside>
+
+  <main id="app" class="app-root" aria-live="polite"></main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <img class="footer-logo" src="./brand_assets/logos/glame_logo black.png" alt="GLAME">
+      </div>
+      <div class="footer-text">Бесплатная доставка от 10 000 руб. по России. Актуальные коллекции и контент синхронизируются с glamejewelry.ru.</div>
+    </div>
+  </footer>
+
+  <div id="modal-root"></div>
+
+  <template id="auth-modal-template">
+    <div class="modal-overlay" data-close="1">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-label="Кабинет покупателя">
+        <h3>Кабинет покупателя</h3>
+        <p class="muted">Вход по email. Обновление пароля через SMS-код.</p>
+
+        <form id="email-login-form" class="stack-sm">
+          <label>Email
+            <input name="email" type="email" placeholder="you@example.com" required>
+          </label>
+          <label>Пароль
+            <input name="password" type="password" placeholder="Ваш пароль" required>
+          </label>
+          <button type="submit" class="btn primary">Войти</button>
+        </form>
+
+        <hr>
+
+        <form id="sms-reset-request-form" class="stack-sm">
+          <label>Телефон
+            <input name="phone" type="tel" placeholder="+7 (999) 123-45-67" required>
+          </label>
+          <button type="submit" class="btn">Получить SMS-код</button>
+        </form>
+
+        <form id="sms-reset-confirm-form" class="stack-sm">
+          <label>Код
+            <input name="code" type="text" placeholder="1234" required>
+          </label>
+          <label>Новый пароль
+            <input name="new_password" type="password" placeholder="Новый пароль" required>
+          </label>
+          <button type="submit" class="btn">Обновить пароль по SMS</button>
+        </form>
+        <div id="auth-message" class="muted"></div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+      });
+    }
+  </script>
+  <script type="module" src="./storefront.js?v=10"></script>
+</body>
+</html>

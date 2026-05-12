@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="GLAME.JEWELRY — Стильная бижутерия: кольца, серьги, колье, браслеты, чокеры. Бесплатная доставка от 10 000 руб.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+
+  <meta property="og:title" content="GLAME.JEWELRY">
+  <meta property="og:description" content="Стильная бижутерия: кольца, серьги, колье, браслеты, чокеры">
+  <meta property="og:type" content="website">
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GLAME">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>GLAME.JEWELRY — Стильная бижутерия</title>
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    body {
+      background-color: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+    .loading {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+      color: #111111;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #e8e5df;
+      border-top-color: #111111;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .loading-text {
+      margin-top: 16px;
+      font-size: 14px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">GLAME</div>
+  </div>
+  <script>
+    async function cleanupLegacyFlutterCaches() {
+      if (!('caches' in window)) return;
+      try {
+        const cacheKeys = await caches.keys();
+        await Promise.all(
+          cacheKeys
+              .filter((key) => key.startsWith('flutter-'))
+              .map((key) => caches.delete(key)),
+        );
+      } catch (error) {
+        console.warn('Failed to clear legacy Flutter caches', error);
+      }
+    }
+
+    async function ensureNoLegacyServiceWorker() {
+      if (!('serviceWorker' in navigator)) return false;
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        const hasLegacyController =
+            registrations.length > 0 || !!navigator.serviceWorker.controller;
+        if (!hasLegacyController) return false;
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+        await cleanupLegacyFlutterCaches();
+        return true;
+      } catch (error) {
+        console.warn('Failed to unregister legacy service workers', error);
+        return false;
+      }
+    }
+
+    window.addEventListener('flutter-first-frame', function() {
+      var loading = document.getElementById('loading');
+      if (loading) loading.remove();
+    });
+
+    window.__glameBootstrapReady = (async function() {
+      const resetKey = 'glame-sw-reset-done';
+      const didReset = sessionStorage.getItem(resetKey) === '1';
+      const resetPerformed = await ensureNoLegacyServiceWorker();
+      if (resetPerformed && !didReset) {
+        sessionStorage.setItem(resetKey, '1');
+        window.location.replace(window.location.href);
+        return false;
+      }
+      if (didReset) {
+        sessionStorage.removeItem(resetKey);
+      }
+      return true;
+    })();
+  </script>
+  <script>
+    (async function() {
+      const ready = await (window.__glameBootstrapReady || Promise.resolve(true));
+      if (!ready) return;
+      var script = document.createElement('script');
+      script.src = 'flutter_bootstrap.js';
+      script.async = true;
+      document.body.appendChild(script);
+    })();
+  </script>
+</body>
+</html>
