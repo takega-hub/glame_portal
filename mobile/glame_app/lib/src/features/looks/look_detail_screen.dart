@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/formatters/rub.dart';
 import '../../core/network/asset_url.dart';
+import '../../core/analytics/analytics_service.dart';
 import '../../core/theme/glame_theme.dart';
 import '../auth/auth_controller.dart';
 import '../cart/cart_controller.dart';
@@ -33,6 +36,7 @@ class _LookDetailScreenState extends ConsumerState<LookDetailScreen> {
   final Set<String> _selectedProductIds = <String>{};
   final Map<String, Map<String, dynamic>> _selectedVariantsByProductId =
       <String, Map<String, dynamic>>{};
+  String? _trackedLookId;
 
   @override
   void initState() {
@@ -58,6 +62,7 @@ class _LookDetailScreenState extends ConsumerState<LookDetailScreen> {
         error: (_, _) =>
             const Center(child: Text('Не удалось загрузить образ')),
         data: (look) {
+          _trackLookViewOnce(look);
           final images = _lookImages(look);
           final preferredPage = _preferredLookImageIndex(look, images.length);
           final products = _products(look);
@@ -284,6 +289,24 @@ class _LookDetailScreenState extends ConsumerState<LookDetailScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _trackLookViewOnce(Map<String, dynamic> look) {
+    final lookId = (look['id'] as String?)?.trim() ?? widget.lookId;
+    if (lookId.isEmpty || _trackedLookId == lookId) return;
+    _trackedLookId = lookId;
+    unawaited(
+      ref
+          .read(analyticsServiceProvider)
+          .trackLookView(
+            lookId,
+            data: {
+              'name': (look['name'] as String?)?.trim(),
+              'style': (look['style'] as String?)?.trim(),
+              'mood': (look['mood'] as String?)?.trim(),
+            },
+          ),
+    );
   }
 
   Future<void> _shareLook() async {
@@ -779,12 +802,11 @@ class _StylistCommentCard extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           InkWell(
-            onTap: () => context.push(
-              buildStylistChatRoute(
-                initialMessage: 'Хочу обсудить этот образ со стилистом GLAME.',
-                source: 'look_detail',
-                scenario: 'live_stylist',
-              ),
+            onTap: () => showStylistContactSheet(
+              context,
+              initialMessage: 'Хочу обсудить этот образ со стилистом GLAME.',
+              source: 'look_detail',
+              scenario: 'live_stylist',
             ),
             borderRadius: BorderRadius.circular(12),
             child: Container(

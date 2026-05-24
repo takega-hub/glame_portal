@@ -150,7 +150,10 @@ class _PhotoUploadScreenState extends ConsumerState<PhotoUploadScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final isLoggedIn = auth.user != null;
-    final photoSelectionBlock = ref.watch(homePhotoSelectionBlockProvider).asData?.value;
+    final photoSelectionBlock = ref
+        .watch(homePhotoSelectionBlockProvider)
+        .asData
+        ?.value;
     final introImageUrl = resolveAssetUrl(
       photoSelectionBlock?['background_image_url'],
     );
@@ -496,13 +499,13 @@ class _PhotoAnalysisScreenState extends ConsumerState<PhotoAnalysisScreen> {
     final title = _phase == _PhotoCheckPhase.accepted
         ? 'Фото подходит'
         : _phase == _PhotoCheckPhase.rejected
-            ? 'Фото пока не подходит'
-            : 'Проверяем фото';
+        ? 'Фото пока не подходит'
+        : 'Проверяем фото';
     final description = _phase == _PhotoCheckPhase.accepted
         ? 'Снимок подходит для точного подбора.\nТеперь можно перейти к рекомендациям.'
         : _phase == _PhotoCheckPhase.rejected
-            ? _photoCheckDescription(_analysis)
-            : 'Проверим фото по этапам перед анализом лица.\nСтатусы под снимком показывают реальный результат проверки.';
+        ? _photoCheckDescription(_analysis)
+        : 'Проверим фото по этапам перед анализом лица.\nСтатусы под снимком показывают реальный результат проверки.';
     final canStart = _analysis != null && _analysis!['can_continue'] == true;
 
     return Scaffold(
@@ -559,8 +562,9 @@ class _PhotoAnalysisScreenState extends ConsumerState<PhotoAnalysisScreen> {
                           fit: BoxFit.contain,
                           alignment: Alignment.center,
                         ),
-                        overlay:
-                            const Positioned.fill(child: _FaceFrameOverlay()),
+                        overlay: const Positioned.fill(
+                          child: _FaceFrameOverlay(),
+                        ),
                       )
                     else
                       Container(
@@ -580,7 +584,11 @@ class _PhotoAnalysisScreenState extends ConsumerState<PhotoAnalysisScreen> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        for (var index = 0; index < _statuses.length; index++) ...[
+                        for (
+                          var index = 0;
+                          index < _statuses.length;
+                          index++
+                        ) ...[
                           Expanded(
                             child: _PhotoCheckStatusCard(
                               item: _statuses[index],
@@ -708,7 +716,9 @@ class _PhotoAnalysisScreenState extends ConsumerState<PhotoAnalysisScreen> {
   Future<void> _revealPhotoStatuses(
     List<_PhotoCheckStatusItem> finalStatuses,
   ) async {
-    final animated = List<_PhotoCheckStatusItem>.from(_initialPhotoCheckStatuses());
+    final animated = List<_PhotoCheckStatusItem>.from(
+      _initialPhotoCheckStatuses(),
+    );
     for (var index = 0; index < finalStatuses.length; index++) {
       if (!mounted) return;
       animated[index] = finalStatuses[index].copyWith(
@@ -784,7 +794,9 @@ List<_PhotoCheckStatusItem> _initialPhotoCheckStatuses() {
 List<_PhotoCheckStatusItem> _buildPhotoCheckStatuses(
   Map<String, dynamic> analysis,
 ) {
-  final photoQuality = _mapValue(_mapValue(analysis['analysis'])['photoQuality']);
+  final photoQuality = _mapValue(
+    _mapValue(analysis['analysis'])['photoQuality'],
+  );
   final faceOk =
       photoQuality['faceDetected'] == true &&
       photoQuality['singlePerson'] == true &&
@@ -889,11 +901,7 @@ class _PhotoCheckStatusCard extends StatelessWidget {
               item.label,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.15,
-                color: color,
-              ),
+              style: TextStyle(fontSize: 12, height: 1.15, color: color),
             ),
           ),
         ],
@@ -921,7 +929,8 @@ class PhotoSelectionResultScreen extends StatelessWidget {
     final recommendations = _mapValue(analysis['recommendations']);
     final analysisProducts = analysis['recommended_products'];
     final products = _extractPhotoSelectionProducts(
-      generatedLook['products'] is List && (generatedLook['products'] as List).isNotEmpty
+      generatedLook['products'] is List &&
+              (generatedLook['products'] as List).isNotEmpty
           ? generatedLook['products']
           : analysisProducts,
     );
@@ -930,7 +939,8 @@ class PhotoSelectionResultScreen extends StatelessWidget {
       tryOnResult: tryOnResult,
     );
     final lookId = _stringValue(generatedLook['id']);
-    final lookName = _stringValue(generatedLook['name']) ?? 'Рекомендации по фото';
+    final lookName =
+        _stringValue(generatedLook['name']) ?? 'Рекомендации по фото';
     final lookDescription = _stringValue(generatedLook['description']);
     final lookStyle =
         _stringValue(analysis['style']) ?? _stringValue(generatedLook['style']);
@@ -1084,16 +1094,21 @@ class PhotoSelectionResultScreen extends StatelessWidget {
                                 ),
                               ),
                             ],
-                            if (humanStyleType != null || humanColorType != null) ...[
+                            if (humanStyleType != null ||
+                                humanColorType != null) ...[
                               const SizedBox(height: 14),
                               Wrap(
                                 spacing: 10,
                                 runSpacing: 10,
                                 children: [
                                   if (humanStyleType != null)
-                                    _PhotoResultChip(label: 'Типаж: $humanStyleType'),
+                                    _PhotoResultChip(
+                                      label: 'Типаж: $humanStyleType',
+                                    ),
                                   if (humanColorType != null)
-                                    _PhotoResultChip(label: 'Цветотип: $humanColorType'),
+                                    _PhotoResultChip(
+                                      label: 'Цветотип: $humanColorType',
+                                    ),
                                 ],
                               ),
                             ],
@@ -1211,13 +1226,12 @@ class PhotoSelectionResultScreen extends StatelessWidget {
                     ],
                     _PhotoSecondaryButton(
                       title: 'Написать стилисту',
-                      onTap: () => context.push(
-                        buildStylistChatRoute(
-                          initialMessage:
-                              'Хочу продолжить подбор украшений по фото.',
-                          source: 'selection_screen',
-                          scenario: 'live_stylist',
-                        ),
+                      onTap: () => showStylistContactSheet(
+                        context,
+                        initialMessage:
+                            'Хочу продолжить подбор украшений по фото.',
+                        source: 'selection_screen',
+                        scenario: 'live_stylist',
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1310,7 +1324,8 @@ class PhotoSelectionPromoCard extends StatelessWidget {
                   width: double.infinity,
                   fit: BoxFit.contain,
                   alignment: Alignment.topCenter,
-                  placeholder: (_, _) => const ColoredBox(color: Color(0xFFF4F1EC)),
+                  placeholder: (_, _) =>
+                      const ColoredBox(color: Color(0xFFF4F1EC)),
                   errorWidget: (_, _, _) => hasAssetImage
                       ? Image.asset(
                           resolvedAssetPath,
@@ -1483,10 +1498,7 @@ class PhotoSelectionPromoCard extends StatelessWidget {
                   label: 'Украшения',
                 ),
                 SizedBox(height: 10),
-                _VisualFeatureLine(
-                  icon: Icons.tune_outlined,
-                  label: 'Подбор',
-                ),
+                _VisualFeatureLine(icon: Icons.tune_outlined, label: 'Подбор'),
                 SizedBox(height: 10),
                 _VisualFeatureLine(
                   icon: Icons.favorite_border,
@@ -1946,11 +1958,7 @@ class _FrameCorner extends StatelessWidget {
       width: 34,
       height: 34,
       child: CustomPaint(
-        painter: _CornerPainter(
-          borderColor: borderColor,
-          top: top,
-          left: left,
-        ),
+        painter: _CornerPainter(borderColor: borderColor, top: top, left: left),
       ),
     );
   }
@@ -2049,11 +2057,7 @@ class _ValidationChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.check,
-            size: 16,
-            color: GlameColors.textPrimary,
-          ),
+          const Icon(Icons.check, size: 16, color: GlameColors.textPrimary),
           const SizedBox(width: 8),
           Text(
             label,
@@ -2083,7 +2087,9 @@ class _VisualFeatureLine extends StatelessWidget {
           width: 118,
           height: 42,
           decoration: BoxDecoration(
-            border: Border.all(color: GlameColors.surface2.withValues(alpha: 0.8)),
+            border: Border.all(
+              color: GlameColors.surface2.withValues(alpha: 0.8),
+            ),
           ),
           child: Row(
             children: [
@@ -2300,10 +2306,7 @@ class _PhotoResultPreviewCard extends StatelessWidget {
       referenceBytes: fallbackBytes,
       borderColor: const Color(0xFFD6D6D6),
       image: imageUrl != null
-          ? CachedNetworkImage(
-              imageUrl: imageUrl!,
-              fit: BoxFit.contain,
-            )
+          ? CachedNetworkImage(imageUrl: imageUrl!, fit: BoxFit.contain)
           : Image.memory(fallbackBytes, fit: BoxFit.contain),
       overlay: Positioned(
         left: 16,
@@ -2373,17 +2376,12 @@ class _AdaptivePhotoFrameState extends State<_AdaptivePhotoFrame> {
   Widget build(BuildContext context) {
     final aspectRatio = _aspectRatio ?? 1;
     return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: widget.borderColor),
-      ),
+      decoration: BoxDecoration(border: Border.all(color: widget.borderColor)),
       child: AspectRatio(
         aspectRatio: aspectRatio,
         child: Stack(
           fit: StackFit.expand,
-          children: [
-            widget.image,
-            if (widget.overlay != null) widget.overlay!,
-          ],
+          children: [widget.image, if (widget.overlay != null) widget.overlay!],
         ),
       ),
     );
@@ -2612,7 +2610,8 @@ String? _resolvePhotoResultPreviewUrl({
 String _photoSelectionErrorMessage(DioException error) {
   final data = error.response?.data;
   if (data is Map) {
-    final detail = _stringValue(data['detail']) ?? _stringValue(data['message']);
+    final detail =
+        _stringValue(data['detail']) ?? _stringValue(data['message']);
     if (detail != null) return detail;
   }
   return 'Не удалось выполнить подбор. Попробуйте еще раз.';

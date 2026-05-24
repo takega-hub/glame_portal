@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/formatters/rub.dart';
 import '../../core/theme/glame_theme.dart';
+import '../auth/auth_controller.dart';
 import '../product/product_providers.dart';
 import 'customer_cabinet_providers.dart';
 
@@ -39,6 +42,7 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
   final controller = TextEditingController();
   final scrollController = ScrollController();
   final picker = ImagePicker();
+  Timer? _chatPollingTimer;
   XFile? pickedPhoto;
   bool sending = false;
   bool initialAutoSent = false;
@@ -48,6 +52,9 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
   @override
   void initState() {
     super.initState();
+    final isLoggedIn = ref.read(authControllerProvider).user != null;
+    if (!isLoggedIn) return;
+    _startChatPolling();
     final initial = (widget.initialMessage ?? '').trim();
     if (initial.isNotEmpty) {
       controller.text = initial;
@@ -63,6 +70,7 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
 
   @override
   void dispose() {
+    _chatPollingTimer?.cancel();
     controller.dispose();
     scrollController.dispose();
     super.dispose();
@@ -70,6 +78,11 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = ref.watch(authControllerProvider);
+    if (auth.user == null) {
+      return _StylistChatAuthGate(resumeRoute: _resumeRoute());
+    }
+
     final messagesAsync = ref.watch(stylistChatMessagesProvider);
     final statusAsync = ref.watch(stylistChatStatusProvider);
     final productId = (widget.productId ?? '').trim();
@@ -77,9 +90,9 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
         ? null
         : ref.watch(productProvider(productId));
     return Scaffold(
-      backgroundColor: GlameColors.textPrimary,
+      backgroundColor: GlameColors.surface2,
       appBar: AppBar(
-        backgroundColor: GlameColors.textPrimary,
+        backgroundColor: GlameColors.surface2,
         leading: IconButton(
           onPressed: () {
             if (context.canPop()) {
@@ -92,13 +105,6 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
         ),
         title: const GlameHeaderLogo(),
         centerTitle: true,
-        actions: [
-          IconButton(
-            tooltip: 'Очистить чат',
-            onPressed: _clearChat,
-            icon: const Icon(Icons.delete_outline),
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -120,16 +126,51 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
                   data: (status) {
                     final statusText = (status['status_text'] as String?)
                         ?.trim();
+                    final typingRaw = status['stylist_typing'];
+                    final typing = typingRaw is Map
+                        ? Map<String, dynamic>.from(typingRaw)
+                        : const <String, dynamic>{};
+                    final stylistTyping = typing['is_typing'] == true;
+                    final typingName = (typing['stylist_name'] as String?)
+                        ?.trim();
                     if (statusText == null || statusText.isEmpty) {
-                      return const SizedBox.shrink();
+                      if (!stylistTyping) return const SizedBox.shrink();
+                      return Text(
+                        typingName == null || typingName.isEmpty
+                            ? 'Стилист печатает...'
+                            : '$typingName печатает...',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.25,
+                          color: GlameColors.textSecondary,
+                        ),
+                      );
                     }
-                    return Text(
-                      statusText,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.25,
-                        color: GlameColors.textSecondary,
-                      ),
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          statusText,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            height: 1.25,
+                            color: GlameColors.textSecondary,
+                          ),
+                        ),
+                        if (stylistTyping) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            typingName == null || typingName.isEmpty
+                                ? 'Стилист печатает...'
+                                : '$typingName печатает...',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.25,
+                              color: GlameColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ],
                     );
                   },
                   loading: () => const SizedBox.shrink(),
@@ -164,14 +205,28 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
                 final displayMessages = <Map<String, dynamic>>[
                   ...messages,
                   ?pendingUserMessage,
-                  if (assistantTyping)
-                    {
-                      'id': '__assistant_typing__',
-                      'role': 'assistant',
-                      'text': '',
-                      'attachments': const [],
-                      'payload': {'typing': true},
-                    },
+                  if (statusAsync.valueOrNull case final status?)
+                    if (((status['stylist_typing'] is Map
+                            ? Map<String, dynamic>.from(
+                                status['stylist_typing'] as Map,
+                              )
+                            : const <String, dynamic>{})['is_typing'] ==
+                        true))
+                      {
+                        'id': '__assistant_typing__',
+                        'role': 'assistant',
+                        'text': '',
+                        'attachments': const [],
+                        'payload': {'typing': true},
+                      }
+                    else if (assistantTyping)
+                      {
+                        'id': '__assistant_typing__',
+                        'role': 'assistant',
+                        'text': '',
+                        'attachments': const [],
+                        'payload': {'typing': true},
+                      },
                 ];
                 if (displayMessages.isEmpty) return const _EmptyChat();
                 return ListView.builder(
@@ -212,16 +267,33 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
   }
 
   Future<void> _send() async {
+    if (ref.read(authControllerProvider).user == null) {
+      context.go('/login?next=${Uri.encodeComponent(_resumeRoute())}');
+      return;
+    }
     final text = controller.text.trim();
     if (text.isEmpty && pickedPhoto == null) return;
+    final file = pickedPhoto;
+    Uint8List? photoBytes;
+    if (file != null) {
+      photoBytes = await file.readAsBytes();
+    }
     final tempUserMessage = <String, dynamic>{
       'id': '__pending_user__',
       'role': 'user',
       'text': text,
-      'attachments': const <Map<String, dynamic>>[],
-      'payload': const <String, dynamic>{},
+      'attachments': file == null
+          ? const <Map<String, dynamic>>[]
+          : <Map<String, dynamic>>[
+              {
+                'type': 'image',
+                'bytes': photoBytes,
+                'name': file.name,
+                'is_local_memory': true,
+              },
+            ],
+      'payload': const <String, dynamic>{'pending': true},
     };
-    final file = pickedPhoto;
     controller.clear();
     setState(() {
       sending = true;
@@ -231,8 +303,8 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
     });
     try {
       MultipartFile? photo;
-      if (file != null) {
-        photo = await MultipartFile.fromFile(file.path, filename: file.name);
+      if (file != null && photoBytes != null) {
+        photo = MultipartFile.fromBytes(photoBytes, filename: file.name);
       }
       await ref
           .read(customerCabinetApiProvider)
@@ -245,61 +317,30 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
             quickTags: widget.quickTags,
             favoriteProductIds: widget.favoriteProductIds,
           );
-      ref.invalidate(stylistChatMessagesProvider);
-    } catch (_) {
+      await _refreshChat(forceStatusRefresh: true);
+    } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось отправить сообщение')),
-      );
+      String message = 'Не удалось отправить сообщение';
+      if (e is DioException) {
+        final data = e.response?.data;
+        if (data is Map && data['detail'] != null) {
+          message = data['detail'].toString();
+        } else if (data is String && data.trim().isNotEmpty) {
+          message = data;
+        } else if (e.message != null && e.message!.trim().isNotEmpty) {
+          message = e.message!.trim();
+        }
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) {
         setState(() {
           sending = false;
           pendingUserMessage = null;
-          assistantTyping = false;
         });
       }
-    }
-  }
-
-  Future<void> _clearChat() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Очистить чат?'),
-        content: const Text(
-          'Вся история сообщений будет удалена без возможности восстановления.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Очистить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await ref.read(customerCabinetApiProvider).clearStylistChatMessages();
-      ref.invalidate(stylistChatMessagesProvider);
-      if (!mounted) return;
-      setState(() {
-        pendingUserMessage = null;
-        assistantTyping = false;
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('История чата очищена')));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось очистить историю чата')),
-      );
     }
   }
 
@@ -309,6 +350,133 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
       scrollController.position.maxScrollExtent,
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
+    );
+  }
+
+  void _startChatPolling() {
+    _chatPollingTimer?.cancel();
+    _chatPollingTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!mounted || sending) return;
+      unawaited(_refreshChat(forceStatusRefresh: true));
+    });
+  }
+
+  Future<void> _refreshChat({bool forceStatusRefresh = false}) async {
+    ref.invalidate(stylistChatMessagesProvider);
+    if (forceStatusRefresh) {
+      ref.invalidate(stylistChatStatusProvider);
+    }
+    try {
+      await ref.read(stylistChatMessagesProvider.future);
+      if (forceStatusRefresh) {
+        await ref.read(stylistChatStatusProvider.future);
+      }
+    } catch (_) {
+      // Ignore background refresh failures and keep the current chat visible.
+    }
+  }
+
+  String _resumeRoute() {
+    final query = <String, String>{};
+    void add(String key, String? value) {
+      final normalized = (value ?? '').trim();
+      if (normalized.isNotEmpty) query[key] = normalized;
+    }
+
+    add('product_id', widget.productId);
+    add('message', widget.initialMessage);
+    add('source', widget.source);
+    add('scenario', widget.scenario);
+    if (widget.quickTags.isNotEmpty) {
+      query['quick_tags'] = widget.quickTags.join(',');
+    }
+    if (widget.favoriteProductIds.isNotEmpty) {
+      query['favorite_ids'] = widget.favoriteProductIds.join(',');
+    }
+    return Uri(path: '/stylist-chat', queryParameters: query).toString();
+  }
+}
+
+class _StylistChatAuthGate extends StatelessWidget {
+  final String resumeRoute;
+
+  const _StylistChatAuthGate({required this.resumeRoute});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: GlameColors.surface2,
+      appBar: AppBar(
+        backgroundColor: GlameColors.surface2,
+        leading: IconButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home?tab=4');
+            }
+          },
+          icon: const Icon(Icons.arrow_back),
+        ),
+        title: const GlameHeaderLogo(),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 34, 24, 28),
+          children: [
+            const Text(
+              'СТИЛИСТ GLAME',
+              style: TextStyle(
+                fontSize: 14,
+                letterSpacing: 0.4,
+                color: GlameColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Войдите, чтобы написать стилисту',
+              style: TextStyle(
+                fontSize: 32,
+                height: 1.05,
+                fontWeight: FontWeight.w300,
+                color: GlameColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Чат со стилистом доступен после входа. Так мы сохраним историю переписки, подборки и сможем продолжить консультацию с того же места.',
+              style: TextStyle(
+                fontSize: 16,
+                height: 1.42,
+                color: GlameColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 22),
+            Container(height: 1, color: const Color(0xFFD6D6D6)),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: GlameUi.buttonHeight,
+              child: FilledButton(
+                onPressed: () => context.go(
+                  '/login?next=${Uri.encodeComponent(resumeRoute)}',
+                ),
+                child: const Text('Войти'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: GlameUi.buttonHeight,
+              child: OutlinedButton(
+                onPressed: () => context.go(
+                  '/auth/register?next=${Uri.encodeComponent(resumeRoute)}',
+                ),
+                child: const Text('Создать аккаунт'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -426,6 +594,14 @@ class _MessageBubble extends ConsumerWidget {
               .map((x) => Map<String, dynamic>.from(x))
               .toList()
         : <Map<String, dynamic>>[];
+    final imageAttachments = attachments.where((item) {
+      final type = (item['type'] as String?)?.trim().toLowerCase();
+      return type == null || type.isEmpty || type == 'image';
+    }).toList();
+    final productAttachments = attachments.where((item) {
+      final type = (item['type'] as String?)?.trim().toLowerCase();
+      return type == 'product';
+    }).toList();
     final payloadRaw = message['payload'];
     final payload = payloadRaw is Map<String, dynamic>
         ? payloadRaw
@@ -454,10 +630,8 @@ class _MessageBubble extends ConsumerWidget {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: own ? GlameColors.textPrimary : GlameColors.surface,
-          border: Border.all(
-            color: own ? GlameColors.textPrimary : GlameColors.lightGray,
-          ),
+          color: own ? GlameColors.warmGray : GlameColors.surface2,
+          border: Border.all(color: GlameColors.lightGray),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -470,38 +644,65 @@ class _MessageBubble extends ConsumerWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _DialogStepChip(step: dialogStepRaw),
               ),
-            if (attachments.isNotEmpty)
+            if (imageAttachments.isNotEmpty)
               Padding(
                 padding: EdgeInsets.only(bottom: text.isEmpty ? 0 : 10),
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: attachments.map((item) {
-                    final url = resolveAssetUrl(item['url']);
-                    return Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(
-                        color: GlameColors.lightGray,
-                        border: Border.all(color: GlameColors.lightGray),
-                      ),
-                      child: url == null
-                          ? Container(color: GlameColors.lightGray)
-                          : CachedNetworkImage(
+                  children: imageAttachments.map((item) {
+                    final isLocalMemory = item['is_local_memory'] == true;
+                    final localBytes =
+                        isLocalMemory && item['bytes'] is Uint8List
+                        ? item['bytes'] as Uint8List
+                        : null;
+                    final url = isLocalMemory
+                        ? null
+                        : resolveAssetUrl(item['url']);
+                    final hasLocalMemory =
+                        localBytes != null && localBytes.isNotEmpty;
+                    return GestureDetector(
+                      onTap: (url == null && !hasLocalMemory)
+                          ? null
+                          : () => _openChatImagePreview(
+                              context,
                               imageUrl: url,
-                              fit: BoxFit.cover,
+                              localImageBytes: localBytes,
+                              imageName: (item['name'] as String?)?.trim(),
                             ),
+                      child: Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          color: GlameColors.lightGray,
+                          border: Border.all(color: GlameColors.lightGray),
+                        ),
+                        child: hasLocalMemory
+                            ? Image.memory(localBytes, fit: BoxFit.cover)
+                            : url == null
+                            ? Container(color: GlameColors.lightGray)
+                            : CachedNetworkImage(
+                                imageUrl: url,
+                                fit: BoxFit.cover,
+                              ),
+                      ),
                     );
                   }).toList(),
+                ),
+              ),
+            if (productAttachments.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: imageAttachments.isNotEmpty ? 10 : 0,
+                ),
+                child: _MessageAttachmentProductsBlock(
+                  attachments: productAttachments,
                 ),
               ),
             if (textBefore.isNotEmpty)
               Text(
                 textBefore,
-                style: TextStyle(
-                  height: 1.35,
-                  color: own ? GlameColors.black : GlameColors.textPrimary,
-                ),
+                style: TextStyle(height: 1.35, color: GlameColors.textPrimary),
               ),
             if (hasInlineProducts)
               _AssistantProductsBlock(
@@ -516,7 +717,7 @@ class _MessageBubble extends ConsumerWidget {
                   textAfter,
                   style: TextStyle(
                     height: 1.35,
-                    color: own ? GlameColors.black : GlameColors.textPrimary,
+                    color: GlameColors.textPrimary,
                   ),
                 ),
               ),
@@ -530,6 +731,188 @@ class _MessageBubble extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+void _openChatImagePreview(
+  BuildContext context, {
+  String? imageUrl,
+  Uint8List? localImageBytes,
+  String? imageName,
+}) {
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.88),
+    builder: (ctx) {
+      return Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                minScale: 1,
+                maxScale: 4,
+                child: Center(
+                  child: localImageBytes != null && localImageBytes.isNotEmpty
+                      ? Image.memory(localImageBytes, fit: BoxFit.contain)
+                      : imageUrl == null
+                      ? const Center(
+                          child: Text(
+                            'Не удалось загрузить фото',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.contain,
+                          placeholder: (_, _) =>
+                              const Center(child: CircularProgressIndicator()),
+                          errorWidget: (_, _, _) => const Center(
+                            child: Text(
+                              'Не удалось загрузить фото',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 12,
+              left: 16,
+              right: 72,
+              child: Text(
+                (imageName == null || imageName.isEmpty) ? 'Фото' : imageName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                icon: const Icon(Icons.close, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _MessageAttachmentProductsBlock extends StatelessWidget {
+  final List<Map<String, dynamic>> attachments;
+
+  const _MessageAttachmentProductsBlock({required this.attachments});
+
+  @override
+  Widget build(BuildContext context) {
+    if (attachments.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: attachments
+          .map((item) {
+            final productId = (item['product_id'] as String?)?.trim() ?? '';
+            final imageUrl = resolveAssetUrl(item['image_url']);
+            final title =
+                ((item['name'] as String?) ??
+                        (item['article'] as String?) ??
+                        'Украшение')
+                    .trim();
+            final subtitle =
+                [
+                      (item['brand'] as String?)?.trim(),
+                      (item['category'] as String?)?.trim(),
+                      (item['article'] as String?)?.trim(),
+                    ]
+                    .whereType<String>()
+                    .where((value) => value.isNotEmpty)
+                    .join(' · ');
+            final price = _parsePrice(item['price']);
+            return InkWell(
+              onTap: productId.isEmpty
+                  ? null
+                  : () => context.push('/product/$productId'),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: GlameColors.surface2,
+                  border: Border.all(color: GlameColors.lightGray),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: GlameColors.surface,
+                        border: Border.all(color: GlameColors.lightGray),
+                      ),
+                      child: imageUrl == null
+                          ? Container(color: GlameColors.surface)
+                          : CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (subtitle.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: GlameColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 6),
+                          Text(
+                            price <= 0
+                                ? 'Цена уточняется'
+                                : formatRubFromKopeks(price),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Icon(
+                      Icons.open_in_new,
+                      size: 18,
+                      color: GlameColors.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          })
+          .toList(growable: false),
     );
   }
 }
@@ -1777,7 +2160,7 @@ class _Composer extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
         decoration: const BoxDecoration(
-          color: GlameColors.textPrimary,
+          color: GlameColors.surface2,
           border: Border(top: BorderSide(color: GlameColors.lightGray)),
         ),
         child: Column(
@@ -1841,15 +2224,32 @@ class _Composer extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: sending ? null : onSend,
-                  icon: sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.arrow_upward),
+                SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: FilledButton(
+                    onPressed: sending ? null : onSend,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: GlameColors.surface2,
+                      foregroundColor: GlameColors.textPrimary,
+                      disabledBackgroundColor: GlameColors.warmGray,
+                      disabledForegroundColor: GlameColors.textSecondary,
+                      padding: EdgeInsets.zero,
+                      shape: const RoundedRectangleBorder(
+                        side: BorderSide(color: GlameColors.lightGray),
+                      ),
+                    ),
+                    child: sending
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: GlameColors.textPrimary,
+                            ),
+                          )
+                        : const Icon(Icons.arrow_upward),
+                  ),
                 ),
               ],
             ),

@@ -16,8 +16,6 @@ import '../stores/stores_screen.dart';
 import '../wishlist/wishlist_screen.dart';
 import 'home_screen.dart';
 
-const double _mobileBottomBarHeight = 96;
-
 class HomeShell extends ConsumerStatefulWidget {
   final int initialTab;
   final String? initialCategory;
@@ -37,6 +35,7 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   int index = 0;
   String? catalogCategory;
   String? catalogSearch;
@@ -76,6 +75,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final cart = ref.watch(cartControllerProvider);
+    final stylistStatus = ref.watch(stylistChatStatusProvider).asData?.value;
     final controller = ref.read(authControllerProvider.notifier);
     final isLoggedIn = auth.user != null;
     final hasCartItems = cart.items.isNotEmpty;
@@ -92,6 +92,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
 
     return Scaffold(
+      key: _scaffoldKey,
       drawer: _GlameDrawer(
         selectedIndex: index,
         onSelected: (i) {
@@ -120,12 +121,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 _HeroTransparentTopBar(
                   onHomeTap: () => setState(() => index = 0),
                   hasCartItems: hasCartItems,
-                  onSearchTap: () => setState(() {
-                    index = 1;
-                    catalogCategory = null;
-                    catalogSearch = null;
-                    lookFilter = null;
-                  }),
+                  onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
                   onCartTap: hasCartItems
                       ? () => setState(() {
                           index = 3;
@@ -171,11 +167,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 catalogSearch = null;
                 lookFilter = null;
               }),
-              onOpenStylist: () => context.push(
-                buildStylistChatRoute(
-                  source: 'bottom_nav',
-                  scenario: 'live_stylist',
-                ),
+              onOpenStylist: () => showStylistContactSheet(
+                context,
+                source: 'bottom_nav',
+                scenario: 'live_stylist',
+                statusPayload: stylistStatus,
               ),
             ),
     );
@@ -367,26 +363,27 @@ class _GlameHeader extends StatelessWidget {
 class _HeroTransparentTopBar extends StatelessWidget {
   final VoidCallback onHomeTap;
   final bool hasCartItems;
-  final VoidCallback onSearchTap;
+  final VoidCallback onMenuTap;
   final VoidCallback? onCartTap;
 
   const _HeroTransparentTopBar({
     required this.onHomeTap,
     required this.hasCartItems,
-    required this.onSearchTap,
+    required this.onMenuTap,
     this.onCartTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final topOffset = MediaQuery.of(context).padding.top + 12;
+    final topOffset =
+        MediaQuery.of(context).padding.top + GlameUi.heroTopOffset;
 
     return Positioned(
       top: topOffset,
-      left: 24,
-      right: 24,
+      left: GlameUi.pagePadding,
+      right: GlameUi.pagePadding,
       child: SizedBox(
-        height: 44,
+        height: GlameUi.heroTopBarHeight,
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -394,16 +391,10 @@ class _HeroTransparentTopBar extends StatelessWidget {
             Center(
               child: InkWell(
                 onTap: onHomeTap,
-                child: ColorFiltered(
-                  colorFilter: const ColorFilter.mode(
-                    Colors.white,
-                    BlendMode.srcIn,
-                  ),
-                  child: Image.asset(
-                    GlameAssets.logoBlack,
-                    height: 30,
-                    fit: BoxFit.contain,
-                  ),
+                child: Image.asset(
+                  GlameAssets.logoSilver,
+                  height: 34,
+                  fit: BoxFit.contain,
                 ),
               ),
             ),
@@ -420,9 +411,9 @@ class _HeroTransparentTopBar extends StatelessWidget {
                     const SizedBox(width: 8),
                   ],
                   _HeroTopBarIconButton(
-                    tooltip: 'Поиск',
-                    icon: Icons.search,
-                    onPressed: onSearchTap,
+                    tooltip: 'Меню',
+                    icon: Icons.menu,
+                    onPressed: onMenuTap,
                   ),
                 ],
               ),
@@ -455,7 +446,7 @@ class _HeroTopBarIconButton extends StatelessWidget {
         onPressed: onPressed,
         splashRadius: 22,
         style: IconButton.styleFrom(
-          backgroundColor: GlameColors.graphite.withValues(alpha: 0.9),
+          backgroundColor: Colors.transparent,
           foregroundColor: GlameColors.surface2,
           shape: const RoundedRectangleBorder(),
         ),
@@ -554,12 +545,12 @@ class _GlameBottomBar extends StatelessWidget {
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: GlameColors.surface2,
-        border: Border(top: BorderSide(color: GlameColors.lightGray)),
+        border: Border(top: BorderSide(color: GlameColors.borderGray)),
       ),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: _mobileBottomBarHeight,
+          height: GlameUi.mobileBottomNavHeight,
           child: Row(
             children: [
               _BottomNavHome(
@@ -603,13 +594,13 @@ class _BottomNavHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 72,
+      width: 64,
       child: InkWell(
         onTap: onTap,
         child: Center(
           child: SizedBox(
-            width: 28,
-            height: 28,
+            width: 24,
+            height: 24,
             child: Opacity(
               opacity: selected ? 1 : 0.64,
               child: Image.asset(GlameAssets.sign, fit: BoxFit.contain),
@@ -642,7 +633,7 @@ class _BottomNavItem extends StatelessWidget {
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               color: selected
                   ? GlameColors.textPrimary
@@ -840,11 +831,10 @@ class _Profile extends ConsumerWidget {
                   title: 'Стилист GLAME',
                   value: 'Чат',
                   subtitle: 'Персональный подбор украшений и образов',
-                  onTap: () => context.push(
-                    buildStylistChatRoute(
-                      source: 'profile_screen',
-                      scenario: 'live_stylist',
-                    ),
+                  onTap: () => showStylistContactSheet(
+                    context,
+                    source: 'profile_screen',
+                    scenario: 'live_stylist',
                   ),
                 ),
                 const SizedBox(height: 12),

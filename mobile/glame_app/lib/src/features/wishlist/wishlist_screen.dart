@@ -108,10 +108,19 @@ class _WishlistContent extends StatelessWidget {
                   scenario: 'live_stylist',
                   favoriteProductIds: productIds,
                 );
-                context.push(
-                  isLoggedIn
-                      ? targetRoute
-                      : '/login?next=${Uri.encodeComponent(targetRoute)}',
+                if (!isLoggedIn) {
+                  context.push(
+                    '/login?next=${Uri.encodeComponent(targetRoute)}',
+                  );
+                  return;
+                }
+                showStylistContactSheet(
+                  context,
+                  initialMessage:
+                      'Хочу обсудить избранные украшения и подобрать лучшее решение.',
+                  source: 'favorites',
+                  scenario: 'live_stylist',
+                  favoriteProductIds: productIds,
                 );
               },
               style: OutlinedButton.styleFrom(

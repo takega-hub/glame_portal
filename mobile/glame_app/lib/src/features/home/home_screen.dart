@@ -10,6 +10,7 @@ import '../../core/formatters/rub.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/theme/glame_theme.dart';
 import '../brands/brands_screen.dart';
+import '../customer/customer_cabinet_providers.dart';
 import '../customer/stylist_entry.dart';
 import '../service/how_to_buy_screen.dart';
 import '../stores/stores_screen.dart';
@@ -17,11 +18,11 @@ import '../wishlist/wishlist_controller.dart';
 import 'home_providers.dart';
 import 'photo_upload_screen.dart';
 
-const double _heroCtaWidth = 300;
-const double _heroCtaHeight = 58;
+const double _heroCtaWidth = GlameUi.heroPrimaryButtonWidth;
+const double _heroCtaHeight = GlameUi.buttonHeight;
 const double _heroCtaGap = 16;
 const double _heroIndicatorGap = 34;
-const double _homeBlockHorizontalPadding = 28;
+const double _homeBlockHorizontalPadding = GlameUi.pagePadding;
 const double _newInDropCardHeight = 500;
 const double _newInProductGap = 13;
 const double _newInLookCardHeight = 330;
@@ -67,7 +68,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final slidesData = slidesAsync.asData?.value;
     final preparedSlides = slidesData != null
         ? _normalizeSlides(slidesData)
-        : const <_HomeSlideData>[_fallbackSlide];
+        : _fallbackHeroSlides;
     _syncAutoPlay(preparedSlides.length);
     if (_currentHeroPage >= preparedSlides.length &&
         preparedSlides.isNotEmpty) {
@@ -83,7 +84,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ? _NewInDropData.fromLook(featuredLook)
         : null;
     final productCards =
-        featuredLook?.products.take(3).toList(growable: false) ??
+        featuredLook?.products.toList(growable: false) ??
         const <_NewInProductData>[];
 
     if (isPagedMobileHome) {
@@ -346,11 +347,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     if (type == 'stylist') {
       if (!mounted) return;
-      context.push(
-        buildStylistChatRoute(
-          source: 'hero_slide_07',
-          scenario: 'live_stylist',
-        ),
+      final statusPayload = await _loadStylistStatus();
+      if (!mounted) return;
+      await showStylistContactSheet(
+        context,
+        source: 'hero_slide_07',
+        scenario: 'live_stylist',
+        statusPayload: statusPayload,
       );
       return;
     }
@@ -379,6 +382,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     if (target.startsWith('/')) {
       context.push(target);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _loadStylistStatus() async {
+    try {
+      return await ref.read(customerCabinetApiProvider).getStylistChatStatus();
+    } catch (_) {
+      return null;
     }
   }
 
@@ -417,58 +428,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           legacyLinkKey: 'secondary_button_link',
         ),
       );
-      if (slides.isEmpty && _isFirstHeroSlide(slide, raw)) {
-        slide = _applyFirstHeroSpec(slide);
-      } else if (slides.length == 1 && _isSecondHeroSlide(slide, raw)) {
-        slide = _applySecondHeroSpec(slide);
-      }
-      slides.add(slide);
+      slides.add(_applyHeroSpec(slide, slides.length));
     }
-    return slides;
+    return slides.isEmpty ? _fallbackHeroSlides : slides;
   }
 
-  bool _isFirstHeroSlide(_HomeSlideData slide, Map raw) {
-    final normalizedTitle = (slide.title ?? '').trim().toLowerCase();
-    final sortOrder = raw['sort_order'];
-    return normalizedTitle == 'стиль внутри' || sortOrder == 0;
-  }
-
-  bool _isSecondHeroSlide(_HomeSlideData slide, Map raw) {
-    final sortOrder = raw['sort_order'];
-    final primaryText = (slide.primaryButtonText ?? '').trim().toLowerCase();
-    return sortOrder == 5 || primaryText == 'смотреть подборку';
-  }
-
-  _HomeSlideData _applyFirstHeroSpec(_HomeSlideData slide) {
+  _HomeSlideData _applyHeroSpec(_HomeSlideData slide, int index) {
+    if (index < 0 || index >= _fallbackHeroSlides.length) return slide;
+    final spec = _fallbackHeroSlides[index];
     return _HomeSlideData(
-      title: _fallbackSlide.title,
-      subtitle: _fallbackSlide.subtitle,
+      title: spec.title,
+      subtitle: spec.subtitle,
       backgroundImageUrl: slide.backgroundImageUrl,
       imageUrl: slide.imageUrl,
-      imageAction: slide.imageAction,
-      primaryButtonText: _fallbackSlide.primaryButtonText,
-      primaryAction: _fallbackSlide.primaryAction,
-      secondaryButtonText: _fallbackSlide.secondaryButtonText,
-      secondaryAction: _fallbackSlide.secondaryAction,
-    );
-  }
-
-  _HomeSlideData _applySecondHeroSpec(_HomeSlideData slide) {
-    return _HomeSlideData(
-      title: slide.title,
-      subtitle: slide.subtitle,
-      backgroundImageUrl: slide.backgroundImageUrl,
-      imageUrl: slide.imageUrl,
-      imageAction: slide.imageAction,
-      primaryButtonText: 'Смотреть подборку',
-      primaryAction: const _HomeSlideAction(
-        legacyLink: '/collections/complete-look',
-      ),
-      secondaryButtonText: 'Подобрать под меня',
-      secondaryAction: const _HomeSlideAction(
-        type: 'selection',
-        legacyLink: '/selection',
-      ),
+      imageAction: slide.imageAction ?? spec.imageAction,
+      primaryButtonText: spec.primaryButtonText,
+      primaryAction: spec.primaryAction,
+      secondaryButtonText: spec.secondaryButtonText,
+      secondaryAction: spec.secondaryAction,
     );
   }
 
@@ -708,11 +685,7 @@ class _HomeHeroBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final isCompactMobile = mediaQuery.size.width < 600;
-    final compactButtonWidth = (mediaQuery.size.width - 56).clamp(
-      220.0,
-      _heroCtaWidth,
-    );
-    final effectiveSlides = slides.isEmpty ? const [_fallbackSlide] : slides;
+    final effectiveSlides = slides.isEmpty ? _fallbackHeroSlides : slides;
     final safeCurrentPage = currentPage.clamp(0, effectiveSlides.length - 1);
     final currentSlide = effectiveSlides[safeCurrentPage];
     final isDesktop = MediaQuery.of(context).size.width >= 900;
@@ -795,72 +768,49 @@ class _HomeHeroBlock extends StatelessWidget {
               onInteractionEnd();
             },
             onHorizontalDragCancel: onInteractionEnd,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  28,
-                  24,
-                  28,
-                  isCompactMobile ? mediaQuery.padding.bottom + 24 : 42,
-                ),
-                child: Column(
-                  children: [
-                    const Spacer(),
-                    if (isCompactMobile)
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _HeroLeftColumn(
-                              slide: currentSlide,
-                              onOpenAction: onOpenAction,
-                              compact: true,
-                              buttonWidth: compactButtonWidth,
-                            ),
-                            const SizedBox(height: _heroIndicatorGap),
-                            Align(
-                              alignment: Alignment.bottomRight,
-                              child: _SlideIndicator(
-                                currentIndex: safeCurrentPage,
-                                total: effectiveSlides.length,
-                                compact: true,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      SizedBox(
-                        height: 292,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: _HeroLeftColumn(
-                                slide: currentSlide,
-                                onOpenAction: onOpenAction,
-                              ),
-                            ),
-                            const SizedBox(width: _heroIndicatorGap),
-                            SizedBox(
-                              width: 148,
-                              child: Align(
-                                alignment: Alignment.bottomRight,
-                                child: _SlideIndicator(
-                                  currentIndex: safeCurrentPage,
-                                  total: effectiveSlides.length,
+            child: isCompactMobile
+                ? _HeroFixedMobileOverlay(
+                    slide: currentSlide,
+                    currentIndex: safeCurrentPage,
+                    total: effectiveSlides.length,
+                    onOpenAction: onOpenAction,
+                  )
+                : SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 42),
+                      child: Column(
+                        children: [
+                          const Spacer(),
+                          SizedBox(
+                            height: 292,
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: _HeroLeftColumn(
+                                    slide: currentSlide,
+                                    onOpenAction: onOpenAction,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: _heroIndicatorGap),
+                                SizedBox(
+                                  width: 148,
+                                  child: Align(
+                                    alignment: Alignment.bottomRight,
+                                    child: _SlideIndicator(
+                                      currentIndex: safeCurrentPage,
+                                      total: effectiveSlides.length,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                  ],
-                ),
-              ),
-            ),
+                    ),
+                  ),
           ),
         ),
       ],
@@ -937,21 +887,19 @@ class _GlameHeroButton extends StatelessWidget {
   final String title;
   final bool filled;
   final VoidCallback onTap;
-  final bool compact;
   final double? width;
 
   const _GlameHeroButton({
     required this.title,
     required this.filled,
     required this.onTap,
-    this.compact = false,
     this.width,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: compact ? 56 : _heroCtaHeight,
+      height: _heroCtaHeight,
       width: width ?? _heroCtaWidth,
       child: Material(
         color: filled ? GlameColors.surface2 : Colors.transparent,
@@ -965,7 +913,7 @@ class _GlameHeroButton extends StatelessWidget {
             child: Text(
               title,
               style: TextStyle(
-                fontSize: compact ? 17 : 20,
+                fontSize: 20,
                 fontWeight: FontWeight.w400,
                 height: 1.05,
                 letterSpacing: 0.1,
@@ -989,10 +937,10 @@ class _HeroArrowButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: GlameColors.surface2.withValues(alpha: 0.14),
-      shape: const CircleBorder(),
+      shape: const RoundedRectangleBorder(),
       child: InkWell(
         onTap: onTap,
-        customBorder: const CircleBorder(),
+        customBorder: const RoundedRectangleBorder(),
         child: SizedBox(
           width: 56,
           height: 56,
@@ -1062,28 +1010,104 @@ class _SlideIndicator extends StatelessWidget {
   }
 }
 
-class _HeroLeftColumn extends StatelessWidget {
+class _HeroFixedMobileOverlay extends StatelessWidget {
   final _HomeSlideData slide;
+  final int currentIndex;
+  final int total;
   final Future<void> Function(_HomeSlideAction? action) onOpenAction;
-  final bool compact;
-  final double? buttonWidth;
 
-  const _HeroLeftColumn({
+  const _HeroFixedMobileOverlay({
     required this.slide,
+    required this.currentIndex,
+    required this.total,
     required this.onOpenAction,
-    this.compact = false,
-    this.buttonWidth,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final buttonWidth = (width - GlameUi.pagePadding * 2).clamp(
+      220.0,
+      _heroCtaWidth,
+    );
+    final topSafe = MediaQuery.of(context).padding.top;
+    final textTop =
+        topSafe + GlameUi.heroTopOffset + GlameUi.heroTopBarHeight + 42;
+    final textBottom = GlameUi.heroPrimaryButtonY - 24;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bottomInset = (constraints.maxHeight - textBottom).clamp(
+          0.0,
+          constraints.maxHeight,
+        );
+        return Stack(
+          children: [
+            Positioned(
+              left: GlameUi.pagePadding,
+              right: GlameUi.pagePadding,
+              top: textTop,
+              bottom: bottomInset,
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: _HeroTextBlock(slide: slide, compact: true),
+              ),
+            ),
+            if ((slide.primaryButtonText ?? '').isNotEmpty)
+              Positioned(
+                left: GlameUi.pagePadding,
+                top: GlameUi.heroPrimaryButtonY,
+                width: buttonWidth,
+                height: _heroCtaHeight,
+                child: _GlameHeroButton(
+                  title: slide.primaryButtonText!,
+                  filled: true,
+                  onTap: () => onOpenAction(slide.primaryAction),
+                  width: buttonWidth,
+                ),
+              ),
+            if ((slide.secondaryButtonText ?? '').isNotEmpty)
+              Positioned(
+                left: GlameUi.pagePadding,
+                top: GlameUi.heroSecondaryButtonY,
+                width: buttonWidth,
+                height: _heroCtaHeight,
+                child: _GlameHeroButton(
+                  title: slide.secondaryButtonText!,
+                  filled: false,
+                  onTap: () => onOpenAction(slide.secondaryAction),
+                  width: buttonWidth,
+                ),
+              ),
+            Positioned(
+              left: GlameUi.pagePadding,
+              top: GlameUi.heroSlideIndicatorY,
+              child: _SlideIndicator(
+                currentIndex: currentIndex,
+                total: total,
+                compact: true,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _HeroTextBlock extends StatelessWidget {
+  final _HomeSlideData slide;
+  final bool compact;
+
+  const _HeroTextBlock({required this.slide, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
     final hasTitle = (slide.title ?? '').isNotEmpty;
     final hasSubtitle = (slide.subtitle ?? '').isNotEmpty;
-    final hasPrimary = (slide.primaryButtonText ?? '').isNotEmpty;
-    final hasSecondary = (slide.secondaryButtonText ?? '').isNotEmpty;
 
     return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (hasTitle)
@@ -1102,36 +1126,55 @@ class _HeroLeftColumn extends StatelessWidget {
           Text(
             slide.subtitle!,
             style: TextStyle(
-              fontSize: compact ? 15 : 17,
-              height: compact ? 1.32 : 1.38,
+              fontSize: compact ? 18 : 17,
+              height: compact ? 1.38 : 1.38,
               fontWeight: FontWeight.w400,
               color: GlameColors.surface2,
               letterSpacing: 0.1,
             ),
           ),
+      ],
+    );
+  }
+}
+
+class _HeroLeftColumn extends StatelessWidget {
+  final _HomeSlideData slide;
+  final Future<void> Function(_HomeSlideAction? action) onOpenAction;
+
+  const _HeroLeftColumn({required this.slide, required this.onOpenAction});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasTitle = (slide.title ?? '').isNotEmpty;
+    final hasSubtitle = (slide.subtitle ?? '').isNotEmpty;
+    final hasPrimary = (slide.primaryButtonText ?? '').isNotEmpty;
+    final hasSecondary = (slide.secondaryButtonText ?? '').isNotEmpty;
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _HeroTextBlock(slide: slide),
         if (hasPrimary || hasSecondary)
-          SizedBox(height: hasTitle || hasSubtitle ? (compact ? 14 : 22) : 0),
+          SizedBox(height: hasTitle || hasSubtitle ? 22 : 0),
         if (hasPrimary)
           SizedBox(
-            width: buttonWidth ?? _heroCtaWidth,
+            width: _heroCtaWidth,
             child: _GlameHeroButton(
               title: slide.primaryButtonText!,
               filled: true,
               onTap: () => onOpenAction(slide.primaryAction),
-              compact: compact,
-              width: buttonWidth,
             ),
           ),
         if (hasPrimary && hasSecondary) const SizedBox(height: _heroCtaGap),
         if (hasSecondary)
           SizedBox(
-            width: buttonWidth ?? _heroCtaWidth,
+            width: _heroCtaWidth,
             child: _GlameHeroButton(
               title: slide.secondaryButtonText!,
               filled: false,
               onTap: () => onOpenAction(slide.secondaryAction),
-              compact: compact,
-              width: buttonWidth,
             ),
           ),
       ],
@@ -1930,17 +1973,19 @@ class _NewInProductCard extends ConsumerWidget {
                           : () => ref
                                 .read(wishlistControllerProvider.notifier)
                                 .toggle(product.id),
-                      child: Container(
+                      child: SizedBox(
                         width: compact ? 32 : 34,
                         height: compact ? 32 : 34,
-                        decoration: BoxDecoration(
-                          color: GlameColors.surface2,
-                          border: Border.all(color: const Color(0xFFD6D6D6)),
-                        ),
                         child: Icon(
                           isFavorite ? Icons.favorite : Icons.favorite_border,
-                          size: compact ? 17 : 18,
-                          color: GlameColors.textPrimary,
+                          size: compact ? 20 : 22,
+                          color: GlameColors.surface2,
+                          shadows: const [
+                            Shadow(
+                              color: GlameColors.textPrimary,
+                              blurRadius: 2,
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -2001,19 +2046,6 @@ class _NewInProductCard extends ConsumerWidget {
                                 color: GlameColors.textSecondary,
                               ),
                             ),
-                            if (product.priceLabel != null) ...[
-                              SizedBox(height: compact ? 5 : 8),
-                              Text(
-                                product.priceLabel!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: compact ? 12 : 14,
-                                  height: 1.2,
-                                  color: GlameColors.textPrimary,
-                                ),
-                              ),
-                            ],
                           ],
                         ),
                       ),
@@ -2151,3 +2183,98 @@ const _HomeSlideData _fallbackSlide = _HomeSlideData(
     legacyLink: '/catalog',
   ),
 );
+
+const List<_HomeSlideData> _fallbackHeroSlides = <_HomeSlideData>[
+  _fallbackSlide,
+  _HomeSlideData(
+    title: 'Собранный образ',
+    subtitle:
+        'Украшения складываются в цельный образ, когда форма, масштаб и настроение работают вместе.',
+    backgroundImageUrl: null,
+    imageUrl: null,
+    imageAction: null,
+    primaryButtonText: 'Смотреть подборку',
+    primaryAction: _HomeSlideAction(legacyLink: '/collections/complete-look'),
+    secondaryButtonText: 'Подобрать под меня',
+    secondaryAction: _HomeSlideAction(
+      type: 'selection',
+      legacyLink: '/selection',
+    ),
+  ),
+  _HomeSlideData(
+    title: 'Подарок',
+    subtitle:
+        'Подберите украшение как личный знак внимания: спокойно, точно и без случайности.',
+    backgroundImageUrl: null,
+    imageUrl: null,
+    imageAction: null,
+    primaryButtonText: 'Смотреть подарки',
+    primaryAction: _HomeSlideAction(legacyLink: '/collections/gift'),
+    secondaryButtonText: 'Подобрать подарок',
+    secondaryAction: _HomeSlideAction(
+      type: 'selection',
+      payload: <String, dynamic>{'mode': 'gift'},
+      legacyLink: '/selection/gift',
+    ),
+  ),
+  _HomeSlideData(
+    title: 'Акцентные украшения',
+    subtitle:
+        'Один выразительный акцент может собрать образ сильнее, чем лишние детали.',
+    backgroundImageUrl: null,
+    imageUrl: null,
+    imageAction: null,
+    primaryButtonText: 'Смотреть акценты',
+    primaryAction: _HomeSlideAction(legacyLink: '/collections/accent'),
+    secondaryButtonText: 'Подобрать под меня',
+    secondaryAction: _HomeSlideAction(
+      type: 'selection',
+      legacyLink: '/selection',
+    ),
+  ),
+  _HomeSlideData(
+    title: 'На отдых',
+    subtitle:
+        'Легкие линии, свет, движение и украшения, которые не спорят с маршрутом.',
+    backgroundImageUrl: null,
+    imageUrl: null,
+    imageAction: null,
+    primaryButtonText: 'Смотреть подборку',
+    primaryAction: _HomeSlideAction(legacyLink: '/collections/resort'),
+    secondaryButtonText: 'Подобрать под меня',
+    secondaryAction: _HomeSlideAction(
+      type: 'selection',
+      legacyLink: '/selection',
+    ),
+  ),
+  _HomeSlideData(
+    title: 'На свадьбу',
+    subtitle:
+        'Украшения для важного дня: деликатный свет, масштаб и образ без лишней драмы.',
+    backgroundImageUrl: null,
+    imageUrl: null,
+    imageAction: null,
+    primaryButtonText: 'Смотреть подборку',
+    primaryAction: _HomeSlideAction(legacyLink: '/collections/wedding'),
+    secondaryButtonText: 'Подобрать под меня',
+    secondaryAction: _HomeSlideAction(
+      type: 'selection',
+      legacyLink: '/selection',
+    ),
+  ),
+  _HomeSlideData(
+    title: 'Ваш стиль не из шаблона',
+    subtitle:
+        'Начните персональный подбор: по фото, задаче, поводу или вместе со стилистом GLAME.',
+    backgroundImageUrl: null,
+    imageUrl: null,
+    imageAction: null,
+    primaryButtonText: 'Начать подбор',
+    primaryAction: _HomeSlideAction(
+      type: 'selection',
+      legacyLink: '/selection',
+    ),
+    secondaryButtonText: 'Написать стилисту',
+    secondaryAction: _HomeSlideAction(type: 'stylist'),
+  ),
+];

@@ -142,8 +142,9 @@ class CustomerCabinetApi {
     List<String> quickTags = const <String>[],
     List<String> favoriteProductIds = const <String>[],
   }) async {
+    final trimmedText = text.trim();
     final form = FormData.fromMap({
-      'text': text,
+      'text': trimmedText,
       if (productId != null && productId.isNotEmpty) 'product_id': productId,
       if (source != null && source.isNotEmpty) 'source': source,
       if (scenario != null && scenario.isNotEmpty) 'scenario': scenario,
@@ -152,7 +153,10 @@ class CustomerCabinetApi {
         'favorite_product_ids': favoriteProductIds.join(','),
       ?photo == null ? null : 'photo': photo,
     });
-    final resp = await _dio.post('/customer/stylist-chat/messages', data: form);
+    final resp = await _dio.post(
+      '/customer/stylist-chat/messages',
+      data: form,
+    );
     return Map<String, dynamic>.from(resp.data as Map);
   }
 

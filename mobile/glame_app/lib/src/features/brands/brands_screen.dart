@@ -241,7 +241,7 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
     final compact = viewportHeight != null;
     final targetHeight = viewportHeight;
     final contentWidth = width - (GlameUi.pagePadding * 2);
-    final compactBrandSectionHeight = compact ? 190.0 : 0.0;
+    final compactBrandSectionHeight = compact ? 252.0 : 0.0;
     final heroHeight = compact
         ? ((targetHeight ?? 760) - compactBrandSectionHeight).clamp(
             330.0,
@@ -549,7 +549,7 @@ class _Block4BrandsGrid extends StatelessWidget {
         for (var i = 0; i < rows.length; i++) ...[
           if (i > 0) const _Block4ThinDivider(),
           SizedBox(
-            height: compact ? 42 : 52,
+            height: compact ? 58 : 60,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: _buildRowChildren(rows[i]),
@@ -562,21 +562,24 @@ class _Block4BrandsGrid extends StatelessWidget {
 
   List<Widget> _buildRowChildren(List<String> row) {
     final children = <Widget>[];
+    final itemPadding = EdgeInsets.symmetric(
+      horizontal: compact ? 4 : 10,
+      vertical: compact ? 6 : 10,
+    );
     for (var i = 0; i < row.length; i++) {
       children.add(
         Flexible(
           child: InkWell(
             onTap: () => onBrandTap(row[i]),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+              padding: itemPadding,
               child: Text(
                 row[i],
                 textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                softWrap: true,
                 style: TextStyle(
-                  fontSize: compact ? 13 : 16,
-                  height: 1.1,
+                  fontSize: compact ? 12 : 16,
+                  height: compact ? 1.12 : 1.15,
                   letterSpacing: -0.1,
                   color: GlameColors.graphite,
                   fontWeight: FontWeight.w300,
@@ -1321,13 +1324,12 @@ class _BrandEmptyState extends StatelessWidget {
           SizedBox(
             height: GlameUi.buttonHeight,
             child: OutlinedButton(
-              onPressed: () => context.push(
-                buildStylistChatRoute(
-                  initialMessage:
-                      'Хочу уточнить наличие изделий ${brand.name} и подобрать лучший вариант.',
-                  source: 'brand_page',
-                  scenario: 'live_stylist',
-                ),
+              onPressed: () => showStylistContactSheet(
+                context,
+                initialMessage:
+                    'Хочу уточнить наличие изделий ${brand.name} и подобрать лучший вариант.',
+                source: 'brand_page',
+                scenario: 'live_stylist',
               ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(
@@ -1396,13 +1398,12 @@ class _BrandErrorState extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => context.push(
-                      buildStylistChatRoute(
-                        initialMessage:
-                            'Хочу подобрать украшения ${brand.name} с помощью стилиста.',
-                        source: 'brand_page',
-                        scenario: 'live_stylist',
-                      ),
+                    onPressed: () => showStylistContactSheet(
+                      context,
+                      initialMessage:
+                          'Хочу подобрать украшения ${brand.name} с помощью стилиста.',
+                      source: 'brand_page',
+                      scenario: 'live_stylist',
                     ),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(

@@ -297,8 +297,10 @@ class _LooksScreenState extends ConsumerState<LooksScreen> {
   }
 
   void _openStylistChat() {
-    context.push(
-      buildStylistChatRoute(source: 'looks_feed', scenario: 'live_stylist'),
+    showStylistContactSheet(
+      context,
+      source: 'looks_feed',
+      scenario: 'live_stylist',
     );
   }
 
@@ -433,8 +435,10 @@ class _LooksProfileScreenState extends ConsumerState<LooksProfileScreen> {
   }
 
   void _openStylistChat() {
-    context.push(
-      buildStylistChatRoute(source: 'looks_profile', scenario: 'live_stylist'),
+    showStylistContactSheet(
+      context,
+      source: 'looks_profile',
+      scenario: 'live_stylist',
     );
   }
 

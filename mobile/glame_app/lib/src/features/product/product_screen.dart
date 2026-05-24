@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/asset_url.dart';
+import '../../core/analytics/analytics_service.dart';
 import '../../core/formatters/rub.dart';
 import '../../core/theme/glame_theme.dart';
 import 'product_providers.dart';
@@ -370,6 +371,15 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     if (id == null || id.isEmpty) return;
     if (_lastTrackedProductId == id) return;
     _lastTrackedProductId = id;
+    await ref
+        .read(analyticsServiceProvider)
+        .trackProductView(
+          id,
+          data: {
+            'name': (item['name'] as String?) ?? '',
+            'price_label': priceLabel,
+          },
+        );
 
     final price = item['price'];
     final parsedPrice = price is num ? price.toInt() : null;
@@ -871,13 +881,12 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
   }
 
   void _openStylistChat(BuildContext context, String message) {
-    context.push(
-      buildStylistChatRoute(
-        productId: widget.productId,
-        initialMessage: message,
-        source: 'product_card',
-        scenario: 'live_stylist',
-      ),
+    showStylistContactSheet(
+      context,
+      productId: widget.productId,
+      initialMessage: message,
+      source: 'product_card',
+      scenario: 'live_stylist',
     );
   }
 

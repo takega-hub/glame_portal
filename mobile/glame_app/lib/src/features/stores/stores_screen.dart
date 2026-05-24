@@ -1094,12 +1094,11 @@ void _openStoreChat(BuildContext context, _SpaceStoreData store) {
   _trackSpacesEvent('space_stylist_click', _spaceItemMap(store));
   final message =
       'Здравствуйте! Хочу написать стилисту по пространству ${store.city} и уточнить примерку и наличие.';
-  context.push(
-    buildStylistChatRoute(
-      initialMessage: message,
-      source: 'spaces_screen',
-      scenario: 'live_stylist',
-    ),
+  showStylistContactSheet(
+    context,
+    initialMessage: message,
+    source: 'spaces_screen',
+    scenario: 'live_stylist',
   );
 }
 

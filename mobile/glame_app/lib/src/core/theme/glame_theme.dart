@@ -1,21 +1,27 @@
 import 'package:flutter/material.dart';
 
 class GlameColors {
-  // Legacy names are kept so the older dark UI can be converted in-place.
-  static const black = Color(0xFFFFFFFF);
-  static const white = Color(0xFF111111);
-  static const surface = Color(0xFFF7F7F5);
+  static const graphite = Color(0xFF222426);
+  static const nearBlack = Color(0xFF0E1012);
+  static const steelGray = Color(0xFF8E9397);
+  static const coldLightGray = Color(0xFFC7CBCF);
+  static const softGray = Color(0xFFD8DADB);
+  static const whiteGlame = Color(0xFFEFF1F2);
+  static const borderGray = Color(0xFF5C6064);
+
+  // Legacy aliases are kept while older screens are converted in-place.
+  static const black = whiteGlame;
+  static const white = nearBlack;
+  static const surface = whiteGlame;
   static const surface2 = Color(0xFFFFFFFF);
-  static const lightGray = Color(0xFFE8E5DF);
-  static const steelGray = Color(0xFF989898);
-  static const coolLightGray = Color(0xFFD2D2D2);
-  static const gold = Color(0xFFE0A526);
-  static const graphite = Color(0xFF2B2B2A);
-  static const steelGrey = Color(0xFF6F7376);
-  static const coldLightGrey = Color(0xFFE5E7E8);
-  static const textPrimary = Color(0xFF111111);
-  static const textSecondary = Color(0xFF6A6863);
-  static const warmGray = Color(0xFFF2F0EB);
+  static const lightGray = softGray;
+  static const coolLightGray = coldLightGray;
+  static const gold = steelGray;
+  static const steelGrey = steelGray;
+  static const coldLightGrey = coldLightGray;
+  static const textPrimary = nearBlack;
+  static const textSecondary = Color(0xFF5C6064);
+  static const warmGray = Color(0xFFF1F2F2);
 }
 
 class GlameUi {
@@ -23,13 +29,22 @@ class GlameUi {
   static const double borderWidth = 1;
   static const double pagePadding = 28;
   static const double blockGap = 36;
-  static const double buttonHeight = 56;
+  static const double buttonHeight = 58;
   static const double minTapTarget = 44;
+  static const double heroTopBarHeight = 56;
+  static const double heroTopOffset = 14;
+  static const double mobileBottomNavHeight = 96;
+  static const double bottomNavContentAir = 24;
+  static const double heroPrimaryButtonWidth = 300;
+  static const double heroPrimaryButtonY = 602;
+  static const double heroSecondaryButtonY = 676;
+  static const double heroSlideIndicatorY = 768;
 }
 
 class GlameAssets {
   static const logoBlack = 'web/brand_assets/logos/glame_logo black.png';
   static const logoGraph = 'web/brand_assets/logos/glame_logo graph.png';
+  static const logoSilver = 'web/brand_assets/logos/glame_logo silver.png';
   static const sign = 'web/brand_assets/logos/glame_sign.png';
 }
 
@@ -51,16 +66,16 @@ class GlameHeaderLogo extends StatelessWidget {
 ThemeData buildGlameTheme() {
   final scheme =
       ColorScheme.fromSeed(
-        seedColor: GlameColors.gold,
+        seedColor: GlameColors.graphite,
         brightness: Brightness.light,
       ).copyWith(
-        surface: GlameColors.textPrimary,
+        surface: GlameColors.surface2,
         onSurface: GlameColors.textPrimary,
         primary: GlameColors.textPrimary,
         onPrimary: GlameColors.surface2,
         secondary: GlameColors.steelGray,
         onSecondary: GlameColors.textPrimary,
-        outline: GlameColors.lightGray,
+        outline: GlameColors.borderGray,
         surfaceContainerHighest: GlameColors.surface,
         onSurfaceVariant: GlameColors.textSecondary,
       );
@@ -134,7 +149,7 @@ ThemeData buildGlameTheme() {
         backgroundColor: scheme.primary,
         foregroundColor: scheme.onPrimary,
         shape: const RoundedRectangleBorder(),
-        minimumSize: const Size.fromHeight(48),
+        minimumSize: const Size.fromHeight(GlameUi.buttonHeight),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         textStyle: const TextStyle(
           fontFamily: 'Clinica Pro',
@@ -149,7 +164,7 @@ ThemeData buildGlameTheme() {
         foregroundColor: scheme.onSurface,
         side: BorderSide(color: scheme.outline),
         shape: const RoundedRectangleBorder(),
-        minimumSize: const Size.fromHeight(48),
+        minimumSize: const Size.fromHeight(GlameUi.buttonHeight),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         textStyle: const TextStyle(
           fontFamily: 'Clinica Pro',

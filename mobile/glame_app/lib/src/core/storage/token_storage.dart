@@ -19,8 +19,9 @@ class TokenStorage {
   Future<TokenPair?> read() async {
     final access = await _readValue(_accessKey);
     final refresh = await _readValue(_refreshKey);
-    if (access == null || access.isEmpty || refresh == null || refresh.isEmpty)
+    if (access == null || access.isEmpty || refresh == null || refresh.isEmpty) {
       return null;
+    }
     return TokenPair(accessToken: access, refreshToken: refresh);
   }
 

@@ -56,12 +56,20 @@ final customerOrdersProvider = FutureProvider<List<Map<String, dynamic>>>((
 final stylistChatMessagesProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
 ) async {
+  final auth = ref.watch(authControllerProvider);
+  if (auth.user == null) return const <Map<String, dynamic>>[];
   return ref.watch(customerCabinetApiProvider).getStylistChatMessages();
 });
 
 final stylistChatStatusProvider = FutureProvider<Map<String, dynamic>>((
   ref,
 ) async {
+  final auth = ref.watch(authControllerProvider);
+  if (auth.user == null) {
+    return const <String, dynamic>{
+      'status_text': 'График стилиста: 10:00-20:00 по МСК',
+    };
+  }
   return ref.watch(customerCabinetApiProvider).getStylistChatStatus();
 });
 

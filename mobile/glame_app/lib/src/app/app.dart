@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,10 +21,12 @@ import '../features/looks/look_detail_screen.dart';
 import '../features/looks/looks_screen.dart';
 import '../features/service/how_to_buy_screen.dart';
 import '../features/stores/stores_screen.dart';
+import '../core/analytics/analytics_service.dart';
 import '../core/theme/glame_theme.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final onboardingSeen = ref.watch(onboardingControllerProvider);
+  final analytics = ref.watch(analyticsServiceProvider);
 
   final router = GoRouter(
     initialLocation: '/',
@@ -37,6 +41,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/home';
       }
 
+      unawaited(analytics.trackScreen(state.uri.toString()));
       return null;
     },
     routes: [
