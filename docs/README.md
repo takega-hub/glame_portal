@@ -81,7 +81,9 @@ This index is the source of truth for platform documentation. The root README gi
 
 ## Archive
 
-Historical summaries, one-off fixes, and design experiments should go under `archive/` and should not be treated as current implementation source of truth.
+Historical or superseded documents live under `archive/`. Keep them when they explain past decisions, but do not treat them as current implementation guidance unless refreshed.
+
+- `archive/fixes/` — old one-off fix notes and quick-fix playbooks kept for context.
 
 ## Documentation rules
 
