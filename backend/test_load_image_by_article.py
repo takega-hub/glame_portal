@@ -178,7 +178,7 @@ async def test_load_image_by_article(article: str):
     
     # Получаем настройки из переменных окружения
     api_url = os.getenv("ONEC_API_URL", "https://msk1.1cfresh.com/a/sbm/3322419/odata/standard.odata")
-    api_token = os.getenv("ONEC_API_TOKEN", "b2RhdGEudXNlcjpvcGV4b2JvZQ==")
+    api_token = os.getenv("ONEC_API_TOKEN", "your_1c_api_token_here")
     
     # Шаг 1: Найти товар в 1С по артикулу
     print("\n[ШАГ 1] Поиск товара в 1С по артикулу...")

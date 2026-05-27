@@ -17,7 +17,7 @@ if sys.platform == "win32":
 # Параметры подключения
 ODATA_BASE_URL = os.getenv("ONEC_API_URL", "https://msk1.1cfresh.com/a/sbm/3322419/odata/standard.odata")
 ODATA_USER = os.getenv("ONEC_API_USER", "odata.user")
-ODATA_PASSWORD = os.getenv("ONEC_API_PASSWORD", "opexoboe")
+ODATA_PASSWORD = os.getenv("ONEC_API_PASSWORD", "your_1c_password_here")
 
 # Создаем Basic Auth заголовок
 auth_string = f"{ODATA_USER}:{ODATA_PASSWORD}"

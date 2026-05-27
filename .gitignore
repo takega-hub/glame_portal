@@ -61,3 +61,58 @@ Thumbs.db
 docker-compose.override.yml
 
 backups/
+
+# --- Local Python environments ---
+.venv/
+backend/.venv/
+backend/venv/
+ml-service/.venv/
+ml-service/venv/
+
+# --- Local SDKs / toolchains ---
+android-sdk/
+.flutter/
+
+# --- Local agent/editor state ---
+.agents/
+.codex/
+.trae/
+
+# --- Runtime uploads / generated media ---
+uploads/
+static/uploads/
+backend/uploads/
+backend/static/uploads/
+backend/static/product_images/
+backend/static/look_images/
+backend/static/jewelry_processed/
+backend/static/content_post_images/
+
+# --- Generated reports / QA artifacts ---
+screenshots/
+test-results/
+playwright-report/
+coverage/
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+reports/tmp/
+reports/generated/
+*_report.json
+*_applied_report.json
+*_audit_*.xlsx
+
+# --- Local data / dumps / backups ---
+migration_data/
+*.dump
+*.sql.gz
+*.bak
+*.backup
+*.sqlite3
+
+# --- Misc generated discovery/debug artifacts ---
+discovered_*.html
+darkrain_parse_result.json
+1c_health_check.json
+1c_groups_analysis.json

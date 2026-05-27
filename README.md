@@ -1,188 +1,175 @@
 # GLAME AI Platform
 
-AI-платформа для бренда GLAME с фокусом на AI Stylist Agent, генерацию контента, интеграцию с каталогом, веб-интерфейс с чатом и аналитику.
+Operational AI + commerce platform for GLAME: customer app, admin platform, AI marketer/director agents, catalog and inventory workflows, CRM, analytics, 1C integrations, payments/shipping, and live stylist workflows.
 
-## Структура платформы
+## Main surfaces
 
-Платформа включает следующие модули:
+### Customer app
 
-- **AI Stylist** (`/`) - Диалоговый интерфейс с AI стилистом для подбора образов
-- **Генератор контента** (`/content-generator`) - Генерация контента для маркетинга
-- **Каталог товаров** (`/products`) - Просмотр и управление каталогом
-- **Образы** (`/looks`) - Готовые образы и стилистические решения
-- **Аналитика** (`/analytics`) - Панель аналитики взаимодействий
+Flutter app in `mobile/glame_app`.
 
-Подробнее: [PLATFORM_STRUCTURE.md](PLATFORM_STRUCTURE.md) | [PLATFORM_NAVIGATION.md](PLATFORM_NAVIGATION.md)
+Current customer-facing areas include:
 
-## Архитектура
+- home and onboarding;
+- catalog and product page;
+- cart and checkout;
+- wishlist and looks;
+- AI photo selection;
+- live stylist chat;
+- brands and spaces.
 
-- **Frontend**: Next.js (React, TypeScript)
-- **Backend**: FastAPI (Python)
-- **AI Layer**: OpenRouter API для доступа к LLM
-- **Vector DB**: Qdrant для хранения знаний бренда
-- **Database**: PostgreSQL для основных данных
-- **Cache**: Redis
+Useful routes in the Flutter web build:
 
-## Быстрый старт
-
-### Требования
-
-- Docker и Docker Compose
-- Python 3.11+
-- Node.js 18+
-
-### Установка
-
-1. Клонируйте репозиторий
-2. Скопируйте `.env.example` в `.env` и заполните переменные окружения:
-   ```bash
-   cp .env.example .env
-   ```
-   Обязательно укажите:
-   - `OPENROUTER_API_KEY` - ваш API ключ от OpenRouter
-   - `JWT_SECRET_KEY` - секретный ключ для JWT токенов
-   
-   Опционально (для работы с образами):
-   - `OPENAI_API_KEY` - для embeddings и vision models
-   - `FASHION_TRENDS_API_KEY` - API ключ для модных трендов (используется LLM fallback если не указан)
-   - `TRY_ON_API_KEY` - API ключ для визуальной примерки (используется fallback если не указан)
-   - `STORAGE_TYPE` - тип хранилища (`local` или `s3`)
-
-3. Запустите инфраструктуру (PostgreSQL, Qdrant, Redis):
-   ```bash
-   docker-compose -f infra/docker-compose.yml up -d
-   ```
-
-4. Установите зависимости backend:
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   ```
-
-5. Инициализируйте базу данных:
-   ```bash
-   cd backend
-   python init_database.py
-   ```
-   Или вручную:
-   ```bash
-   alembic upgrade head
-   ```
-   Подробнее: [INIT_DATABASE.md](INIT_DATABASE.md)
-
-6. Заполните базу тестовыми данными (опционально):
-   ```bash
-   cd backend
-   python run_seeds.py
-   ```
-
-7. Установите зависимости frontend:
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-8. Запустите backend (в отдельном терминале):
-   ```bash
-   cd backend
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
-
-9. Запустите frontend (в отдельном терминале):
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-
-10. Откройте браузер: http://localhost:3000
-
-## Навигация по платформе
-
-После запуска frontend доступны следующие страницы:
-
-- **AI Stylist** (`/`) - Чат с AI стилистом для подбора образов
-- **Генератор контента** (`/content-generator`) - Генерация контента для маркетинга
-- **Каталог товаров** (`/products`) - Просмотр каталога товаров
-- **Образы** (`/looks`) - Готовые образы и стилистические решения
-- **Аналитика** (`/analytics`) - Панель аналитики взаимодействий
-
-Подробнее: [PLATFORM_NAVIGATION.md](PLATFORM_NAVIGATION.md)
-
-## Структура проекта
-
-```
-glame-platform/
-├── frontend/              # Next.js приложение
-│   ├── src/
-│   │   ├── app/          # Next.js App Router
-│   │   ├── components/   # React компоненты
-│   │   ├── lib/          # Утилиты и API клиенты
-│   │   └── types/        # TypeScript типы
-│   └── package.json
-├── backend/               # FastAPI приложение
-│   ├── app/
-│   │   ├── api/          # API роуты
-│   │   ├── agents/       # AI агенты
-│   │   ├── services/     # Бизнес-логика
-│   │   ├── models/       # SQLAlchemy модели
-│   │   └── main.py       # Точка входа
-│   └── requirements.txt
-├── data/
-│   └── migrations/       # Alembic миграции
-├── infra/
-│   └── docker-compose.yml # Docker конфигурация
-└── README.md
+```text
+/#/home
+/#/home?tab=1
+/#/catalog
+/#/product/:id
+/#/selection/ai-photo
+/#/stylist-chat
 ```
 
-## API Документация
+### Web admin / platform
 
-После запуска backend доступна по адресу: http://localhost:8000/docs
+Next.js platform in `frontend`.
 
-### Основные endpoints:
+Current operational areas include:
 
-- `POST /api/stylist/chat` - диалог с AI стилистом
-- `GET /api/products` - список товаров
-- `GET /api/looks` - список образов
-- `POST /api/content/generate` - генерация контента
-- `POST /api/analytics/track` - трекинг событий
+- admin app;
+- customers and customer segments;
+- live stylist;
+- cron;
+- roles/access;
+- shipping;
+- AI marketer;
+- task boards;
+- content agent;
+- analytics and product analytics;
+- inventory control;
+- knowledge base;
+- products and looks.
 
-## Основные функции
+Representative routes:
 
-### AI Stylist Agent
-- Определение персоны пользователя
-- Определение этапа Customer Journey Map
-- Подбор товаров и образов
-- Генерация персонализированных рекомендаций
+```text
+/admin/app
+/admin/customers
+/admin/live-stylist
+/admin/cron
+/admin/roles
+/admin/shipping
+/ai-marketer
+/ai-marketer/tasks
+/analytics
+/inventory-control
+/knowledge-base
+/products
+/looks
+```
 
-### AI Content Agent
-- Генерация контента на основе персоны и CJM
-- Адаптация под различные каналы
+### Backend
 
-### Analytics
-- Трекинг событий пользователей
-- Метрики сессий
-- Аналитика взаимодействий
+FastAPI backend in `backend`.
 
-## Переменные окружения
+Current API domains include:
 
-См. `.env.example` для полного списка переменных окружения.
+- auth;
+- products and catalog sections;
+- cart, checkout, orders and payments;
+- analytics;
+- inventory and pricing;
+- 1C sync and orders exchange;
+- customers, CRM and segmentation;
+- communication;
+- content agent;
+- stylist and live stylist;
+- AI marketer and director agents;
+- app public API;
+- admin APIs;
+- shipping.
 
-## Документация
+## Repository structure
 
-- [QUICK_START.md](QUICK_START.md) - Быстрый старт
-- [PLATFORM_STRUCTURE.md](PLATFORM_STRUCTURE.md) - Структура платформы
-- [PLATFORM_NAVIGATION.md](PLATFORM_NAVIGATION.md) - Навигация по платформе
-- [CONTENT_AGENT_GUIDE.md](CONTENT_AGENT_GUIDE.md) - Руководство по Content Agent
-- [CONTENT_AGENT_INTEGRATION.md](CONTENT_AGENT_INTEGRATION.md) - Интеграция Content Agent
-- [CONTENT_AGENT_USAGE.md](CONTENT_AGENT_USAGE.md) - Использование Content Agent
-- [1C_INTEGRATION.md](1C_INTEGRATION.md) - Интеграция с 1С
-- [BRAND_KNOWLEDGE.md](BRAND_KNOWLEDGE.md) - База знаний о бренде
-- [NEXT_STEPS.md](NEXT_STEPS.md) - План дальнейшей работы
+```text
+backend/           FastAPI backend
+frontend/          Next.js admin/platform frontend
+mobile/glame_app/  Flutter customer app
+docs/              documentation and design docs
+scripts/           dev/deploy/data/audit helpers
+infra/             Docker/systemd/nginx infrastructure
+data/migrations/   Alembic migrations
+ml-service/        ML inference service
+reports/           curated audit/QA/sync reports
+```
 
-## Разработка
+## Quick start
 
-См. план реализации в `.cursor/plans/` для детальной информации о спринтах и задачах.
+### Infrastructure
 
-## Лицензия
+```bash
+docker-compose -f infra/docker-compose.yml up -d
+```
 
-Proprietary - GLAME AI Platform
+### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Flutter customer app
+
+```bash
+cd mobile/glame_app
+flutter pub get
+flutter run -d chrome
+```
+
+## Documentation
+
+Start with:
+
+- `docs/README.md` — documentation index;
+- `docs/design/GLAME_updated_document_system_v2_FULL/00_INDEX_GLAME_DOCUMENT_SYSTEM.md` — customer app design system index;
+- `docs/mobile_app_ui_spec.md` — app UI spec;
+- `docs/admin/` — admin/platform and agent docs;
+- `docs/integrations/1c/` — 1C integration docs;
+- `docs/operations/` — deploy/database/environment operations docs.
+
+## Repository hygiene
+
+Do not commit:
+
+- `.env` or local secrets;
+- `.venv/`, `backend/.venv/`, `venv/`;
+- `node_modules/`, `.next/`, build outputs;
+- `android-sdk/`;
+- runtime uploads/static generated media;
+- temporary screenshots/test reports.
+
+Use `reports/` only for curated durable reports. Temporary/generated outputs should stay ignored or outside the repository.
+
+## Development process
+
+- Customer app page design: agree with Elena first, then implement with Anatoly.
+- Kanban/GLAME platform tasks: do not move to Done without a verified result.
+- Catalog rule: products without photos are hidden; out-of-stock products may be shown with clear unavailable status and `Сообщить о поступлении` flow.
+- Keep cleanup commits separate from behavior changes.
+
+## API documentation
+
+When backend is running, API docs are exposed through the configured docs/OpenAPI endpoints. In production/staging, prefer the configured proxy/API base URL rather than hardcoded localhost.
+
+## License
+
+Proprietary — GLAME AI Platform.

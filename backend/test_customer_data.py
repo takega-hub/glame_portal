@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Настройка переменных окружения
 os.environ.setdefault("ONEC_API_URL", "https://msk1.1cfresh.com/a/sbm/3322419/odata/standard.odata")
-os.environ.setdefault("ONEC_API_TOKEN", "b2RhdGEudXNlcjpvcGV4b2JvZQ==")
+os.environ.setdefault("ONEC_API_TOKEN", "your_1c_api_token_here")
 
 ONEC_API_URL = os.getenv("ONEC_API_URL")
 ONEC_API_TOKEN = os.getenv("ONEC_API_TOKEN")

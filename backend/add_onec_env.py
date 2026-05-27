@@ -25,7 +25,7 @@ def add_onec_vars():
 # URL OData сервиса 1С
 ONEC_API_URL=https://msk1.1cfresh.com/a/sbm/3322419/odata/standard.odata
 # Токен в формате base64 для Basic Auth (логин:пароль)
-ONEC_API_TOKEN=b2RhdGEudXNlcjpvcGV4b2JvZQ==
+ONEC_API_TOKEN=your_1c_api_token_here
 # Endpoint для получения данных о продажах
 ONEC_SALES_ENDPOINT=/AccumulationRegister_Продажи_RecordType
 # Endpoint для дисконтных карт

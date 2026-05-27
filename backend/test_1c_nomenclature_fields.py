@@ -17,7 +17,7 @@ if sys.platform == "win32":
 if not os.getenv("ONEC_API_URL"):
     os.environ["ONEC_API_URL"] = "https://msk1.1cfresh.com/a/sbm/3322419/odata/standard.odata"
 if not os.getenv("ONEC_API_TOKEN"):
-    os.environ["ONEC_API_TOKEN"] = "b2RhdGEudXNlcjpvcGV4b2JvZQ=="
+    os.environ["ONEC_API_TOKEN"] = "your_1c_api_token_here"
 
 from app.services.onec_products_service import OneCProductsService
 from app.database.connection import AsyncSessionLocal

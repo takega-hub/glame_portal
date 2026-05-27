@@ -13,7 +13,7 @@ if sys.platform == "win32":
     sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer, "strict")
 
 API_URL = os.getenv("ONEC_API_URL", "https://msk1.1cfresh.com/a/sbm/3322419/odata/standard.odata")
-API_TOKEN = os.getenv("ONEC_API_TOKEN", "b2RhdGEudXNlcjpvcGV4b2JvZQ==")
+API_TOKEN = os.getenv("ONEC_API_TOKEN", "your_1c_api_token_here")
 
 
 async def find_characteristics():
