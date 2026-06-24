@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/glame_theme.dart';
+import 'auth_field.dart';
 import 'auth_controller.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -54,90 +55,82 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final controller = ref.read(authControllerProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(title: const GlameHeaderLogo()),
-      body: SafeArea(
+      backgroundColor: GlameColors.nearBlack,
+      appBar: const GlameTopAppBar(dark: true),
+      body: GlamePage(
+        dark: true,
+        safeTop: false,
+        padding: EdgeInsets.zero,
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                'РЕГИСТРАЦИЯ',
-                style: TextStyle(
-                  fontSize: 40,
-                  height: 0.95,
-                  fontWeight: FontWeight.w400,
-                  color: GlameColors.textPrimary,
-                ),
+              const GlameSectionHeader(
+                title: 'РЕГИСТРАЦИЯ',
+                subtitle:
+                    'Создайте аккаунт, чтобы сохранять покупки и получать бонусы',
+                dark: true,
               ),
-              const SizedBox(height: 10),
-              const Text(
-                'Создайте аккаунт, чтобы сохранять покупки и получать бонусы',
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.35,
-                  color: GlameColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Container(width: 44, height: 1, color: GlameColors.lightGray),
               const SizedBox(height: 24),
-              TextField(
+              AuthTextField(
                 controller: _phone,
+                label: 'Номер телефона',
+                hintText: '+7 900 000-00-00',
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Номер телефона',
-                  hintText: '+7 900 000-00-00',
-                ),
+                dark: true,
               ),
               const SizedBox(height: 12),
-              TextField(
+              AuthTextField(
                 controller: _fullName,
-                decoration: const InputDecoration(
-                  labelText: 'Как к Вам обращаться',
-                  hintText: 'Имя и фамилия',
-                ),
+                label: 'Как к Вам обращаться',
+                hintText: 'Имя и фамилия',
+                dark: true,
               ),
               const SizedBox(height: 12),
               GestureDetector(
                 onTap: () => _selectDate(context),
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Дата рождения (не обязательно)',
-                  ),
-                  child: Text(
-                    _formattedBirthDate ?? 'Выберите дату',
-                    style: TextStyle(
-                      color: _birthDate == null
-                          ? GlameColors.textSecondary
-                          : GlameColors.textPrimary,
+                child: AuthFieldShell(
+                  label: 'Дата рождения (не обязательно)',
+                  dark: true,
+                  child: InputDecorator(
+                    decoration: const InputDecoration(),
+                    child: Text(
+                      _formattedBirthDate ?? 'Выберите дату',
+                      style: TextStyle(
+                        color: _birthDate == null
+                            ? GlameColors.steelGray
+                            : GlameColors.textPrimary,
+                      ),
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 12),
-              TextField(
+              AuthTextField(
                 controller: _password,
+                label: 'Пароль (от 6 символов)',
+                hintText: 'Введите пароль',
                 obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Пароль (от 6 символов)',
-                  hintText: 'Введите пароль',
-                ),
+                dark: true,
               ),
               const SizedBox(height: 16),
               if (auth.error != null)
-                Container(
+                GlamePanel(
+                  dark: true,
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: GlameColors.graphite),
-                  ),
                   child: Text(
                     auth.error!,
-                    style: const TextStyle(color: GlameColors.graphite),
+                    style: const TextStyle(color: GlameColors.coldLightGray),
                   ),
                 ),
               const SizedBox(height: 24),
               FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: GlameColors.whiteGlame,
+                  foregroundColor: GlameColors.nearBlack,
+                  shape: const RoundedRectangleBorder(),
+                ),
                 onPressed: auth.loading
                     ? null
                     : () async {
@@ -183,6 +176,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
               const SizedBox(height: 12),
               OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: GlameColors.whiteGlame,
+                  side: const BorderSide(color: GlameColors.borderGray),
+                  shape: const RoundedRectangleBorder(),
+                ),
                 onPressed: auth.loading ? null : () => context.pop(),
                 child: const Text('Назад'),
               ),

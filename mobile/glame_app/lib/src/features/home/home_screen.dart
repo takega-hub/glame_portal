@@ -37,6 +37,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   late final PageController _heroPageController;
   late final PageController _blockPageController;
+  late final ScrollController _homeScrollController;
   Timer? _autoPlayTimer;
   int _currentHeroPage = 0;
   int _autoPlaySlideCount = 0;
@@ -48,6 +49,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     _heroPageController = PageController();
     _blockPageController = PageController();
+    _homeScrollController = ScrollController();
   }
 
   @override
@@ -55,13 +57,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _autoPlayTimer?.cancel();
     _heroPageController.dispose();
     _blockPageController.dispose();
+    _homeScrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final isPagedMobileHome = mediaQuery.size.width < 600;
     final slidesAsync = ref.watch(homeSlidesProvider);
     final newLooksAsync = ref.watch(homeNewLooksProvider);
 
@@ -87,6 +88,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         featuredLook?.products.toList(growable: false) ??
         const <_NewInProductData>[];
 
+    final isPagedMobileHome = MediaQuery.of(context).size.width < 600;
     if (isPagedMobileHome) {
       return LayoutBuilder(
         builder: (context, constraints) {
@@ -158,6 +160,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           color: GlameColors.textPrimary,
           onRefresh: _refreshHome,
           child: ListView(
+            controller: _homeScrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.zero,
             children: [
@@ -283,7 +286,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _openPhotoUpload() async {
     if (!mounted) return;
-    await startPhotoSelectionFlow(context);
+    context.push('/selection/ai-photo');
   }
 
   Future<void> _openPhotoGuide() async {
@@ -357,6 +360,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
       return;
     }
+    if (type == 'home_block') {
+      final block = _parseHomeBlockNumber(
+        _firstNotEmpty(<Object?>[
+          payload['block'],
+          payload['block_number'],
+          payload['target'],
+        ]),
+      );
+      await _openHomeBlock(block ?? 2);
+      return;
+    }
     final urlFromPayload = _firstNotEmpty(<Object?>[
       payload['url'],
       payload['link'],
@@ -368,6 +382,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _openLink(String? link) async {
     final target = (link ?? '').trim();
     if (target.isEmpty) return;
+    final homeBlock = _parseHomeBlockNumber(target);
+    if (homeBlock != null) {
+      await _openHomeBlock(homeBlock);
+      return;
+    }
     if (target.startsWith('http://') || target.startsWith('https://')) {
       final uri = Uri.tryParse(target);
       if (uri != null) {
@@ -383,6 +402,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (target.startsWith('/')) {
       context.push(target);
     }
+  }
+
+  Future<void> _openHomeBlock(int blockNumber) async {
+    if (!mounted) return;
+    final index = (blockNumber - 1).clamp(0, 5);
+    final isPagedMobileHome = MediaQuery.of(context).size.width < 600;
+    if (isPagedMobileHome && _blockPageController.hasClients) {
+      await _blockPageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+    if (!_homeScrollController.hasClients) return;
+    final viewportHeight = MediaQuery.of(context).size.height;
+    await _homeScrollController.animateTo(
+      viewportHeight * index,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  int? _parseHomeBlockNumber(Object? rawValue) {
+    final raw = '${rawValue ?? ''}'.trim().toLowerCase();
+    if (raw.isEmpty) return null;
+    final direct = int.tryParse(raw);
+    if (direct != null && direct > 0) return direct;
+    final match = RegExp(
+      r'^(?:home[_\-\s:]*)?(?:scroll\s+to\s+)?(?:block|блок)[_\-\s:#]*(\d+)$',
+    ).firstMatch(raw);
+    if (match == null) return null;
+    final parsed = int.tryParse(match.group(1) ?? '');
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   Future<Map<String, dynamic>?> _loadStylistStatus() async {
@@ -437,15 +490,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (index < 0 || index >= _fallbackHeroSlides.length) return slide;
     final spec = _fallbackHeroSlides[index];
     return _HomeSlideData(
-      title: spec.title,
-      subtitle: spec.subtitle,
+      title: slide.title ?? spec.title,
+      subtitle: slide.subtitle ?? spec.subtitle,
       backgroundImageUrl: slide.backgroundImageUrl,
       imageUrl: slide.imageUrl,
       imageAction: slide.imageAction ?? spec.imageAction,
-      primaryButtonText: spec.primaryButtonText,
-      primaryAction: spec.primaryAction,
-      secondaryButtonText: spec.secondaryButtonText,
-      secondaryAction: spec.secondaryAction,
+      primaryButtonText: slide.primaryButtonText ?? spec.primaryButtonText,
+      primaryAction: slide.primaryAction ?? spec.primaryAction,
+      secondaryButtonText:
+          slide.secondaryButtonText ?? spec.secondaryButtonText,
+      secondaryAction: slide.secondaryAction ?? spec.secondaryAction,
     );
   }
 
@@ -717,18 +771,20 @@ class _HomeHeroBlock extends StatelessWidget {
           ),
         ),
         Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  GlameColors.textPrimary.withValues(alpha: 0.1),
-                  GlameColors.textPrimary.withValues(alpha: 0.48),
-                  GlameColors.textPrimary.withValues(alpha: 0.68),
-                ],
-                stops: const [0, 0.52, 0.8, 1],
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    GlameColors.textPrimary.withValues(alpha: 0.36),
+                    GlameColors.textPrimary.withValues(alpha: 0.06),
+                    GlameColors.textPrimary.withValues(alpha: 0.52),
+                    GlameColors.textPrimary.withValues(alpha: 0.78),
+                  ],
+                  stops: const [0, 0.36, 0.8, 1],
+                ),
               ),
             ),
           ),
@@ -1050,7 +1106,7 @@ class _HeroFixedMobileOverlay extends StatelessWidget {
               bottom: bottomInset,
               child: Align(
                 alignment: Alignment.bottomLeft,
-                child: _HeroTextBlock(slide: slide, compact: true),
+                child: _HeroTextBlock(slide: slide, compact: true, boxed: true),
               ),
             ),
             if ((slide.primaryButtonText ?? '').isNotEmpty)
@@ -1098,15 +1154,20 @@ class _HeroFixedMobileOverlay extends StatelessWidget {
 class _HeroTextBlock extends StatelessWidget {
   final _HomeSlideData slide;
   final bool compact;
+  final bool boxed;
 
-  const _HeroTextBlock({required this.slide, this.compact = false});
+  const _HeroTextBlock({
+    required this.slide,
+    this.compact = false,
+    this.boxed = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final hasTitle = (slide.title ?? '').isNotEmpty;
     final hasSubtitle = (slide.subtitle ?? '').isNotEmpty;
 
-    return Column(
+    final textColumn = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1134,6 +1195,17 @@ class _HeroTextBlock extends StatelessWidget {
             ),
           ),
       ],
+    );
+    if (!boxed) return textColumn;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 340),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: GlameColors.textPrimary.withValues(alpha: 0.2),
+        border: Border.all(color: GlameColors.surface2.withValues(alpha: 0.64)),
+      ),
+      child: textColumn,
     );
   }
 }
@@ -1208,22 +1280,23 @@ class _HomeNewInBlock extends ConsumerWidget {
           )
         : products;
     final isPagedLayout = viewportHeight != null;
+    final screenWidth = MediaQuery.of(context).size.width;
     final blockHeight = viewportHeight ?? MediaQuery.of(context).size.height;
-    final compact = isPagedLayout;
-    final topPadding = compact ? 64.0 : 36.0;
-    final bottomPadding = compact ? 8.0 : 36.0;
-    final titleSize = compact ? 30.0 : 36.0;
-    final linkSize = compact ? 16.0 : 19.0;
-    final bodySize = compact ? 15.0 : 18.0;
+    final compact = isPagedLayout || screenWidth < 600;
+    final topPadding = isPagedLayout ? 118.0 : (compact ? 64.0 : 72.0);
+    final bottomPadding = isPagedLayout ? 18.0 : (compact ? 64.0 : 72.0);
+    final titleSize = compact ? 24.0 : 42.0;
+    final linkSize = compact ? 14.0 : 19.0;
+    final bodySize = compact ? 14.0 : 18.0;
     final dropHeight = compact
-        ? (blockHeight * 0.34).clamp(220.0, 300.0)
+        ? (isPagedLayout ? (blockHeight * 0.34).clamp(220.0, 300.0) : 420.0)
         : _newInDropCardHeight;
     final productCardHeight = compact
-        ? (blockHeight * 0.2).clamp(145.0, 190.0)
+        ? (isPagedLayout ? (blockHeight * 0.2).clamp(145.0, 190.0) : 310.0)
         : _newInLookCardHeight;
 
     return Container(
-      color: GlameColors.surface2,
+      color: GlameColors.nearBlack,
       padding: EdgeInsets.fromLTRB(
         _homeBlockHorizontalPadding,
         topPadding,
@@ -1233,40 +1306,48 @@ class _HomeNewInBlock extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  'Новое в GLAME',
-                  style: TextStyle(
-                    fontSize: titleSize,
-                    fontWeight: FontWeight.w400,
-                    color: GlameColors.textPrimary,
-                    height: 1.02,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              InkWell(
-                onTap: () => onOpenAllNew(),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    'Все новинки',
-                    style: TextStyle(
-                      fontSize: linkSize,
-                      fontWeight: FontWeight.w400,
-                      color: GlameColors.textPrimary,
-                      decoration: TextDecoration.underline,
-                      decorationColor: GlameColors.textPrimary,
+          DecoratedBox(
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: GlameColors.borderGray)),
+            ),
+            child: Padding(
+              padding: EdgeInsets.only(bottom: compact ? 14 : 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Новое в GLAME',
+                      style: TextStyle(
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.w300,
+                        color: GlameColors.whiteGlame,
+                        height: 1.02,
+                      ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  InkWell(
+                    onTap: () => onOpenAllNew(),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Все новинки',
+                        style: TextStyle(
+                          fontSize: linkSize,
+                          fontWeight: FontWeight.w300,
+                          color: GlameColors.steelGray,
+                          decoration: TextDecoration.underline,
+                          decorationColor: GlameColors.steelGray,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-          SizedBox(height: compact ? 12 : 18),
+          SizedBox(height: compact ? 18 : 20),
           SizedBox(
             width: 310,
             child: Text(
@@ -1274,23 +1355,23 @@ class _HomeNewInBlock extends ConsumerWidget {
               style: TextStyle(
                 fontSize: bodySize,
                 height: 1.4,
-                color: GlameColors.textSecondary,
+                color: GlameColors.steelGray,
               ),
             ),
           ),
-          SizedBox(height: compact ? 16 : 36),
-          if (compact)
+          SizedBox(height: compact ? 28 : 36),
+          if (compact && isPagedLayout)
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final availableHeight = constraints.maxHeight;
                   final hasScrollHint = items.length > 3;
                   final hintHeight = hasScrollHint ? 24.0 : 0.0;
-                  final verticalGap = 12.0;
+                  final verticalGap = 16.0;
                   final rowGap = hasScrollHint ? 10.0 : 0.0;
-                  final preferredProductHeight = (availableHeight * 0.35).clamp(
-                    184.0,
-                    240.0,
+                  final preferredProductHeight = (availableHeight * 0.33).clamp(
+                    210.0,
+                    280.0,
                   );
                   final dynamicDropHeight =
                       (availableHeight -
@@ -1329,14 +1410,14 @@ class _HomeNewInBlock extends ConsumerWidget {
                                 style: TextStyle(
                                   fontSize: 12,
                                   letterSpacing: 0.6,
-                                  color: GlameColors.textSecondary,
+                                  color: GlameColors.steelGray,
                                 ),
                               ),
                               SizedBox(width: 6),
                               Icon(
                                 Icons.arrow_forward_rounded,
                                 size: 16,
-                                color: GlameColors.textSecondary,
+                                color: GlameColors.steelGray,
                               ),
                             ],
                           ),
@@ -1371,14 +1452,14 @@ class _HomeNewInBlock extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 12,
                         letterSpacing: 0.6,
-                        color: GlameColors.textSecondary,
+                        color: GlameColors.steelGray,
                       ),
                     ),
                     SizedBox(width: 6),
                     Icon(
                       Icons.arrow_forward_rounded,
                       size: 16,
-                      color: GlameColors.textSecondary,
+                      color: GlameColors.steelGray,
                     ),
                   ],
                 ),
@@ -1411,6 +1492,54 @@ class _NewInProductCardsRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cardWidth = (constraints.maxWidth - (_newInProductGap * 2)) / 3;
+        if (compact) {
+          return Stack(
+            children: [
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var index = 0; index < items.length; index++) ...[
+                      SizedBox(
+                        width: 240,
+                        child: _NewInProductCard(
+                          product: items[index],
+                          height: height,
+                          compact: compact,
+                        ),
+                      ),
+                      if (index != items.length - 1)
+                        const SizedBox(width: _newInProductGap),
+                    ],
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 0,
+                right: 0,
+                bottom: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 28,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          GlameColors.nearBlack.withValues(alpha: 0),
+                          GlameColors.nearBlack,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
+
         if (items.length <= 3) {
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1466,7 +1595,7 @@ class _NewInProductCardsRow extends StatelessWidget {
                       end: Alignment.centerRight,
                       colors: [
                         GlameColors.surface2.withValues(alpha: 0),
-                        GlameColors.surface2,
+                        GlameColors.nearBlack,
                       ],
                     ),
                   ),
@@ -1497,26 +1626,24 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
         .watch(homePhotoSelectionBlockProvider)
         .asData
         ?.value;
-    final promoImageUrl = resolveAssetUrl(photoSelectionBlock?['image_url']);
     final adminTitle = '${photoSelectionBlock?['title'] ?? ''}'.trim();
     final adminSubtitle = '${photoSelectionBlock?['subtitle'] ?? ''}'.trim();
-    final hasAdminTitle = adminTitle.isNotEmpty;
-    final hasAdminSubtitle = adminSubtitle.isNotEmpty;
-    final compact = viewportHeight != null;
+    final title = adminTitle.isNotEmpty ? adminTitle : 'Подбор по фото';
+    final subtitle = adminSubtitle.isNotEmpty
+        ? adminSubtitle
+        : 'Загрузите фото, и мы поможем подобрать украшения, которые звучат с Вашей внешностью естественно, точно и без случайных решений.';
+    const fallbackPhotoAsset =
+        'assets/images/home/home_block_3_photo_selection.png';
+    final compact =
+        viewportHeight != null || MediaQuery.of(context).size.width < 600;
     final topPadding = compact ? 88.0 : 0.0;
     final bottomPadding = compact ? 18.0 : 36.0;
-    final titleSize = compact ? 30.0 : 36.0;
     final bodySize = compact ? 15.0 : 18.0;
-    const promoHeight = 640.0;
-
-    if (compact) {
-      final backgroundSource =
-          (promoImageUrl != null && promoImageUrl.isNotEmpty)
-          ? promoImageUrl
-          : 'assets/images/home/home_block_3_photo_selection.png';
+    if (compact && viewportHeight != null) {
+      const backgroundSource = fallbackPhotoAsset;
       return Container(
-        color: GlameColors.surface2,
-        padding: EdgeInsets.fromLTRB(10, 0, 10, bottomPadding),
+        color: GlameColors.nearBlack,
+        padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1524,55 +1651,23 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  _HomePhotoSelectionBackground(source: backgroundSource),
                   Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.22),
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.2),
-                          ],
-                          stops: const [0.0, 0.42, 1.0],
+                    child: Padding(
+                      padding: EdgeInsets.only(top: topPadding - 10),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: GlameColors.borderGray.withValues(
+                              alpha: 0.9,
+                            ),
+                          ),
+                        ),
+                        child: const ClipRect(
+                          child: _HomePhotoSelectionBackground(
+                            source: backgroundSource,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(26, topPadding + 8, 26, 28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (hasAdminTitle)
-                          Text(
-                            adminTitle,
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w400,
-                              height: 1.02,
-                              color: GlameColors.surface2,
-                            ),
-                          ),
-                        if (hasAdminTitle && hasAdminSubtitle)
-                          const SizedBox(height: 18),
-                        if (hasAdminSubtitle)
-                          SizedBox(
-                            width: 188,
-                            child: Text(
-                              adminSubtitle,
-                              style: TextStyle(
-                                fontSize: bodySize - 1,
-                                height: 1.55,
-                                color: GlameColors.surface2.withValues(
-                                  alpha: 0.92,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
                     ),
                   ),
                 ],
@@ -1602,79 +1697,76 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
     }
 
     return Container(
-      color: GlameColors.surface2,
+      color: GlameColors.nearBlack,
       padding: EdgeInsets.fromLTRB(
-        _homeBlockHorizontalPadding,
-        topPadding,
-        _homeBlockHorizontalPadding,
-        bottomPadding,
+        28,
+        compact ? 80 : 88,
+        28,
+        compact ? 80 : 88,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
         children: [
-          if (hasAdminTitle)
-            Text(
-              adminTitle,
-              style: TextStyle(
-                fontSize: titleSize,
-                fontWeight: FontWeight.w400,
-                height: 1.02,
-                color: GlameColors.textPrimary,
-              ),
-            ),
-          if (hasAdminTitle && hasAdminSubtitle)
-            SizedBox(height: compact ? 14 : 18),
-          if (hasAdminSubtitle)
-            SizedBox(
-              width: 310,
-              child: Text(
-                adminSubtitle,
-                style: TextStyle(
-                  fontSize: bodySize,
-                  height: 1.42,
-                  color: GlameColors.textSecondary,
+          Positioned.fill(
+            right: compact ? -120 : -40,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: compact ? 0.32 : 0.42,
+                child: const _HomePhotoSelectionBackground(
+                  source: fallbackPhotoAsset,
                 ),
               ),
             ),
-          if (hasAdminTitle || hasAdminSubtitle)
-            SizedBox(height: compact ? 18 : 28),
-          Expanded(
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return PhotoSelectionPromoCard(
-                        height: compact ? constraints.maxHeight : promoHeight,
-                        title: adminTitle,
-                        description: adminSubtitle,
-                        imageUrl: promoImageUrl,
-                        imageAspectRatio: 2 / 3,
-                        useFixedHeightWhenImage: compact,
-                        imageAssetPath:
-                            'assets/images/home/home_block_3_photo_selection.png',
-                      );
-                    },
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: compact ? 30 : 42,
+                    fontWeight: FontWeight.w300,
+                    height: 1.06,
+                    color: GlameColors.whiteGlame,
                   ),
                 ),
-                SizedBox(height: compact ? 10 : 16),
-                PhotoSelectionInfoCard(compact: compact),
-                SizedBox(height: compact ? 10 : 16),
-                _HomePhotoActionButton(
-                  title: 'Загрузить фото',
-                  icon: Icons.photo_camera_outlined,
-                  filled: true,
-                  onTap: onOpenUpload,
-                  compact: compact,
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: compact ? 300 : 360,
+                  child: Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: bodySize,
+                      height: 1.45,
+                      color: GlameColors.coldLightGray,
+                    ),
+                  ),
                 ),
-                SizedBox(height: compact ? 8 : 14),
-                _HomePhotoActionButton(
-                  title: 'Какое фото подойдет',
-                  icon: Icons.image_outlined,
-                  filled: false,
-                  onTap: onOpenGuide,
-                  compact: compact,
+                SizedBox(height: compact ? 34 : 44),
+                SizedBox(
+                  width: double.infinity,
+                  child: _HomePhotoActionButton(
+                    title: 'Загрузить фото',
+                    icon: Icons.photo_camera_outlined,
+                    filled: true,
+                    onTap: onOpenUpload,
+                    compact: compact,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Center(
+                  child: TextButton(
+                    onPressed: onOpenGuide,
+                    child: const Text(
+                      'Какое фото подойдет',
+                      style: TextStyle(
+                        color: GlameColors.steelGray,
+                        decoration: TextDecoration.underline,
+                        decorationColor: GlameColors.steelGray,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1732,7 +1824,7 @@ class _HomePhotoActionButton extends StatelessWidget {
         Icon(
           icon,
           size: compact ? 18 : 22,
-          color: filled ? GlameColors.surface2 : GlameColors.textPrimary,
+          color: filled ? GlameColors.surface2 : GlameColors.whiteGlame,
         ),
         SizedBox(width: compact ? 10 : 12),
         Text(
@@ -1741,7 +1833,7 @@ class _HomePhotoActionButton extends StatelessWidget {
             fontSize: compact ? 15 : 20,
             height: 1.05,
             fontWeight: FontWeight.w400,
-            color: filled ? GlameColors.surface2 : GlameColors.textPrimary,
+            color: filled ? GlameColors.surface2 : GlameColors.whiteGlame,
           ),
         ),
       ],
@@ -1769,7 +1861,7 @@ class _HomePhotoActionButton extends StatelessWidget {
           : OutlinedButton(
               onPressed: onTap,
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFD6D6D6)),
+                side: const BorderSide(color: GlameColors.borderGray),
               ),
               child: child,
             ),
@@ -1800,7 +1892,7 @@ class _NewInDropCard extends StatelessWidget {
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFD6D6D6)),
+          border: Border.all(color: GlameColors.borderGray),
         ),
         child: Stack(
           fit: StackFit.expand,
@@ -1822,9 +1914,9 @@ class _NewInDropCard extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      GlameColors.textPrimary.withValues(alpha: 0.12),
+                      GlameColors.textPrimary.withValues(alpha: 0.04),
                       Colors.transparent,
-                      GlameColors.textPrimary.withValues(alpha: 0.55),
+                      GlameColors.textPrimary.withValues(alpha: 0.68),
                     ],
                     stops: const [0, 0.42, 1],
                   ),
@@ -1852,9 +1944,9 @@ class _NewInDropCard extends StatelessWidget {
                     Text(
                       (drop?.title ?? 'Новый дроп').toUpperCase(),
                       style: TextStyle(
-                        fontSize: compact ? 24 : 32,
+                        fontSize: compact ? 28 : 40,
                         height: 0.96,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.w300,
                         color: GlameColors.surface2,
                       ),
                     ),
@@ -1944,13 +2036,14 @@ class _NewInProductCard extends ConsumerWidget {
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFD6D6D6)),
+          color: GlameColors.graphite,
+          border: Border.all(color: GlameColors.borderGray),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              flex: 60,
+              flex: 56,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -1964,44 +2057,18 @@ class _NewInProductCard extends ConsumerWidget {
                               Container(color: GlameColors.warmGray),
                         )
                       : Container(color: GlameColors.warmGray),
-                  Positioned(
-                    top: compact ? 10 : 12,
-                    right: compact ? 10 : 12,
-                    child: InkWell(
-                      onTap: product.id.isEmpty
-                          ? null
-                          : () => ref
-                                .read(wishlistControllerProvider.notifier)
-                                .toggle(product.id),
-                      child: SizedBox(
-                        width: compact ? 32 : 34,
-                        height: compact ? 32 : 34,
-                        child: Icon(
-                          isFavorite ? Icons.favorite : Icons.favorite_border,
-                          size: compact ? 20 : 22,
-                          color: GlameColors.surface2,
-                          shadows: const [
-                            Shadow(
-                              color: GlameColors.textPrimary,
-                              blurRadius: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
-            Container(height: 1, color: const Color(0xFFD6D6D6)),
+            Container(height: 1, color: GlameColors.borderGray),
             Expanded(
-              flex: compact ? 44 : 40,
+              flex: compact ? 52 : 44,
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                  10,
-                  compact ? 10 : 12,
-                  10,
-                  compact ? 10 : 12,
+                  compact ? 12 : 16,
+                  compact ? 12 : 16,
+                  compact ? 12 : 16,
+                  compact ? 12 : 16,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2026,34 +2093,41 @@ class _NewInProductCard extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: compact ? 13 : 16,
                         height: 1.2,
-                        color: GlameColors.textPrimary,
+                        color: GlameColors.whiteGlame,
                       ),
                     ),
                     SizedBox(height: compact ? 5 : 8),
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.topLeft,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product.availability,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: compact ? 11 : 13,
-                                height: 1.3,
-                                color: GlameColors.textSecondary,
-                              ),
-                            ),
-                          ],
+                    Text(
+                      product.availability,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 11 : 13,
+                        height: 1.3,
+                        color: GlameColors.steelGray,
+                      ),
+                    ),
+                    const Spacer(),
+                    InkWell(
+                      onTap: product.id.isEmpty
+                          ? null
+                          : () => ref
+                                .read(wishlistControllerProvider.notifier)
+                                .toggle(product.id),
+                      child: Container(
+                        width: compact ? 34 : 38,
+                        height: compact ? 34 : 38,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: GlameColors.borderGray),
+                        ),
+                        child: Icon(
+                          isFavorite ? Icons.favorite : Icons.favorite_border,
+                          size: compact ? 18 : 20,
+                          color: GlameColors.whiteGlame,
                         ),
                       ),
                     ),
-                    if (!compact)
-                      const SizedBox(height: 0)
-                    else
-                      const SizedBox(height: 0),
                   ],
                 ),
               ),

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/formatters/rub.dart';
 import '../../core/theme/glame_theme.dart';
+import '../../core/widgets/glame_auth_gate.dart';
 import '../auth/auth_controller.dart';
 import '../product/product_providers.dart';
 import 'customer_cabinet_providers.dart';
@@ -91,21 +92,7 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
         : ref.watch(productProvider(productId));
     return Scaffold(
       backgroundColor: GlameColors.surface2,
-      appBar: AppBar(
-        backgroundColor: GlameColors.surface2,
-        leading: IconButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home?tab=4');
-            }
-          },
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const GlameHeaderLogo(),
-        centerTitle: true,
-      ),
+      appBar: const GlameTopAppBar(),
       body: Column(
         children: [
           Padding(
@@ -404,79 +391,18 @@ class _StylistChatAuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: GlameColors.surface2,
-      appBar: AppBar(
-        backgroundColor: GlameColors.surface2,
-        leading: IconButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home?tab=4');
-            }
-          },
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const GlameHeaderLogo(),
-        centerTitle: true,
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 34, 24, 28),
-          children: [
-            const Text(
-              'СТИЛИСТ GLAME',
-              style: TextStyle(
-                fontSize: 14,
-                letterSpacing: 0.4,
-                color: GlameColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              'Войдите, чтобы написать стилисту',
-              style: TextStyle(
-                fontSize: 32,
-                height: 1.05,
-                fontWeight: FontWeight.w300,
-                color: GlameColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Чат со стилистом доступен после входа. Так мы сохраним историю переписки, подборки и сможем продолжить консультацию с того же места.',
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.42,
-                color: GlameColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 22),
-            Container(height: 1, color: const Color(0xFFD6D6D6)),
-            const SizedBox(height: 18),
-            SizedBox(
-              height: GlameUi.buttonHeight,
-              child: FilledButton(
-                onPressed: () => context.go(
-                  '/login?next=${Uri.encodeComponent(resumeRoute)}',
-                ),
-                child: const Text('Войти'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: GlameUi.buttonHeight,
-              child: OutlinedButton(
-                onPressed: () => context.go(
-                  '/auth/register?next=${Uri.encodeComponent(resumeRoute)}',
-                ),
-                child: const Text('Создать аккаунт'),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return GlameAuthGate(
+      eyebrow: 'Стилист GLAME',
+      title: 'Войдите, чтобы написать стилисту',
+      description:
+          'Чат со стилистом доступен после входа. Так мы сохраним историю переписки, подборки и сможем продолжить консультацию с того же места.',
+      note: 'После входа Вы вернетесь в чат стилиста.',
+      noteIcon: Icons.chat_bubble_outline,
+      showTopBar: true,
+      onLogin: () =>
+          context.go('/login?next=${Uri.encodeComponent(resumeRoute)}'),
+      onRegister: () =>
+          context.go('/auth/register?next=${Uri.encodeComponent(resumeRoute)}'),
     );
   }
 }

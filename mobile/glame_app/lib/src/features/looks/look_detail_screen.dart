@@ -426,20 +426,24 @@ class _LookHeroSection extends StatelessWidget {
               child: Row(
                 children: [
                   _OverlayIconButton(
-                    icon: Icons.arrow_back_ios_new,
-                    onTap: onBack,
+                    icon: Icons.menu,
+                    onTap: () => showGlameNavigationMenu(context),
                   ),
                   const Spacer(),
-                  const GlameHeaderLogo(),
+                  Image.asset(
+                    GlameAssets.logoSilver,
+                    height: 24,
+                    fit: BoxFit.contain,
+                  ),
                   const Spacer(),
                   _OverlayIconButton(
-                    icon: isFavorited ? Icons.favorite : Icons.favorite_border,
-                    onTap: onToggleFavorite,
+                    icon: Icons.shopping_bag_outlined,
+                    onTap: () => context.go('/home?tab=11'),
                   ),
                   const SizedBox(width: 6),
                   _OverlayIconButton(
-                    icon: Icons.ios_share_outlined,
-                    onTap: onShare,
+                    icon: Icons.search,
+                    onTap: () => context.go('/home?tab=1'),
                   ),
                 ],
               ),

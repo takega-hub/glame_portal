@@ -128,6 +128,53 @@ class CustomerCabinetApi {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> getFavoriteProducts() async {
+    final resp = await _dio.get('/customer/favorite-products');
+    final raw = resp.data;
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((x) => Map<String, dynamic>.from(x))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> syncFavoriteProducts(
+    List<String> productIds,
+  ) async {
+    final resp = await _dio.put(
+      '/customer/favorite-products',
+      data: {'product_ids': productIds, 'source': 'app'},
+    );
+    final raw = resp.data;
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((x) => Map<String, dynamic>.from(x))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> addFavoriteProduct(String productId) async {
+    final resp = await _dio.post('/customer/favorite-products/$productId');
+    final raw = resp.data;
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((x) => Map<String, dynamic>.from(x))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> deleteFavoriteProduct(
+    String productId,
+  ) async {
+    final resp = await _dio.delete('/customer/favorite-products/$productId');
+    final raw = resp.data;
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((x) => Map<String, dynamic>.from(x))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> deleteSavedLook(String savedLookId) async {
     final resp = await _dio.delete('/customer/saved-looks/$savedLookId');
     return Map<String, dynamic>.from(resp.data as Map);

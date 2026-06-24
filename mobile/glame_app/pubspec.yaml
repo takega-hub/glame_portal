@@ -68,6 +68,7 @@ flutter:
 
   assets:
     - web/brand_assets/logos/
+    - assets/images/brand/
     - assets/images/home/
     - assets/images/service/
 

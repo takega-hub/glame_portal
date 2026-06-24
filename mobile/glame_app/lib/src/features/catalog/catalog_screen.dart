@@ -122,7 +122,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     final isWideScreen = MediaQuery.of(context).size.width > 768;
 
     return Scaffold(
-      backgroundColor: GlameColors.textPrimary,
+      backgroundColor: GlameColors.nearBlack,
       body: SafeArea(
         child: Column(
           children: [
@@ -131,15 +131,17 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
             _buildCategoryTabs(categories, isWideScreen),
             Expanded(
               child: RefreshIndicator(
-                color: GlameColors.gold,
+                color: GlameColors.whiteGlame,
                 onRefresh: controller.refresh,
                 child: CustomScrollView(
                   controller: scroll,
                   slivers: [
                     SliverPadding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isWideScreen ? 40 : 16,
-                        vertical: 20,
+                      padding: EdgeInsets.fromLTRB(
+                        isWideScreen ? 40 : 16,
+                        18,
+                        isWideScreen ? 40 : 16,
+                        28,
                       ),
                       sliver: SliverGrid(
                         delegate: SliverChildBuilderDelegate((context, i) {
@@ -157,11 +159,11 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                           crossAxisCount: catalog.oneColumn
                               ? 1
                               : (isWideScreen ? 4 : 2),
-                          mainAxisSpacing: isWideScreen ? 24 : 16,
-                          crossAxisSpacing: isWideScreen ? 24 : 12,
+                          mainAxisSpacing: isWideScreen ? 30 : 22,
+                          crossAxisSpacing: isWideScreen ? 24 : 14,
                           childAspectRatio: catalog.oneColumn
-                              ? (isWideScreen ? 2.1 : 0.92)
-                              : (isWideScreen ? 0.65 : 0.6),
+                              ? (isWideScreen ? 2.25 : 0.92)
+                              : (isWideScreen ? 0.62 : 0.56),
                         ),
                       ),
                     ),
@@ -175,7 +177,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                                 child: Padding(
                                   padding: EdgeInsets.symmetric(vertical: 20),
                                   child: CircularProgressIndicator(
-                                    color: GlameColors.gold,
+                                    color: GlameColors.whiteGlame,
                                   ),
                                 ),
                               ),
@@ -186,7 +188,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   letterSpacing: 1,
-                                  color: GlameColors.textSecondary,
+                                  color: GlameColors.coldLightGray,
                                 ),
                               ),
                           ],
@@ -206,9 +208,11 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   Widget _buildHeader(BuildContext context) {
     final isWideScreen = MediaQuery.of(context).size.width > 768;
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isWideScreen ? 40 : 20,
-        vertical: 18,
+      padding: EdgeInsets.fromLTRB(
+        isWideScreen ? 40 : 20,
+        24,
+        isWideScreen ? 40 : 20,
+        16,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -223,18 +227,21 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                     fontSize: isWideScreen ? 44 : 36,
                     fontWeight: FontWeight.w400,
                     height: 0.95,
-                    color: GlameColors.textPrimary,
+                    color: GlameColors.whiteGlame,
                   ),
                 ),
                 const SizedBox(height: 10),
-                Container(width: 44, height: 1, color: GlameColors.lightGray),
+                Container(width: 54, height: 1, color: GlameColors.steelGray),
               ],
             ),
           ),
           const SizedBox(width: 12),
           Text(
             '${_groupCatalogItems(ref.watch(catalogControllerProvider).items).length} товаров',
-            style: TextStyle(fontSize: 12, color: GlameColors.steelGray),
+            style: const TextStyle(
+              fontSize: 12,
+              color: GlameColors.coldLightGray,
+            ),
           ),
         ],
       ),
@@ -295,6 +302,11 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                 onPressed: () {
                   ref.read(catalogControllerProvider.notifier).toggleLayout();
                 },
+                style: IconButton.styleFrom(
+                  foregroundColor: GlameColors.whiteGlame,
+                  side: const BorderSide(color: GlameColors.borderGray),
+                  shape: const RoundedRectangleBorder(),
+                ),
                 icon: Icon(
                   catalog.oneColumn ? Icons.grid_view : Icons.view_agenda,
                 ),
@@ -313,17 +325,15 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                     value: catalog.inStockOnly,
                     onChanged: (value) =>
                         controller.setInStockOnly(value ?? false),
-                    activeColor: GlameColors.gold,
+                    activeColor: GlameColors.whiteGlame,
+                    checkColor: GlameColors.nearBlack,
                     visualDensity: VisualDensity.compact,
                   ),
                 ),
                 const SizedBox(width: 8),
                 const Text(
                   'В наличии',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: GlameColors.textPrimary,
-                  ),
+                  style: TextStyle(fontSize: 13, color: GlameColors.whiteGlame),
                 ),
               ],
             ),
@@ -338,7 +348,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       padding: EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: GlameColors.lightGray.withAlpha(51)),
+          bottom: BorderSide(color: GlameColors.borderGray.withAlpha(130)),
         ),
       ),
       child: SizedBox(
@@ -367,10 +377,10 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: isActive
-                        ? GlameColors.textPrimary
-                        : GlameColors.lightGray.withAlpha(77),
+                        ? GlameColors.whiteGlame
+                        : GlameColors.borderGray.withAlpha(120),
                   ),
-                  color: isActive ? GlameColors.surface : Colors.transparent,
+                  color: isActive ? GlameColors.whiteGlame : Colors.transparent,
                 ),
                 child: Center(
                   child: Text(
@@ -380,8 +390,8 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                       letterSpacing: 0.8,
                       fontWeight: isActive ? FontWeight.w500 : FontWeight.w400,
                       color: isActive
-                          ? GlameColors.textPrimary
-                          : GlameColors.textSecondary,
+                          ? GlameColors.nearBlack
+                          : GlameColors.coldLightGray,
                     ),
                   ),
                 ),
@@ -476,40 +486,62 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   }
 
   List<String> _buildCategoryLabels(List<dynamic> sections) {
-    final names = <String>[];
-    final seen = <String>{};
+    final namesByLower = <String, String>{};
     for (final section in sections) {
       if (section is! Map) continue;
       final raw = section['name'];
       final name = raw is String ? raw.trim() : '';
-      if (name.isEmpty || !seen.add(name.toLowerCase())) continue;
-      names.add(name);
+      if (name.isEmpty) continue;
+      namesByLower.putIfAbsent(name.toLowerCase(), () => name);
     }
 
-    const preferred = [
-      'Кольца',
+    // Customer catalog must expose only product categories here.
+    // Brand/line values (AGafi, Antura, Eva Rites, etc.) and marketing
+    // collections (NEW/SALE) belong to filters or dedicated collection flows.
+    const customerCategories = [
       'Серьги',
+      'Кольца',
       'Колье',
       'Браслеты',
       'Каффы',
-      'NEW',
-      'SALE',
     ];
+
     final result = <String>['Все'];
-    for (final label in preferred) {
-      final match = names.where(
-        (name) => name.toLowerCase() == label.toLowerCase(),
-      );
-      if (match.isNotEmpty) result.add(match.first);
-    }
-    for (final name in names) {
-      if (result.any((item) => item.toLowerCase() == name.toLowerCase())) {
-        continue;
-      }
-      result.add(name);
+    for (final label in customerCategories) {
+      result.add(namesByLower[label.toLowerCase()] ?? label);
     }
     return result;
   }
+}
+
+String _normalizeCatalogDisplayLabel(String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) return normalized;
+  const replacements = {
+    'WRINKLES OG TIME': 'WRINKLES OF TIME',
+    'Wrinkles Og Time': 'Wrinkles Of Time',
+    'wrinkles og time': 'Wrinkles of Time',
+  };
+  return replacements[normalized] ?? normalized;
+}
+
+bool _hasPositiveStock(Map<String, dynamic> item) {
+  final stock =
+      _asStockNumber(item['stock']) ?? _asStockNumber(item['quantity']);
+  if (stock != null && stock > 0) return true;
+
+  final specs = item['specifications'];
+  if (specs is Map) {
+    final quantity = _asStockNumber(specs['quantity']);
+    if (quantity != null && quantity > 0) return true;
+  }
+  return false;
+}
+
+num? _asStockNumber(dynamic value) {
+  if (value is num) return value;
+  if (value is String) return num.tryParse(value.trim().replaceAll(',', '.'));
+  return null;
 }
 
 class _ProductCardDarkrain extends ConsumerWidget {
@@ -528,7 +560,10 @@ class _ProductCardDarkrain extends ConsumerWidget {
     final brandRaw =
         ((current['brand'] as String?) ?? (item['brand'] as String?) ?? '')
             .trim();
-    final brand = brandRaw.isEmpty ? null : brandRaw.toUpperCase();
+    final brand = brandRaw.isEmpty
+        ? null
+        : _normalizeCatalogDisplayLabel(brandRaw).toUpperCase();
+    final isAvailable = [item, ...variants].any(_hasPositiveStock);
     var priceLabel = _buildPriceLabel(item, variants);
     String? remoteImageUrl;
     if (id.isNotEmpty) {
@@ -586,11 +621,11 @@ class _ProductCardDarkrain extends ConsumerWidget {
                         imageUrl: imageUrl,
                         fit: BoxFit.cover,
                         placeholder: (_, _) =>
-                            Container(color: GlameColors.surface),
+                            Container(color: GlameColors.graphite),
                         errorWidget: (_, _, _) =>
-                            Container(color: GlameColors.surface),
+                            Container(color: GlameColors.graphite),
                       )
-                    : Container(color: GlameColors.surface),
+                    : Container(color: GlameColors.graphite),
                 Positioned(
                   top: 8,
                   left: 8,
@@ -602,7 +637,7 @@ class _ProductCardDarkrain extends ConsumerWidget {
                             vertical: 4,
                           ),
                           decoration: BoxDecoration(
-                            color: GlameColors.textPrimary.withAlpha(166),
+                            color: GlameColors.nearBlack.withAlpha(166),
                           ),
                           child: Text(
                             brand,
@@ -612,7 +647,7 @@ class _ProductCardDarkrain extends ConsumerWidget {
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.6,
-                              color: GlameColors.surface2,
+                              color: GlameColors.whiteGlame,
                             ),
                           ),
                         ),
@@ -633,7 +668,7 @@ class _ProductCardDarkrain extends ConsumerWidget {
             style: const TextStyle(
               fontSize: 11,
               letterSpacing: 0.8,
-              color: GlameColors.textPrimary,
+              color: GlameColors.whiteGlame,
               height: 1.4,
             ),
           ),
@@ -643,7 +678,20 @@ class _ProductCardDarkrain extends ConsumerWidget {
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w400,
-              color: GlameColors.textPrimary,
+              color: GlameColors.coldLightGray,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isAvailable ? 'В наличии' : 'Нет в наличии',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              letterSpacing: 0.4,
+              color: isAvailable
+                  ? GlameColors.steelGray
+                  : GlameColors.borderGray,
             ),
           ),
         ],
@@ -707,14 +755,11 @@ class _WishlistButton extends ConsumerWidget {
           ref.read(wishlistControllerProvider.notifier).toggle(productId),
       child: Container(
         padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: GlameColors.textPrimary.withAlpha(128),
-          border: Border.all(color: GlameColors.surface2.withAlpha(80)),
-        ),
+        decoration: const BoxDecoration(),
         child: Icon(
           isOn ? Icons.favorite : Icons.favorite_border,
           size: 16,
-          color: isOn ? GlameColors.gold : GlameColors.surface2,
+          color: isOn ? GlameColors.whiteGlame : GlameColors.whiteGlame,
         ),
       ),
     );

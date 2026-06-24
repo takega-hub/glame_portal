@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/glame_theme.dart';
+import 'auth_field.dart';
 import 'auth_controller.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -39,146 +40,141 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final next = GoRouterState.of(context).uri.queryParameters['next'];
 
     return Scaffold(
-      appBar: AppBar(title: const GlameHeaderLogo()),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'ВХОД',
-                style: TextStyle(
-                  fontSize: 40,
-                  height: 0.95,
-                  fontWeight: FontWeight.w400,
-                  color: GlameColors.textPrimary,
+      backgroundColor: GlameColors.nearBlack,
+      appBar: const GlameTopAppBar(dark: true),
+      body: GlamePage(
+        dark: true,
+        safeTop: false,
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const GlameSectionHeader(
+              title: 'ВХОД',
+              subtitle: 'Вход для покупателей',
+              dark: true,
+            ),
+            const SizedBox(height: 24),
+            AuthTextField(
+              controller: _phone,
+              label: 'Номер телефона',
+              hintText: '+7 900 000-00-00',
+              keyboardType: TextInputType.phone,
+              dark: true,
+            ),
+            const SizedBox(height: 12),
+            AuthTextField(
+              controller: _password,
+              label: 'Пароль',
+              hintText: 'Введите пароль',
+              obscureText: true,
+              dark: true,
+            ),
+            const SizedBox(height: 16),
+            if (auth.error != null)
+              GlamePanel(
+                dark: true,
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  auth.error == 'not_found'
+                      ? 'Нет такого пользователя'
+                      : auth.error!,
+                  style: const TextStyle(color: GlameColors.coldLightGray),
                 ),
               ),
-              const SizedBox(height: 10),
-              const Text(
-                'Вход для покупателей',
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.35,
-                  color: GlameColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Container(width: 44, height: 1, color: GlameColors.lightGray),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Номер телефона',
-                  hintText: '+7 900 000-00-00',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _password,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Пароль',
-                  hintText: 'Введите пароль',
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (auth.error != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: GlameColors.graphite),
-                  ),
-                  child: Text(
-                    auth.error == 'not_found'
-                        ? 'Нет такого пользователя'
-                        : auth.error!,
-                    style: const TextStyle(color: GlameColors.graphite),
-                  ),
-                ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () async {
-                    if (_phone.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Введите номер телефона для получения кода',
-                          ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () async {
+                  if (_phone.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Введите номер телефона для получения кода',
                         ),
-                      );
+                      ),
+                    );
+                    return;
+                  }
+                  try {
+                    await controller.requestOtp(phone: _phone.text.trim());
+                    final currentState = ref.read(authControllerProvider);
+                    if (currentState.error != null) {
                       return;
                     }
-                    try {
-                      await controller.requestOtp(phone: _phone.text.trim());
-                      final currentState = ref.read(authControllerProvider);
-                      if (currentState.error != null) {
+
+                    if (!context.mounted) return;
+                    GoRouter.of(context).push(
+                      '/auth/otp?phone=${Uri.encodeComponent(_phone.text.trim())}&next=${Uri.encodeComponent(next ?? '')}',
+                    );
+                  } catch (_) {}
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: GlameColors.whiteGlame,
+                ),
+                child: const Text('Войти по SMS'),
+              ),
+            ),
+            const Spacer(),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: GlameColors.whiteGlame,
+                foregroundColor: GlameColors.nearBlack,
+                shape: const RoundedRectangleBorder(),
+              ),
+              onPressed: auth.loading
+                  ? null
+                  : () async {
+                      final go = GoRouter.of(context);
+                      if (_phone.text.trim().isEmpty ||
+                          _password.text.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Введите телефон и пароль'),
+                          ),
+                        );
                         return;
                       }
-
-                      if (!context.mounted) return;
-                      GoRouter.of(context).push(
-                        '/auth/otp?phone=${Uri.encodeComponent(_phone.text.trim())}&next=${Uri.encodeComponent(next ?? '')}',
+                      await controller.login(
+                        email: _phone.text.trim(),
+                        password: _password.text,
                       );
-                    } catch (_) {}
-                  },
-                  child: const Text('Войти по SMS'),
-                ),
-              ),
-              const Spacer(),
-              FilledButton(
-                onPressed: auth.loading
-                    ? null
-                    : () async {
-                        final go = GoRouter.of(context);
-                        if (_phone.text.trim().isEmpty ||
-                            _password.text.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Введите телефон и пароль'),
-                            ),
-                          );
-                          return;
-                        }
-                        await controller.login(
-                          email: _phone.text.trim(),
-                          password: _password.text,
+                      if (!mounted) return;
+                      final after = ref.read(authControllerProvider);
+                      if (after.user != null) {
+                        go.go(
+                          (next != null && next.isNotEmpty)
+                              ? next
+                              : '/home?tab=4',
                         );
-                        if (!mounted) return;
-                        final after = ref.read(authControllerProvider);
-                        if (after.user != null) {
-                          go.go(
-                            (next != null && next.isNotEmpty)
-                                ? next
-                                : '/home?tab=4',
-                          );
-                        }
-                      },
-                child: auth.loading
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Войти'),
+                      }
+                    },
+              child: auth.loading
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Войти'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: GlameColors.whiteGlame,
+                side: const BorderSide(color: GlameColors.borderGray),
+                shape: const RoundedRectangleBorder(),
               ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: auth.loading
-                    ? null
-                    : () {
-                        GoRouter.of(context).push(
-                          '/auth/register?next=${Uri.encodeComponent(next ?? '')}',
-                        );
-                      },
-                child: const Text('Регистрация'),
-              ),
-            ],
-          ),
+              onPressed: auth.loading
+                  ? null
+                  : () {
+                      GoRouter.of(context).push(
+                        '/auth/register?next=${Uri.encodeComponent(next ?? '')}',
+                      );
+                    },
+              child: const Text('Регистрация'),
+            ),
+          ],
         ),
       ),
     );

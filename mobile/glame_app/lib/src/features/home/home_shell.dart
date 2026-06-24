@@ -5,13 +5,14 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/network/asset_url.dart';
 import '../../core/theme/glame_theme.dart';
+import '../../core/widgets/glame_auth_gate.dart';
 import '../auth/auth_controller.dart';
-import '../cart/cart_controller.dart';
 import '../cart/cart_screen.dart';
 import '../catalog/catalog_screen.dart';
 import '../customer/customer_cabinet_providers.dart';
 import '../customer/stylist_entry.dart';
 import '../looks/looks_screen.dart';
+import '../service/how_to_buy_screen.dart';
 import '../stores/stores_screen.dart';
 import '../wishlist/wishlist_screen.dart';
 import 'home_screen.dart';
@@ -44,7 +45,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   void initState() {
     super.initState();
-    index = widget.initialTab.clamp(0, 10);
+    index = widget.initialTab.clamp(0, 11);
     catalogCategory = _normalizeCategory(widget.initialCategory);
     catalogSearch = _normalizeSearch(widget.initialSearch);
     lookFilter = _normalizeLookFilter(widget.initialLookFilter);
@@ -54,7 +55,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   void didUpdateWidget(covariant HomeShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialTab != widget.initialTab) {
-      setState(() => index = widget.initialTab.clamp(0, 10));
+      setState(() => index = widget.initialTab.clamp(0, 11));
     }
     if (oldWidget.initialCategory != widget.initialCategory) {
       setState(
@@ -74,11 +75,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
-    final cart = ref.watch(cartControllerProvider);
-    final stylistStatus = ref.watch(stylistChatStatusProvider).asData?.value;
     final controller = ref.read(authControllerProvider.notifier);
     final isLoggedIn = auth.user != null;
-    final hasCartItems = cart.items.isNotEmpty;
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 900;
     final isHeroHome = index == 0;
@@ -120,16 +118,19 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 Positioned.fill(child: page),
                 _HeroTransparentTopBar(
                   onHomeTap: () => setState(() => index = 0),
-                  hasCartItems: hasCartItems,
                   onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
-                  onCartTap: hasCartItems
-                      ? () => setState(() {
-                          index = 3;
-                          catalogCategory = null;
-                          catalogSearch = null;
-                          lookFilter = null;
-                        })
-                      : null,
+                  onCartTap: () => setState(() {
+                    index = 11;
+                    catalogCategory = null;
+                    catalogSearch = null;
+                    lookFilter = null;
+                  }),
+                  onSearchTap: () => setState(() {
+                    index = 1;
+                    catalogCategory = null;
+                    catalogSearch = null;
+                    lookFilter = null;
+                  }),
                 ),
               ],
             )
@@ -138,21 +139,12 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 _GlameHeader(
                   selectedIndex: index,
                   isDesktop: isDesktop,
-                  isLoggedIn: isLoggedIn,
-                  hasCartItems: hasCartItems,
                   onSelected: (i) => setState(() {
                     index = i;
                     catalogCategory = null;
                     catalogSearch = null;
                     lookFilter = null;
                   }),
-                  onLogin: () => context.go(
-                    '/login?next=${Uri.encodeComponent('/home?tab=4')}',
-                  ),
-                  onLogout: () async {
-                    await controller.logout();
-                    setState(() => index = 0);
-                  },
                 ),
                 Expanded(child: page),
               ],
@@ -167,12 +159,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                 catalogSearch = null;
                 lookFilter = null;
               }),
-              onOpenStylist: () => showStylistContactSheet(
-                context,
-                source: 'bottom_nav',
-                scenario: 'live_stylist',
-                statusPayload: stylistStatus,
-              ),
             ),
     );
   }
@@ -193,13 +179,16 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
     if (index == 2) return const WishlistScreen();
     if (index == 3) {
+      return const SelectionMethodScreen(showAppBar: false);
+    }
+    if (index == 11) {
       return isLoggedIn
-          ? const CartScreen()
+          ? const CartScreen(showAppBar: false)
           : _LoginRequired(
               title: 'Корзина',
               subtitle: 'Войдите, чтобы оформить заказ',
               onLogin: () => context.go(
-                '/login?next=${Uri.encodeComponent('/home?tab=3')}',
+                '/login?next=${Uri.encodeComponent('/home?tab=11')}',
               ),
             );
     }
@@ -233,7 +222,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             'Мы помогаем подобрать украшение, оформить заказ, уточнить наличие и условия ухода. Гарантия на украшения GLAME действует 30 дней с момента покупки.',
       );
     }
-    if (index == 10) return const StoresScreen();
+    if (index == 10) return const StoresScreen(showAppBar: false);
     return const HomeScreen();
   }
 
@@ -256,105 +245,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 class _GlameHeader extends StatelessWidget {
   final int selectedIndex;
   final bool isDesktop;
-  final bool isLoggedIn;
-  final bool hasCartItems;
   final ValueChanged<int> onSelected;
-  final VoidCallback onLogin;
-  final Future<void> Function() onLogout;
 
   const _GlameHeader({
     required this.selectedIndex,
     required this.isDesktop,
-    required this.isLoggedIn,
-    required this.hasCartItems,
     required this.onSelected,
-    required this.onLogin,
-    required this.onLogout,
   });
 
   @override
   Widget build(BuildContext context) {
     final height = isDesktop ? 96.0 : 74.0;
-    return Material(
-      color: GlameColors.surface2,
-      child: Container(
+    return Builder(
+      builder: (context) => GlameTopAppBar(
         height: height,
-        padding: EdgeInsets.symmetric(horizontal: isDesktop ? 28 : 14),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: GlameColors.lightGray)),
-        ),
-        child: SafeArea(
-          bottom: false,
-          child: Row(
-            children: [
-              Builder(
-                builder: (context) => _HeaderIconButton(
-                  tooltip: 'Меню',
-                  onPressed: () => Scaffold.of(context).openDrawer(),
-                  icon: Icons.menu,
-                ),
-              ),
-              if (isDesktop) ...[
-                const SizedBox(width: 18),
-                _HeaderLink(
-                  label: 'Новинки',
-                  selected: selectedIndex == 6,
-                  onTap: () => onSelected(6),
-                ),
-                _HeaderLink(
-                  label: 'Каталог',
-                  selected: selectedIndex == 1,
-                  onTap: () => onSelected(1),
-                ),
-                _HeaderLink(
-                  label: 'Образы',
-                  selected: selectedIndex == 5,
-                  onTap: () => onSelected(5),
-                ),
-              ],
-              Expanded(
-                child: Center(
-                  child: InkWell(
-                    onTap: () => onSelected(0),
-                    child: Container(
-                      constraints: BoxConstraints(
-                        maxWidth: isDesktop ? 340 : 210,
-                      ),
-                      height: isDesktop ? 40 : 34,
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: GlameColors.lightGray),
-                        color: GlameColors.surface2,
-                      ),
-                      alignment: Alignment.center,
-                      child: GlameHeaderLogo(height: isDesktop ? 24 : 20),
-                    ),
-                  ),
-                ),
-              ),
-              if (hasCartItems) ...[
-                const SizedBox(width: 6),
-                _HeaderIconButton(
-                  tooltip: 'Корзина',
-                  onPressed: () => onSelected(3),
-                  icon: Icons.shopping_bag_outlined,
-                ),
-              ],
-              const SizedBox(width: 6),
-              _HeaderIconButton(
-                tooltip: 'Поиск',
-                onPressed: () => onSelected(1),
-                icon: Icons.search,
-              ),
-              if (isDesktop)
-                _HeaderIconButton(
-                  tooltip: isLoggedIn ? 'Выйти' : 'Войти',
-                  onPressed: isLoggedIn ? onLogout : onLogin,
-                  icon: isLoggedIn ? Icons.logout : Icons.person_outline,
-                ),
-            ],
-          ),
-        ),
+        onMenuPressed: () => Scaffold.of(context).openDrawer(),
+        onLogoPressed: () => onSelected(0),
+        onCartPressed: () => onSelected(11),
+        onSearchPressed: () => onSelected(1),
       ),
     );
   }
@@ -362,15 +270,15 @@ class _GlameHeader extends StatelessWidget {
 
 class _HeroTransparentTopBar extends StatelessWidget {
   final VoidCallback onHomeTap;
-  final bool hasCartItems;
   final VoidCallback onMenuTap;
   final VoidCallback? onCartTap;
+  final VoidCallback? onSearchTap;
 
   const _HeroTransparentTopBar({
     required this.onHomeTap,
-    required this.hasCartItems,
     required this.onMenuTap,
     this.onCartTap,
+    this.onSearchTap,
   });
 
   @override
@@ -387,7 +295,14 @@ class _HeroTransparentTopBar extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            const Positioned(left: 0, child: SizedBox(width: 44, height: 44)),
+            Positioned(
+              left: 0,
+              child: _HeroTopBarIconButton(
+                tooltip: 'Меню',
+                icon: Icons.menu,
+                onPressed: onMenuTap,
+              ),
+            ),
             Center(
               child: InkWell(
                 onTap: onHomeTap,
@@ -402,18 +317,16 @@ class _HeroTransparentTopBar extends StatelessWidget {
               right: 0,
               child: Row(
                 children: [
-                  if (hasCartItems) ...[
-                    _HeroTopBarIconButton(
-                      tooltip: 'Корзина',
-                      icon: Icons.shopping_bag_outlined,
-                      onPressed: onCartTap,
-                    ),
-                    const SizedBox(width: 8),
-                  ],
                   _HeroTopBarIconButton(
-                    tooltip: 'Меню',
-                    icon: Icons.menu,
-                    onPressed: onMenuTap,
+                    tooltip: 'Корзина',
+                    icon: Icons.shopping_bag_outlined,
+                    onPressed: onCartTap,
+                  ),
+                  const SizedBox(width: 4),
+                  _HeroTopBarIconButton(
+                    tooltip: 'Поиск',
+                    icon: Icons.search,
+                    onPressed: onSearchTap,
                   ),
                 ],
               ),
@@ -456,88 +369,13 @@ class _HeroTopBarIconButton extends StatelessWidget {
   }
 }
 
-class _HeaderLink extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _HeaderLink({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? GlameColors.textPrimary : Colors.transparent,
-                width: 1,
-              ),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 5),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
-                color: selected
-                    ? GlameColors.textPrimary
-                    : GlameColors.textSecondary,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderIconButton extends StatelessWidget {
-  final String tooltip;
-  final VoidCallback onPressed;
-  final IconData icon;
-
-  const _HeaderIconButton({
-    required this.tooltip,
-    required this.onPressed,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      visualDensity: VisualDensity.compact,
-      splashRadius: 20,
-      style: IconButton.styleFrom(
-        foregroundColor: GlameColors.textPrimary,
-        backgroundColor: GlameColors.surface2,
-        shape: const RoundedRectangleBorder(),
-      ),
-      icon: Icon(icon, size: 23),
-    );
-  }
-}
-
 class _GlameBottomBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelected;
-  final VoidCallback onOpenStylist;
 
   const _GlameBottomBar({
     required this.selectedIndex,
     required this.onSelected,
-    required this.onOpenStylist,
   });
 
   @override
@@ -569,8 +407,8 @@ class _GlameBottomBar extends StatelessWidget {
               ),
               _BottomNavItem(
                 label: 'Подбор',
-                selected: false,
-                onTap: onOpenStylist,
+                selected: selectedIndex == 3,
+                onTap: () => onSelected(3),
               ),
               _BottomNavItem(
                 label: 'Профиль',
@@ -664,44 +502,89 @@ class _GlameDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: GlameColors.textPrimary,
+      backgroundColor: GlameColors.nearBlack,
       shape: const RoundedRectangleBorder(),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
           child: ListView(
             children: [
-              Image.asset(GlameAssets.logoGraph, height: 64),
-              const SizedBox(height: 34),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Image.asset(
+                  GlameAssets.logoSilver,
+                  height: 46,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(height: 28),
+              const _DrawerSectionLabel('Навигация'),
               _DrawerItem('Главная', 0, selectedIndex, onSelected),
+              _DrawerItem('Украшения', 1, selectedIndex, onSelected),
+              _DrawerItem('Мой стиль', 2, selectedIndex, onSelected),
+              _DrawerItem('Подбор', 3, selectedIndex, onSelected),
+              _DrawerItem('Профиль', 4, selectedIndex, onSelected),
+              const SizedBox(height: 20),
+              const _DrawerSectionLabel('Витрина'),
               _DrawerItem('Новинки', 6, selectedIndex, onSelected),
               _DrawerItem('Коллекции', 7, selectedIndex, onSelected),
-              _DrawerItem('Каталог', 1, selectedIndex, onSelected),
-              _DrawerItem('Образы', 5, selectedIndex, onSelected),
-              _DrawerItem('Сертификат', 8, selectedIndex, onSelected),
+              _DrawerRouteItem(
+                label: 'Бренды',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.go('/brands');
+                },
+              ),
+              _DrawerItem('Пространства', 10, selectedIndex, onSelected),
               _DrawerItem('Сервис', 9, selectedIndex, onSelected),
-              _DrawerItem('Магазины', 10, selectedIndex, onSelected),
-              _DrawerItem('Избранное', 2, selectedIndex, onSelected),
-              _DrawerItem('Корзина', 3, selectedIndex, onSelected),
-              _DrawerItem('Профиль', 4, selectedIndex, onSelected),
+              _DrawerItem('Сертификат', 8, selectedIndex, onSelected),
               const SizedBox(height: 24),
-              TextButton(
-                onPressed: isLoggedIn ? onLogout : onLogin,
-                child: Text(isLoggedIn ? 'Выйти' : 'Войти'),
+              Container(height: 1, color: GlameColors.borderGray),
+              const SizedBox(height: 18),
+              const _DrawerSectionLabel('Действия'),
+              _DrawerItem('Корзина', 11, selectedIndex, onSelected),
+              _DrawerRouteItem(
+                label: isLoggedIn ? 'Выйти' : 'Войти',
+                onTap: isLoggedIn ? onLogout : onLogin,
               ),
               const SizedBox(height: 40),
               Image.asset(
-                GlameAssets.logoGraph,
+                GlameAssets.logoSilver,
                 height: 22,
                 alignment: Alignment.centerLeft,
               ),
               const SizedBox(height: 8),
               const Text(
                 'Новости и коллекции в наших соцсетях',
-                style: TextStyle(fontSize: 16),
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.35,
+                  color: GlameColors.coldLightGray,
+                ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerSectionLabel extends StatelessWidget {
+  final String label;
+
+  const _DrawerSectionLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 10,
+          letterSpacing: 1.4,
+          color: GlameColors.steelGray,
         ),
       ),
     );
@@ -731,11 +614,48 @@ class _DrawerItem extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 28,
+            fontSize: 24,
+            height: 1.05,
             color: selected
-                ? GlameColors.textPrimary
-                : GlameColors.textSecondary,
+                ? GlameColors.whiteGlame
+                : GlameColors.coldLightGray,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DrawerRouteItem extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _DrawerRouteItem({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 24,
+                  height: 1.05,
+                  color: GlameColors.coldLightGray,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: GlameColors.steelGray,
+            ),
+          ],
         ),
       ),
     );
@@ -750,30 +670,22 @@ class _StaticInfoScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
-          children: [
-            Text(title, style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 18),
-            Text(
-              body,
-              style: const TextStyle(
-                height: 1.45,
-                color: GlameColors.textSecondary,
-              ),
+    return GlamePage(
+      safeTop: false,
+      padding: EdgeInsets.zero,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+        children: [
+          GlameSectionHeader(title: title, subtitle: body),
+          const SizedBox(height: 28),
+          GlamePanel(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
+            color: GlameColors.surface,
+            child: Center(
+              child: Image.asset(GlameAssets.logoBlack, height: 72),
             ),
-            const SizedBox(height: 28),
-            DecoratedBox(
-              decoration: const BoxDecoration(color: GlameColors.surface),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Image.asset(GlameAssets.logoBlack, height: 72),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -793,540 +705,746 @@ class _Profile extends ConsumerWidget {
     final historyAsync = ref.watch(customerPurchaseHistoryProvider);
     final savedLooksAsync = ref.watch(customerSavedLooksProvider);
 
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        Text(
-          'Личный кабинет',
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-        const SizedBox(height: 12),
-        profileAsync.when(
-          data: (profile) {
-            final fullName = (profile['full_name'] as String?)?.trim();
-            final phone = (profile['phone'] as String?)?.trim();
-            final points = (profile['loyalty_points'] as num?)?.toInt() ?? 0;
-            final totalPurchases =
-                (profile['total_purchases'] as num?)?.toInt() ?? 0;
-            final totalSpent = (profile['total_spent'] as num?) ?? 0;
-            final averageCheck = (profile['average_check'] as num?) ?? 0;
-            final lastPurchaseDate = (profile['last_purchase_date'] as String?)
-                ?.trim();
-            final preferredDelivery = profile['preferred_delivery'] is Map
-                ? Map<String, dynamic>.from(
-                    profile['preferred_delivery'] as Map,
-                  )
-                : <String, dynamic>{};
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(fullName?.isNotEmpty == true ? fullName! : 'Покупатель'),
-                const SizedBox(height: 6),
-                Text(
-                  phone?.isNotEmpty == true ? phone! : (email ?? 'Без email'),
-                ),
-                const SizedBox(height: 18),
-                _ProfileMetricCard(
-                  title: 'Стилист GLAME',
-                  value: 'Чат',
-                  subtitle: 'Персональный подбор украшений и образов',
-                  onTap: () => showStylistContactSheet(
-                    context,
-                    source: 'profile_screen',
-                    scenario: 'live_stylist',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _ProfileMetricCard(
-                  title: 'Бонусные баллы',
-                  value: '$points',
-                  subtitle: '1 балл = 1 ₽ скидки',
-                ),
-                const SizedBox(height: 12),
-                _ProfileMetricCard(
-                  title: 'Покупки',
-                  value: '$totalPurchases',
-                  subtitle:
-                      'На сумму ${_formatRub(totalSpent)} · Средний чек ${_formatRub(averageCheck)}',
-                ),
-                if (lastPurchaseDate != null &&
-                    lastPurchaseDate.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Последняя покупка: ${_formatIsoDate(lastPurchaseDate)}',
-                    style: const TextStyle(color: GlameColors.textSecondary),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                _ProfileMetricCard(
-                  title: 'Доставка',
-                  value: _deliveryShortLabel(preferredDelivery),
-                  subtitle: _deliverySummary(preferredDelivery),
-                ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: () => _editPreferredDelivery(
-                    context: context,
-                    ref: ref,
-                    currentDelivery: preferredDelivery,
-                  ),
-                  child: const Text('Изменить доставку'),
-                ),
-              ],
-            );
-          },
-          loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: CircularProgressIndicator(),
+    return Theme(
+      data: Theme.of(context).copyWith(
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: GlameColors.whiteGlame,
+            foregroundColor: GlameColors.nearBlack,
+            shape: const RoundedRectangleBorder(),
           ),
-          error: (_, _) => Text(email ?? 'Без email'),
         ),
-        const SizedBox(height: 20),
-        loyaltyAsync.when(
-          data: (loyalty) {
-            final info = (loyalty['program_info'] is Map)
-                ? Map<String, dynamic>.from(loyalty['program_info'] as Map)
-                : <String, dynamic>{};
-            final levelsRaw = info['levels'];
-            final levels = levelsRaw is List
-                ? levelsRaw
-                      .whereType<Map>()
-                      .map((x) => Map<String, dynamic>.from(x))
-                      .toList()
-                : <Map<String, dynamic>>[];
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: GlameColors.whiteGlame,
+            side: const BorderSide(color: GlameColors.borderGray),
+            shape: const RoundedRectangleBorder(),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: GlameColors.whiteGlame,
+            shape: const RoundedRectangleBorder(),
+          ),
+        ),
+      ),
+      child: GlamePage(
+        dark: true,
+        safeTop: false,
+        padding: EdgeInsets.zero,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+          children: [
+            const GlameSectionHeader(
+              title: 'ЛИЧНЫЙ\nКАБИНЕТ',
+              subtitle:
+                  'Покупки, бонусы, сохраненные образы и связь со стилистом',
+              dark: true,
+            ),
+            const SizedBox(height: 24),
+            profileAsync.when(
+              data: (profile) {
+                final fullName = (profile['full_name'] as String?)?.trim();
+                final phone = (profile['phone'] as String?)?.trim();
+                final points =
+                    (profile['loyalty_points'] as num?)?.toInt() ?? 0;
+                final totalPurchases =
+                    (profile['total_purchases'] as num?)?.toInt() ?? 0;
+                final totalSpent = (profile['total_spent'] as num?) ?? 0;
+                final averageCheck = (profile['average_check'] as num?) ?? 0;
+                final lastPurchaseDate =
+                    (profile['last_purchase_date'] as String?)?.trim();
+                final preferredDelivery = profile['preferred_delivery'] is Map
+                    ? Map<String, dynamic>.from(
+                        profile['preferred_delivery'] as Map,
+                      )
+                    : <String, dynamic>{};
+                final displayName = fullName?.isNotEmpty == true
+                    ? fullName!
+                    : 'Покупатель GLAME';
+                final contact = phone?.isNotEmpty == true
+                    ? phone!
+                    : (email ?? 'Без email');
 
-            final profile = profileAsync.maybeWhen(
-              data: (x) => x,
-              orElse: () => const <String, dynamic>{},
-            );
-            final purchases =
-                (profile['total_purchases'] as num?)?.toInt() ?? 0;
-            final spent = (profile['total_spent'] as num?)?.toDouble() ?? 0;
-            final progressRaw = loyalty['level_progress'];
-            final progress = progressRaw is Map
-                ? _progressFromApi(Map<String, dynamic>.from(progressRaw))
-                : _resolveNextLevel(levels, purchases, spent);
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Бонусная программа',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                if (progress != null) ...[
-                  Text(
-                    'До уровня "${progress.nextLevelName}" осталось купить на ${_formatRub(progress.remainingTotal)}',
-                    style: const TextStyle(color: GlameColors.textSecondary),
-                  ),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: progress.progress.clamp(0, 1),
-                    minHeight: 8,
-                    backgroundColor: GlameColors.surface,
-                    color: GlameColors.gold,
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                if (levels.isNotEmpty)
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: levels
-                        .map((lvl) => _buildLevelChip(lvl))
-                        .toList(growable: false),
-                  ),
-              ],
-            );
-          },
-          loading: () => const SizedBox.shrink(),
-          error: (_, _) => const SizedBox.shrink(),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'Сохраненные образы',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 10),
-        savedLooksAsync.when(
-          data: (rows) {
-            if (rows.isEmpty) {
-              return const Text(
-                'Пока нет сохраненных образов',
-                style: TextStyle(color: GlameColors.textSecondary),
-              );
-            }
-            return Column(
-              children: rows
-                  .take(8)
-                  .map((row) {
-                    final name = (row['look_name'] as String?)?.trim();
-                    final imageUrl = resolveAssetUrl(row['look_image_url']);
-                    final style = (row['look_style'] as String?)?.trim();
-                    final mood = (row['look_mood'] as String?)?.trim();
-                    final notes = (row['notes'] as String?)?.trim();
-                    final createdAt =
-                        (row['created_at'] as String?)?.trim() ?? '';
-                    final subtitleParts = <String>[
-                      if (style != null && style.isNotEmpty) style,
-                      if (mood != null && mood.isNotEmpty) mood,
-                    ];
-                    final lookId = (row['look_id'] as String?)?.trim() ?? '';
-                    final savedLookId = (row['id'] as String?)?.trim() ?? '';
-                    return InkWell(
-                      onTap: lookId.isEmpty
-                          ? null
-                          : () => context.push('/look/$lookId'),
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: GlameColors.surface,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: SizedBox(
-                                    width: 64,
-                                    height: 64,
-                                    child: imageUrl == null
-                                        ? Container(color: GlameColors.surface2)
-                                        : Image.network(
-                                            imageUrl,
-                                            fit: BoxFit.cover,
-                                          ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        name?.isNotEmpty == true
-                                            ? name!
-                                            : 'Образ',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      if (subtitleParts.isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          subtitleParts.join(' · '),
-                                          style: const TextStyle(
-                                            color: GlameColors.textSecondary,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                      if (notes != null &&
-                                          notes.isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          notes,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: GlameColors.textSecondary,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Сохранен: ${_formatIsoDate(createdAt)}',
-                                        style: const TextStyle(
-                                          color: GlameColors.textSecondary,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GlamePanel(
+                      dark: true,
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'ПРОФИЛЬ',
+                            style: TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 1.6,
+                              color: GlameColors.steelGray,
                             ),
-                            const SizedBox(height: 8),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: OutlinedButton(
-                                onPressed: savedLookId.isEmpty
-                                    ? null
-                                    : () => _confirmDeleteSavedLook(
-                                        context: context,
-                                        ref: ref,
-                                        savedLookId: savedLookId,
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      displayName,
+                                      style: const TextStyle(
+                                        fontSize: 30,
+                                        height: 1.02,
+                                        fontWeight: FontWeight.w400,
+                                        color: GlameColors.whiteGlame,
                                       ),
-                                child: const Text('Удалить из сохраненных'),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      contact,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: GlameColors.coldLightGray,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '$points',
+                                    style: const TextStyle(
+                                      fontSize: 34,
+                                      height: 0.95,
+                                      color: GlameColors.whiteGlame,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'БОНУСОВ',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      letterSpacing: 1.2,
+                                      color: GlameColors.steelGray,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          Container(
+                            height: 1,
+                            color: GlameColors.borderGray.withValues(
+                              alpha: 0.7,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _ProfileInlineStat(
+                                  label: 'Покупки',
+                                  value: '$totalPurchases',
+                                ),
+                              ),
+                              Expanded(
+                                child: _ProfileInlineStat(
+                                  label: 'Сумма',
+                                  value: _formatRub(totalSpent),
+                                ),
+                              ),
+                              Expanded(
+                                child: _ProfileInlineStat(
+                                  label: 'Средний чек',
+                                  value: _formatRub(averageCheck),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (lastPurchaseDate != null &&
+                              lastPurchaseDate.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              'Последняя покупка: ${_formatIsoDate(lastPurchaseDate)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: GlameColors.coldLightGray,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    _ProfileMetricGrid(
+                      children: [
+                        _ProfileMetricCard(
+                          title: 'Стилист GLAME',
+                          value: 'Чат',
+                          subtitle: 'Персональный подбор',
+                          icon: Icons.support_agent_outlined,
+                          onTap: () => showStylistContactSheet(
+                            context,
+                            source: 'profile_screen',
+                            scenario: 'live_stylist',
+                          ),
+                        ),
+                        _ProfileMetricCard(
+                          title: 'Избранное',
+                          value: 'Сохранить',
+                          subtitle: 'Товары и образы',
+                          icon: Icons.favorite_border,
+                          onTap: () => context.go('/home?tab=2'),
+                        ),
+                        _ProfileMetricCard(
+                          title: 'Доставка',
+                          value: _deliveryShortLabel(preferredDelivery),
+                          subtitle: _deliverySummary(preferredDelivery),
+                          icon: Icons.local_shipping_outlined,
+                          onTap: () => _editPreferredDelivery(
+                            context: context,
+                            ref: ref,
+                            currentDelivery: preferredDelivery,
+                          ),
+                        ),
+                        _ProfileMetricCard(
+                          title: 'Корзина',
+                          value: 'Заказы',
+                          subtitle: 'Оформление и оплата',
+                          icon: Icons.shopping_bag_outlined,
+                          onTap: () => context.go('/home?tab=11'),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: CircularProgressIndicator(color: GlameColors.whiteGlame),
+              ),
+              error: (_, _) => Text(
+                email ?? 'Без email',
+                style: const TextStyle(color: GlameColors.coldLightGray),
+              ),
+            ),
+            const SizedBox(height: 20),
+            loyaltyAsync.when(
+              data: (loyalty) {
+                final info = (loyalty['program_info'] is Map)
+                    ? Map<String, dynamic>.from(loyalty['program_info'] as Map)
+                    : <String, dynamic>{};
+                final levelsRaw = info['levels'];
+                final levels = levelsRaw is List
+                    ? levelsRaw
+                          .whereType<Map>()
+                          .map((x) => Map<String, dynamic>.from(x))
+                          .toList()
+                    : <Map<String, dynamic>>[];
+
+                final profile = profileAsync.maybeWhen(
+                  data: (x) => x,
+                  orElse: () => const <String, dynamic>{},
+                );
+                final purchases =
+                    (profile['total_purchases'] as num?)?.toInt() ?? 0;
+                final spent = (profile['total_spent'] as num?)?.toDouble() ?? 0;
+                final progressRaw = loyalty['level_progress'];
+                final progress = progressRaw is Map
+                    ? _progressFromApi(Map<String, dynamic>.from(progressRaw))
+                    : _resolveNextLevel(levels, purchases, spent);
+
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: GlameColors.graphite.withValues(alpha: 0.72),
+                    border: Border.all(color: GlameColors.borderGray),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _ProfileSectionHeading(
+                        eyebrow: 'LOYALTY',
+                        title: 'Бонусная программа',
+                      ),
+                      const SizedBox(height: 14),
+                      if (progress != null) ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'До уровня "${progress.nextLevelName}"',
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  color: GlameColors.whiteGlame,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              _formatRub(progress.remainingTotal),
+                              style: const TextStyle(
+                                fontSize: 17,
+                                color: GlameColors.whiteGlame,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    );
-                  })
-                  .toList(growable: false),
-            );
-          },
-          loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: CircularProgressIndicator(),
-          ),
-          error: (_, _) => const Text(
-            'Не удалось загрузить сохраненные образы',
-            style: TextStyle(color: GlameColors.textSecondary),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text('Мои заказы', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 10),
-        ordersAsync.when(
-          data: (rows) {
-            if (rows.isEmpty) {
-              return const Text(
-                'Заказов пока нет',
-                style: TextStyle(color: GlameColors.textSecondary),
-              );
-            }
-            return Column(
-              children: rows
-                  .map((row) {
-                    final orderId = (row['id'] as String?)?.trim() ?? '';
-                    final orderStatus =
-                        ((row['order_status'] ?? row['status']) as String?)
-                            ?.trim() ??
-                        'pending';
-                    final amount = (row['total_amount'] as num?)?.toInt() ?? 0;
-                    final createdAt =
-                        (row['created_at'] as String?)?.trim() ?? '';
-                    final payment = row['payment'] is Map
-                        ? Map<String, dynamic>.from(row['payment'] as Map)
-                        : <String, dynamic>{};
-                    final paymentId =
-                        (payment['payment_id'] ?? payment['id'] as Object?)
-                            ?.toString();
-                    final paymentStatus = (payment['status'] as String?)
-                        ?.trim();
-                    final confirmationUrl =
-                        (payment['confirmation_url'] as String?)?.trim();
-                    final delivery = row['delivery'] is Map
-                        ? Map<String, dynamic>.from(row['delivery'] as Map)
-                        : <String, dynamic>{};
-                    final canPay =
-                        paymentStatus != null &&
-                        paymentStatus != 'succeeded' &&
-                        confirmationUrl != null &&
-                        confirmationUrl.isNotEmpty;
-                    final canDelete =
-                        (paymentStatus ?? 'pending') != 'succeeded' ||
-                        orderStatus == 'shipped';
+                        const SizedBox(height: 10),
+                        LinearProgressIndicator(
+                          value: progress.progress.clamp(0, 1),
+                          minHeight: 4,
+                          backgroundColor: GlameColors.nearBlack,
+                          color: GlameColors.whiteGlame,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (levels.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: levels
+                              .map((lvl) => _buildLevelChip(lvl))
+                              .toList(growable: false),
+                        ),
+                    ],
+                  ),
+                );
+              },
+              loading: () => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
+            ),
+            const SizedBox(height: 24),
+            const _ProfileSectionHeading(
+              eyebrow: 'STYLE',
+              title: 'Сохраненные образы',
+            ),
+            const SizedBox(height: 10),
+            savedLooksAsync.when(
+              data: (rows) {
+                if (rows.isEmpty) {
+                  return const _ProfileEmptyPanel(
+                    text: 'Пока нет сохраненных образов',
+                  );
+                }
+                return _buildSavedLooksCarousel(
+                  context: context,
+                  ref: ref,
+                  rows: rows,
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: CircularProgressIndicator(color: GlameColors.whiteGlame),
+              ),
+              error: (_, _) => const Text(
+                'Не удалось загрузить сохраненные образы',
+                style: TextStyle(color: GlameColors.coldLightGray),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const _ProfileSectionHeading(
+              eyebrow: 'ORDERS',
+              title: 'Мои заказы',
+            ),
+            const SizedBox(height: 10),
+            ordersAsync.when(
+              data: (rows) {
+                if (rows.isEmpty) {
+                  return const _ProfileEmptyPanel(text: 'Заказов пока нет');
+                }
+                return Column(
+                  children: rows
+                      .map((row) {
+                        final orderId = (row['id'] as String?)?.trim() ?? '';
+                        final orderStatus =
+                            ((row['order_status'] ?? row['status']) as String?)
+                                ?.trim() ??
+                            'pending';
+                        final amount =
+                            (row['total_amount'] as num?)?.toInt() ?? 0;
+                        final createdAt =
+                            (row['created_at'] as String?)?.trim() ?? '';
+                        final payment = row['payment'] is Map
+                            ? Map<String, dynamic>.from(row['payment'] as Map)
+                            : <String, dynamic>{};
+                        final paymentId =
+                            (payment['payment_id'] ?? payment['id'] as Object?)
+                                ?.toString();
+                        final paymentStatus = (payment['status'] as String?)
+                            ?.trim();
+                        final confirmationUrl =
+                            (payment['confirmation_url'] as String?)?.trim();
+                        final delivery = row['delivery'] is Map
+                            ? Map<String, dynamic>.from(row['delivery'] as Map)
+                            : <String, dynamic>{};
+                        final canPay =
+                            paymentStatus != null &&
+                            paymentStatus != 'succeeded' &&
+                            confirmationUrl != null &&
+                            confirmationUrl.isNotEmpty;
+                        final canDelete =
+                            (paymentStatus ?? 'pending') != 'succeeded' ||
+                            orderStatus == 'shipped';
 
-                    return Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: GlameColors.surface,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Заказ #${orderId.length > 8 ? orderId.substring(0, 8) : orderId}',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                        return Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: GlameColors.graphite,
+                            border: Border.all(color: GlameColors.borderGray),
+                            borderRadius: BorderRadius.zero,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${_formatIsoDate(createdAt)} · ${_formatRub(amount / 100)}',
-                            style: const TextStyle(
-                              color: GlameColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Статус заказа: ${_orderStatusLabel(orderStatus)}',
-                            style: const TextStyle(
-                              color: GlameColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Статус оплаты: ${_paymentStatusLabel(paymentStatus)}',
-                            style: TextStyle(
-                              color: paymentStatus == 'succeeded'
-                                  ? GlameColors.gold
-                                  : GlameColors.gold,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _deliverySummary(delivery),
-                            style: const TextStyle(
-                              color: GlameColors.textSecondary,
-                            ),
-                          ),
-                          if (paymentId != null && paymentId.isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                OutlinedButton(
-                                  onPressed: () async {
-                                    final messenger = ScaffoldMessenger.of(
-                                      context,
-                                    );
-                                    try {
-                                      await ref
-                                          .read(customerCabinetApiProvider)
-                                          .refreshPayment(paymentId);
-                                      ref.invalidate(customerOrdersProvider);
-                                      messenger.showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Статус оплаты обновлен',
-                                          ),
-                                        ),
-                                      );
-                                    } catch (_) {
-                                      messenger.showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Не удалось обновить статус оплаты',
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  child: const Text('Обновить статус'),
-                                ),
-                                if (canPay)
-                                  FilledButton(
-                                    onPressed: () async {
-                                      final uri = Uri.tryParse(confirmationUrl);
-                                      if (uri == null) return;
-                                      await launchUrl(
-                                        uri,
-                                        mode: LaunchMode.externalApplication,
-                                      );
-                                    },
-                                    child: const Text('Оплатить'),
-                                  ),
-                              ],
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (canDelete)
-                                OutlinedButton(
-                                  onPressed: () => _confirmDeleteOrder(
-                                    context: context,
-                                    ref: ref,
-                                    orderId: orderId,
-                                  ),
-                                  child: const Text('Удалить заказ'),
+                              Text(
+                                'Заказ #${orderId.length > 8 ? orderId.substring(0, 8) : orderId}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: GlameColors.whiteGlame,
                                 ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${_formatIsoDate(createdAt)} · ${_formatRub(amount / 100)}',
+                                style: const TextStyle(
+                                  color: GlameColors.coldLightGray,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Статус заказа: ${_orderStatusLabel(orderStatus)}',
+                                style: const TextStyle(
+                                  color: GlameColors.coldLightGray,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Статус оплаты: ${_paymentStatusLabel(paymentStatus)}',
+                                style: const TextStyle(
+                                  color: GlameColors.whiteGlame,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _deliverySummary(delivery),
+                                style: const TextStyle(
+                                  color: GlameColors.coldLightGray,
+                                ),
+                              ),
+                              if (paymentId != null &&
+                                  paymentId.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    OutlinedButton(
+                                      onPressed: () async {
+                                        final messenger = ScaffoldMessenger.of(
+                                          context,
+                                        );
+                                        try {
+                                          await ref
+                                              .read(customerCabinetApiProvider)
+                                              .refreshPayment(paymentId);
+                                          ref.invalidate(
+                                            customerOrdersProvider,
+                                          );
+                                          messenger.showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Статус оплаты обновлен',
+                                              ),
+                                            ),
+                                          );
+                                        } catch (_) {
+                                          messenger.showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Не удалось обновить статус оплаты',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      child: const Text('Обновить статус'),
+                                    ),
+                                    if (canPay)
+                                      FilledButton(
+                                        onPressed: () async {
+                                          final uri = Uri.tryParse(
+                                            confirmationUrl,
+                                          );
+                                          if (uri == null) return;
+                                          await launchUrl(
+                                            uri,
+                                            mode:
+                                                LaunchMode.externalApplication,
+                                          );
+                                        },
+                                        child: const Text('Оплатить'),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  if (canDelete)
+                                    OutlinedButton(
+                                      onPressed: () => _confirmDeleteOrder(
+                                        context: context,
+                                        ref: ref,
+                                        orderId: orderId,
+                                      ),
+                                      child: const Text('Удалить заказ'),
+                                    ),
+                                ],
+                              ),
                             ],
                           ),
-                        ],
-                      ),
-                    );
-                  })
-                  .toList(growable: false),
-            );
-          },
-          loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: CircularProgressIndicator(),
-          ),
-          error: (_, _) => const Text(
-            'Не удалось загрузить заказы',
-            style: TextStyle(color: GlameColors.textSecondary),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Text('История покупок', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 10),
-        historyAsync.when(
-          data: (rows) {
-            if (rows.isEmpty) {
-              return const Text(
-                'Покупок пока нет',
-                style: TextStyle(color: GlameColors.textSecondary),
-              );
-            }
-            return Column(
-              children: rows
-                  .map((row) {
-                    final name = (row['product_name'] as String?)?.trim();
-                    final date =
-                        (row['purchase_date'] as String?)?.trim() ?? '';
-                    final amount = (row['total_amount'] as num?) ?? 0;
-                    final quantity = (row['quantity'] as num?)?.toInt() ?? 1;
-                    return Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: GlameColors.surface,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name?.isNotEmpty == true ? name! : 'Товар',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                        );
+                      })
+                      .toList(growable: false),
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: CircularProgressIndicator(color: GlameColors.whiteGlame),
+              ),
+              error: (_, _) => const Text(
+                'Не удалось загрузить заказы',
+                style: TextStyle(color: GlameColors.coldLightGray),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const _ProfileSectionHeading(
+              eyebrow: 'HISTORY',
+              title: 'История покупок',
+            ),
+            const SizedBox(height: 10),
+            historyAsync.when(
+              data: (rows) {
+                if (rows.isEmpty) {
+                  return const _ProfileEmptyPanel(text: 'Покупок пока нет');
+                }
+                return Column(
+                  children: rows
+                      .map((row) {
+                        final name = (row['product_name'] as String?)?.trim();
+                        final date =
+                            (row['purchase_date'] as String?)?.trim() ?? '';
+                        final amount = (row['total_amount'] as num?) ?? 0;
+                        final quantity =
+                            (row['quantity'] as num?)?.toInt() ?? 1;
+                        return Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: GlameColors.graphite,
+                            border: Border.all(color: GlameColors.borderGray),
+                            borderRadius: BorderRadius.zero,
                           ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name?.isNotEmpty == true ? name! : 'Товар',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: GlameColors.whiteGlame,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${_formatIsoDate(date)} · $quantity шт.',
+                                style: const TextStyle(
+                                  color: GlameColors.coldLightGray,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatRub(amount),
+                                style: const TextStyle(
+                                  color: GlameColors.whiteGlame,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      })
+                      .toList(growable: false),
+                );
+              },
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: CircularProgressIndicator(color: GlameColors.whiteGlame),
+              ),
+              error: (_, _) => const Text(
+                'Не удалось загрузить историю покупок',
+                style: TextStyle(color: GlameColors.coldLightGray),
+              ),
+            ),
+            const SizedBox(height: 32),
+            OutlinedButton(onPressed: onLogout, child: const Text('Выйти')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSavedLooksCarousel({
+    required BuildContext context,
+    required WidgetRef ref,
+    required List<Map<String, dynamic>> rows,
+  }) {
+    final visibleRows = rows.take(8).toList(growable: false);
+    return SizedBox(
+      height: 180,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: visibleRows.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final row = visibleRows[index];
+          final name = (row['look_name'] as String?)?.trim();
+          final imageUrl = resolveAssetUrl(row['look_image_url']);
+          final style = (row['look_style'] as String?)?.trim();
+          final mood = (row['look_mood'] as String?)?.trim();
+          final notes = (row['notes'] as String?)?.trim();
+          final createdAt = (row['created_at'] as String?)?.trim() ?? '';
+          final subtitleParts = <String>[
+            if (style != null && style.isNotEmpty) style,
+            if (mood != null && mood.isNotEmpty) mood,
+          ];
+          final lookId = (row['look_id'] as String?)?.trim() ?? '';
+          final savedLookId = (row['id'] as String?)?.trim() ?? '';
+
+          return InkWell(
+            onTap: lookId.isEmpty ? null : () => context.push('/look/$lookId'),
+            borderRadius: BorderRadius.zero,
+            child: Container(
+              width: 236,
+              decoration: BoxDecoration(
+                color: GlameColors.graphite,
+                border: Border.all(color: GlameColors.borderGray),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 92,
+                    width: double.infinity,
+                    child: imageUrl == null
+                        ? Container(color: GlameColors.nearBlack)
+                        : Image.network(imageUrl, fit: BoxFit.cover),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name?.isNotEmpty == true ? name! : 'Образ',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: GlameColors.whiteGlame,
+                          ),
+                        ),
+                        if (subtitleParts.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
-                            '${_formatIsoDate(date)} · $quantity шт.',
+                            subtitleParts.join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: GlameColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _formatRub(amount),
-                            style: const TextStyle(
-                              color: GlameColors.gold,
-                              fontWeight: FontWeight.w600,
+                              color: GlameColors.coldLightGray,
+                              fontSize: 12,
                             ),
                           ),
                         ],
-                      ),
-                    );
-                  })
-                  .toList(growable: false),
-            );
-          },
-          loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: CircularProgressIndicator(),
-          ),
-          error: (_, _) => const Text(
-            'Не удалось загрузить историю покупок',
-            style: TextStyle(color: GlameColors.textSecondary),
-          ),
-        ),
-        const SizedBox(height: 32),
-        OutlinedButton(onPressed: onLogout, child: const Text('Выйти')),
-      ],
+                        if (notes != null && notes.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            notes,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: GlameColors.coldLightGray,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatIsoDate(createdAt),
+                          style: const TextStyle(
+                            color: GlameColors.steelGray,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    height: 1,
+                    color: GlameColors.borderGray.withValues(alpha: 0.55),
+                  ),
+                  SizedBox(
+                    height: 38,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'СМОТРЕТЬ',
+                            style: TextStyle(
+                              fontSize: 10,
+                              letterSpacing: 1.1,
+                              color: GlameColors.whiteGlame,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Удалить из сохраненных',
+                          onPressed: savedLookId.isEmpty
+                              ? null
+                              : () => _confirmDeleteSavedLook(
+                                  context: context,
+                                  ref: ref,
+                                  savedLookId: savedLookId,
+                                ),
+                          icon: const Icon(
+                            Icons.close,
+                            size: 18,
+                            color: GlameColors.coldLightGray,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -1353,14 +1471,15 @@ class _Profile extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: GlameColors.surface,
-        borderRadius: BorderRadius.circular(999),
+        color: GlameColors.graphite,
+        border: Border.all(color: GlameColors.borderGray),
+        borderRadius: BorderRadius.zero,
       ),
       child: Text(
         subtitle.isEmpty
             ? (name?.isNotEmpty == true ? name! : 'Уровень')
             : '${name ?? 'Уровень'}: $subtitle',
-        style: const TextStyle(fontSize: 12, color: GlameColors.textSecondary),
+        style: const TextStyle(fontSize: 12, color: GlameColors.coldLightGray),
       ),
     );
   }
@@ -1617,16 +1736,138 @@ class _Profile extends ConsumerWidget {
   }
 }
 
+class _ProfileInlineStat extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ProfileInlineStat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 10,
+            letterSpacing: 1.1,
+            color: GlameColors.steelGray,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 15, color: GlameColors.whiteGlame),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileSectionHeading extends StatelessWidget {
+  final String eyebrow;
+  final String title;
+
+  const _ProfileSectionHeading({required this.eyebrow, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                eyebrow,
+                style: const TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 1.4,
+                  color: GlameColors.steelGray,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 22,
+                  height: 1.05,
+                  color: GlameColors.whiteGlame,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(width: 42, height: 1, color: GlameColors.borderGray),
+      ],
+    );
+  }
+}
+
+class _ProfileEmptyPanel extends StatelessWidget {
+  final String text;
+
+  const _ProfileEmptyPanel({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+      decoration: BoxDecoration(
+        color: GlameColors.graphite.withValues(alpha: 0.48),
+        border: Border.all(color: GlameColors.borderGray),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(color: GlameColors.coldLightGray),
+      ),
+    );
+  }
+}
+
+class _ProfileMetricGrid extends StatelessWidget {
+  final List<Widget> children;
+
+  const _ProfileMetricGrid({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 560 ? 4 : 2;
+        final gap = 10.0;
+        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: children
+              .map((child) => SizedBox(width: width, child: child))
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+}
+
 class _ProfileMetricCard extends StatelessWidget {
   final String title;
   final String value;
   final String subtitle;
+  final IconData icon;
   final VoidCallback? onTap;
 
   const _ProfileMetricCard({
     required this.title,
     required this.value,
     required this.subtitle,
+    required this.icon,
     this.onTap,
   });
 
@@ -1634,34 +1875,62 @@ class _ProfileMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.zero,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: GlameColors.surface,
-          borderRadius: BorderRadius.circular(10),
+          color: GlameColors.graphite,
+          border: Border.all(color: GlameColors.borderGray),
+          borderRadius: BorderRadius.zero,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: const TextStyle(color: GlameColors.textSecondary),
+            Row(
+              children: [
+                Icon(icon, size: 18, color: GlameColors.coldLightGray),
+                const Spacer(),
+                if (onTap != null)
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: GlameColors.steelGray,
+                  ),
+              ],
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 14),
             Text(
-              value,
+              title.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: GlameColors.gold,
+                fontSize: 10,
+                letterSpacing: 1,
+                color: GlameColors.steelGray,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: GlameColors.whiteGlame,
+              ),
+            ),
+            const SizedBox(height: 6),
             Text(
               subtitle,
-              style: const TextStyle(color: GlameColors.textSecondary),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.25,
+                color: GlameColors.coldLightGray,
+              ),
             ),
           ],
         ),
@@ -1845,18 +2114,14 @@ class _LoginRequired extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        Text(title, style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 12),
-        Text(
-          subtitle,
-          style: const TextStyle(color: GlameColors.textSecondary),
-        ),
-        const SizedBox(height: 28),
-        FilledButton(onPressed: onLogin, child: const Text('Войти')),
-      ],
+    return GlameAuthGate(
+      eyebrow: title,
+      title: 'Войдите в GLAME',
+      description: subtitle,
+      note: 'После входа Вы вернетесь к этому разделу.',
+      noteIcon: Icons.lock_outline,
+      onLogin: onLogin,
+      dark: false,
     );
   }
 }

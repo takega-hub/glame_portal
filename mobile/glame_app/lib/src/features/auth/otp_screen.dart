@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/glame_theme.dart';
+import 'auth_field.dart';
 import 'auth_controller.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
@@ -30,7 +31,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     final controller = ref.read(authControllerProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(title: const GlameHeaderLogo()),
+      appBar: const GlameTopAppBar(),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
@@ -58,13 +59,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
               const SizedBox(height: 18),
               Container(width: 44, height: 1, color: GlameColors.lightGray),
               const SizedBox(height: 24),
-              TextField(
+              AuthTextField(
                 controller: _code,
+                label: 'Код из SMS',
+                hintText: 'Введите код',
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Код из SMS',
-                  hintText: 'Введите код',
-                ),
               ),
               const SizedBox(height: 16),
               if (auth.error != null)

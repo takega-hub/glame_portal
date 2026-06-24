@@ -116,65 +116,90 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final steps = const ['Корзина', 'Адрес', 'Оплата', 'Подтверждение'];
 
     return Scaffold(
-      appBar: AppBar(title: const GlameHeaderLogo()),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 24, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'ОФОРМЛЕНИЕ',
-                    style: TextStyle(
-                      fontSize: 40,
-                      height: 0.95,
-                      fontWeight: FontWeight.w400,
-                      color: GlameColors.textPrimary,
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    'Проверьте корзину, выберите доставку и подтвердите заказ',
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.35,
-                      color: GlameColors.textSecondary,
-                    ),
-                  ),
-                  SizedBox(height: 18),
-                  SizedBox(
-                    width: 44,
-                    child: Divider(height: 1, color: GlameColors.lightGray),
-                  ),
-                ],
-              ),
+      backgroundColor: GlameColors.nearBlack,
+      appBar: const GlameTopAppBar(dark: true),
+      body: Theme(
+        data: Theme.of(context).copyWith(
+          filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(
+              backgroundColor: GlameColors.whiteGlame,
+              foregroundColor: GlameColors.nearBlack,
+              shape: const RoundedRectangleBorder(),
             ),
-            const SizedBox(height: 16),
-            _Progress(steps: steps, active: step),
-            const Divider(height: 1),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: _buildStep(
-                    context,
-                    auth.user != null,
-                    cart,
-                    cartController,
-                    subtotal,
-                    totalBeforeBonuses,
-                    deliveryAmount,
-                    bonusDiscountAmount,
-                    bonusPointsToUse,
-                    total,
+          ),
+          outlinedButtonTheme: OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: GlameColors.whiteGlame,
+              side: const BorderSide(color: GlameColors.borderGray),
+              shape: const RoundedRectangleBorder(),
+            ),
+          ),
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(
+              foregroundColor: GlameColors.whiteGlame,
+              shape: const RoundedRectangleBorder(),
+            ),
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 24, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'ОФОРМЛЕНИЕ',
+                      style: TextStyle(
+                        fontSize: 40,
+                        height: 0.95,
+                        fontWeight: FontWeight.w400,
+                        color: GlameColors.whiteGlame,
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    Text(
+                      'Проверьте корзину, выберите доставку и подтвердите заказ',
+                      style: TextStyle(
+                        fontSize: 15,
+                        height: 1.35,
+                        color: GlameColors.coldLightGray,
+                      ),
+                    ),
+                    SizedBox(height: 18),
+                    SizedBox(
+                      width: 44,
+                      child: Divider(height: 1, color: GlameColors.steelGray),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _Progress(steps: steps, active: step),
+              const Divider(height: 1, color: GlameColors.borderGray),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: _buildStep(
+                      context,
+                      auth.user != null,
+                      cart,
+                      cartController,
+                      subtotal,
+                      totalBeforeBonuses,
+                      deliveryAmount,
+                      bonusDiscountAmount,
+                      bonusPointsToUse,
+                      total,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1540,18 +1565,14 @@ class _Progress extends StatelessWidget {
                 Container(
                   height: 3,
                   decoration: BoxDecoration(
-                    color: on
-                        ? GlameColors.gold
-                        : Theme.of(context).colorScheme.outline,
+                    color: on ? GlameColors.whiteGlame : GlameColors.borderGray,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   steps[i],
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: on
-                        ? GlameColors.textPrimary
-                        : GlameColors.textSecondary,
+                    color: on ? GlameColors.whiteGlame : GlameColors.steelGray,
                     fontWeight: i == active ? FontWeight.w700 : FontWeight.w400,
                   ),
                 ),
@@ -1584,13 +1605,9 @@ class _PaymentOption extends StatelessWidget {
       child: Ink(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected
-              ? GlameColors.surface
-              : Theme.of(context).cardTheme.color,
+          color: selected ? GlameColors.graphite : GlameColors.nearBlack,
           border: Border.all(
-            color: selected
-                ? GlameColors.gold
-                : Theme.of(context).colorScheme.outline,
+            color: selected ? GlameColors.whiteGlame : GlameColors.borderGray,
             width: 1.5,
           ),
         ),
@@ -1598,16 +1615,26 @@ class _PaymentOption extends StatelessWidget {
           children: [
             Icon(
               selected ? Icons.check_circle : Icons.circle_outlined,
-              color: selected ? GlameColors.gold : GlameColors.textSecondary,
+              color: selected ? GlameColors.whiteGlame : GlameColors.steelGray,
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: GlameColors.whiteGlame,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: GlameColors.coldLightGray,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1651,15 +1678,15 @@ class _BonusPaymentOption extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Theme.of(context).cardTheme.color,
-          border: Border.all(color: Theme.of(context).colorScheme.outline),
+          color: GlameColors.graphite,
+          border: Border.all(color: GlameColors.borderGray),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
               'Войдите, чтобы использовать баланс и получать бонусы',
-              style: TextStyle(color: GlameColors.textSecondary),
+              style: TextStyle(color: GlameColors.coldLightGray),
             ),
             const SizedBox(height: 10),
             FilledButton(onPressed: onLogin, child: const Text('ВОЙТИ')),
@@ -1693,10 +1720,10 @@ class _BonusPaymentOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected
-              ? GlameColors.surface
-              : Theme.of(context).cardTheme.color,
-          border: Border.all(color: Theme.of(context).colorScheme.outline),
+          color: selected ? GlameColors.graphite : GlameColors.nearBlack,
+          border: Border.all(
+            color: selected ? GlameColors.whiteGlame : GlameColors.borderGray,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1710,22 +1737,28 @@ class _BonusPaymentOption extends StatelessWidget {
                     Icon(
                       Icons.stars_rounded,
                       color: loyaltyPoints > 0
-                          ? GlameColors.gold
-                          : GlameColors.textSecondary,
+                          ? GlameColors.whiteGlame
+                          : GlameColors.steelGray,
                     ),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
                         'Баланс GLAME',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: GlameColors.whiteGlame,
+                        ),
                       ),
                     ),
-                    Text('${loyaltyPoints.clamp(0, 999999)} ₽'),
+                    Text(
+                      '${loyaltyPoints.clamp(0, 999999)} ₽',
+                      style: const TextStyle(color: GlameColors.whiteGlame),
+                    ),
                   ],
                 ),
               ),
             ),
-            const Divider(height: 16),
+            const Divider(height: 16, color: GlameColors.borderGray),
             SwitchListTile.adaptive(
               contentPadding: EdgeInsets.zero,
               value: selected && !disabled,
@@ -1747,7 +1780,7 @@ class _BonusPaymentOption extends StatelessWidget {
                 'Доступно: $loyaltyPoints бонусов, к списанию сейчас до $maxPointsByOrder',
                 style: const TextStyle(
                   fontSize: 12,
-                  color: GlameColors.textSecondary,
+                  color: GlameColors.coldLightGray,
                 ),
               ),
             ],
@@ -1774,10 +1807,10 @@ class _Totals extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: GlameColors.surface2,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        border: Border.all(color: GlameColors.lightGray),
+        color: GlameColors.graphite,
+        border: Border.all(color: GlameColors.borderGray),
       ),
       child: Column(
         children: [
@@ -1794,13 +1827,13 @@ class _Totals extends StatelessWidget {
             _Row(label: 'Бонусами', value: '-${_rub(bonusDiscountAmount)}'),
           ],
           const SizedBox(height: 10),
-          const Divider(height: 1),
+          const Divider(height: 1, color: GlameColors.borderGray),
           const SizedBox(height: 10),
           _Row(
             label: 'Итого',
             value: _rub(total),
             valueStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: GlameColors.gold,
+              color: GlameColors.whiteGlame,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -1825,16 +1858,19 @@ class _CheckoutStepHeader extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontSize: 28, height: 1),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontSize: 28,
+              height: 1,
+              color: GlameColors.whiteGlame,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             subtitle,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(fontSize: 14),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 14,
+              color: GlameColors.coldLightGray,
+            ),
           ),
         ],
       ),
@@ -1854,12 +1890,21 @@ class _Row extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          child: Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: GlameColors.coldLightGray),
+          ),
         ),
         const SizedBox(width: 12),
         Text(
           value,
-          style: valueStyle ?? Theme.of(context).textTheme.bodyMedium,
+          style:
+              valueStyle ??
+              Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: GlameColors.whiteGlame),
         ),
       ],
     );

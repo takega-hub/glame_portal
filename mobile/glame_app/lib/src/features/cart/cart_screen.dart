@@ -9,7 +9,9 @@ import '../../core/theme/glame_theme.dart';
 import 'cart_controller.dart';
 
 class CartScreen extends ConsumerWidget {
-  const CartScreen({super.key});
+  final bool showAppBar;
+
+  const CartScreen({super.key, this.showAppBar = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -18,18 +20,20 @@ class CartScreen extends ConsumerWidget {
 
     if (cart.loading) {
       return const Scaffold(
+        backgroundColor: GlameColors.nearBlack,
         body: SafeArea(
           child: Center(
-            child: CircularProgressIndicator(color: GlameColors.gold),
+            child: CircularProgressIndicator(color: GlameColors.whiteGlame),
           ),
         ),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const GlameHeaderLogo()),
+      backgroundColor: GlameColors.nearBlack,
+      appBar: showAppBar ? const GlameTopAppBar(dark: true) : null,
       body: RefreshIndicator(
-        color: GlameColors.gold,
+        color: GlameColors.whiteGlame,
         onRefresh: controller.refresh,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
@@ -40,7 +44,7 @@ class CartScreen extends ConsumerWidget {
                 fontSize: 40,
                 height: 0.95,
                 fontWeight: FontWeight.w400,
-                color: GlameColors.textPrimary,
+                color: GlameColors.whiteGlame,
               ),
             ),
             const SizedBox(height: 10),
@@ -51,22 +55,23 @@ class CartScreen extends ConsumerWidget {
               style: const TextStyle(
                 fontSize: 15,
                 height: 1.35,
-                color: GlameColors.textSecondary,
+                color: GlameColors.coldLightGray,
               ),
             ),
             const SizedBox(height: 18),
-            Container(width: 44, height: 1, color: GlameColors.lightGray),
+            Container(width: 54, height: 1, color: GlameColors.steelGray),
             const SizedBox(height: 24),
             if (cart.error != null)
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  border: Border.all(color: GlameColors.graphite),
+                  color: GlameColors.graphite,
+                  border: Border.all(color: GlameColors.borderGray),
                 ),
                 child: Text(
                   cart.error!,
-                  style: const TextStyle(color: GlameColors.graphite),
+                  style: const TextStyle(color: GlameColors.coldLightGray),
                 ),
               ),
             if (cart.items.isEmpty)
@@ -76,8 +81,8 @@ class CartScreen extends ConsumerWidget {
                   vertical: 28,
                 ),
                 decoration: BoxDecoration(
-                  color: GlameColors.surface2,
-                  border: Border.all(color: GlameColors.lightGray),
+                  color: GlameColors.graphite,
+                  border: Border.all(color: GlameColors.borderGray),
                 ),
                 child: const Column(
                   children: [
@@ -87,13 +92,14 @@ class CartScreen extends ConsumerWidget {
                         fontSize: 22,
                         height: 1,
                         fontWeight: FontWeight.w400,
+                        color: GlameColors.whiteGlame,
                       ),
                     ),
                     SizedBox(height: 10),
                     Text(
                       'Добавьте товары из каталога или раздела образов',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: GlameColors.textSecondary),
+                      style: TextStyle(color: GlameColors.coldLightGray),
                     ),
                   ],
                 ),
@@ -104,6 +110,11 @@ class CartScreen extends ConsumerWidget {
             _Totals(subtotal: cart.subtotal),
             const SizedBox(height: 12),
             FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: GlameColors.whiteGlame,
+                foregroundColor: GlameColors.nearBlack,
+                shape: const RoundedRectangleBorder(),
+              ),
               onPressed: cart.items.isEmpty
                   ? null
                   : () => context.push('/checkout'),
@@ -141,8 +152,8 @@ class _CartItemRow extends ConsumerWidget {
       padding: const EdgeInsets.only(bottom: 16),
       child: Container(
         decoration: BoxDecoration(
-          color: GlameColors.surface2,
-          border: Border.all(color: GlameColors.lightGray),
+          color: GlameColors.graphite,
+          border: Border.all(color: GlameColors.borderGray),
         ),
         padding: const EdgeInsets.all(14),
         child: Row(
@@ -152,19 +163,19 @@ class _CartItemRow extends ConsumerWidget {
               width: 78,
               height: 96,
               decoration: BoxDecoration(
-                color: GlameColors.surface,
-                border: Border.all(color: GlameColors.lightGray),
+                color: GlameColors.nearBlack,
+                border: Border.all(color: GlameColors.borderGray),
               ),
               child: imageUrl != null
                   ? CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
                       placeholder: (context, url) =>
-                          Container(color: GlameColors.surface),
+                          Container(color: GlameColors.nearBlack),
                       errorWidget: (context, url, error) =>
-                          Container(color: GlameColors.surface),
+                          Container(color: GlameColors.nearBlack),
                     )
-                  : Container(color: GlameColors.surface),
+                  : Container(color: GlameColors.nearBlack),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -175,15 +186,16 @@ class _CartItemRow extends ConsumerWidget {
                     name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(height: 1.1),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      height: 1.1,
+                      color: GlameColors.whiteGlame,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     formatRubFromKopeks(unit),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: GlameColors.textSecondary,
+                      color: GlameColors.coldLightGray,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -191,10 +203,8 @@ class _CartItemRow extends ConsumerWidget {
                     children: [
                       Container(
                         decoration: BoxDecoration(
-                          color: GlameColors.textPrimary,
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
+                          color: GlameColors.nearBlack,
+                          border: Border.all(color: GlameColors.borderGray),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -203,7 +213,7 @@ class _CartItemRow extends ConsumerWidget {
                               onPressed: () =>
                                   controller.updateQuantity(id, qty - 1),
                               icon: const Icon(Icons.remove, size: 18),
-                              color: Theme.of(context).colorScheme.onSurface,
+                              color: GlameColors.whiteGlame,
                               constraints: const BoxConstraints(
                                 minWidth: 36,
                                 minHeight: 36,
@@ -217,24 +227,27 @@ class _CartItemRow extends ConsumerWidget {
                               decoration: const BoxDecoration(
                                 border: Border(
                                   left: BorderSide(
-                                    color: GlameColors.lightGray,
+                                    color: GlameColors.borderGray,
                                   ),
                                   right: BorderSide(
-                                    color: GlameColors.lightGray,
+                                    color: GlameColors.borderGray,
                                   ),
                                 ),
                               ),
                               child: Text(
                                 '$qty',
                                 style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.w600),
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: GlameColors.whiteGlame,
+                                    ),
                               ),
                             ),
                             IconButton(
                               onPressed: () =>
                                   controller.updateQuantity(id, qty + 1),
                               icon: const Icon(Icons.add, size: 18),
-                              color: Theme.of(context).colorScheme.onSurface,
+                              color: GlameColors.whiteGlame,
                               constraints: const BoxConstraints(
                                 minWidth: 36,
                                 minHeight: 36,
@@ -248,7 +261,7 @@ class _CartItemRow extends ConsumerWidget {
                       TextButton(
                         onPressed: () => controller.removeItem(id),
                         style: TextButton.styleFrom(
-                          foregroundColor: GlameColors.graphite,
+                          foregroundColor: GlameColors.whiteGlame,
                           padding: EdgeInsets.zero,
                         ),
                         child: const Text('Удалить'),
@@ -277,8 +290,8 @@ class _Totals extends StatelessWidget {
     final total = subtotal + delivery;
     return Container(
       decoration: BoxDecoration(
-        color: GlameColors.surface2,
-        border: Border.all(color: GlameColors.lightGray),
+        color: GlameColors.graphite,
+        border: Border.all(color: GlameColors.borderGray),
       ),
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -302,7 +315,7 @@ class _Totals extends StatelessWidget {
             value: formatRubFromKopeks(total),
             valueStyle: Theme.of(
               context,
-            ).textTheme.titleMedium?.copyWith(color: GlameColors.gold),
+            ).textTheme.titleMedium?.copyWith(color: GlameColors.whiteGlame),
           ),
         ],
       ),
@@ -322,12 +335,21 @@ class _Row extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          child: Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: GlameColors.coldLightGray),
+          ),
         ),
         const SizedBox(width: 12),
         Text(
           value,
-          style: valueStyle ?? Theme.of(context).textTheme.bodyMedium,
+          style:
+              valueStyle ??
+              Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: GlameColors.whiteGlame),
         ),
       ],
     );

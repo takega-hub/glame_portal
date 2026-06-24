@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/formatters/rub.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/theme/glame_theme.dart';
+import '../../core/widgets/glame_auth_gate.dart';
 import '../auth/auth_controller.dart';
 import '../customer/stylist_entry.dart';
 import 'home_providers.dart';
@@ -50,7 +51,11 @@ Future<void> _openPhotoAuthGate(BuildContext context) async {
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (sheetContext) => _PhotoAuthGateSheet(
+    builder: (sheetContext) => GlameAuthGateSheet(
+      title: 'Войдите, чтобы продолжить',
+      description:
+          'Подбор по фото доступен после входа в профиль. Так мы сможем сохранить результат и собрать персональную подборку именно для Вас.',
+      note: 'После входа Вы сразу вернетесь к загрузке фото.',
       onLoginTap: () => _openPhotoLogin(sheetContext, parentContext),
       onRegisterTap: () => _openPhotoRegister(sheetContext, parentContext),
       onPhoneTap: () => _openPhotoLogin(sheetContext, parentContext),
@@ -159,19 +164,7 @@ class _PhotoUploadScreenState extends ConsumerState<PhotoUploadScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const GlameHeaderLogo(),
-      ),
+      appBar: const GlameTopAppBar(),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -290,13 +283,7 @@ class PhotoReviewScreen extends StatelessWidget {
     final imageBytes = args?.bytes;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const GlameHeaderLogo(),
-      ),
+      appBar: const GlameTopAppBar(),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -509,13 +496,7 @@ class _PhotoAnalysisScreenState extends ConsumerState<PhotoAnalysisScreen> {
     final canStart = _analysis != null && _analysis!['can_continue'] == true;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => context.pop(),
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const GlameHeaderLogo(),
-      ),
+      appBar: const GlameTopAppBar(),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -959,19 +940,7 @@ class PhotoSelectionResultScreen extends StatelessWidget {
     final analysisBullets = _stringList(userFacing['bullets']);
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/home');
-            }
-          },
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: const GlameHeaderLogo(),
-      ),
+      appBar: const GlameTopAppBar(),
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
@@ -1792,93 +1761,6 @@ class _PhotoSourcePickerSheet extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Не сейчас'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PhotoAuthGateSheet extends StatelessWidget {
-  final VoidCallback onLoginTap;
-  final VoidCallback onRegisterTap;
-  final VoidCallback onPhoneTap;
-
-  const _PhotoAuthGateSheet({
-    required this.onLoginTap,
-    required this.onRegisterTap,
-    required this.onPhoneTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.fromLTRB(18, 24, 18, 16),
-        decoration: const BoxDecoration(color: GlameColors.surface2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Войдите, чтобы продолжить',
-              style: TextStyle(
-                fontSize: 24,
-                height: 1.05,
-                color: GlameColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Подбор по фото доступен после входа в профиль. Так мы сможем сохранить результат и собрать персональную подборку именно для Вас.',
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.42,
-                color: GlameColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(height: 1, color: const Color(0xFFD6D6D6)),
-            const SizedBox(height: 14),
-            const Row(
-              children: [
-                Icon(
-                  Icons.autorenew,
-                  size: 18,
-                  color: GlameColors.textSecondary,
-                ),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'После входа Вы сразу вернетесь к загрузке фото.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.35,
-                      color: GlameColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            _PhotoPrimaryButton(title: 'Войти', onTap: onLoginTap),
-            const SizedBox(height: 10),
-            _PhotoSecondaryButton(
-              title: 'Создать аккаунт',
-              onTap: onRegisterTap,
-            ),
-            const SizedBox(height: 10),
-            _PhotoSecondaryButton(
-              title: 'Продолжить по номеру',
-              icon: Icons.smartphone_outlined,
-              onTap: onPhoneTap,
             ),
             const SizedBox(height: 8),
             TextButton(

@@ -23,10 +23,11 @@ class WishlistScreen extends ConsumerWidget {
     final isLoggedIn = auth.user != null;
 
     return Scaffold(
+      backgroundColor: GlameColors.nearBlack,
       body: SafeArea(
         child: favoriteLooksAsync.when(
           loading: () => const Center(
-            child: CircularProgressIndicator(color: GlameColors.gold),
+            child: CircularProgressIndicator(color: GlameColors.whiteGlame),
           ),
           error: (_, _) => _WishlistContent(
             productIds: ids,
@@ -71,7 +72,7 @@ class _WishlistContent extends StatelessWidget {
     final isEmpty = totalCount == 0 && !showLooksLoginHint && !showLooksError;
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
       children: [
         const Text(
           'ИЗБРАННОЕ',
@@ -79,7 +80,7 @@ class _WishlistContent extends StatelessWidget {
             fontSize: 40,
             height: 0.95,
             fontWeight: FontWeight.w400,
-            color: GlameColors.textPrimary,
+            color: GlameColors.whiteGlame,
           ),
         ),
         const SizedBox(height: 10),
@@ -90,11 +91,11 @@ class _WishlistContent extends StatelessWidget {
           style: const TextStyle(
             fontSize: 15,
             height: 1.35,
-            color: GlameColors.textSecondary,
+            color: GlameColors.coldLightGray,
           ),
         ),
         const SizedBox(height: 18),
-        Container(width: 44, height: 1, color: GlameColors.lightGray),
+        Container(width: 54, height: 1, color: GlameColors.steelGray),
         const SizedBox(height: 24),
         if (productIds.isNotEmpty) ...[
           SizedBox(
@@ -124,7 +125,9 @@ class _WishlistContent extends StatelessWidget {
                 );
               },
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: GlameColors.lightGray),
+                foregroundColor: GlameColors.whiteGlame,
+                side: const BorderSide(color: GlameColors.borderGray),
+                shape: const RoundedRectangleBorder(),
               ),
               child: Text(
                 isLoggedIn
@@ -132,7 +135,7 @@ class _WishlistContent extends StatelessWidget {
                     : 'Войти и обсудить избранное',
                 style: const TextStyle(
                   fontSize: 16,
-                  color: GlameColors.textPrimary,
+                  color: GlameColors.whiteGlame,
                 ),
               ),
             ),
@@ -186,8 +189,8 @@ class _WishlistEmptyState extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
       decoration: BoxDecoration(
-        color: GlameColors.surface2,
-        border: Border.all(color: GlameColors.lightGray),
+        color: GlameColors.graphite,
+        border: Border.all(color: GlameColors.borderGray),
       ),
       child: const Column(
         children: [
@@ -197,13 +200,14 @@ class _WishlistEmptyState extends StatelessWidget {
               fontSize: 22,
               height: 1,
               fontWeight: FontWeight.w400,
+              color: GlameColors.whiteGlame,
             ),
           ),
           SizedBox(height: 10),
           Text(
             'Добавляйте украшения и образы в избранное из каталога, карточек товара и стилист-подборок',
             textAlign: TextAlign.center,
-            style: TextStyle(color: GlameColors.textSecondary, height: 1.4),
+            style: TextStyle(color: GlameColors.coldLightGray, height: 1.4),
           ),
         ],
       ),
@@ -224,14 +228,16 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Text(
           title.toUpperCase(),
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontSize: 28, height: 1),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontSize: 28,
+            height: 1,
+            color: GlameColors.whiteGlame,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
           'Сохранено: $count',
-          style: const TextStyle(color: GlameColors.textSecondary),
+          style: const TextStyle(color: GlameColors.coldLightGray),
         ),
       ],
     );
@@ -249,12 +255,12 @@ class _SectionHint extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: GlameColors.surface2,
-        border: Border.all(color: GlameColors.lightGray),
+        color: GlameColors.graphite,
+        border: Border.all(color: GlameColors.borderGray),
       ),
       child: Text(
         text,
-        style: const TextStyle(color: GlameColors.textSecondary),
+        style: const TextStyle(color: GlameColors.coldLightGray),
       ),
     );
   }
@@ -284,8 +290,8 @@ class _FavoriteLookTile extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: GlameColors.surface2,
-          border: Border.all(color: GlameColors.lightGray),
+          color: GlameColors.graphite,
+          border: Border.all(color: GlameColors.borderGray),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,16 +300,16 @@ class _FavoriteLookTile extends ConsumerWidget {
               width: 84,
               height: 112,
               decoration: BoxDecoration(
-                color: GlameColors.surface,
-                border: Border.all(color: GlameColors.lightGray),
+                color: GlameColors.nearBlack,
+                border: Border.all(color: GlameColors.borderGray),
               ),
               child: imageUrl == null
-                  ? const ColoredBox(color: GlameColors.surface)
+                  ? const ColoredBox(color: GlameColors.nearBlack)
                   : CachedNetworkImage(
                       imageUrl: imageUrl,
                       fit: BoxFit.cover,
                       errorWidget: (_, _, _) =>
-                          const ColoredBox(color: GlameColors.surface),
+                          const ColoredBox(color: GlameColors.nearBlack),
                     ),
             ),
             const SizedBox(width: 14),
@@ -315,14 +321,16 @@ class _FavoriteLookTile extends ConsumerWidget {
                     name?.isNotEmpty == true ? name! : 'Образ',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: GlameColors.whiteGlame,
+                    ),
                   ),
                   if (subtitleParts.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(
                       subtitleParts.join(' · '),
                       style: const TextStyle(
-                        color: GlameColors.textSecondary,
+                        color: GlameColors.coldLightGray,
                         fontSize: 12,
                       ),
                     ),
@@ -334,7 +342,7 @@ class _FavoriteLookTile extends ConsumerWidget {
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: GlameColors.textSecondary,
+                        color: GlameColors.coldLightGray,
                         height: 1.25,
                       ),
                     ),
@@ -345,7 +353,10 @@ class _FavoriteLookTile extends ConsumerWidget {
                       if (lookId.isNotEmpty)
                         TextButton(
                           onPressed: () => context.push('/look/$lookId'),
-                          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                          style: TextButton.styleFrom(
+                            foregroundColor: GlameColors.whiteGlame,
+                            padding: EdgeInsets.zero,
+                          ),
                           child: const Text('Подробнее'),
                         ),
                       const Spacer(),
@@ -359,8 +370,8 @@ class _FavoriteLookTile extends ConsumerWidget {
                                 savedLookId: savedLookId,
                               ),
                         icon: const Icon(
-                          Icons.favorite,
-                          color: GlameColors.gold,
+                          Icons.favorite_border,
+                          color: GlameColors.whiteGlame,
                         ),
                       ),
                     ],
@@ -410,10 +421,10 @@ class _ProductWishlistDismissible extends ConsumerWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: GlameColors.warmGray,
-          border: Border.all(color: GlameColors.graphite),
+          color: GlameColors.graphite,
+          border: Border.all(color: GlameColors.borderGray),
         ),
-        child: const Icon(Icons.delete_outline, color: GlameColors.graphite),
+        child: const Icon(Icons.delete_outline, color: GlameColors.whiteGlame),
       ),
       onDismissed: (_) =>
           ref.read(wishlistControllerProvider.notifier).remove(id),
@@ -433,48 +444,90 @@ class _WishlistTile extends ConsumerWidget {
     return InkWell(
       onTap: () => context.push('/product/$id'),
       child: Container(
-        color: GlameColors.surface2,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          border: Border.all(color: GlameColors.lightGray),
+          color: GlameColors.graphite,
+          border: Border.all(color: GlameColors.borderGray),
         ),
         child: async.when(
           loading: () => const SizedBox(
             height: 52,
             child: Align(
               alignment: Alignment.centerLeft,
-              child: CircularProgressIndicator(color: GlameColors.gold),
+              child: CircularProgressIndicator(color: GlameColors.whiteGlame),
             ),
           ),
           error: (error, stackTrace) => Row(
             children: [
-              const Expanded(child: Text('Не удалось загрузить товар')),
+              const Expanded(
+                child: Text(
+                  'Не удалось загрузить товар',
+                  style: TextStyle(color: GlameColors.coldLightGray),
+                ),
+              ),
               IconButton(
                 onPressed: () => ref.invalidate(productProvider(id)),
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(Icons.refresh, color: GlameColors.whiteGlame),
               ),
             ],
           ),
           data: (item) {
             final name = (item['name'] as String?) ?? '';
             final price = item['price'];
+            final images = item['images'];
+            final imageUrl = images is List && images.isNotEmpty
+                ? resolveAssetUrl(images.first)
+                : null;
+            final brand = ((item['brand'] as String?) ?? '').trim();
             return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(
+                  width: 82,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: GlameColors.nearBlack,
+                    border: Border.all(color: GlameColors.borderGray),
+                  ),
+                  child: imageUrl == null
+                      ? const ColoredBox(color: GlameColors.nearBlack)
+                      : CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, _, _) =>
+                              const ColoredBox(color: GlameColors.nearBlack),
+                        ),
+                ),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (brand.isNotEmpty) ...[
+                        Text(
+                          brand.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            letterSpacing: 0.8,
+                            color: GlameColors.steelGray,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                      ],
                       Text(
                         name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(color: GlameColors.whiteGlame),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         formatRubFromKopeks(price),
                         style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(color: GlameColors.gold),
+                            ?.copyWith(color: GlameColors.coldLightGray),
                       ),
                     ],
                   ),
@@ -482,7 +535,10 @@ class _WishlistTile extends ConsumerWidget {
                 IconButton(
                   onPressed: () =>
                       ref.read(wishlistControllerProvider.notifier).toggle(id),
-                  icon: const Icon(Icons.favorite, color: GlameColors.gold),
+                  icon: const Icon(
+                    Icons.favorite_border,
+                    color: GlameColors.whiteGlame,
+                  ),
                 ),
               ],
             );

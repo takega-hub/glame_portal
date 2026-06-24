@@ -39,15 +39,18 @@ class HomeSpacesBlock extends ConsumerWidget {
     return Container(
       height: targetHeight,
       width: double.infinity,
-      color: GlameColors.coldLightGrey,
+      color: GlameColors.nearBlack,
       child: Stack(
         children: [
           Positioned.fill(
             child: IgnorePointer(
-              child: Image.asset(
-                _homeBlock5BackgroundAsset,
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
+              child: Opacity(
+                opacity: 0.16,
+                child: Image.asset(
+                  _homeBlock5BackgroundAsset,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                ),
               ),
             ),
           ),
@@ -60,7 +63,7 @@ class HomeSpacesBlock extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SpacesHeader(compact: compact),
+                    _SpacesHeader(compact: compact, dark: true),
                     SizedBox(height: compact ? 18 : 44),
                     for (var i = 0; i < items.length; i++) ...[
                       _HomeSpaceCard(
@@ -82,14 +85,18 @@ class HomeSpacesBlock extends ConsumerWidget {
 }
 
 class StoresScreen extends ConsumerWidget {
-  const StoresScreen({super.key});
+  final bool showAppBar;
+
+  const StoresScreen({super.key, this.showAppBar = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final storesAsync = ref.watch(homeStoresProvider);
     return Scaffold(
       backgroundColor: GlameColors.surface2,
+      appBar: showAppBar ? const GlameTopAppBar() : null,
       body: SafeArea(
+        top: false,
         child: storesAsync.when(
           data: (raw) {
             final spaces = _parseSpaces(raw);
@@ -100,29 +107,13 @@ class StoresScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => context.canPop()
-                            ? context.pop()
-                            : context.go('/home'),
-                        icon: const Icon(
-                          Icons.arrow_back,
-                          color: GlameColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Expanded(
-                        child: Text(
-                          'ПРОСТРАНСТВА GLAME',
-                          style: TextStyle(
-                            fontSize: 18,
-                            letterSpacing: 0.2,
-                            color: GlameColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const Text(
+                    'ПРОСТРАНСТВА GLAME',
+                    style: TextStyle(
+                      fontSize: 18,
+                      letterSpacing: 0.2,
+                      color: GlameColors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 18),
                   const _SpacesHeader(),
@@ -269,8 +260,9 @@ class SpaceDetailScreen extends ConsumerWidget {
 
 class _SpacesHeader extends StatelessWidget {
   final bool compact;
+  final bool dark;
 
-  const _SpacesHeader({this.compact = false});
+  const _SpacesHeader({this.compact = false, this.dark = false});
 
   @override
   Widget build(BuildContext context) {
@@ -287,8 +279,8 @@ class _SpacesHeader extends StatelessWidget {
           style: TextStyle(
             fontSize: compact ? 34 : 46,
             height: 1.05,
-            letterSpacing: -0.8,
-            color: GlameColors.graphite,
+            letterSpacing: 0,
+            color: dark ? GlameColors.whiteGlame : GlameColors.graphite,
             fontWeight: FontWeight.w300,
           ),
         ),
@@ -298,7 +290,7 @@ class _SpacesHeader extends StatelessWidget {
           style: TextStyle(
             fontSize: compact ? 16 : 20,
             height: 1.3,
-            color: GlameColors.graphite,
+            color: dark ? GlameColors.steelGray : GlameColors.graphite,
             fontWeight: FontWeight.w300,
           ),
         ),
@@ -337,6 +329,7 @@ class _HomeSpaceCard extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final narrow = constraints.maxWidth < 560;
+            final homeCard = forcedHeight != null;
             final cardHeight = forcedHeight ?? (narrow ? 406.0 : 392.0);
             final compactCard = compact || cardHeight < 280;
             final citySize = compactCard ? 22.0 : (narrow ? 28.0 : 33.0);
@@ -349,15 +342,24 @@ class _HomeSpaceCard extends StatelessWidget {
                 ? const EdgeInsets.fromLTRB(20, 24, 14, 22)
                 : const EdgeInsets.fromLTRB(28, 32, 18, 28);
             final ctaWidth = compactCard ? 132.0 : (narrow ? 154.0 : 176.0);
+            final cardImageUrl = forcedHeight == null
+                ? space.cardImageUrl
+                : _homeCardImageForSpace(space);
 
             return SizedBox(
               width: double.infinity,
               height: cardHeight,
               child: Material(
-                color: Colors.white.withValues(alpha: 0.72),
+                color: homeCard
+                    ? GlameColors.graphite.withValues(alpha: 0.72)
+                    : Colors.white.withValues(alpha: 0.72),
                 child: Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFC7C9CB)),
+                    border: Border.all(
+                      color: homeCard
+                          ? GlameColors.borderGray
+                          : const Color(0xFFC7C9CB),
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -374,8 +376,10 @@ class _HomeSpaceCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: citySize,
                                   height: 1.08,
-                                  letterSpacing: -0.6,
-                                  color: GlameColors.graphite,
+                                  letterSpacing: 0,
+                                  color: homeCard
+                                      ? GlameColors.whiteGlame
+                                      : GlameColors.graphite,
                                   fontWeight: FontWeight.w300,
                                 ),
                               ),
@@ -385,7 +389,9 @@ class _HomeSpaceCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: addressSize,
                                   height: 1.45,
-                                  color: GlameColors.graphite,
+                                  color: homeCard
+                                      ? GlameColors.coldLightGray
+                                      : GlameColors.graphite,
                                   fontWeight: FontWeight.w300,
                                 ),
                               ),
@@ -394,7 +400,9 @@ class _HomeSpaceCard extends StatelessWidget {
                               Container(
                                 width: 36,
                                 height: 1,
-                                color: GlameColors.graphite,
+                                color: homeCard
+                                    ? GlameColors.borderGray
+                                    : GlameColors.graphite,
                               ),
                               const Spacer(),
                               Text(
@@ -402,7 +410,9 @@ class _HomeSpaceCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: descriptionSize,
                                   height: 1.35,
-                                  color: GlameColors.graphite,
+                                  color: homeCard
+                                      ? GlameColors.steelGray
+                                      : GlameColors.graphite,
                                   fontWeight: FontWeight.w300,
                                 ),
                               ),
@@ -414,7 +424,9 @@ class _HomeSpaceCard extends StatelessWidget {
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     border: Border.all(
-                                      color: GlameColors.graphite,
+                                      color: homeCard
+                                          ? GlameColors.whiteGlame
+                                          : GlameColors.graphite,
                                     ),
                                   ),
                                   padding: const EdgeInsets.symmetric(
@@ -427,7 +439,9 @@ class _HomeSpaceCard extends StatelessWidget {
                                           ? 10
                                           : (narrow ? 12 : 13),
                                       height: 1,
-                                      color: GlameColors.graphite,
+                                      color: homeCard
+                                          ? GlameColors.whiteGlame
+                                          : GlameColors.graphite,
                                       fontWeight: FontWeight.w300,
                                     ),
                                   ),
@@ -440,7 +454,7 @@ class _HomeSpaceCard extends StatelessWidget {
                       Expanded(
                         flex: compactCard ? 54 : (narrow ? 57 : 61),
                         child: ClipRect(
-                          child: _NetworkStoreImage(url: space.cardImageUrl),
+                          child: _NetworkStoreImage(url: cardImageUrl),
                         ),
                       ),
                     ],
@@ -453,6 +467,16 @@ class _HomeSpaceCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _homeCardImageForSpace(_SpaceStoreData space) {
+  if (space.slug == 'yalta') {
+    return 'assets/images/home/glame_block5_yalta_card_photo.png';
+  }
+  if (space.slug == 'simferopol') {
+    return 'assets/images/home/glame_block5_simferopol_card_photo.png';
+  }
+  return space.cardImageUrl;
 }
 
 class _SpaceHero extends StatelessWidget {
@@ -479,14 +503,11 @@ class _SpaceHero extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            left: 12,
-            top: 12,
-            child: IconButton(
-              onPressed: () =>
-                  context.canPop() ? context.pop() : context.go('/spaces'),
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-            ),
+          const Positioned(
+            left: 0,
+            top: 0,
+            right: 0,
+            child: GlameTopAppBar(transparent: true),
           ),
           Positioned(
             left: 20,
@@ -705,8 +726,25 @@ class _NetworkStoreImage extends StatelessWidget {
       );
     }
 
+    final source = url!.trim();
+    if (!source.startsWith('http://') && !source.startsWith('https://')) {
+      return Image.asset(
+        source,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Container(
+          color: GlameColors.coldLightGrey,
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.storefront_outlined,
+            color: GlameColors.steelGray,
+            size: 30,
+          ),
+        ),
+      );
+    }
+
     return CachedNetworkImage(
-      imageUrl: url!,
+      imageUrl: source,
       fit: BoxFit.cover,
       placeholder: (_, _) => const ColoredBox(color: GlameColors.coldLightGrey),
       errorWidget: (_, _, _) => Container(

@@ -69,9 +69,6 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     final recommendationsAsync = ref.watch(
       productRecommendationsProvider(widget.productId),
     );
-    final isWishlistedInAppBar = ref
-        .watch(wishlistControllerProvider)
-        .contains(widget.productId);
     final variantsData = variantsAsync.maybeWhen(
       data: (x) => x,
       orElse: () => null,
@@ -79,39 +76,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
     return Scaffold(
       backgroundColor: GlameColors.surface2,
-      appBar: AppBar(
-        backgroundColor: GlameColors.surface2,
-        leading: IconButton(
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-              return;
-            }
-            context.go('/home?tab=1');
-          },
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18),
-        ),
-        title: const GlameHeaderLogo(),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            onPressed: () => context.go('/home?tab=2'),
-            icon: Icon(
-              isWishlistedInAppBar ? Icons.favorite : Icons.favorite_border,
-              color: GlameColors.textPrimary,
-              size: 21,
-            ),
-          ),
-          IconButton(
-            onPressed: () => context.go('/home?tab=3'),
-            icon: const Icon(
-              Icons.shopping_bag_outlined,
-              color: GlameColors.textPrimary,
-              size: 21,
-            ),
-          ),
-        ],
-      ),
+      appBar: const GlameTopAppBar(),
       body: async.when(
         loading: () => const Center(
           child: CircularProgressIndicator(color: GlameColors.gold),
@@ -741,9 +706,11 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
             SizedBox(width: gap),
             Expanded(
               child: OutlinedButton(
-                onPressed: () {
-                  _addToCart(context);
-                  context.go('/checkout');
+                onPressed: () async {
+                  final added = await _addToCart(context);
+                  if (added && context.mounted) {
+                    context.go('/checkout');
+                  }
                 },
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(42),
@@ -763,8 +730,26 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     );
   }
 
-  void _addToCart(BuildContext context) {
-    ref.read(cartControllerProvider.notifier).addOne(widget.productId);
+  Future<bool> _addToCart(BuildContext context) async {
+    final auth = ref.read(authControllerProvider);
+    if (auth.user == null) {
+      context.go(
+        '/login?next=${Uri.encodeComponent('/product/${widget.productId}')}',
+      );
+      return false;
+    }
+
+    await ref.read(cartControllerProvider.notifier).addOne(widget.productId);
+    final cartState = ref.read(cartControllerProvider);
+    if (cartState.error != null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(cartState.error!)));
+      }
+      return false;
+    }
+    if (!context.mounted) return false;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Товар добавлен в корзину'),
@@ -773,10 +758,11 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
         action: SnackBarAction(
           label: 'ПЕРЕЙТИ',
           textColor: GlameColors.gold,
-          onPressed: () => context.go('/home?tab=3'),
+          onPressed: () => context.go('/home?tab=11'),
         ),
       ),
     );
+    return true;
   }
 
   Future<void> _showStylistEntrySheet(
@@ -1130,7 +1116,24 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       );
       return;
     }
+    final auth = ref.read(authControllerProvider);
+    if (auth.user == null) {
+      context.go(
+        '/login?next=${Uri.encodeComponent('/product/${widget.productId}')}',
+      );
+      return;
+    }
+
     await ref.read(cartControllerProvider.notifier).addMany(productIds);
+    final cartState = ref.read(cartControllerProvider);
+    if (cartState.error != null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(cartState.error!)));
+      }
+      return;
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1140,7 +1143,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
         action: SnackBarAction(
           label: 'ПЕРЕЙТИ',
           textColor: GlameColors.gold,
-          onPressed: () => context.go('/home?tab=3'),
+          onPressed: () => context.go('/home?tab=11'),
         ),
       ),
     );

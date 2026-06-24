@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import http.client
 import os
+import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -9,6 +10,14 @@ from urllib.parse import urlsplit
 BACKEND_HOST = "localhost"
 BACKEND_PORT = 8000
 PROXY_PREFIXES = ("/api", "/static", "/uploads")
+
+
+class QuietThreadingHTTPServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        exc_type, exc, _ = sys.exc_info()
+        if exc_type in {ConnectionResetError, BrokenPipeError, TimeoutError}:
+            return
+        super().handle_error(request, client_address)
 
 
 class StorefrontHandler(SimpleHTTPRequestHandler):
@@ -93,18 +102,21 @@ class StorefrontHandler(SimpleHTTPRequestHandler):
             self.wfile.write(data)
         except Exception as exc:
             payload = f'{{"detail":"Proxy error: {str(exc)}"}}'.encode("utf-8")
-            self.send_response(502, "Bad Gateway")
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
+            try:
+                self.send_response(502, "Bad Gateway")
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            except (BrokenPipeError, ConnectionResetError):
+                return
         finally:
             conn.close()
 
 
 def main():
     port = int(os.environ.get("STOREFRONT_PORT", "9091"))
-    server = ThreadingHTTPServer(("0.0.0.0", port), StorefrontHandler)
+    server = QuietThreadingHTTPServer(("0.0.0.0", port), StorefrontHandler)
     static_dir = Path(os.environ.get("STOREFRONT_DIR", str(Path(__file__).resolve().parent))).resolve()
     print(f"Storefront server started on http://0.0.0.0:{port} from {static_dir} (proxying /api,/static,/uploads -> {BACKEND_HOST}:{BACKEND_PORT})")
     server.serve_forever()

@@ -25,23 +25,13 @@ final _brandsApiProvider = Provider<HomeApi>((ref) {
 
 final homeCollectedGlameBlockProvider =
     FutureProvider<HomeBlockCollectedGlameData>((ref) async {
-      final api = ref.watch(_brandsApiProvider);
-      final raw = await api.getHomeSlides(blockKey: 'collected_glame');
-      final slide = raw.isNotEmpty && raw.first is Map
-          ? Map<String, dynamic>.from(raw.first as Map)
-          : const <String, dynamic>{};
-      final backgroundImage = resolveAssetUrl(slide['background_image_url']);
-      final visualImage =
-          resolveAssetUrl(slide['image_url']) ?? _block4VisualAsset;
-      final useSingleImage = backgroundImage == null || backgroundImage.isEmpty;
-
       return HomeBlockCollectedGlameData(
         title: 'Собрано GLAME',
         subtitle: 'Мы отбираем главное. Чтобы вы выбирали свое.',
         ctaLabel: 'Смотреть бренды',
-        backgroundImage: backgroundImage,
-        visualImage: visualImage,
-        useSingleImage: useSingleImage,
+        backgroundImage: _block4BackgroundAsset,
+        visualImage: _block4VisualAsset,
+        useSingleImage: false,
         brandNames: [
           'Geometry',
           'Magna',
@@ -241,10 +231,10 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
     final compact = viewportHeight != null;
     final targetHeight = viewportHeight;
     final contentWidth = width - (GlameUi.pagePadding * 2);
-    final compactBrandSectionHeight = compact ? 252.0 : 0.0;
+    final compactBrandSectionHeight = compact ? 270.0 : 0.0;
     final heroHeight = compact
         ? ((targetHeight ?? 760) - compactBrandSectionHeight).clamp(
-            330.0,
+            360.0,
             520.0,
           )
         : data.useSingleImage
@@ -264,7 +254,7 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
       child: Container(
         height: targetHeight,
         width: double.infinity,
-        color: GlameColors.coldLightGrey,
+        color: GlameColors.graphite,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -310,18 +300,12 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
                             begin: Alignment.centerLeft,
                             end: Alignment.centerRight,
                             colors: [
-                              GlameColors.coldLightGrey.withValues(
-                                alpha: data.useSingleImage ? 0.72 : 0.96,
-                              ),
-                              GlameColors.coldLightGrey.withValues(
-                                alpha: data.useSingleImage ? 0.36 : 0.76,
-                              ),
-                              GlameColors.coldLightGrey.withValues(
-                                alpha: data.useSingleImage ? 0.02 : 0.08,
-                              ),
+                              GlameColors.graphite.withValues(alpha: 0.96),
+                              GlameColors.graphite.withValues(alpha: 0.66),
+                              GlameColors.graphite.withValues(alpha: 0.16),
                             ],
                             stops: data.useSingleImage
-                                ? const [0.0, 0.32, 0.72]
+                                ? const [0.0, 0.34, 0.78]
                                 : const [0.0, 0.38, 0.78],
                           ),
                         ),
@@ -345,8 +329,8 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
                             style: TextStyle(
                               fontSize: compact ? 34 : 44,
                               height: 1.06,
-                              letterSpacing: -0.8,
-                              color: GlameColors.graphite,
+                              letterSpacing: 0,
+                              color: GlameColors.whiteGlame,
                               fontWeight: FontWeight.w300,
                             ),
                           ),
@@ -361,8 +345,8 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
                             style: TextStyle(
                               fontSize: compact ? 18 : 23,
                               height: 1.38,
-                              letterSpacing: -0.2,
-                              color: GlameColors.graphite,
+                              letterSpacing: 0,
+                              color: GlameColors.steelGray,
                               fontWeight: FontWeight.w300,
                             ),
                           ),
@@ -378,7 +362,7 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
                                 GlameUi.minTapTarget,
                               ),
                               side: const BorderSide(
-                                color: GlameColors.graphite,
+                                color: GlameColors.whiteGlame,
                                 width: GlameUi.borderWidth,
                               ),
                               shape: RoundedRectangleBorder(
@@ -394,8 +378,8 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: compact ? 16 : 18,
                                 height: 1.0,
-                                letterSpacing: -0.1,
-                                color: GlameColors.graphite,
+                                letterSpacing: 0,
+                                color: GlameColors.whiteGlame,
                                 fontWeight: FontWeight.w300,
                               ),
                             ),
@@ -537,12 +521,20 @@ class _Block4BrandsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = <List<String>>[
-      brands.take(5).toList(growable: false),
-      brands.skip(5).take(3).toList(growable: false),
-      brands.skip(8).take(4).toList(growable: false),
-      brands.skip(12).take(2).toList(growable: false),
-    ];
+    final rows = compact
+        ? <List<String>>[
+            brands.take(4).toList(growable: false),
+            brands.skip(4).take(3).toList(growable: false),
+            brands.skip(7).take(3).toList(growable: false),
+            brands.skip(10).take(2).toList(growable: false),
+            brands.skip(12).take(2).toList(growable: false),
+          ]
+        : <List<String>>[
+            brands.take(5).toList(growable: false),
+            brands.skip(5).take(3).toList(growable: false),
+            brands.skip(8).take(4).toList(growable: false),
+            brands.skip(12).take(2).toList(growable: false),
+          ];
 
     return Column(
       children: [
@@ -580,8 +572,8 @@ class _Block4BrandsGrid extends StatelessWidget {
                 style: TextStyle(
                   fontSize: compact ? 12 : 16,
                   height: compact ? 1.12 : 1.15,
-                  letterSpacing: -0.1,
-                  color: GlameColors.graphite,
+                  letterSpacing: 0,
+                  color: GlameColors.whiteGlame,
                   fontWeight: FontWeight.w300,
                 ),
               ),
@@ -591,7 +583,7 @@ class _Block4BrandsGrid extends StatelessWidget {
       );
       if (i < row.length - 1) {
         children.add(
-          Container(width: 1, height: 22, color: const Color(0xFFC7C9CB)),
+          Container(width: 1, height: 22, color: GlameColors.borderGray),
         );
       }
     }
@@ -606,7 +598,7 @@ class _Block4ThinDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 1,
-      color: const Color(0xFFC7C9CB).withValues(alpha: 0.85),
+      color: GlameColors.borderGray.withValues(alpha: 0.85),
     );
   }
 }
@@ -622,7 +614,7 @@ class BrandsPageScreen extends ConsumerWidget {
       _trackEvent('brands_page_view');
     });
     return Scaffold(
-      appBar: AppBar(title: const GlameHeaderLogo()),
+      appBar: const GlameTopAppBar(),
       body: SafeArea(
         top: false,
         child: ListView(
@@ -801,7 +793,7 @@ class BrandDetailScreen extends ConsumerWidget {
     final brand = _brandById(brandId);
     if (brand == null) {
       return Scaffold(
-        appBar: AppBar(title: const GlameHeaderLogo()),
+        appBar: const GlameTopAppBar(),
         body: const SafeArea(
           top: false,
           child: Padding(
@@ -827,7 +819,7 @@ class BrandDetailScreen extends ConsumerWidget {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const GlameHeaderLogo()),
+      appBar: const GlameTopAppBar(),
       body: SafeArea(
         top: false,
         child: ListView(

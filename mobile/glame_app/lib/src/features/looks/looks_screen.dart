@@ -466,67 +466,7 @@ class _LooksProfileScreenState extends ConsumerState<LooksProfileScreen> {
 
     return Scaffold(
       backgroundColor: GlameColors.surface2,
-      appBar: AppBar(
-        backgroundColor: GlameColors.surface2,
-        elevation: 0,
-        titleSpacing: 8,
-        title: Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: const BoxDecoration(
-                color: GlameColors.textPrimary,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: const Text(
-                'GL',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: GlameColors.surface2,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'glame_official',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: GlameColors.textPrimary,
-                  ),
-                ),
-                Text(
-                  'Looks profile',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: GlameColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Скопировать deeplink',
-            onPressed: _inviteToLooksProfile,
-            icon: const Icon(
-              Icons.ios_share_outlined,
-              color: GlameColors.textPrimary,
-            ),
-          ),
-        ],
-        titleTextStyle: const TextStyle(
-          fontSize: 16,
-          color: GlameColors.textPrimary,
-        ),
-      ),
+      appBar: const GlameTopAppBar(),
       body: RefreshIndicator(
         color: GlameColors.textPrimary,
         onRefresh: () async {

@@ -16,8 +16,8 @@ class CartState {
     required this.subtotal,
   });
 
-  factory CartState.initial() =>
-      const CartState(loading: true, error: null, items: [], subtotal: 0);
+  factory CartState.initial({bool loading = false}) =>
+      CartState(loading: loading, error: null, items: const [], subtotal: 0);
 
   CartState copyWith({
     bool? loading,
@@ -36,18 +36,34 @@ class CartState {
 
 final cartControllerProvider = StateNotifierProvider<CartController, CartState>(
   (ref) {
-    return CartController(api: CartApi(ref.watch(apiClientProvider)));
+    final auth = ref.watch(authControllerProvider);
+    return CartController(
+      api: CartApi(ref.watch(apiClientProvider)),
+      isAuthenticated: auth.user != null,
+      authLoading: auth.loading,
+    );
   },
 );
 
 class CartController extends StateNotifier<CartState> {
   final CartApi api;
+  final bool isAuthenticated;
 
-  CartController({required this.api}) : super(CartState.initial()) {
-    refresh();
+  CartController({
+    required this.api,
+    required this.isAuthenticated,
+    required bool authLoading,
+  }) : super(CartState.initial(loading: authLoading || isAuthenticated)) {
+    if (isAuthenticated) {
+      refresh();
+    }
   }
 
   Future<void> refresh() async {
+    if (!isAuthenticated) {
+      state = CartState.initial();
+      return;
+    }
     state = state.copyWith(loading: true, error: null);
     try {
       final raw = await api.getCart();
@@ -70,6 +86,10 @@ class CartController extends StateNotifier<CartState> {
   }
 
   Future<void> addOne(String productId) async {
+    if (!isAuthenticated) {
+      state = state.copyWith(error: 'Войдите, чтобы добавить товар в корзину');
+      return;
+    }
     try {
       await api.addItem(productId: productId, quantity: 1);
       await refresh();
@@ -80,6 +100,10 @@ class CartController extends StateNotifier<CartState> {
 
   Future<void> addMany(List<String> productIds) async {
     if (productIds.isEmpty) return;
+    if (!isAuthenticated) {
+      state = state.copyWith(error: 'Войдите, чтобы добавить товары в корзину');
+      return;
+    }
     try {
       for (final productId in productIds) {
         await api.addItem(productId: productId, quantity: 1);
@@ -91,6 +115,10 @@ class CartController extends StateNotifier<CartState> {
   }
 
   Future<void> updateQuantity(String itemId, int quantity) async {
+    if (!isAuthenticated) {
+      state = state.copyWith(error: 'Войдите, чтобы изменить корзину');
+      return;
+    }
     if (quantity <= 0) {
       return removeItem(itemId);
     }
@@ -103,6 +131,10 @@ class CartController extends StateNotifier<CartState> {
   }
 
   Future<void> removeItem(String itemId) async {
+    if (!isAuthenticated) {
+      state = state.copyWith(error: 'Войдите, чтобы изменить корзину');
+      return;
+    }
     try {
       await api.deleteItem(itemId: itemId);
       await refresh();
