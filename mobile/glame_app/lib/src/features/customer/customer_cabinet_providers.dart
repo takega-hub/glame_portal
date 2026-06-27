@@ -87,3 +87,10 @@ final customerFavoriteLooksProvider =
           .watch(customerCabinetApiProvider)
           .getSavedLooks(saveType: 'favorite');
     });
+
+final customerFavoriteProductsProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+      final auth = ref.watch(authControllerProvider);
+      if (auth.user == null) return const <Map<String, dynamic>>[];
+      return ref.watch(customerCabinetApiProvider).getFavoriteProducts();
+    });

@@ -16,21 +16,27 @@ import '../features/catalog/catalog_screen.dart';
 import '../features/product/product_screen.dart';
 import '../features/onboarding/onboarding_controller.dart';
 import '../features/onboarding/onboarding_screen.dart';
+import '../features/profile/clients_screen.dart';
 import '../features/checkout/checkout_screen.dart';
 import '../features/looks/look_detail_screen.dart';
+import '../features/looks/look_builder_screen.dart';
 import '../features/looks/looks_screen.dart';
+import '../features/looks/user_created_looks_controller.dart';
 import '../features/service/how_to_buy_screen.dart';
 import '../features/stores/stores_screen.dart';
 import '../core/analytics/analytics_service.dart';
 import '../core/theme/glame_theme.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final onboardingSeen = ref.watch(onboardingControllerProvider);
-  final analytics = ref.watch(analyticsServiceProvider);
+  final analytics = ref.read(analyticsServiceProvider);
 
-  final router = GoRouter(
+  late final GoRouter router;
+  ref.listen(onboardingControllerProvider, (_, next) => router.refresh());
+
+  router = GoRouter(
     initialLocation: '/',
     redirect: (context, state) {
+      final onboardingSeen = ref.read(onboardingControllerProvider);
       if (onboardingSeen == null) return null;
 
       final isOnboarding = state.matchedLocation == '/onboarding';
@@ -90,6 +96,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           final typeSlug = (state.uri.queryParameters['type'] ?? '').trim();
           final availableInSlug =
               (state.uri.queryParameters['availableIn'] ?? '').trim();
+          final pick = (state.uri.queryParameters['pick'] ?? '').trim();
           return CatalogScreen(
             initialBrand: _catalogBrandNameFromId(brandId),
             initialCategory: _catalogCategoryFromRoute(
@@ -102,12 +109,13 @@ final routerProvider = Provider<GoRouter>((ref) {
               typeSlug: typeSlug,
               availableInSlug: availableInSlug,
             ),
+            pickLookBase: pick == 'look_base',
           );
         },
       ),
       GoRoute(
         path: '/spaces',
-        builder: (context, state) => const StoresScreen(),
+        builder: (context, state) => const HomeShell(initialTab: 10),
       ),
       GoRoute(
         path: '/spaces/:slug',
@@ -130,6 +138,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/look-builder',
+        builder: (context, state) => LookBuilderScreen(
+          initialLook: state.extra is Map
+              ? Map<String, dynamic>.from(state.extra as Map)
+              : null,
+        ),
+      ),
+      GoRoute(
         path: '/product/:id',
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
@@ -139,6 +155,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/checkout',
         builder: (context, state) => const CheckoutScreen(),
+      ),
+      GoRoute(
+        path: '/clients',
+        builder: (context, state) => const ClientsScreen(),
       ),
       GoRoute(
         path: '/stylist-chat',
@@ -161,6 +181,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/my-look/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final look = ref.read(userCreatedLooksProvider.notifier).findById(id);
+          return LookDetailScreen(lookId: id, localLook: look);
+        },
+      ),
+      GoRoute(
         path: '/looks-profile',
         builder: (context, state) => LooksProfileScreen(
           initialFilter: state.uri.queryParameters['lookFilter'],
@@ -176,16 +204,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/brands',
         builder: (context, state) => const BrandsPageScreen(),
-      ),
-      GoRoute(
-        path: '/collections/:slug',
-        builder: (context, state) {
-          final slug = (state.pathParameters['slug'] ?? '').trim();
-          return CatalogScreen(
-            title: _collectionTitle(slug),
-            initialSearch: _collectionSearch(slug),
-          );
-        },
       ),
       GoRoute(
         path: '/brand/:id',
@@ -299,40 +317,6 @@ String? _catalogSearchFromRoute({
     ...?(brandName == null ? null : [brandName]),
     ...tokens,
   ].join(' ');
-}
-
-String _collectionTitle(String slug) {
-  switch (slug.trim().toLowerCase()) {
-    case 'complete-look':
-      return 'ПОДБОРКА: СОБРАННЫЙ ОБРАЗ';
-    case 'gift':
-      return 'ПОДБОРКА: ПОДАРОК';
-    case 'accent':
-      return 'ПОДБОРКА: АКЦЕНТ';
-    case 'resort':
-      return 'ПОДБОРКА: НА ОТДЫХ';
-    case 'wedding':
-      return 'ПОДБОРКА: НА СВАДЬБУ';
-    default:
-      return 'ПОДБОРКА GLAME';
-  }
-}
-
-String? _collectionSearch(String slug) {
-  switch (slug.trim().toLowerCase()) {
-    case 'complete-look':
-      return 'комплект образ';
-    case 'gift':
-      return 'подарок';
-    case 'accent':
-      return 'акцент выразительное';
-    case 'resort':
-      return 'отдых море';
-    case 'wedding':
-      return 'свадьба вечер';
-    default:
-      return null;
-  }
 }
 
 class GlameApp extends ConsumerWidget {

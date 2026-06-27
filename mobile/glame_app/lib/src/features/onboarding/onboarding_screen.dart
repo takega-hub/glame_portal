@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-
 import '../../core/theme/glame_theme.dart';
 import 'onboarding_controller.dart';
 
@@ -78,12 +76,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   const Spacer(),
                   TextButton(
                     onPressed: () async {
-                      final go = GoRouter.of(context);
                       await ref
                           .read(onboardingControllerProvider.notifier)
                           .complete();
-                      if (!mounted) return;
-                      go.go('/home');
                     },
                     style: TextButton.styleFrom(
                       foregroundColor: GlameColors.textSecondary,
@@ -136,7 +131,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               const SizedBox(height: 18),
               FilledButton(
                 onPressed: () async {
-                  final go = GoRouter.of(context);
                   if (!last) {
                     await controller.nextPage(
                       duration: const Duration(milliseconds: 220),
@@ -147,8 +141,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   await ref
                       .read(onboardingControllerProvider.notifier)
                       .complete();
-                  if (!mounted) return;
-                  go.go('/home');
                 },
                 child: Text(last ? 'Начать' : 'Далее'),
               ),

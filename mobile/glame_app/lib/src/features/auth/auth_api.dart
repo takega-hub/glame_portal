@@ -36,7 +36,9 @@ class AuthApi {
     required String password,
     required String fullName,
     String? birthDate,
+    String? referralCode,
   }) async {
+    final normalizedReferralCode = referralCode?.trim().toUpperCase();
     final resp = await _dio.post(
       '/auth/register-phone',
       data: {
@@ -44,6 +46,8 @@ class AuthApi {
         'password': password,
         'full_name': fullName,
         'birth_date': ?birthDate,
+        if (normalizedReferralCode != null && normalizedReferralCode.isNotEmpty)
+          'referral_code': normalizedReferralCode,
       },
     );
     return Map<String, dynamic>.from(resp.data as Map);

@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 
 class GlameColors {
   static const graphite = Color(0xFF222426);
-  static const nearBlack = Color(0xFF0E1012);
+  static const nearBlack = Color(0xFF111111);
   static const steelGray = Color(0xFF8E9397);
   static const coldLightGray = Color(0xFFC7CBCF);
   static const softGray = Color(0xFFD8DADB);
@@ -34,7 +34,7 @@ class GlameUi {
   static const double minTapTarget = 44;
   static const double heroTopBarHeight = 56;
   static const double heroTopOffset = 14;
-  static const double mobileBottomNavHeight = 96;
+  static const double mobileBottomNavHeight = 56;
   static const double bottomNavContentAir = 24;
   static const double heroPrimaryButtonWidth = 300;
   static const double heroPrimaryButtonY = 602;
@@ -226,6 +226,8 @@ class GlameTopAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onLogoPressed;
   final VoidCallback? onCartPressed;
   final VoidCallback? onSearchPressed;
+  final IconData? leadingIcon;
+  final String? leadingTooltip;
   final double height;
 
   const GlameTopAppBar({
@@ -236,6 +238,8 @@ class GlameTopAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onLogoPressed,
     this.onCartPressed,
     this.onSearchPressed,
+    this.leadingIcon,
+    this.leadingTooltip,
     this.height = 74,
   });
 
@@ -270,8 +274,8 @@ class GlameTopAppBar extends StatelessWidget implements PreferredSizeWidget {
               Positioned(
                 left: 0,
                 child: _GlameTopIconButton(
-                  tooltip: 'Меню',
-                  icon: Icons.menu,
+                  tooltip: leadingTooltip ?? 'Меню',
+                  icon: leadingIcon ?? Icons.menu,
                   color: foreground,
                   onPressed:
                       onMenuPressed ?? () => showGlameNavigationMenu(context),
@@ -406,13 +410,12 @@ Future<void> showGlameNavigationMenu(BuildContext context) {
                     _GlameMenuRoute('Мой стиль', '/home?tab=2'),
                     _GlameMenuRoute('Подбор', '/home?tab=3'),
                     _GlameMenuRoute('Профиль', '/home?tab=4'),
+                    _GlameMenuRoute('Образы', '/home?tab=5'),
                     const SizedBox(height: 16),
                     _GlameMenuRoute('Новинки', '/home?tab=6'),
-                    _GlameMenuRoute('Коллекции', '/home?tab=7'),
                     _GlameMenuRoute('Бренды', '/brands'),
                     _GlameMenuRoute('Пространства', '/spaces'),
-                    _GlameMenuRoute('Сервис', '/home?tab=9'),
-                    _GlameMenuRoute('Сертификат', '/home?tab=8'),
+                    _GlameMenuRoute('Подарочный сертификат', '/home?tab=8'),
                     const SizedBox(height: 16),
                     _GlameMenuRoute('Корзина', '/home?tab=11'),
                   ],

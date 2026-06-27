@@ -76,7 +76,17 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
     return Scaffold(
       backgroundColor: GlameColors.surface2,
-      appBar: const GlameTopAppBar(),
+      appBar: GlameTopAppBar(
+        leadingIcon: Icons.arrow_back,
+        leadingTooltip: 'Назад',
+        onMenuPressed: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/home?tab=1');
+          }
+        },
+      ),
       body: async.when(
         loading: () => const Center(
           child: CircularProgressIndicator(color: GlameColors.gold),
@@ -274,7 +284,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
           const _BlockTitle('НЕДАВНО ПРОСМОТРЕННЫЕ'),
           const SizedBox(height: 8),
           SizedBox(
-            height: 196,
+            height: 224,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemBuilder: (context, index) {
@@ -282,7 +292,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 10),
                   child: SizedBox(
-                    width: 132,
+                    width: 148,
                     child: GestureDetector(
                       onTap: () {
                         final productId = _extractProductId(item);
@@ -892,14 +902,14 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
           itemCount: items.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 4,
-            mainAxisExtent: 74,
+            mainAxisExtent: 84,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
           ),
           itemBuilder: (context, index) {
             final item = items[index];
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
               decoration: BoxDecoration(
                 color: GlameColors.surface2,
                 border: Border.all(color: GlameColors.lightGray),
@@ -908,14 +918,22 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(item.$1, size: 18, color: GlameColors.textPrimary),
-                  const SizedBox(height: 8),
-                  Text(
-                    item.$2,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 9.5,
-                      height: 1.2,
-                      color: GlameColors.textPrimary,
+                  const SizedBox(height: 6),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.topCenter,
+                      child: Text(
+                        item.$2,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          height: 1.18,
+                          color: GlameColors.textPrimary,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -1291,45 +1309,45 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
             action: 'Смотреть все',
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              ...List.generate(3, (index) {
-                final item = index < displayItems.length
-                    ? displayItems[index]
-                    : null;
-                return Expanded(
-                  child: Padding(
+          SizedBox(
+            height: 224,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                ...List.generate(3, (index) {
+                  final item = index < displayItems.length
+                      ? displayItems[index]
+                      : null;
+                  return Padding(
                     padding: const EdgeInsets.only(right: 10),
-                    child: GestureDetector(
-                      onTap: item == null
-                          ? null
-                          : () {
-                              final productId = _extractProductId(item);
-                              if (productId != null) {
-                                context.push(
-                                  '/product/${Uri.encodeComponent(productId)}',
-                                );
-                              }
-                            },
-                      child: _SimilarTile(
-                        imageUrl: _productImageUrl(item),
-                        title: (item?['name'] as String?) ?? 'GLAME',
-                        price: formatRubFromKopeks(item?['price']),
+                    child: SizedBox(
+                      width: 148,
+                      child: GestureDetector(
+                        onTap: item == null
+                            ? null
+                            : () {
+                                final productId = _extractProductId(item);
+                                if (productId != null) {
+                                  context.push(
+                                    '/product/${Uri.encodeComponent(productId)}',
+                                  );
+                                }
+                              },
+                        child: _SimilarTile(
+                          imageUrl: _productImageUrl(item),
+                          title: (item?['name'] as String?) ?? 'GLAME',
+                          price: formatRubFromKopeks(item?['price']),
+                        ),
                       ),
                     ),
-                  ),
-                );
-              }),
-              Expanded(
-                child: GestureDetector(
+                  );
+                }),
+                GestureDetector(
                   onTap: () => context.go('/home?tab=1'),
-                  child: const AspectRatio(
-                    aspectRatio: 0.72,
-                    child: _MoreTile(),
-                  ),
+                  child: const SizedBox(width: 96, child: _MoreTile()),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -2053,51 +2071,53 @@ class _SimilarTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       clipBehavior: Clip.antiAlias,
-      child: AspectRatio(
-        aspectRatio: 0.72,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              color: GlameColors.surface2,
+              padding: const EdgeInsets.all(6),
               child: imageUrl != null
                   ? CachedNetworkImage(
                       imageUrl: imageUrl!,
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                       placeholder: (_, _) =>
-                          Container(color: GlameColors.surface),
+                          Container(color: GlameColors.surface2),
                       errorWidget: (_, _, _) =>
-                          Container(color: GlameColors.surface),
+                          Container(color: GlameColors.surface2),
                     )
-                  : Container(color: GlameColors.surface),
+                  : Container(color: GlameColors.surface2),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: GlameColors.textPrimary,
-                    ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: GlameColors.textPrimary,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    price,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: GlameColors.textPrimary,
-                    ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  price,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: GlameColors.textPrimary,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

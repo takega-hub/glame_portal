@@ -19,6 +19,42 @@ import 'photo_selection_api.dart';
 
 const String _photoUploadResumeRoute = '/photo-upload?resume=pick';
 
+Future<void> showPhotoUploadSheet(
+  BuildContext context, {
+  bool resumePick = false,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) => FractionallySizedBox(
+      heightFactor: 0.92,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Stack(
+          children: [
+            PhotoUploadScreen(
+              resumePick: resumePick,
+              showAppBar: false,
+              contentTopPadding: 54,
+            ),
+            Positioned(
+              top: 10,
+              right: 14,
+              child: IconButton(
+                tooltip: 'Закрыть',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close, color: GlameColors.textPrimary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 Future<void> showPhotoGuideSheet(
   BuildContext context, {
   required VoidCallback onPrimaryTap,
@@ -128,8 +164,15 @@ Future<void> _pickPhotoImage(
 
 class PhotoUploadScreen extends ConsumerStatefulWidget {
   final bool resumePick;
+  final bool showAppBar;
+  final double contentTopPadding;
 
-  const PhotoUploadScreen({super.key, this.resumePick = false});
+  const PhotoUploadScreen({
+    super.key,
+    this.resumePick = false,
+    this.showAppBar = true,
+    this.contentTopPadding = 24,
+  });
 
   @override
   ConsumerState<PhotoUploadScreen> createState() => _PhotoUploadScreenState();
@@ -164,11 +207,11 @@ class _PhotoUploadScreenState extends ConsumerState<PhotoUploadScreen> {
     );
 
     return Scaffold(
-      appBar: const GlameTopAppBar(),
+      appBar: widget.showAppBar ? const GlameTopAppBar() : null,
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 32),
+          padding: EdgeInsets.fromLTRB(28, widget.contentTopPadding, 28, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

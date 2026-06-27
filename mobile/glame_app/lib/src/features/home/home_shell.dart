@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:latlong2/latlong.dart';
 
-import '../../core/network/asset_url.dart';
 import '../../core/theme/glame_theme.dart';
 import '../../core/widgets/glame_auth_gate.dart';
 import '../auth/auth_controller.dart';
@@ -12,10 +12,11 @@ import '../catalog/catalog_screen.dart';
 import '../customer/customer_cabinet_providers.dart';
 import '../customer/stylist_entry.dart';
 import '../looks/looks_screen.dart';
-import '../service/how_to_buy_screen.dart';
 import '../stores/stores_screen.dart';
 import '../wishlist/wishlist_screen.dart';
+import 'home_providers.dart';
 import 'home_screen.dart';
+import 'photo_upload_screen.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   final int initialTab;
@@ -80,14 +81,70 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 900;
     final isHeroHome = index == 0;
+    final darkHeader = _usesDarkHeader(index);
+    final headerHeight = isDesktop ? 96.0 : (darkHeader ? 88.0 : 74.0);
 
-    final page = _buildSectionPage(
-      context: context,
-      index: index,
-      isLoggedIn: isLoggedIn,
-      email: auth.user?.email,
-      onLogout: controller.logout,
-    );
+    final page = index == 3
+        ? const SizedBox.shrink()
+        : _buildSectionPage(
+            context: context,
+            index: index,
+            isLoggedIn: isLoggedIn,
+            email: auth.user?.email,
+            onLogout: controller.logout,
+          );
+
+    final body = isHeroHome
+        ? Stack(
+            children: [
+              Positioned.fill(child: page),
+              _HeroTransparentTopBar(
+                onHomeTap: () => setState(() => index = 0),
+                onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+                onCartTap: () => setState(() {
+                  index = 11;
+                  catalogCategory = null;
+                  catalogSearch = null;
+                  lookFilter = null;
+                }),
+                onSearchTap: () => setState(() {
+                  index = 1;
+                  catalogCategory = null;
+                  catalogSearch = null;
+                  lookFilter = null;
+                }),
+              ),
+            ],
+          )
+        : Stack(
+            children: [
+              Positioned.fill(
+                child: Column(
+                  children: [
+                    _GlameHeader(
+                      selectedIndex: index,
+                      isDesktop: isDesktop,
+                      dark: darkHeader,
+                      onSelected: _selectTab,
+                    ),
+                    Expanded(
+                      child: ColoredBox(
+                        color: index == 3
+                            ? GlameColors.nearBlack
+                            : GlameColors.surface2,
+                        child: page,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (index == 3)
+                Positioned.fill(
+                  top: headerHeight,
+                  child: _buildSelectionTabPage(context),
+                ),
+            ],
+          );
 
     return Scaffold(
       key: _scaffoldKey,
@@ -95,11 +152,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         selectedIndex: index,
         onSelected: (i) {
           Navigator.of(context).pop();
-          setState(() {
-            index = i;
-            catalogCategory = null;
-            catalogSearch = null;
-          });
+          _selectTab(i);
         },
         isLoggedIn: isLoggedIn,
         onLogin: () {
@@ -112,55 +165,34 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           setState(() => index = 0);
         },
       ),
-      body: isHeroHome
-          ? Stack(
-              children: [
-                Positioned.fill(child: page),
-                _HeroTransparentTopBar(
-                  onHomeTap: () => setState(() => index = 0),
-                  onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
-                  onCartTap: () => setState(() {
-                    index = 11;
-                    catalogCategory = null;
-                    catalogSearch = null;
-                    lookFilter = null;
-                  }),
-                  onSearchTap: () => setState(() {
-                    index = 1;
-                    catalogCategory = null;
-                    catalogSearch = null;
-                    lookFilter = null;
-                  }),
-                ),
-              ],
-            )
-          : Column(
-              children: [
-                _GlameHeader(
-                  selectedIndex: index,
-                  isDesktop: isDesktop,
-                  onSelected: (i) => setState(() {
-                    index = i;
-                    catalogCategory = null;
-                    catalogSearch = null;
-                    lookFilter = null;
-                  }),
-                ),
-                Expanded(child: page),
-              ],
-            ),
+      body: body,
       bottomNavigationBar: isDesktop
           ? null
-          : _GlameBottomBar(
-              selectedIndex: index,
-              onSelected: (i) => setState(() {
-                index = i;
-                catalogCategory = null;
-                catalogSearch = null;
-                lookFilter = null;
-              }),
-            ),
+          : _GlameBottomBar(selectedIndex: index, onSelected: _selectTab),
     );
+  }
+
+  bool _usesDarkHeader(int tabIndex) {
+    return tabIndex == 1 ||
+        tabIndex == 2 ||
+        tabIndex == 3 ||
+        tabIndex == 4 ||
+        tabIndex == 5 ||
+        tabIndex == 11;
+  }
+
+  void _selectTab(int nextIndex) {
+    final nextRoute = nextIndex == 0 ? '/home' : '/home?tab=$nextIndex';
+    if (GoRouterState.of(context).uri.toString() == nextRoute) {
+      setState(() {
+        index = nextIndex;
+        catalogCategory = null;
+        catalogSearch = null;
+        lookFilter = null;
+      });
+      return;
+    }
+    context.go(nextRoute);
   }
 
   Widget _buildSectionPage({
@@ -179,7 +211,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
     if (index == 2) return const WishlistScreen();
     if (index == 3) {
-      return const SelectionMethodScreen(showAppBar: false);
+      return _buildSelectionTabPage(context);
     }
     if (index == 11) {
       return isLoggedIn
@@ -201,16 +233,16 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               onLogin: () => context.go(
                 '/login?next=${Uri.encodeComponent('/home?tab=4')}',
               ),
+              dark: true,
             );
     }
     if (index == 5) return LooksScreen(initialFilter: lookFilter);
     if (index == 6) {
       return const CatalogScreen(title: 'НОВИНКИ', initialCategory: 'NEW');
     }
-    if (index == 7) return const CatalogScreen(title: 'КОЛЛЕКЦИИ');
     if (index == 8) {
       return const _StaticInfoScreen(
-        title: 'Сертификат',
+        title: 'Подарочный сертификат',
         body:
             'Подарочный сертификат GLAME — аккуратный способ подарить выбор. Номинал и условия использования уточняются в магазинах и у консультантов.',
       );
@@ -224,6 +256,56 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
     if (index == 10) return const StoresScreen(showAppBar: false);
     return const HomeScreen();
+  }
+
+  Widget _buildSelectionTabPage(BuildContext context) {
+    final stylistStatus = ref.watch(stylistChatStatusProvider).asData?.value;
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: const Color(0xFF111111),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 22, 28, 32),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _SelectionTabHeader(),
+                const SizedBox(height: 20),
+                _SelectionTabAction(
+                  number: '01',
+                  title: 'Через AI-подбор',
+                  description: 'По фото, форме и масштабу',
+                  onTap: () => showPhotoUploadSheet(context),
+                ),
+                const SizedBox(height: 14),
+                _SelectionTabAction(
+                  number: '02',
+                  title: 'С живым стилистом',
+                  description: 'Онлайн или в пространстве',
+                  onTap: () => showStylistContactSheet(
+                    context,
+                    source: 'selection_screen',
+                    scenario: 'live_stylist',
+                    statusPayload: stylistStatus,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _SelectionTabAction(
+                  number: '03',
+                  title: 'Подобрать подарок',
+                  description: 'Для особенного момента',
+                  onTap: () => context.push('/selection/gift'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   static String? _normalizeCategory(String? category) {
@@ -245,20 +327,23 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 class _GlameHeader extends StatelessWidget {
   final int selectedIndex;
   final bool isDesktop;
+  final bool dark;
   final ValueChanged<int> onSelected;
 
   const _GlameHeader({
     required this.selectedIndex,
     required this.isDesktop,
+    this.dark = false,
     required this.onSelected,
   });
 
   @override
   Widget build(BuildContext context) {
-    final height = isDesktop ? 96.0 : 74.0;
+    final height = isDesktop ? 96.0 : (dark ? 88.0 : 74.0);
     return Builder(
       builder: (context) => GlameTopAppBar(
         height: height,
+        dark: dark,
         onMenuPressed: () => Scaffold.of(context).openDrawer(),
         onLogoPressed: () => onSelected(0),
         onCartPressed: () => onSelected(11),
@@ -306,10 +391,11 @@ class _HeroTransparentTopBar extends StatelessWidget {
             Center(
               child: InkWell(
                 onTap: onHomeTap,
-                child: Image.asset(
-                  GlameAssets.logoSilver,
-                  height: 34,
-                  fit: BoxFit.contain,
+                child: Container(
+                  width: 154,
+                  height: 38,
+                  alignment: Alignment.center,
+                  child: const GlameHeaderLogo(height: 24, silver: true),
                 ),
               ),
             ),
@@ -380,15 +466,18 @@ class _GlameBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasBottomInset = MediaQuery.of(context).padding.bottom > 0;
+    final bottomAir = hasBottomInset ? 6.0 : 0.0;
+
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: GlameColors.surface2,
         border: Border(top: BorderSide(color: GlameColors.borderGray)),
       ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: GlameUi.mobileBottomNavHeight,
+      child: SizedBox(
+        height: GlameUi.mobileBottomNavHeight + bottomAir,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: bottomAir),
           child: Row(
             children: [
               _BottomNavHome(
@@ -416,6 +505,130 @@ class _GlameBottomBar extends StatelessWidget {
                 onTap: () => onSelected(4),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionTabHeader extends StatelessWidget {
+  const _SelectionTabHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Подбор',
+          style: TextStyle(
+            fontSize: 24,
+            height: 1.1,
+            color: GlameColors.whiteGlame,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        SizedBox(height: 12),
+        Divider(height: 1, thickness: 1, color: GlameColors.borderGray),
+      ],
+    );
+  }
+}
+
+class _SelectionTabAction extends StatelessWidget {
+  final String number;
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+
+  const _SelectionTabAction({
+    required this.number,
+    required this.title,
+    required this.description,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: title,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: GlameColors.whiteGlame.withValues(alpha: 0.05),
+          highlightColor: GlameColors.whiteGlame.withValues(alpha: 0.03),
+          child: Container(
+            height: 88,
+            decoration: BoxDecoration(
+              color: const Color(0xFF18191A),
+              border: Border.all(color: const Color(0xFF55585C)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 54,
+                  child: Center(
+                    child: Text(
+                      number,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: GlameColors.whiteGlame,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                Container(width: 1, color: const Color(0xFF55585C)),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 17, 12, 15),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            height: 1.15,
+                            color: GlameColors.whiteGlame,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            height: 1.25,
+                            color: GlameColors.textSecondary,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  width: 48,
+                  child: Center(
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 24,
+                      color: GlameColors.whiteGlame,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -524,10 +737,10 @@ class _GlameDrawer extends StatelessWidget {
               _DrawerItem('Мой стиль', 2, selectedIndex, onSelected),
               _DrawerItem('Подбор', 3, selectedIndex, onSelected),
               _DrawerItem('Профиль', 4, selectedIndex, onSelected),
+              _DrawerItem('Образы', 5, selectedIndex, onSelected),
               const SizedBox(height: 20),
               const _DrawerSectionLabel('Витрина'),
               _DrawerItem('Новинки', 6, selectedIndex, onSelected),
-              _DrawerItem('Коллекции', 7, selectedIndex, onSelected),
               _DrawerRouteItem(
                 label: 'Бренды',
                 onTap: () {
@@ -536,8 +749,12 @@ class _GlameDrawer extends StatelessWidget {
                 },
               ),
               _DrawerItem('Пространства', 10, selectedIndex, onSelected),
-              _DrawerItem('Сервис', 9, selectedIndex, onSelected),
-              _DrawerItem('Сертификат', 8, selectedIndex, onSelected),
+              _DrawerItem(
+                'Подарочный сертификат',
+                8,
+                selectedIndex,
+                onSelected,
+              ),
               const SizedBox(height: 24),
               Container(height: 1, color: GlameColors.borderGray),
               const SizedBox(height: 18),
@@ -701,9 +918,6 @@ class _Profile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(customerProfileProvider);
     final loyaltyAsync = ref.watch(customerLoyaltyProvider);
-    final ordersAsync = ref.watch(customerOrdersProvider);
-    final historyAsync = ref.watch(customerPurchaseHistoryProvider);
-    final savedLooksAsync = ref.watch(customerSavedLooksProvider);
 
     return Theme(
       data: Theme.of(context).copyWith(
@@ -733,27 +947,14 @@ class _Profile extends ConsumerWidget {
         safeTop: false,
         padding: EdgeInsets.zero,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
+          padding: const EdgeInsets.fromLTRB(28, 40, 28, 28),
           children: [
-            const GlameSectionHeader(
-              title: 'ЛИЧНЫЙ\nКАБИНЕТ',
-              subtitle:
-                  'Покупки, бонусы, сохраненные образы и связь со стилистом',
-              dark: true,
-            ),
-            const SizedBox(height: 24),
             profileAsync.when(
               data: (profile) {
                 final fullName = (profile['full_name'] as String?)?.trim();
                 final phone = (profile['phone'] as String?)?.trim();
                 final points =
                     (profile['loyalty_points'] as num?)?.toInt() ?? 0;
-                final totalPurchases =
-                    (profile['total_purchases'] as num?)?.toInt() ?? 0;
-                final totalSpent = (profile['total_spent'] as num?) ?? 0;
-                final averageCheck = (profile['average_check'] as num?) ?? 0;
-                final lastPurchaseDate =
-                    (profile['last_purchase_date'] as String?)?.trim();
                 final preferredDelivery = profile['preferred_delivery'] is Map
                     ? Map<String, dynamic>.from(
                         profile['preferred_delivery'] as Map,
@@ -765,161 +966,61 @@ class _Profile extends ConsumerWidget {
                 final contact = phone?.isNotEmpty == true
                     ? phone!
                     : (email ?? 'Без email');
+                final loyalty = loyaltyAsync.maybeWhen(
+                  data: (value) => value,
+                  orElse: () => const <String, dynamic>{},
+                );
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    GlamePanel(
-                      dark: true,
-                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'ПРОФИЛЬ',
-                            style: TextStyle(
-                              fontSize: 11,
-                              letterSpacing: 1.6,
-                              color: GlameColors.steelGray,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      displayName,
-                                      style: const TextStyle(
-                                        fontSize: 30,
-                                        height: 1.02,
-                                        fontWeight: FontWeight.w400,
-                                        color: GlameColors.whiteGlame,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      contact,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        color: GlameColors.coldLightGray,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    '$points',
-                                    style: const TextStyle(
-                                      fontSize: 34,
-                                      height: 0.95,
-                                      color: GlameColors.whiteGlame,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  const Text(
-                                    'БОНУСОВ',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      letterSpacing: 1.2,
-                                      color: GlameColors.steelGray,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                          Container(
-                            height: 1,
-                            color: GlameColors.borderGray.withValues(
-                              alpha: 0.7,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _ProfileInlineStat(
-                                  label: 'Покупки',
-                                  value: '$totalPurchases',
-                                ),
-                              ),
-                              Expanded(
-                                child: _ProfileInlineStat(
-                                  label: 'Сумма',
-                                  value: _formatRub(totalSpent),
-                                ),
-                              ),
-                              Expanded(
-                                child: _ProfileInlineStat(
-                                  label: 'Средний чек',
-                                  value: _formatRub(averageCheck),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (lastPurchaseDate != null &&
-                              lastPurchaseDate.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              'Последняя покупка: ${_formatIsoDate(lastPurchaseDate)}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: GlameColors.coldLightGray,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                    _ProfileStitchHero(
+                      name: displayName,
+                      contact: contact,
+                      points: points,
+                      status: _profileStatusLabel(loyalty),
+                      progress: _profileProgressFromLoyalty(loyalty),
+                      nextLevelAmount: _profileNextLevelAmount(loyalty),
                     ),
-                    const SizedBox(height: 18),
-                    _ProfileMetricGrid(
-                      children: [
-                        _ProfileMetricCard(
-                          title: 'Стилист GLAME',
-                          value: 'Чат',
-                          subtitle: 'Персональный подбор',
-                          icon: Icons.support_agent_outlined,
+                    const SizedBox(height: 26),
+                    _ProfileActionList(
+                      actions: [
+                        _ProfileAction(
+                          label: 'Мои заказы',
+                          onTap: () => _showProfileOrdersDialog(context, ref),
+                        ),
+                        _ProfileAction(
+                          label: 'История покупок',
+                          onTap: () => _showProfileHistoryDialog(context, ref),
+                        ),
+                        _ProfileAction(
+                          label: 'Избранное',
+                          onTap: () => context.go('/home?tab=2'),
+                        ),
+                        _ProfileAction(
+                          label: 'Обращения к стилисту',
                           onTap: () => showStylistContactSheet(
                             context,
                             source: 'profile_screen',
                             scenario: 'live_stylist',
                           ),
                         ),
-                        _ProfileMetricCard(
-                          title: 'Избранное',
-                          value: 'Сохранить',
-                          subtitle: 'Товары и образы',
-                          icon: Icons.favorite_border,
-                          onTap: () => context.go('/home?tab=2'),
-                        ),
-                        _ProfileMetricCard(
-                          title: 'Доставка',
-                          value: _deliveryShortLabel(preferredDelivery),
-                          subtitle: _deliverySummary(preferredDelivery),
-                          icon: Icons.local_shipping_outlined,
+                        _ProfileAction(
+                          label: 'Настройки доставки',
                           onTap: () => _editPreferredDelivery(
                             context: context,
                             ref: ref,
                             currentDelivery: preferredDelivery,
                           ),
                         ),
-                        _ProfileMetricCard(
-                          title: 'Корзина',
-                          value: 'Заказы',
-                          subtitle: 'Оформление и оплата',
-                          icon: Icons.shopping_bag_outlined,
-                          onTap: () => context.go('/home?tab=11'),
+                        _ProfileAction(
+                          label: 'Клиентам',
+                          onTap: () => context.push('/clients'),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 28),
+                    _ProfileLogoutButton(onTap: onLogout),
                   ],
                 );
               },
@@ -932,554 +1033,9 @@ class _Profile extends ConsumerWidget {
                 style: const TextStyle(color: GlameColors.coldLightGray),
               ),
             ),
-            const SizedBox(height: 20),
-            loyaltyAsync.when(
-              data: (loyalty) {
-                final info = (loyalty['program_info'] is Map)
-                    ? Map<String, dynamic>.from(loyalty['program_info'] as Map)
-                    : <String, dynamic>{};
-                final levelsRaw = info['levels'];
-                final levels = levelsRaw is List
-                    ? levelsRaw
-                          .whereType<Map>()
-                          .map((x) => Map<String, dynamic>.from(x))
-                          .toList()
-                    : <Map<String, dynamic>>[];
-
-                final profile = profileAsync.maybeWhen(
-                  data: (x) => x,
-                  orElse: () => const <String, dynamic>{},
-                );
-                final purchases =
-                    (profile['total_purchases'] as num?)?.toInt() ?? 0;
-                final spent = (profile['total_spent'] as num?)?.toDouble() ?? 0;
-                final progressRaw = loyalty['level_progress'];
-                final progress = progressRaw is Map
-                    ? _progressFromApi(Map<String, dynamic>.from(progressRaw))
-                    : _resolveNextLevel(levels, purchases, spent);
-
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: GlameColors.graphite.withValues(alpha: 0.72),
-                    border: Border.all(color: GlameColors.borderGray),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _ProfileSectionHeading(
-                        eyebrow: 'LOYALTY',
-                        title: 'Бонусная программа',
-                      ),
-                      const SizedBox(height: 14),
-                      if (progress != null) ...[
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'До уровня "${progress.nextLevelName}"',
-                                style: const TextStyle(
-                                  fontSize: 17,
-                                  color: GlameColors.whiteGlame,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              _formatRub(progress.remainingTotal),
-                              style: const TextStyle(
-                                fontSize: 17,
-                                color: GlameColors.whiteGlame,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        LinearProgressIndicator(
-                          value: progress.progress.clamp(0, 1),
-                          minHeight: 4,
-                          backgroundColor: GlameColors.nearBlack,
-                          color: GlameColors.whiteGlame,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      if (levels.isNotEmpty)
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: levels
-                              .map((lvl) => _buildLevelChip(lvl))
-                              .toList(growable: false),
-                        ),
-                    ],
-                  ),
-                );
-              },
-              loading: () => const SizedBox.shrink(),
-              error: (_, _) => const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 24),
-            const _ProfileSectionHeading(
-              eyebrow: 'STYLE',
-              title: 'Сохраненные образы',
-            ),
-            const SizedBox(height: 10),
-            savedLooksAsync.when(
-              data: (rows) {
-                if (rows.isEmpty) {
-                  return const _ProfileEmptyPanel(
-                    text: 'Пока нет сохраненных образов',
-                  );
-                }
-                return _buildSavedLooksCarousel(
-                  context: context,
-                  ref: ref,
-                  rows: rows,
-                );
-              },
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(color: GlameColors.whiteGlame),
-              ),
-              error: (_, _) => const Text(
-                'Не удалось загрузить сохраненные образы',
-                style: TextStyle(color: GlameColors.coldLightGray),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const _ProfileSectionHeading(
-              eyebrow: 'ORDERS',
-              title: 'Мои заказы',
-            ),
-            const SizedBox(height: 10),
-            ordersAsync.when(
-              data: (rows) {
-                if (rows.isEmpty) {
-                  return const _ProfileEmptyPanel(text: 'Заказов пока нет');
-                }
-                return Column(
-                  children: rows
-                      .map((row) {
-                        final orderId = (row['id'] as String?)?.trim() ?? '';
-                        final orderStatus =
-                            ((row['order_status'] ?? row['status']) as String?)
-                                ?.trim() ??
-                            'pending';
-                        final amount =
-                            (row['total_amount'] as num?)?.toInt() ?? 0;
-                        final createdAt =
-                            (row['created_at'] as String?)?.trim() ?? '';
-                        final payment = row['payment'] is Map
-                            ? Map<String, dynamic>.from(row['payment'] as Map)
-                            : <String, dynamic>{};
-                        final paymentId =
-                            (payment['payment_id'] ?? payment['id'] as Object?)
-                                ?.toString();
-                        final paymentStatus = (payment['status'] as String?)
-                            ?.trim();
-                        final confirmationUrl =
-                            (payment['confirmation_url'] as String?)?.trim();
-                        final delivery = row['delivery'] is Map
-                            ? Map<String, dynamic>.from(row['delivery'] as Map)
-                            : <String, dynamic>{};
-                        final canPay =
-                            paymentStatus != null &&
-                            paymentStatus != 'succeeded' &&
-                            confirmationUrl != null &&
-                            confirmationUrl.isNotEmpty;
-                        final canDelete =
-                            (paymentStatus ?? 'pending') != 'succeeded' ||
-                            orderStatus == 'shipped';
-
-                        return Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: GlameColors.graphite,
-                            border: Border.all(color: GlameColors.borderGray),
-                            borderRadius: BorderRadius.zero,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Заказ #${orderId.length > 8 ? orderId.substring(0, 8) : orderId}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: GlameColors.whiteGlame,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${_formatIsoDate(createdAt)} · ${_formatRub(amount / 100)}',
-                                style: const TextStyle(
-                                  color: GlameColors.coldLightGray,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Статус заказа: ${_orderStatusLabel(orderStatus)}',
-                                style: const TextStyle(
-                                  color: GlameColors.coldLightGray,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Статус оплаты: ${_paymentStatusLabel(paymentStatus)}',
-                                style: const TextStyle(
-                                  color: GlameColors.whiteGlame,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                _deliverySummary(delivery),
-                                style: const TextStyle(
-                                  color: GlameColors.coldLightGray,
-                                ),
-                              ),
-                              if (paymentId != null &&
-                                  paymentId.isNotEmpty) ...[
-                                const SizedBox(height: 10),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    OutlinedButton(
-                                      onPressed: () async {
-                                        final messenger = ScaffoldMessenger.of(
-                                          context,
-                                        );
-                                        try {
-                                          await ref
-                                              .read(customerCabinetApiProvider)
-                                              .refreshPayment(paymentId);
-                                          ref.invalidate(
-                                            customerOrdersProvider,
-                                          );
-                                          messenger.showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Статус оплаты обновлен',
-                                              ),
-                                            ),
-                                          );
-                                        } catch (_) {
-                                          messenger.showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Не удалось обновить статус оплаты',
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                      child: const Text('Обновить статус'),
-                                    ),
-                                    if (canPay)
-                                      FilledButton(
-                                        onPressed: () async {
-                                          final uri = Uri.tryParse(
-                                            confirmationUrl,
-                                          );
-                                          if (uri == null) return;
-                                          await launchUrl(
-                                            uri,
-                                            mode:
-                                                LaunchMode.externalApplication,
-                                          );
-                                        },
-                                        child: const Text('Оплатить'),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  if (canDelete)
-                                    OutlinedButton(
-                                      onPressed: () => _confirmDeleteOrder(
-                                        context: context,
-                                        ref: ref,
-                                        orderId: orderId,
-                                      ),
-                                      child: const Text('Удалить заказ'),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      })
-                      .toList(growable: false),
-                );
-              },
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(color: GlameColors.whiteGlame),
-              ),
-              error: (_, _) => const Text(
-                'Не удалось загрузить заказы',
-                style: TextStyle(color: GlameColors.coldLightGray),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const _ProfileSectionHeading(
-              eyebrow: 'HISTORY',
-              title: 'История покупок',
-            ),
-            const SizedBox(height: 10),
-            historyAsync.when(
-              data: (rows) {
-                if (rows.isEmpty) {
-                  return const _ProfileEmptyPanel(text: 'Покупок пока нет');
-                }
-                return Column(
-                  children: rows
-                      .map((row) {
-                        final name = (row['product_name'] as String?)?.trim();
-                        final date =
-                            (row['purchase_date'] as String?)?.trim() ?? '';
-                        final amount = (row['total_amount'] as num?) ?? 0;
-                        final quantity =
-                            (row['quantity'] as num?)?.toInt() ?? 1;
-                        return Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: GlameColors.graphite,
-                            border: Border.all(color: GlameColors.borderGray),
-                            borderRadius: BorderRadius.zero,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                name?.isNotEmpty == true ? name! : 'Товар',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: GlameColors.whiteGlame,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${_formatIsoDate(date)} · $quantity шт.',
-                                style: const TextStyle(
-                                  color: GlameColors.coldLightGray,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _formatRub(amount),
-                                style: const TextStyle(
-                                  color: GlameColors.whiteGlame,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      })
-                      .toList(growable: false),
-                );
-              },
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(color: GlameColors.whiteGlame),
-              ),
-              error: (_, _) => const Text(
-                'Не удалось загрузить историю покупок',
-                style: TextStyle(color: GlameColors.coldLightGray),
-              ),
-            ),
-            const SizedBox(height: 32),
-            OutlinedButton(onPressed: onLogout, child: const Text('Выйти')),
+            const SizedBox(height: 12),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSavedLooksCarousel({
-    required BuildContext context,
-    required WidgetRef ref,
-    required List<Map<String, dynamic>> rows,
-  }) {
-    final visibleRows = rows.take(8).toList(growable: false);
-    return SizedBox(
-      height: 180,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: visibleRows.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final row = visibleRows[index];
-          final name = (row['look_name'] as String?)?.trim();
-          final imageUrl = resolveAssetUrl(row['look_image_url']);
-          final style = (row['look_style'] as String?)?.trim();
-          final mood = (row['look_mood'] as String?)?.trim();
-          final notes = (row['notes'] as String?)?.trim();
-          final createdAt = (row['created_at'] as String?)?.trim() ?? '';
-          final subtitleParts = <String>[
-            if (style != null && style.isNotEmpty) style,
-            if (mood != null && mood.isNotEmpty) mood,
-          ];
-          final lookId = (row['look_id'] as String?)?.trim() ?? '';
-          final savedLookId = (row['id'] as String?)?.trim() ?? '';
-
-          return InkWell(
-            onTap: lookId.isEmpty ? null : () => context.push('/look/$lookId'),
-            borderRadius: BorderRadius.zero,
-            child: Container(
-              width: 236,
-              decoration: BoxDecoration(
-                color: GlameColors.graphite,
-                border: Border.all(color: GlameColors.borderGray),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: 92,
-                    width: double.infinity,
-                    child: imageUrl == null
-                        ? Container(color: GlameColors.nearBlack)
-                        : Image.network(imageUrl, fit: BoxFit.cover),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name?.isNotEmpty == true ? name! : 'Образ',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: GlameColors.whiteGlame,
-                          ),
-                        ),
-                        if (subtitleParts.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            subtitleParts.join(' · '),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: GlameColors.coldLightGray,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                        if (notes != null && notes.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            notes,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: GlameColors.coldLightGray,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 4),
-                        Text(
-                          _formatIsoDate(createdAt),
-                          style: const TextStyle(
-                            color: GlameColors.steelGray,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    height: 1,
-                    color: GlameColors.borderGray.withValues(alpha: 0.55),
-                  ),
-                  SizedBox(
-                    height: 38,
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'СМОТРЕТЬ',
-                            style: TextStyle(
-                              fontSize: 10,
-                              letterSpacing: 1.1,
-                              color: GlameColors.whiteGlame,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Удалить из сохраненных',
-                          onPressed: savedLookId.isEmpty
-                              ? null
-                              : () => _confirmDeleteSavedLook(
-                                  context: context,
-                                  ref: ref,
-                                  savedLookId: savedLookId,
-                                ),
-                          icon: const Icon(
-                            Icons.close,
-                            size: 18,
-                            color: GlameColors.coldLightGray,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildLevelChip(Map<String, dynamic> lvl) {
-    final name = (lvl['name'] as String?)?.trim();
-    final condition = (lvl['condition'] as String?)?.trim();
-    final minPurchases = (lvl['min_purchases'] as num?)?.toInt();
-    final minTotal = (lvl['min_total'] as num?)?.toDouble();
-    final maxTotal = (lvl['max_total'] as num?)?.toDouble();
-    final parts = <String>[];
-    if (minPurchases != null && minPurchases > 0) {
-      parts.add('от $minPurchases покупок');
-    }
-    if (condition != null && condition.isNotEmpty) {
-      parts.add(condition);
-    } else if (minTotal != null && minTotal > 0) {
-      if (maxTotal != null) {
-        parts.add('${_formatRub(minTotal)} - ${_formatRub(maxTotal)}');
-      } else {
-        parts.add('от ${_formatRub(minTotal)}');
-      }
-    }
-    final subtitle = parts.join(' · ');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: GlameColors.graphite,
-        border: Border.all(color: GlameColors.borderGray),
-        borderRadius: BorderRadius.zero,
-      ),
-      child: Text(
-        subtitle.isEmpty
-            ? (name?.isNotEmpty == true ? name! : 'Уровень')
-            : '${name ?? 'Уровень'}: $subtitle',
-        style: const TextStyle(fontSize: 12, color: GlameColors.coldLightGray),
       ),
     );
   }
@@ -1498,24 +1054,445 @@ class _Profile extends ConsumerWidget {
     if (method != 'pickup' && method != 'cdek_pvz' && method != 'pvz') {
       method = 'pickup';
     }
+    if (method == 'pvz') method = 'cdek_pvz';
 
-    final storeCtrl = TextEditingController(
-      text: (currentDelivery['store_name'] ?? '').toString(),
+    List<dynamic> rawStores = const [];
+    try {
+      rawStores = await ref.read(homeApiProvider).getPickupStores();
+    } catch (_) {
+      rawStores = const [];
+    }
+    if (!context.mounted) return;
+
+    final apiStoreOptions = _deliveryStoreOptions(rawStores);
+    final storeOptions = apiStoreOptions.isEmpty
+        ? _fallbackDeliveryStores
+        : apiStoreOptions;
+    final storesFromFallback = apiStoreOptions.isEmpty;
+    final currentStoreId =
+        (currentDelivery['store_id'] ?? currentDelivery['storeId'] ?? '')
+            .toString()
+            .trim();
+    final currentStoreName = (currentDelivery['store_name'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    String? selectedStoreId = _initialDeliveryStoreId(
+      stores: storeOptions,
+      currentStoreId: currentStoreId,
+      currentStoreName: currentStoreName,
     );
+
     final cityCtrl = TextEditingController(
       text: (currentDelivery['city'] ?? currentDelivery['city_name'] ?? '')
           .toString(),
     );
-    final pvzCtrl = TextEditingController(
-      text: (currentDelivery['pvz_name'] ?? currentDelivery['pvz_code'] ?? '')
-          .toString(),
+    Map<String, dynamic>? selectedCdekCity = _deliveryInitialCdekCity(
+      currentDelivery,
     );
-    final addressCtrl = TextEditingController(
-      text: (currentDelivery['address'] ?? '').toString(),
+    Map<String, dynamic>? selectedPvz = _deliveryInitialCdekPvz(
+      currentDelivery,
     );
-    final commentCtrl = TextEditingController(
-      text: (currentDelivery['comment'] ?? '').toString(),
-    );
+    List<Map<String, dynamic>> cdekPvz = const [];
+    bool loadingCdekPvz = false;
+    String? cdekError;
+
+    Future<Map<String, dynamic>?> pickCdekCity(
+      BuildContext dialogContext,
+    ) async {
+      final queryController = TextEditingController(
+        text: cityCtrl.text.trim().isEmpty ? 'Ялта' : cityCtrl.text.trim(),
+      );
+      final api = ref.read(homeApiProvider);
+      List<Map<String, dynamic>> cities = const [];
+      bool loading = false;
+      String? error;
+
+      Future<void> runSearch(
+        StateSetter modalSetState, [
+        String? forced,
+      ]) async {
+        final query = (forced ?? queryController.text).trim();
+        if (query.length < 2) {
+          modalSetState(() {
+            cities = const [];
+            error = 'Введите минимум 2 символа';
+          });
+          return;
+        }
+        modalSetState(() {
+          loading = true;
+          error = null;
+        });
+        try {
+          final result = await api.getCdekCities(query);
+          modalSetState(() {
+            cities = result;
+            if (cities.isEmpty) error = 'Города не найдены';
+          });
+        } catch (_) {
+          modalSetState(() => error = 'Ошибка поиска городов СДЭК');
+        } finally {
+          modalSetState(() => loading = false);
+        }
+      }
+
+      try {
+        cities = await api.getCdekCities(queryController.text.trim());
+        if (cities.isEmpty) error = 'Города не найдены';
+      } catch (_) {
+        error = 'Ошибка поиска городов СДЭК';
+      }
+      if (!dialogContext.mounted) {
+        queryController.dispose();
+        return null;
+      }
+
+      final picked = await showModalBottomSheet<Map<String, dynamic>>(
+        context: dialogContext,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (sheetContext, modalSetState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  MediaQuery.of(sheetContext).viewInsets.bottom + 12,
+                ),
+                child: SizedBox(
+                  height: 440,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Выбор города СДЭК',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: queryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Введите город',
+                          hintText: 'Например, Москва',
+                        ),
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (value) =>
+                            runSearch(modalSetState, value.trim()),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: loading
+                            ? null
+                            : () => runSearch(modalSetState),
+                        icon: const Icon(Icons.search, size: 18),
+                        label: const Text('Найти город'),
+                      ),
+                      if (loading) ...[
+                        const SizedBox(height: 8),
+                        const LinearProgressIndicator(),
+                      ],
+                      if (error != null) ...[
+                        const SizedBox(height: 8),
+                        Text(error!),
+                      ],
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: ListView.separated(
+                          itemCount: cities.length,
+                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final city = cities[i];
+                            return ListTile(
+                              title: Text(_deliveryCdekCityLabel(city)),
+                              subtitle: Text('Код: ${city['code'] ?? '-'}'),
+                              onTap: () => Navigator.of(sheetContext).pop(city),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+      queryController.dispose();
+      return picked;
+    }
+
+    Future<bool> loadCdekPvz(StateSetter modalSetState) async {
+      final cityCode = _deliveryInt(selectedCdekCity?['code']);
+      if (cityCode == null) {
+        modalSetState(() {
+          cdekError = 'Не удалось определить код города СДЭК';
+        });
+        return false;
+      }
+      modalSetState(() {
+        loadingCdekPvz = true;
+        cdekError = null;
+      });
+      try {
+        final result = await ref.read(homeApiProvider).getCdekPvz(cityCode);
+        modalSetState(() {
+          cdekPvz = result;
+          loadingCdekPvz = false;
+          if (result.isEmpty) {
+            cdekError = 'Для выбранного города ПВЗ не найдены';
+          }
+        });
+        return result.isNotEmpty;
+      } catch (_) {
+        modalSetState(() {
+          loadingCdekPvz = false;
+          cdekError = 'Не удалось загрузить пункты ПВЗ СДЭК';
+        });
+        return false;
+      }
+    }
+
+    Future<Map<String, dynamic>?> pickCdekPvzList(
+      BuildContext dialogContext,
+      StateSetter parentSetState,
+    ) async {
+      if (selectedCdekCity == null) return null;
+      if (cdekPvz.isEmpty) {
+        final loaded = await loadCdekPvz(parentSetState);
+        if (!loaded || !dialogContext.mounted) return null;
+      }
+
+      final queryController = TextEditingController();
+      final picked = await showModalBottomSheet<Map<String, dynamic>>(
+        context: dialogContext,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (sheetContext, modalSetState) {
+            final query = queryController.text.trim().toLowerCase();
+            final filtered = query.isEmpty
+                ? cdekPvz
+                : cdekPvz
+                      .where(
+                        (pvz) => _deliveryCdekPvzLabel(
+                          pvz,
+                        ).toLowerCase().contains(query),
+                      )
+                      .toList();
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  8,
+                  16,
+                  MediaQuery.of(sheetContext).viewInsets.bottom + 12,
+                ),
+                child: SizedBox(
+                  height: 440,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Выбор пункта ПВЗ СДЭК',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: queryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Поиск ПВЗ',
+                        ),
+                        onChanged: (_) => modalSetState(() {}),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child: Text('Пункты выдачи не найдены'),
+                              )
+                            : ListView.separated(
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, _) =>
+                                    const Divider(height: 1),
+                                itemBuilder: (_, i) {
+                                  final pvz = filtered[i];
+                                  return ListTile(
+                                    title: Text(_deliveryCdekPvzLabel(pvz)),
+                                    subtitle: Text(
+                                      'Код: ${pvz['code'] ?? '-'}',
+                                    ),
+                                    onTap: () =>
+                                        Navigator.of(sheetContext).pop(pvz),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+      queryController.dispose();
+      return picked;
+    }
+
+    Future<Map<String, dynamic>?> pickCdekPvzMap(
+      BuildContext dialogContext,
+      StateSetter parentSetState,
+    ) async {
+      if (selectedCdekCity == null) return null;
+      if (cdekPvz.isEmpty) {
+        final loaded = await loadCdekPvz(parentSetState);
+        if (!loaded || !dialogContext.mounted) return null;
+      }
+      final points = cdekPvz
+          .map((pvz) {
+            final point = _deliveryCdekPvzLatLng(pvz);
+            if (point == null) return null;
+            return (pvz, point);
+          })
+          .whereType<(Map<String, dynamic>, LatLng)>()
+          .toList();
+      if (points.isEmpty) {
+        parentSetState(() {
+          cdekError =
+              'Для выбранного города нет координат ПВЗ для отображения карты';
+        });
+        return null;
+      }
+
+      final picked = await showDialog<Map<String, dynamic>>(
+        context: dialogContext,
+        builder: (mapContext) {
+          Map<String, dynamic>? selected = selectedPvz;
+          return StatefulBuilder(
+            builder: (mapContext, modalSetState) => Dialog(
+              insetPadding: const EdgeInsets.all(12),
+              child: SizedBox(
+                width: 900,
+                height: 660,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Выбор ПВЗ СДЭК на карте',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(mapContext).pop(),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'Нажмите на маркер, затем подтвердите пункт ниже',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: FlutterMap(
+                        options: MapOptions(
+                          initialCenter: points.first.$2,
+                          initialZoom: 12,
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            userAgentPackageName: 'ru.glamejewelry.glame_app',
+                          ),
+                          MarkerLayer(
+                            markers: points
+                                .map(
+                                  (item) => Marker(
+                                    point: item.$2,
+                                    width: 42,
+                                    height: 42,
+                                    child: Tooltip(
+                                      message: _deliveryCdekPvzLabel(item.$1),
+                                      child: GestureDetector(
+                                        onTap: () => modalSetState(
+                                          () => selected = item.$1,
+                                        ),
+                                        child: Icon(
+                                          Icons.location_on,
+                                          color:
+                                              selected != null &&
+                                                  '${selected!['code']}' ==
+                                                      '${item.$1['code']}'
+                                              ? GlameColors.graphite
+                                              : GlameColors.gold,
+                                          size: 34,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: GlameColors.lightGray),
+                        ),
+                      ),
+                      child: selected == null
+                          ? const Text('Выберите маркер ПВЗ на карте')
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  _deliveryCdekPvzLabel(selected!),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _deliveryCdekPvzAddress(selected!),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 10),
+                                FilledButton(
+                                  onPressed: () =>
+                                      Navigator.of(mapContext).pop(selected),
+                                  child: const Text('Выбрать это ПВЗ'),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+      return picked;
+    }
 
     final shouldSave = await showDialog<bool>(
       context: context,
@@ -1547,45 +1524,111 @@ class _Profile extends ConsumerWidget {
                   ),
                   const SizedBox(height: 12),
                   if (method == 'pickup') ...[
-                    TextField(
-                      controller: storeCtrl,
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedStoreId,
                       decoration: const InputDecoration(
                         labelText: 'Магазин самовывоза',
                       ),
+                      isExpanded: true,
+                      items: storeOptions
+                          .map(
+                            (store) => DropdownMenuItem(
+                              value: store.id,
+                              child: Text(
+                                store.label,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: storeOptions.isEmpty
+                          ? null
+                          : (value) {
+                              modalSetState(() => selectedStoreId = value);
+                            },
                     ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: cityCtrl,
-                      decoration: const InputDecoration(labelText: 'Город'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: addressCtrl,
-                      decoration: const InputDecoration(labelText: 'Адрес'),
-                    ),
+                    if (storeOptions.isEmpty) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Магазины не загрузились. Проверьте соединение и повторите.',
+                      ),
+                    ] else if (storesFromFallback) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Показываем сохраненный список пространств. Данные API обновятся автоматически, когда сервер будет доступен.',
+                      ),
+                    ],
                   ] else ...[
-                    TextField(
-                      controller: cityCtrl,
-                      decoration: const InputDecoration(labelText: 'Город'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: pvzCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'ПВЗ / пункт',
+                    OutlinedButton(
+                      onPressed: () async {
+                        final picked = await pickCdekCity(ctx);
+                        if (picked == null) return;
+                        modalSetState(() {
+                          selectedCdekCity = picked;
+                          cityCtrl.text = _deliveryCdekCityLabel(picked);
+                          selectedPvz = null;
+                          cdekPvz = const [];
+                          cdekError = null;
+                        });
+                        await loadCdekPvz(modalSetState);
+                      },
+                      child: Text(
+                        selectedCdekCity == null
+                            ? 'Выбрать город СДЭК'
+                            : 'Город: ${_deliveryCdekCityLabel(selectedCdekCity!)}',
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: addressCtrl,
-                      decoration: const InputDecoration(labelText: 'Адрес ПВЗ'),
-                    ),
+                    if (selectedCdekCity != null) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: loadingCdekPvz
+                            ? null
+                            : () async {
+                                final picked = await pickCdekPvzList(
+                                  ctx,
+                                  modalSetState,
+                                );
+                                if (picked == null) return;
+                                modalSetState(() {
+                                  selectedPvz = picked;
+                                  cdekError = null;
+                                });
+                              },
+                        child: Text(
+                          selectedPvz == null
+                              ? 'Выбрать пункт ПВЗ СДЭК'
+                              : 'ПВЗ: ${_deliveryCdekPvzLabel(selectedPvz!)}',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: loadingCdekPvz
+                            ? null
+                            : () async {
+                                final picked = await pickCdekPvzMap(
+                                  ctx,
+                                  modalSetState,
+                                );
+                                if (picked == null) return;
+                                modalSetState(() {
+                                  selectedPvz = picked;
+                                  cdekError = null;
+                                });
+                              },
+                        icon: const Icon(Icons.map_outlined, size: 18),
+                        label: const Text('Выбрать ПВЗ на карте'),
+                      ),
+                    ],
+                    if (loadingCdekPvz) ...[
+                      const SizedBox(height: 8),
+                      const LinearProgressIndicator(),
+                    ],
+                    if (cdekError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(cdekError!),
+                    ],
                   ],
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: commentCtrl,
-                    decoration: const InputDecoration(labelText: 'Комментарий'),
-                  ),
                 ],
               ),
             ),
@@ -1595,7 +1638,12 @@ class _Profile extends ConsumerWidget {
                 child: const Text('Отмена'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
+                onPressed:
+                    (method == 'pickup' && selectedStoreId == null) ||
+                        (method != 'pickup' &&
+                            (selectedCdekCity == null || selectedPvz == null))
+                    ? null
+                    : () => Navigator.of(ctx).pop(true),
                 child: const Text('Сохранить'),
               ),
             ],
@@ -1605,26 +1653,36 @@ class _Profile extends ConsumerWidget {
     );
 
     if (shouldSave != true) {
-      storeCtrl.dispose();
       cityCtrl.dispose();
-      pvzCtrl.dispose();
-      addressCtrl.dispose();
-      commentCtrl.dispose();
       return;
     }
 
+    final selectedStore = _deliveryStoreById(storeOptions, selectedStoreId);
     final delivery = <String, dynamic>{
       ...currentDelivery,
       'method': method == 'pickup' ? 'pickup' : 'cdek',
       'type': method == 'pickup' ? 'pickup' : 'pvz',
-      'city': cityCtrl.text.trim(),
-      'address': addressCtrl.text.trim(),
-      'comment': commentCtrl.text.trim(),
+      'city': method == 'pickup'
+          ? selectedStore?.city ?? ''
+          : selectedCdekCity?['city'] ?? selectedCdekCity?['city_name'] ?? '',
+      'address': method == 'pickup' ? selectedStore?.address ?? '' : '',
+      'comment': '',
     };
     if (method == 'pickup') {
-      delivery['store_name'] = storeCtrl.text.trim();
+      delivery['store_id'] = selectedStore?.id ?? '';
+      delivery['store_name'] = selectedStore?.title ?? '';
+      delivery['pvz_name'] = '';
     } else {
-      delivery['pvz_name'] = pvzCtrl.text.trim();
+      final location = selectedPvz?['location'] is Map
+          ? Map<String, dynamic>.from(selectedPvz!['location'] as Map)
+          : const <String, dynamic>{};
+      delivery['store_id'] = '';
+      delivery['store_name'] = '';
+      delivery['city_code'] = selectedCdekCity?['code'];
+      delivery['pvz_code'] = selectedPvz?['code'];
+      delivery['pvz_name'] = selectedPvz?['name'];
+      delivery['address'] =
+          location['address'] ?? selectedPvz?['address'] ?? '';
     }
 
     if (!context.mounted) return;
@@ -1643,293 +1701,304 @@ class _Profile extends ConsumerWidget {
         const SnackBar(content: Text('Не удалось сохранить доставку')),
       );
     } finally {
-      storeCtrl.dispose();
       cityCtrl.dispose();
-      pvzCtrl.dispose();
-      addressCtrl.dispose();
-      commentCtrl.dispose();
-    }
-  }
-
-  Future<void> _confirmDeleteOrder({
-    required BuildContext context,
-    required WidgetRef ref,
-    required String orderId,
-  }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить заказ?'),
-        content: const Text(
-          'Заказ и связанные данные будут удалены, резерв будет снят.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    if (!context.mounted) return;
-    try {
-      await ref.read(customerCabinetApiProvider).deleteOrder(orderId);
-      ref.invalidate(customerOrdersProvider);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Заказ удален')));
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Не удалось удалить заказ')));
-    }
-  }
-
-  Future<void> _confirmDeleteSavedLook({
-    required BuildContext context,
-    required WidgetRef ref,
-    required String savedLookId,
-  }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить образ?'),
-        content: const Text(
-          'Образ будет удален из сохраненных в личном кабинете.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Удалить'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    if (!context.mounted) return;
-    try {
-      await ref.read(customerCabinetApiProvider).deleteSavedLook(savedLookId);
-      ref.invalidate(customerSavedLooksProvider);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Образ удален из сохраненных')),
-      );
-    } catch (_) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Не удалось удалить образ')));
     }
   }
 }
 
-class _ProfileInlineStat extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _ProfileInlineStat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 10,
-            letterSpacing: 1.1,
-            color: GlameColors.steelGray,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 15, color: GlameColors.whiteGlame),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileSectionHeading extends StatelessWidget {
-  final String eyebrow;
+class _DeliveryStoreOption {
+  final String id;
   final String title;
+  final String city;
+  final String address;
 
-  const _ProfileSectionHeading({required this.eyebrow, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                eyebrow,
-                style: const TextStyle(
-                  fontSize: 10,
-                  letterSpacing: 1.4,
-                  color: GlameColors.steelGray,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 22,
-                  height: 1.05,
-                  color: GlameColors.whiteGlame,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Container(width: 42, height: 1, color: GlameColors.borderGray),
-      ],
-    );
-  }
-}
-
-class _ProfileEmptyPanel extends StatelessWidget {
-  final String text;
-
-  const _ProfileEmptyPanel({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
-      decoration: BoxDecoration(
-        color: GlameColors.graphite.withValues(alpha: 0.48),
-        border: Border.all(color: GlameColors.borderGray),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(color: GlameColors.coldLightGray),
-      ),
-    );
-  }
-}
-
-class _ProfileMetricGrid extends StatelessWidget {
-  final List<Widget> children;
-
-  const _ProfileMetricGrid({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 560 ? 4 : 2;
-        final gap = 10.0;
-        final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: children
-              .map((child) => SizedBox(width: width, child: child))
-              .toList(growable: false),
-        );
-      },
-    );
-  }
-}
-
-class _ProfileMetricCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String subtitle;
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  const _ProfileMetricCard({
+  const _DeliveryStoreOption({
+    required this.id,
     required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-    this.onTap,
+    required this.city,
+    required this.address,
+  });
+
+  String get label {
+    final parts = <String>[
+      title,
+      if (city.toLowerCase() != title.toLowerCase()) city,
+      address,
+    ].where((part) => part.trim().isNotEmpty).toList();
+    return parts.join(' · ');
+  }
+}
+
+const _fallbackDeliveryStores = <_DeliveryStoreOption>[
+  _DeliveryStoreOption(
+    id: 'yalta',
+    title: 'GLAME Ялта',
+    city: 'Ялта',
+    address: 'Набережная им. Ленина, 18',
+  ),
+  _DeliveryStoreOption(
+    id: 'simferopol',
+    title: 'GLAME Симферополь',
+    city: 'Симферополь',
+    address: 'ул. Севастопольская, 62',
+  ),
+  _DeliveryStoreOption(
+    id: 'mriya',
+    title: 'GLAME МРИЯ',
+    city: 'Оползневое',
+    address: 'Mriya Resort & SPA',
+  ),
+];
+
+List<_DeliveryStoreOption> _deliveryStoreOptions(List<dynamic> rawStores) {
+  final stores = <_DeliveryStoreOption>[];
+  for (final raw in rawStores.whereType<Map>()) {
+    final item = Map<String, dynamic>.from(raw);
+    final id = _deliveryValue(item['id']) ?? stores.length.toString();
+    final city = _deliveryValue(item['city']);
+    final title =
+        _deliveryValue(item['title']) ?? _deliveryValue(item['name']) ?? city;
+    final address = _deliveryValue(item['address']);
+    if (title == null || city == null || address == null) continue;
+    stores.add(
+      _DeliveryStoreOption(id: id, title: title, city: city, address: address),
+    );
+  }
+  return stores;
+}
+
+String? _initialDeliveryStoreId({
+  required List<_DeliveryStoreOption> stores,
+  required String currentStoreId,
+  required String currentStoreName,
+}) {
+  if (stores.isEmpty) return null;
+  for (final store in stores) {
+    if (currentStoreId.isNotEmpty && store.id == currentStoreId) {
+      return store.id;
+    }
+  }
+  for (final store in stores) {
+    if (currentStoreName.isNotEmpty &&
+        store.title.toLowerCase() == currentStoreName) {
+      return store.id;
+    }
+  }
+  return stores.first.id;
+}
+
+_DeliveryStoreOption? _deliveryStoreById(
+  List<_DeliveryStoreOption> stores,
+  String? id,
+) {
+  for (final store in stores) {
+    if (store.id == id) return store;
+  }
+  return null;
+}
+
+String? _deliveryValue(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+Map<String, dynamic>? _deliveryInitialCdekCity(
+  Map<String, dynamic> currentDelivery,
+) {
+  final code = currentDelivery['city_code'];
+  final city = _deliveryValue(
+    currentDelivery['city'] ?? currentDelivery['city_name'],
+  );
+  if (code == null && city == null) return null;
+  final result = <String, dynamic>{};
+  if (code != null) result['code'] = code;
+  if (city != null) result['city'] = city;
+  return result;
+}
+
+Map<String, dynamic>? _deliveryInitialCdekPvz(
+  Map<String, dynamic> currentDelivery,
+) {
+  final code = _deliveryValue(
+    currentDelivery['pvz_code'] ?? currentDelivery['point_code'],
+  );
+  final name = _deliveryValue(
+    currentDelivery['pvz_name'] ?? currentDelivery['point_name'],
+  );
+  final address = _deliveryValue(currentDelivery['address']);
+  if (code == null && name == null && address == null) return null;
+  final result = <String, dynamic>{};
+  if (code != null) result['code'] = code;
+  if (name != null) result['name'] = name;
+  if (address != null) result['address'] = address;
+  return result;
+}
+
+String _deliveryCdekCityLabel(Map<String, dynamic> city) {
+  final title = _deliveryValue(city['city'] ?? city['city_name']) ?? '';
+  final region = _deliveryValue(city['region'] ?? city['region_name']);
+  if (region == null) return title;
+  return '$title, $region';
+}
+
+String _deliveryCdekPvzLabel(Map<String, dynamic> pvz) {
+  final code = _deliveryValue(pvz['code']);
+  final name = _deliveryValue(pvz['name']) ?? code ?? 'ПВЗ';
+  final address = _deliveryCdekPvzAddress(pvz);
+  if (address == '-') return name;
+  return '$name — $address';
+}
+
+String _deliveryCdekPvzAddress(Map<String, dynamic> pvz) {
+  final location = pvz['location'] is Map
+      ? Map<String, dynamic>.from(pvz['location'] as Map)
+      : const <String, dynamic>{};
+  return _deliveryValue(location['address_full']) ??
+      _deliveryValue(location['address']) ??
+      _deliveryValue(pvz['address']) ??
+      '-';
+}
+
+LatLng? _deliveryCdekPvzLatLng(Map<String, dynamic> pvz) {
+  final location = pvz['location'] is Map
+      ? Map<String, dynamic>.from(pvz['location'] as Map)
+      : const <String, dynamic>{};
+  final lat = _deliveryDouble(location['latitude'] ?? pvz['latitude']);
+  final lng = _deliveryDouble(location['longitude'] ?? pvz['longitude']);
+  if (lat == null || lng == null) return null;
+  return LatLng(lat, lng);
+}
+
+int? _deliveryInt(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty) return null;
+  return int.tryParse(text) ??
+      double.tryParse(text.replaceAll(',', '.'))?.toInt();
+}
+
+double? _deliveryDouble(Object? value) {
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  final text = value?.toString().trim();
+  if (text == null || text.isEmpty) return null;
+  return double.tryParse(text.replaceAll(',', '.'));
+}
+
+class _ProfileStitchHero extends StatelessWidget {
+  final String name;
+  final String contact;
+  final int points;
+  final String status;
+  final double progress;
+  final num? nextLevelAmount;
+
+  const _ProfileStitchHero({
+    required this.name,
+    required this.contact,
+    required this.points,
+    required this.status,
+    required this.progress,
+    required this.nextLevelAmount,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.zero,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: GlameColors.graphite,
-          border: Border.all(color: GlameColors.borderGray),
-          borderRadius: BorderRadius.zero,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF1A1C1E), GlameColors.nearBlack],
         ),
+        border: Border(bottom: BorderSide(color: GlameColors.borderGray)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 0, 0, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(icon, size: 18, color: GlameColors.coldLightGray),
-                const Spacer(),
-                if (onTap != null)
-                  const Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: GlameColors.steelGray,
-                  ),
-              ],
+            Text(
+              name.toUpperCase(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 28,
+                height: 1.08,
+                letterSpacing: 0,
+                color: GlameColors.whiteGlame,
+                fontWeight: FontWeight.w400,
+              ),
             ),
             const SizedBox(height: 14),
             Text(
-              title.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 10,
-                letterSpacing: 1,
-                color: GlameColors.steelGray,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
+              contact,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 18,
-                fontWeight: FontWeight.w500,
-                color: GlameColors.whiteGlame,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
                 height: 1.25,
                 color: GlameColors.coldLightGray,
+              ),
+            ),
+            const SizedBox(height: 34),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              decoration: BoxDecoration(
+                color: GlameColors.graphite.withValues(alpha: 0.46),
+                border: Border.all(color: GlameColors.borderGray),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: _ProfileLoyaltyValue(
+                          label: 'Баланс бонусов',
+                          value: _formatCompactNumber(points),
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      _ProfileLoyaltyValue(
+                        label: 'Статус',
+                        value: status.toUpperCase(),
+                        alignEnd: true,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 22),
+                  ClipRect(
+                    child: LinearProgressIndicator(
+                      value: progress.clamp(0, 1),
+                      minHeight: 4,
+                      backgroundColor: GlameColors.borderGray.withValues(
+                        alpha: 0.32,
+                      ),
+                      color: GlameColors.whiteGlame,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      nextLevelAmount == null
+                          ? 'Статус рассчитывается по покупкам'
+                          : 'До следующего статуса: ${_formatRub(nextLevelAmount!)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        height: 1.2,
+                        color: GlameColors.steelGray,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -1939,92 +2008,527 @@ class _ProfileMetricCard extends StatelessWidget {
   }
 }
 
-class _NextLevelProgress {
-  final String nextLevelName;
-  final double remainingTotal;
-  final double progress;
+class _ProfileLoyaltyValue extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool alignEnd;
 
-  const _NextLevelProgress({
-    required this.nextLevelName,
-    required this.remainingTotal,
-    required this.progress,
+  const _ProfileLoyaltyValue({
+    required this.label,
+    required this.value,
+    this.alignEnd = false,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: alignEnd
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 12,
+            height: 1.2,
+            letterSpacing: 1.4,
+            color: GlameColors.steelGray,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 24,
+            height: 1,
+            color: GlameColors.whiteGlame,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-_NextLevelProgress? _progressFromApi(Map<String, dynamic> progress) {
-  final nextLevelRaw = progress['next_level'];
-  if (nextLevelRaw is! Map) return null;
+class _ProfileAction {
+  final String label;
+  final VoidCallback onTap;
 
-  final nextLevel = Map<String, dynamic>.from(nextLevelRaw);
-  final remainingTotal = (progress['remaining_total'] as num?)?.toDouble() ?? 0;
-  return _NextLevelProgress(
-    nextLevelName: (nextLevel['name'] as String?) ?? 'Следующий уровень',
-    remainingTotal: remainingTotal,
-    progress: (progress['progress'] as num?)?.toDouble() ?? 0,
+  const _ProfileAction({required this.label, required this.onTap});
+}
+
+class _ProfileActionList extends StatelessWidget {
+  final List<_ProfileAction> actions;
+
+  const _ProfileActionList({required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.symmetric(
+          horizontal: BorderSide(color: GlameColors.borderGray),
+        ),
+      ),
+      child: CustomPaint(
+        painter: _ProfileDotPatternPainter(),
+        child: Column(
+          children: [
+            for (var i = 0; i < actions.length; i++) ...[
+              _ProfileActionRow(action: actions[i]),
+              if (i != actions.length - 1)
+                Container(height: 1, color: GlameColors.borderGray),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileActionRow extends StatelessWidget {
+  final _ProfileAction action;
+
+  const _ProfileActionRow({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: action.onTap,
+        child: SizedBox(
+          height: 64,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  action.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    height: 1.1,
+                    color: GlameColors.whiteGlame,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                size: 32,
+                color: GlameColors.coldLightGray,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileLogoutButton extends StatelessWidget {
+  final Future<void> Function() onTap;
+
+  const _ProfileLogoutButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: GlameColors.coldLightGray,
+          side: const BorderSide(color: GlameColors.borderGray),
+          shape: const RoundedRectangleBorder(),
+          textStyle: const TextStyle(
+            fontSize: 18,
+            letterSpacing: 2.2,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        child: const Text('ВЫХОД'),
+      ),
+    );
+  }
+}
+
+Future<void> _showProfileOrdersDialog(BuildContext context, WidgetRef ref) {
+  ref.invalidate(customerOrdersProvider);
+  return _showProfileDataDialog(
+    context: context,
+    title: 'Мои заказы',
+    provider: customerOrdersProvider,
+    itemBuilder: (order) => _ProfileOrderDialogItem(order: order),
+    emptyText: 'У вас пока нет заказов.',
+    errorText: 'Не удалось загрузить заказы.',
   );
 }
 
-_NextLevelProgress? _resolveNextLevel(
-  List<Map<String, dynamic>> levels,
-  int currentPurchases,
-  double currentTotalRub,
-) {
-  if (levels.isEmpty) return null;
+Future<void> _showProfileHistoryDialog(BuildContext context, WidgetRef ref) {
+  ref.invalidate(customerPurchaseHistoryProvider);
+  return _showProfileDataDialog(
+    context: context,
+    title: 'История покупок',
+    provider: customerPurchaseHistoryProvider,
+    itemBuilder: (purchase) => _ProfilePurchaseDialogItem(purchase: purchase),
+    emptyText: 'История покупок пока пустая.',
+    errorText: 'Не удалось загрузить историю покупок.',
+  );
+}
 
-  levels.sort((a, b) {
-    final at = (a['min_total'] as num?)?.toDouble() ?? 0;
-    final bt = (b['min_total'] as num?)?.toDouble() ?? 0;
-    return at.compareTo(bt);
+Future<void> _showProfileDataDialog({
+  required BuildContext context,
+  required String title,
+  required ProviderListenable<AsyncValue<List<Map<String, dynamic>>>> provider,
+  required Widget Function(Map<String, dynamic> item) itemBuilder,
+  required String emptyText,
+  required String errorText,
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (ctx) => Consumer(
+      builder: (ctx, ref, _) {
+        final asyncValue = ref.watch(provider);
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 28,
+          ),
+          backgroundColor: GlameColors.nearBlack,
+          shape: const RoundedRectangleBorder(),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520, maxHeight: 640),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: GlameColors.nearBlack,
+                border: Border.all(color: GlameColors.borderGray),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 16, 8, 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              height: 1.05,
+                              color: GlameColors.whiteGlame,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          icon: const Icon(Icons.close),
+                          color: GlameColors.whiteGlame,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(height: 1, color: GlameColors.borderGray),
+                  Flexible(
+                    child: asyncValue.when(
+                      loading: () => const SizedBox(
+                        height: 180,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: GlameColors.whiteGlame,
+                          ),
+                        ),
+                      ),
+                      error: (_, _) =>
+                          _ProfileDialogStateMessage(text: errorText),
+                      data: (items) {
+                        if (items.isEmpty) {
+                          return _ProfileDialogStateMessage(text: emptyText);
+                        }
+                        return ListView.separated(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+                          itemCount: items.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (_, index) => itemBuilder(items[index]),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class _ProfileDialogStateMessage extends StatelessWidget {
+  final String text;
+
+  const _ProfileDialogStateMessage({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 180,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              height: 1.35,
+              color: GlameColors.coldLightGray,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileOrderDialogItem extends StatelessWidget {
+  final Map<String, dynamic> order;
+
+  const _ProfileOrderDialogItem({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final id = _profileItemString(order['id'] ?? order['number']) ?? 'заказ';
+    final created = _profileDateLabel(
+      order['created_at'] ?? order['createdAt'] ?? order['date'],
+    );
+    final status = _orderStatusLabel(
+      _profileItemString(order['order_status'] ?? order['status']) ?? '',
+    );
+    final payment = _paymentStatusLabel(
+      _profileItemString(
+        order['payment_status'] ??
+            (order['payment'] is Map
+                ? (order['payment'] as Map)['status']
+                : null),
+      ),
+    );
+    final amount = _profileMoneyValue(
+      order['total_amount'] ??
+          order['total'] ??
+          order['amount'] ??
+          order['total_price'],
+    );
+
+    return _ProfileDialogItemFrame(
+      title: 'Заказ ${_shortId(id)}',
+      meta: created,
+      value: amount == null ? null : _formatRub(amount),
+      lines: [
+        _ProfileDialogLine(label: 'Статус', value: status),
+        _ProfileDialogLine(label: 'Оплата', value: payment),
+        ?_deliverySummaryLine(order['delivery']),
+      ],
+    );
+  }
+}
+
+class _ProfilePurchaseDialogItem extends StatelessWidget {
+  final Map<String, dynamic> purchase;
+
+  const _ProfilePurchaseDialogItem({required this.purchase});
+
+  @override
+  Widget build(BuildContext context) {
+    final title =
+        _profileItemString(
+          purchase['product_name'] ??
+              purchase['name'] ??
+              purchase['title'] ??
+              purchase['brand'],
+        ) ??
+        'Покупка GLAME';
+    final created = _profileDateLabel(
+      purchase['purchased_at'] ??
+          purchase['created_at'] ??
+          purchase['createdAt'] ??
+          purchase['date'],
+    );
+    final amount = _profileMoneyValue(
+      purchase['amount'] ??
+          purchase['price'] ??
+          purchase['total'] ??
+          purchase['total_amount'],
+    );
+    final orderId = _profileItemString(
+      purchase['order_id'] ?? purchase['orderId'] ?? purchase['order_number'],
+    );
+
+    return _ProfileDialogItemFrame(
+      title: title,
+      meta: created,
+      value: amount == null ? null : _formatRub(amount),
+      lines: [
+        if (orderId != null)
+          _ProfileDialogLine(label: 'Заказ', value: _shortId(orderId)),
+        ?_profileItemString(purchase['brand']) == null
+            ? null
+            : _ProfileDialogLine(
+                label: 'Бренд',
+                value: _profileItemString(purchase['brand'])!,
+              ),
+      ],
+    );
+  }
+}
+
+class _ProfileDialogItemFrame extends StatelessWidget {
+  final String title;
+  final String? meta;
+  final String? value;
+  final List<_ProfileDialogLine> lines;
+
+  const _ProfileDialogItemFrame({
+    required this.title,
+    required this.meta,
+    required this.value,
+    required this.lines,
   });
 
-  for (final level in levels) {
-    final reqPurchases = (level['min_purchases'] as num?)?.toInt() ?? 0;
-    final reqTotal = (level['min_total'] as num?)?.toDouble() ?? 0;
-    final needP = reqPurchases - currentPurchases;
-    final needT = reqTotal - currentTotalRub;
-    if (needP > 0 || needT > 0) {
-      final pProgress = reqPurchases <= 0
-          ? 1.0
-          : (currentPurchases / reqPurchases).clamp(0.0, 1.0);
-      final tProgress = reqTotal <= 0
-          ? 1.0
-          : (currentTotalRub / reqTotal).clamp(0.0, 1.0);
-      final progress = (pProgress + tProgress) / 2;
-      return _NextLevelProgress(
-        nextLevelName: (level['name'] as String?) ?? 'Следующий уровень',
-        remainingTotal: needT > 0 ? needT : 0,
-        progress: progress,
-      );
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: GlameColors.graphite.withValues(alpha: 0.55),
+        border: Border.all(color: GlameColors.borderGray),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    height: 1.15,
+                    color: GlameColors.whiteGlame,
+                  ),
+                ),
+              ),
+              if (value != null) ...[
+                const SizedBox(width: 10),
+                Text(
+                  value!,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: GlameColors.whiteGlame,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (meta != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              meta!,
+              style: const TextStyle(
+                fontSize: 12,
+                color: GlameColors.steelGray,
+              ),
+            ),
+          ],
+          if (lines.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...lines.map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 72,
+                      child: Text(
+                        line.label.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          letterSpacing: 1,
+                          color: GlameColors.steelGray,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        line.value,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          height: 1.25,
+                          color: GlameColors.coldLightGray,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileDialogLine {
+  final String label;
+  final String value;
+
+  const _ProfileDialogLine({required this.label, required this.value});
+}
+
+String? _profileItemString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+String _shortId(String value) {
+  final text = value.trim();
+  if (text.length <= 8) return '#$text';
+  return '#${text.substring(0, 8)}';
+}
+
+num? _profileMoneyValue(Object? value) {
+  if (value is num) return value;
+  if (value is String) {
+    return num.tryParse(value.replaceAll(' ', '').replaceAll(',', '.').trim());
   }
   return null;
 }
 
-String _formatRub(num value) {
-  final rounded = value.round();
-  final s = rounded.abs().toString();
-  final buf = StringBuffer();
-  for (var i = 0; i < s.length; i++) {
-    final posFromEnd = s.length - i;
-    buf.write(s[i]);
-    if (posFromEnd > 1 && posFromEnd % 3 == 1) {
-      buf.write(' ');
-    }
-  }
-  final sign = rounded < 0 ? '-' : '';
-  return '$sign${buf.toString()} ₽';
-}
-
-String _formatIsoDate(String iso) {
-  if (iso.trim().isEmpty) return '';
+String? _profileDateLabel(Object? value) {
+  final raw = _profileItemString(value);
+  if (raw == null) return null;
   try {
-    final dt = DateTime.parse(iso).toLocal();
-    final y = dt.year.toString().padLeft(4, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    return '$d.$m.$y';
+    final date = DateTime.parse(raw).toLocal();
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year.toString().padLeft(4, '0');
+    return '$day.$month.$year';
   } catch (_) {
-    return iso;
+    return raw;
   }
 }
 
@@ -2043,7 +2547,7 @@ String _orderStatusLabel(String value) {
     case 'canceled':
       return 'Отменен';
     default:
-      return value;
+      return value.isEmpty ? 'Нет данных' : value;
   }
 }
 
@@ -2064,52 +2568,156 @@ String _paymentStatusLabel(String? value) {
   }
 }
 
-String _deliverySummary(Map<String, dynamic> delivery) {
-  if (delivery.isEmpty) return 'Доставка: не указана';
-  final method = (delivery['method'] ?? delivery['type'] ?? '').toString();
-  final city = (delivery['city'] ?? delivery['city_name'] ?? '')
-      .toString()
-      .trim();
-  final pvz = (delivery['pvz_name'] ?? delivery['pvz_code'] ?? '')
-      .toString()
-      .trim();
-  final address = (delivery['address'] ?? '').toString().trim();
-
-  final parts = <String>[];
-  if (city.isNotEmpty) parts.add(city);
-  if (pvz.isNotEmpty) parts.add(pvz);
-  if (address.isNotEmpty) parts.add(address);
-
-  final place = parts.isEmpty ? 'не указана' : parts.join(', ');
-  if (method == 'pickup') return 'Доставка: самовывоз · $place';
-  if (method == 'cdek' || method == 'cdek_pvz' || method == 'pvz') {
-    return 'Доставка: СДЭК · $place';
-  }
-  return 'Доставка: $place';
+_ProfileDialogLine? _deliverySummaryLine(Object? value) {
+  if (value is! Map) return null;
+  final delivery = Map<String, dynamic>.from(value);
+  final method = _profileItemString(delivery['method'] ?? delivery['type']);
+  final city = _profileItemString(delivery['city'] ?? delivery['city_name']);
+  final address = _profileItemString(delivery['address']);
+  final store = _profileItemString(delivery['store_name']);
+  final pvz = _profileItemString(delivery['pvz_name'] ?? delivery['pvz_code']);
+  final label = method == 'pickup' ? 'Самовывоз' : 'СДЭК';
+  final parts = [store, pvz, city, address].whereType<String>().toList();
+  if (parts.isEmpty) return _ProfileDialogLine(label: 'Доставка', value: label);
+  return _ProfileDialogLine(
+    label: 'Доставка',
+    value: '$label: ${parts.join(', ')}',
+  );
 }
 
-String _deliveryShortLabel(Map<String, dynamic> delivery) {
-  if (delivery.isEmpty) return 'Не выбрана';
-  final method = (delivery['method'] ?? delivery['type'] ?? '')
-      .toString()
-      .trim()
-      .toLowerCase();
-  if (method == 'pickup') return 'Самовывоз';
-  if (method == 'cdek' || method == 'cdek_pvz' || method == 'pvz') {
-    return 'СДЭК';
+class _ProfileDotPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = GlameColors.borderGray.withValues(alpha: 0.16)
+      ..style = PaintingStyle.fill;
+    const step = 24.0;
+    for (var y = 10.0; y < size.height; y += step) {
+      for (var x = 2.0; x < size.width; x += step) {
+        canvas.drawCircle(Offset(x, y), 1, paint);
+      }
+    }
   }
-  return 'Доставка';
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+String _formatRub(num value) {
+  final rounded = value.round();
+  final s = rounded.abs().toString();
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    final posFromEnd = s.length - i;
+    buf.write(s[i]);
+    if (posFromEnd > 1 && posFromEnd % 3 == 1) {
+      buf.write(' ');
+    }
+  }
+  final sign = rounded < 0 ? '-' : '';
+  return '$sign${buf.toString()} ₽';
+}
+
+String _formatCompactNumber(num value) {
+  final rounded = value.round();
+  final s = rounded.abs().toString();
+  final buf = StringBuffer();
+  for (var i = 0; i < s.length; i++) {
+    final posFromEnd = s.length - i;
+    buf.write(s[i]);
+    if (posFromEnd > 1 && posFromEnd % 3 == 1) {
+      buf.write(' ');
+    }
+  }
+  final sign = rounded < 0 ? '-' : '';
+  return '$sign${buf.toString()}';
+}
+
+String _profileStatusLabel(Map<String, dynamic> loyalty) {
+  final direct = _stringFromAny(
+    loyalty['status'] ??
+        loyalty['level'] ??
+        loyalty['current_level'] ??
+        loyalty['currentLevel'],
+  );
+  if (direct != null) return direct;
+
+  final progress = loyalty['level_progress'];
+  if (progress is Map) {
+    final current = _stringFromAny(
+      progress['current_level'] ??
+          progress['currentLevel'] ??
+          progress['level'] ??
+          progress['status'],
+    );
+    if (current != null) return current;
+  }
+  return 'GLAME';
+}
+
+double _profileProgressFromLoyalty(Map<String, dynamic> loyalty) {
+  final progress = loyalty['level_progress'];
+  if (progress is Map) {
+    final value =
+        _doubleFromAny(progress['progress']) ??
+        _doubleFromAny(progress['percent']) ??
+        _doubleFromAny(progress['ratio']);
+    if (value != null) {
+      return value > 1 ? value / 100 : value;
+    }
+  }
+  final value =
+      _doubleFromAny(loyalty['progress']) ??
+      _doubleFromAny(loyalty['level_progress']);
+  if (value != null) return value > 1 ? value / 100 : value;
+  return 0;
+}
+
+num? _profileNextLevelAmount(Map<String, dynamic> loyalty) {
+  final progress = loyalty['level_progress'];
+  if (progress is Map) {
+    return _numFromAny(
+      progress['remaining_total'] ??
+          progress['remainingTotal'] ??
+          progress['amount_left'] ??
+          progress['amountLeft'],
+    );
+  }
+  return _numFromAny(loyalty['remaining_total'] ?? loyalty['amount_left']);
+}
+
+String? _stringFromAny(Object? value) {
+  if (value is Map) {
+    return _stringFromAny(
+      value['name'] ?? value['title'] ?? value['label'] ?? value['code'],
+    );
+  }
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+num? _numFromAny(Object? value) {
+  if (value is num) return value;
+  if (value is String) return num.tryParse(value.replaceAll(' ', '').trim());
+  return null;
+}
+
+double? _doubleFromAny(Object? value) {
+  final number = _numFromAny(value);
+  return number?.toDouble();
 }
 
 class _LoginRequired extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onLogin;
+  final bool dark;
 
   const _LoginRequired({
     required this.title,
     required this.subtitle,
     required this.onLogin,
+    this.dark = false,
   });
 
   @override
@@ -2121,7 +2729,7 @@ class _LoginRequired extends StatelessWidget {
       note: 'После входа Вы вернетесь к этому разделу.',
       noteIcon: Icons.lock_outline,
       onLogin: onLogin,
-      dark: false,
+      dark: dark,
     );
   }
 }

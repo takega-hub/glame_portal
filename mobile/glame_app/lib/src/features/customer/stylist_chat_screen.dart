@@ -17,6 +17,14 @@ import '../auth/auth_controller.dart';
 import '../product/product_providers.dart';
 import 'customer_cabinet_providers.dart';
 
+const _chatSurface = Color(0xFF121416);
+const _chatSurfaceLow = Color(0xFF1A1C1E);
+const _chatSurfaceHigh = Color(0xFF282A2C);
+const _chatBorder = Color(0xFF5C6064);
+const _chatText = Color(0xFFE2E2E5);
+const _chatTextMuted = Color(0xFFC4C7C8);
+const _chatTextDim = Color(0xFF8E9192);
+
 class StylistChatScreen extends ConsumerStatefulWidget {
   final String? productId;
   final String? initialMessage;
@@ -91,149 +99,84 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
         ? null
         : ref.watch(productProvider(productId));
     return Scaffold(
-      backgroundColor: GlameColors.surface2,
-      appBar: const GlameTopAppBar(),
+      backgroundColor: _chatSurface,
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'СТИЛИСТ GLAME',
-                  style: TextStyle(
-                    fontSize: 14,
-                    letterSpacing: 0.4,
-                    color: GlameColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                statusAsync.when(
-                  data: (status) {
-                    final statusText = (status['status_text'] as String?)
-                        ?.trim();
-                    final typingRaw = status['stylist_typing'];
-                    final typing = typingRaw is Map
-                        ? Map<String, dynamic>.from(typingRaw)
-                        : const <String, dynamic>{};
-                    final stylistTyping = typing['is_typing'] == true;
-                    final typingName = (typing['stylist_name'] as String?)
-                        ?.trim();
-                    if (statusText == null || statusText.isEmpty) {
-                      if (!stylistTyping) return const SizedBox.shrink();
-                      return Text(
-                        typingName == null || typingName.isEmpty
-                            ? 'Стилист печатает...'
-                            : '$typingName печатает...',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.25,
-                          color: GlameColors.textSecondary,
-                        ),
-                      );
-                    }
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          statusText,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            height: 1.25,
-                            color: GlameColors.textSecondary,
-                          ),
-                        ),
-                        if (stylistTyping) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            typingName == null || typingName.isEmpty
-                                ? 'Стилист печатает...'
-                                : '$typingName печатает...',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              height: 1.25,
-                              color: GlameColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ],
-                    );
-                  },
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, _) => const Text(
-                    'График стилиста: 10:00-20:00 по МСК',
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.25,
-                      color: GlameColors.textSecondary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const SizedBox(
-                  width: 44,
-                  child: Divider(height: 1, color: GlameColors.lightGray),
-                ),
-              ],
-            ),
-          ),
+          _StylistChatTopBar(statusAsync: statusAsync),
           if (productAsync != null)
             productAsync.maybeWhen(
               data: (product) => _ChatProductCard(product: product),
               orElse: () => const SizedBox.shrink(),
             ),
           Expanded(
-            child: messagesAsync.when(
-              data: (messages) {
-                WidgetsBinding.instance.addPostFrameCallback(
-                  (_) => _toBottom(),
-                );
-                final displayMessages = <Map<String, dynamic>>[
-                  ...messages,
-                  ?pendingUserMessage,
-                  if (statusAsync.valueOrNull case final status?)
-                    if (((status['stylist_typing'] is Map
-                            ? Map<String, dynamic>.from(
-                                status['stylist_typing'] as Map,
-                              )
-                            : const <String, dynamic>{})['is_typing'] ==
-                        true))
-                      {
-                        'id': '__assistant_typing__',
-                        'role': 'assistant',
-                        'text': '',
-                        'attachments': const [],
-                        'payload': {'typing': true},
-                      }
-                    else if (assistantTyping)
-                      {
-                        'id': '__assistant_typing__',
-                        'role': 'assistant',
-                        'text': '',
-                        'attachments': const [],
-                        'payload': {'typing': true},
-                      },
-                ];
-                if (displayMessages.isEmpty) return const _EmptyChat();
-                return ListView.builder(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-                  itemCount: displayMessages.length,
-                  itemBuilder: (context, index) {
-                    return _MessageBubble(message: displayMessages[index]);
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) =>
-                  const Center(child: Text('Не удалось загрузить чат')),
+            child: Stack(
+              children: [
+                const Positioned.fill(child: _ChatBackgroundPattern()),
+                Positioned.fill(
+                  child: messagesAsync.when(
+                    data: (messages) {
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _toBottom(),
+                      );
+                      final displayMessages = <Map<String, dynamic>>[
+                        ...messages,
+                        ?pendingUserMessage,
+                        if (statusAsync.valueOrNull case final status?)
+                          if (((status['stylist_typing'] is Map
+                                  ? Map<String, dynamic>.from(
+                                      status['stylist_typing'] as Map,
+                                    )
+                                  : const <String, dynamic>{})['is_typing'] ==
+                              true))
+                            {
+                              'id': '__assistant_typing__',
+                              'role': 'assistant',
+                              'text': '',
+                              'attachments': const [],
+                              'payload': {'typing': true},
+                            }
+                          else if (assistantTyping)
+                            {
+                              'id': '__assistant_typing__',
+                              'role': 'assistant',
+                              'text': '',
+                              'attachments': const [],
+                              'payload': {'typing': true},
+                            },
+                      ];
+                      if (displayMessages.isEmpty) return const _EmptyChat();
+                      return ListView.builder(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+                        itemCount: displayMessages.length + 1,
+                        itemBuilder: (context, index) {
+                          if (index == 0) return const _ChatDateSeparator();
+                          return _MessageBubble(
+                            message: displayMessages[index - 1],
+                          );
+                        },
+                      );
+                    },
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(color: _chatText),
+                    ),
+                    error: (_, _) => const Center(
+                      child: Text(
+                        'Не удалось загрузить чат',
+                        style: TextStyle(color: _chatTextMuted),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           _Composer(
             controller: controller,
             pickedPhoto: pickedPhoto,
             sending: sending,
+            quickTags: _composerQuickTags,
+            onQuickTag: _applyQuickTag,
             onPick: _pickPhoto,
             onClearPhoto: () => setState(() => pickedPhoto = null),
             onSend: _send,
@@ -382,6 +325,210 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
     }
     return Uri(path: '/stylist-chat', queryParameters: query).toString();
   }
+
+  void _applyQuickTag(String value) {
+    if (sending) return;
+    final normalized = value.trim();
+    if (normalized.isEmpty) return;
+    final current = controller.text.trim();
+    controller.text = current.isEmpty ? normalized : '$current\n$normalized';
+    controller.selection = TextSelection.collapsed(
+      offset: controller.text.length,
+    );
+  }
+}
+
+const _composerQuickTags = <String>['Для себя', 'В подарок', 'Хочу примерить'];
+
+class _StylistChatTopBar extends StatelessWidget {
+  final AsyncValue<Map<String, dynamic>> statusAsync;
+
+  const _StylistChatTopBar({required this.statusAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).padding.top + 56,
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+      decoration: const BoxDecoration(
+        color: _chatSurface,
+        border: Border(bottom: BorderSide(color: _chatBorder)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: IconButton(
+              tooltip: 'Назад',
+              onPressed: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  context.go('/home?tab=3');
+                }
+              },
+              icon: const Icon(
+                Icons.arrow_back_ios_new,
+                color: _chatText,
+                size: 24,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'Стилист GLAME',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 24,
+                    height: 1,
+                    color: _chatText,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                statusAsync.when(
+                  data: (status) => _ChatStatusLine(status: status),
+                  loading: () => const _ChatStatusText(
+                    text: 'На связи сейчас · до 20:00 по МСК',
+                  ),
+                  error: (_, _) => const _ChatStatusText(
+                    text: 'График стилиста: 10:00-20:00 по МСК',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: IconButton(
+              tooltip: 'Меню',
+              onPressed: () {},
+              icon: const Icon(Icons.more_horiz, color: _chatText, size: 28),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatStatusLine extends StatelessWidget {
+  final Map<String, dynamic> status;
+
+  const _ChatStatusLine({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final statusText = (status['status_text'] as String?)?.trim();
+    final typingRaw = status['stylist_typing'];
+    final typing = typingRaw is Map
+        ? Map<String, dynamic>.from(typingRaw)
+        : const <String, dynamic>{};
+    final typingName = (typing['stylist_name'] as String?)?.trim();
+    final stylistTyping = typing['is_typing'] == true;
+    if (stylistTyping) {
+      return _ChatStatusText(
+        text: typingName == null || typingName.isEmpty
+            ? 'Стилист печатает'
+            : '$typingName печатает',
+      );
+    }
+    return _ChatStatusText(
+      text: statusText == null || statusText.isEmpty
+          ? 'На связи сейчас · до 20:00 по МСК'
+          : statusText,
+    );
+  }
+}
+
+class _ChatStatusText extends StatelessWidget {
+  final String text;
+
+  const _ChatStatusText({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 8, height: 8, color: _chatTextMuted),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            text.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1,
+              color: _chatTextMuted,
+              letterSpacing: 0.7,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChatBackgroundPattern extends StatelessWidget {
+  const _ChatBackgroundPattern();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _ChatBackgroundPatternPainter());
+  }
+}
+
+class _ChatBackgroundPatternPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawColor(_chatSurface, BlendMode.src);
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.018)
+      ..strokeWidth = 1;
+    const step = 20.0;
+    for (var x = -size.height; x < size.width; x += step) {
+      canvas.drawLine(
+        Offset(x, size.height),
+        Offset(x + size.height, 0),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ChatDateSeparator extends StatelessWidget {
+  const _ChatDateSeparator();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        decoration: BoxDecoration(border: Border.all(color: _chatBorder)),
+        child: const Text(
+          'СЕГОДНЯ',
+          style: TextStyle(
+            fontSize: 12,
+            color: _chatText,
+            letterSpacing: 1,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _StylistChatAuthGate extends StatelessWidget {
@@ -420,8 +567,8 @@ class _EmptyChat extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 520),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
           decoration: BoxDecoration(
-            color: GlameColors.surface2,
-            border: Border.all(color: GlameColors.lightGray),
+            color: _chatSurfaceLow,
+            border: Border.all(color: _chatBorder),
           ),
           child: const Column(
             mainAxisSize: MainAxisSize.min,
@@ -433,16 +580,14 @@ class _EmptyChat extends StatelessWidget {
                   fontSize: 24,
                   height: 1,
                   fontWeight: FontWeight.w400,
+                  color: _chatText,
                 ),
               ),
               SizedBox(height: 12),
               Text(
                 'Напишите стилисту, что хотите подобрать. Можно приложить фото для более точного подбора.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: GlameColors.textSecondary,
-                  height: 1.45,
-                ),
+                style: TextStyle(color: _chatTextMuted, height: 1.45),
               ),
             ],
           ),
@@ -467,8 +612,8 @@ class _ChatProductCard extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(20, 6, 20, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: GlameColors.surface2,
-        border: Border.all(color: GlameColors.lightGray),
+        color: _chatSurfaceLow,
+        border: Border.all(color: _chatBorder),
       ),
       child: Row(
         children: [
@@ -476,8 +621,8 @@ class _ChatProductCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: GlameColors.surface,
-              border: Border.all(color: GlameColors.lightGray),
+              color: _chatSurface,
+              border: Border.all(color: _chatBorder),
             ),
             child: imageUrl == null
                 ? Container(color: GlameColors.surface)
@@ -489,13 +634,21 @@ class _ChatProductCard extends StatelessWidget {
               ((product['name'] as String?) ?? 'GLAME').toUpperCase(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, letterSpacing: .6),
+              style: const TextStyle(
+                fontSize: 12,
+                letterSpacing: .6,
+                color: _chatText,
+              ),
             ),
           ),
           const SizedBox(width: 12),
           Text(
             formatRubFromKopeks(product['price']),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _chatText,
+            ),
           ),
         ],
       ),
@@ -549,116 +702,199 @@ class _MessageBubble extends ConsumerWidget {
         ? text.substring(inlineInsertAt).trimLeft()
         : '';
 
-    return Align(
-      alignment: own ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 520),
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: own ? GlameColors.warmGray : GlameColors.surface2,
-          border: Border.all(color: GlameColors.lightGray),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!own &&
-                dialogStepRaw != null &&
-                dialogStepRaw.isNotEmpty &&
-                !isTyping)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _DialogStepChip(step: dialogStepRaw),
-              ),
-            if (imageAttachments.isNotEmpty)
-              Padding(
-                padding: EdgeInsets.only(bottom: text.isEmpty ? 0 : 10),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: imageAttachments.map((item) {
-                    final isLocalMemory = item['is_local_memory'] == true;
-                    final localBytes =
-                        isLocalMemory && item['bytes'] is Uint8List
-                        ? item['bytes'] as Uint8List
-                        : null;
-                    final url = isLocalMemory
+    final bubble = Container(
+      constraints: const BoxConstraints(maxWidth: 520),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: own ? _chatSurfaceHigh : _chatSurfaceLow,
+        border: Border.all(color: _chatBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!own &&
+              dialogStepRaw != null &&
+              dialogStepRaw.isNotEmpty &&
+              !isTyping)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _DialogStepChip(step: dialogStepRaw),
+            ),
+          if (imageAttachments.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(bottom: text.isEmpty ? 0 : 10),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: imageAttachments.map((item) {
+                  final isLocalMemory = item['is_local_memory'] == true;
+                  final localBytes = isLocalMemory && item['bytes'] is Uint8List
+                      ? item['bytes'] as Uint8List
+                      : null;
+                  final url = isLocalMemory
+                      ? null
+                      : resolveAssetUrl(item['url']);
+                  final hasLocalMemory =
+                      localBytes != null && localBytes.isNotEmpty;
+                  return GestureDetector(
+                    onTap: (url == null && !hasLocalMemory)
                         ? null
-                        : resolveAssetUrl(item['url']);
-                    final hasLocalMemory =
-                        localBytes != null && localBytes.isNotEmpty;
-                    return GestureDetector(
-                      onTap: (url == null && !hasLocalMemory)
-                          ? null
-                          : () => _openChatImagePreview(
-                              context,
-                              imageUrl: url,
-                              localImageBytes: localBytes,
-                              imageName: (item['name'] as String?)?.trim(),
-                            ),
-                      child: Container(
-                        width: 96,
-                        height: 96,
-                        decoration: BoxDecoration(
-                          color: GlameColors.lightGray,
-                          border: Border.all(color: GlameColors.lightGray),
-                        ),
-                        child: hasLocalMemory
-                            ? Image.memory(localBytes, fit: BoxFit.cover)
-                            : url == null
-                            ? Container(color: GlameColors.lightGray)
-                            : CachedNetworkImage(
-                                imageUrl: url,
-                                fit: BoxFit.cover,
-                              ),
+                        : () => _openChatImagePreview(
+                            context,
+                            imageUrl: url,
+                            localImageBytes: localBytes,
+                            imageName: (item['name'] as String?)?.trim(),
+                          ),
+                    child: Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        color: _chatSurface,
+                        border: Border.all(color: _chatBorder),
                       ),
-                    );
-                  }).toList(),
+                      child: hasLocalMemory
+                          ? Image.memory(localBytes, fit: BoxFit.cover)
+                          : url == null
+                          ? Container(color: _chatSurface)
+                          : CachedNetworkImage(
+                              imageUrl: url,
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          if (productAttachments.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(
+                top: imageAttachments.isNotEmpty ? 10 : 0,
+              ),
+              child: _MessageAttachmentProductsBlock(
+                attachments: productAttachments,
+              ),
+            ),
+          if (textBefore.isNotEmpty)
+            Text(
+              textBefore,
+              textAlign: own ? TextAlign.right : TextAlign.left,
+              style: const TextStyle(
+                height: 1.35,
+                color: _chatText,
+                fontSize: 16,
+              ),
+            ),
+          if (hasInlineProducts)
+            _AssistantProductsBlock(
+              message: message,
+              showTitle: false,
+              compactSpacing: true,
+            ),
+          if (textAfter.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                textAfter,
+                style: const TextStyle(
+                  height: 1.35,
+                  color: _chatText,
+                  fontSize: 16,
                 ),
               ),
-            if (productAttachments.isNotEmpty)
+            ),
+          if (isTyping) const _TypingIndicator(),
+          if (!own) ...[
+            _AssistantInteractiveBlock(message: message),
+            _AssistantStoresBlock(message: message),
+            _AssistantLooksBlock(message: message),
+            if (!hasInlineProducts) _AssistantProductsBlock(message: message),
+          ],
+        ],
+      ),
+    );
+
+    final time = _messageTimeLabel(message);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Align(
+        alignment: own ? Alignment.centerRight : Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment: own
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!own) ...[
+                  const _StylistAvatar(),
+                  const SizedBox(width: 12),
+                ],
+                Flexible(child: bubble),
+              ],
+            ),
+            if (time != null)
               Padding(
-                padding: EdgeInsets.only(
-                  top: imageAttachments.isNotEmpty ? 10 : 0,
-                ),
-                child: _MessageAttachmentProductsBlock(
-                  attachments: productAttachments,
-                ),
-              ),
-            if (textBefore.isNotEmpty)
-              Text(
-                textBefore,
-                style: TextStyle(height: 1.35, color: GlameColors.textPrimary),
-              ),
-            if (hasInlineProducts)
-              _AssistantProductsBlock(
-                message: message,
-                showTitle: false,
-                compactSpacing: true,
-              ),
-            if (textAfter.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
+                padding: EdgeInsets.only(top: 6, left: own ? 0 : 48),
                 child: Text(
-                  textAfter,
-                  style: TextStyle(
-                    height: 1.35,
-                    color: GlameColors.textPrimary,
+                  time,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: _chatTextMuted,
+                    letterSpacing: 0.4,
                   ),
                 ),
               ),
-            if (isTyping) const _TypingIndicator(),
-            if (!own) ...[
-              _AssistantInteractiveBlock(message: message),
-              _AssistantStoresBlock(message: message),
-              _AssistantLooksBlock(message: message),
-              if (!hasInlineProducts) _AssistantProductsBlock(message: message),
-            ],
           ],
         ),
       ),
     );
   }
+}
+
+class _StylistAvatar extends StatelessWidget {
+  const _StylistAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 34,
+      height: 34,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: _chatSurfaceHigh,
+        border: Border.all(color: _chatBorder),
+      ),
+      child: const Text(
+        'G',
+        style: TextStyle(
+          color: _chatText,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+String? _messageTimeLabel(Map<String, dynamic> message) {
+  final raw =
+      message['created_at'] ??
+      message['createdAt'] ??
+      message['timestamp'] ??
+      message['time'];
+  if (raw == null) return null;
+  if (raw is String) {
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) {
+      final local = parsed.toLocal();
+      return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    }
+    final trimmed = raw.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+  return null;
 }
 
 void _openChatImagePreview(
@@ -772,8 +1008,8 @@ class _MessageAttachmentProductsBlock extends StatelessWidget {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: GlameColors.surface2,
-                  border: Border.all(color: GlameColors.lightGray),
+                  color: _chatSurfaceLow,
+                  border: Border.all(color: _chatBorder),
                 ),
                 child: Row(
                   children: [
@@ -782,7 +1018,7 @@ class _MessageAttachmentProductsBlock extends StatelessWidget {
                       height: 64,
                       decoration: BoxDecoration(
                         color: GlameColors.surface,
-                        border: Border.all(color: GlameColors.lightGray),
+                        border: Border.all(color: _chatBorder),
                       ),
                       child: imageUrl == null
                           ? Container(color: GlameColors.surface)
@@ -803,6 +1039,7 @@ class _MessageAttachmentProductsBlock extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
+                              color: _chatText,
                             ),
                           ),
                           if (subtitle.isNotEmpty) ...[
@@ -813,7 +1050,7 @@ class _MessageAttachmentProductsBlock extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 11,
-                                color: GlameColors.textSecondary,
+                                color: _chatTextMuted,
                               ),
                             ),
                           ],
@@ -822,7 +1059,10 @@ class _MessageAttachmentProductsBlock extends StatelessWidget {
                             price <= 0
                                 ? 'Цена уточняется'
                                 : formatRubFromKopeks(price),
-                            style: const TextStyle(fontSize: 12),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: _chatText,
+                            ),
                           ),
                         ],
                       ),
@@ -831,7 +1071,7 @@ class _MessageAttachmentProductsBlock extends StatelessWidget {
                     const Icon(
                       Icons.open_in_new,
                       size: 18,
-                      color: GlameColors.textSecondary,
+                      color: _chatTextMuted,
                     ),
                   ],
                 ),
@@ -855,15 +1095,15 @@ class _DialogStepChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: GlameColors.lightGray.withValues(alpha: 0.6),
-        border: Border.all(color: GlameColors.lightGray),
+        color: _chatSurfaceHigh,
+        border: Border.all(color: _chatBorder),
       ),
       child: Text(
         label,
         style: const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: GlameColors.textSecondary,
+          color: _chatTextMuted,
         ),
       ),
     );
@@ -932,10 +1172,9 @@ class _AssistantInteractiveBlock extends StatelessWidget {
         : payloadRaw is Map
         ? Map<String, dynamic>.from(payloadRaw)
         : const <String, dynamic>{};
-    final collections = _extractInteractiveItems(payload['collections']);
     final brands = _extractInteractiveItems(payload['brands']);
     final sections = _extractInteractiveItems(payload['sections']);
-    if (collections.isEmpty && brands.isEmpty && sections.isEmpty) {
+    if (brands.isEmpty && sections.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -944,12 +1183,6 @@ class _AssistantInteractiveBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (collections.isNotEmpty)
-            _InteractiveChipsRow(
-              title: 'Коллекции',
-              items: collections,
-              onTap: (item) => _openInteractiveItem(context, item),
-            ),
           if (brands.isNotEmpty)
             _InteractiveChipsRow(
               title: 'Бренды',
@@ -1187,7 +1420,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
                   width: 6,
                   height: 6,
                   decoration: const BoxDecoration(
-                    color: GlameColors.textSecondary,
+                    color: _chatTextMuted,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1415,7 +1648,7 @@ Future<void> _openStoreOnMap(_StoreItem store) async {
   final lng = store.longitude;
   if (lat == null || lng == null) return;
   final uri = Uri.parse(
-    'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+    'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
   );
   await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
@@ -2066,6 +2299,8 @@ class _Composer extends StatelessWidget {
   final TextEditingController controller;
   final XFile? pickedPhoto;
   final bool sending;
+  final List<String> quickTags;
+  final ValueChanged<String> onQuickTag;
   final VoidCallback onPick;
   final VoidCallback onClearPhoto;
   final VoidCallback onSend;
@@ -2074,6 +2309,8 @@ class _Composer extends StatelessWidget {
     required this.controller,
     required this.pickedPhoto,
     required this.sending,
+    required this.quickTags,
+    required this.onQuickTag,
     required this.onPick,
     required this.onClearPhoto,
     required this.onSend,
@@ -2084,100 +2321,178 @@ class _Composer extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+        padding: EdgeInsets.zero,
         decoration: const BoxDecoration(
-          color: GlameColors.surface2,
-          border: Border(top: BorderSide(color: GlameColors.lightGray)),
+          color: _chatSurface,
+          border: Border(top: BorderSide(color: _chatBorder)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (quickTags.isNotEmpty)
+              Container(
+                height: 72,
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: _chatBorder)),
+                ),
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 16,
+                  ),
+                  itemBuilder: (context, index) {
+                    final tag = quickTags[index];
+                    return InkWell(
+                      onTap: sending ? null : () => onQuickTag(tag),
+                      child: Container(
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 22),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: _chatBorder),
+                        ),
+                        child: Text(
+                          tag.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            height: 1,
+                            color: _chatText,
+                            letterSpacing: 0.8,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemCount: quickTags.length,
+                ),
+              ),
             if (pickedPhoto != null)
               Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.fromLTRB(28, 12, 28, 0),
                 child: Row(
                   children: [
-                    const Icon(Icons.image_outlined, size: 18),
+                    const Icon(
+                      Icons.image_outlined,
+                      size: 18,
+                      color: _chatTextMuted,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         pickedPhoto!.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: _chatTextMuted),
                       ),
                     ),
                     IconButton(
                       onPressed: onClearPhoto,
-                      icon: const Icon(Icons.close, size: 18),
+                      icon: const Icon(Icons.close, size: 18, color: _chatText),
                     ),
                   ],
                 ),
               ),
-            Row(
-              children: [
-                IconButton(
-                  tooltip: 'Прикрепить фото',
-                  onPressed: sending ? null : onPick,
-                  icon: const Icon(Icons.photo_camera_outlined),
-                ),
-                Expanded(
-                  child: Focus(
-                    onKeyEvent: (node, event) {
-                      final isEnter =
-                          event.logicalKey == LogicalKeyboardKey.enter ||
-                          event.logicalKey == LogicalKeyboardKey.numpadEnter;
-                      if (event is KeyDownEvent &&
-                          isEnter &&
-                          !HardwareKeyboard.instance.isShiftPressed) {
-                        if (!sending) onSend();
-                        return KeyEventResult.handled;
-                      }
-                      return KeyEventResult.ignored;
-                    },
-                    child: TextField(
-                      controller: controller,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) {
-                        if (!sending) onSend();
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 20, 28, 24),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: OutlinedButton(
+                      onPressed: sending ? null : onPick,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _chatText,
+                        disabledForegroundColor: _chatTextDim,
+                        padding: EdgeInsets.zero,
+                        shape: const RoundedRectangleBorder(),
+                        side: const BorderSide(color: _chatBorder),
+                      ),
+                      child: const Icon(Icons.add, size: 30),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Focus(
+                      onKeyEvent: (node, event) {
+                        final isEnter =
+                            event.logicalKey == LogicalKeyboardKey.enter ||
+                            event.logicalKey == LogicalKeyboardKey.numpadEnter;
+                        if (event is KeyDownEvent &&
+                            isEnter &&
+                            !HardwareKeyboard.instance.isShiftPressed) {
+                          if (!sending) onSend();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
                       },
-                      decoration: const InputDecoration(
-                        hintText: 'Сообщение стилисту',
-                        border: OutlineInputBorder(),
+                      child: TextField(
+                        controller: controller,
+                        minLines: 1,
+                        maxLines: 4,
+                        style: const TextStyle(color: _chatText, fontSize: 16),
+                        cursorColor: _chatText,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) {
+                          if (!sending) onSend();
+                        },
+                        decoration: const InputDecoration(
+                          hintText: 'Написать сообщение...',
+                          hintStyle: TextStyle(color: _chatTextDim),
+                          filled: true,
+                          fillColor: _chatSurfaceLow,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.zero,
+                            borderSide: BorderSide(color: _chatBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.zero,
+                            borderSide: BorderSide(color: _chatText),
+                          ),
+                          disabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.zero,
+                            borderSide: BorderSide(color: _chatBorder),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 56,
-                  height: 56,
-                  child: FilledButton(
-                    onPressed: sending ? null : onSend,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: GlameColors.surface2,
-                      foregroundColor: GlameColors.textPrimary,
-                      disabledBackgroundColor: GlameColors.warmGray,
-                      disabledForegroundColor: GlameColors.textSecondary,
-                      padding: EdgeInsets.zero,
-                      shape: const RoundedRectangleBorder(
-                        side: BorderSide(color: GlameColors.lightGray),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: FilledButton(
+                      onPressed: sending ? null : onSend,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _chatText,
+                        foregroundColor: _chatSurface,
+                        disabledBackgroundColor: _chatSurfaceHigh,
+                        disabledForegroundColor: _chatTextDim,
+                        padding: EdgeInsets.zero,
+                        shape: const RoundedRectangleBorder(),
                       ),
+                      child: sending
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: _chatText,
+                              ),
+                            )
+                          : const Icon(Icons.send, size: 24),
                     ),
-                    child: sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: GlameColors.textPrimary,
-                            ),
-                          )
-                        : const Icon(Icons.arrow_upward),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),

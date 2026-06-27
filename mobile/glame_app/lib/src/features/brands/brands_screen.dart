@@ -13,7 +13,7 @@ import '../home/home_api.dart';
 const String _block4HeroAsset =
     'assets/images/home/home_block_4_collected_glame.png';
 const String _block4BackgroundAsset =
-    'assets/images/home/glame_home_block4_background_underlay.png';
+    'assets/images/home/glame_home_block4_open_display_background.png';
 const String _block4VisualAsset =
     'assets/images/home/glame_home_block4_visual_image_no_text.png';
 const String _block4BrandsPageBlockKey = 'collected_glame_brands';
@@ -25,13 +25,28 @@ final _brandsApiProvider = Provider<HomeApi>((ref) {
 
 final homeCollectedGlameBlockProvider =
     FutureProvider<HomeBlockCollectedGlameData>((ref) async {
+      String? serverImage;
+      try {
+        final api = ref.watch(_brandsApiProvider);
+        final raw = await api.getHomeSlides(
+          blockKey: _block4BrandsPageBlockKey,
+        );
+        final slide = raw.isNotEmpty && raw.first is Map
+            ? Map<String, dynamic>.from(raw.first as Map)
+            : const <String, dynamic>{};
+        serverImage =
+            _nonEmptyString(slide['background_image_url']) ??
+            _nonEmptyString(slide['image_url']);
+      } catch (_) {
+        serverImage = null;
+      }
       return HomeBlockCollectedGlameData(
         title: 'Собрано GLAME',
         subtitle: 'Мы отбираем главное. Чтобы вы выбирали свое.',
         ctaLabel: 'Смотреть бренды',
-        backgroundImage: _block4BackgroundAsset,
-        visualImage: _block4VisualAsset,
-        useSingleImage: false,
+        backgroundImage: serverImage ?? _block4BackgroundAsset,
+        visualImage: serverImage ?? _block4VisualAsset,
+        useSingleImage: serverImage != null,
         brandNames: [
           'Geometry',
           'Magna',
@@ -50,6 +65,11 @@ final homeCollectedGlameBlockProvider =
         ],
       );
     });
+
+String? _nonEmptyString(Object? value) {
+  final text = (value as String?)?.trim();
+  return text == null || text.isEmpty ? null : text;
+}
 
 final brandsPageHeroProvider = FutureProvider<BrandsPageHeroData?>((ref) async {
   final api = ref.watch(_brandsApiProvider);
@@ -230,6 +250,10 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
     final width = MediaQuery.of(context).size.width;
     final compact = viewportHeight != null;
     final targetHeight = viewportHeight;
+    final topBarBottom =
+        MediaQuery.of(context).padding.top +
+        GlameUi.heroTopOffset +
+        GlameUi.heroTopBarHeight;
     final contentWidth = width - (GlameUi.pagePadding * 2);
     final compactBrandSectionHeight = compact ? 270.0 : 0.0;
     final heroHeight = compact
@@ -241,7 +265,7 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
         ? (contentWidth * 1.52).clamp(520.0, 980.0)
         : (contentWidth * 1.5).clamp(430.0, 560.0);
     final heroTopPadding = compact
-        ? 88.0
+        ? topBarBottom + 24.0
         : data.useSingleImage
         ? (width < 420 ? 44.0 : 56.0)
         : (width < 420 ? 58.0 : 72.0);
@@ -266,7 +290,7 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
                     Positioned.fill(
                       child: _Block4ImageLayer(
                         source: data.visualImage,
-                        fit: BoxFit.fitWidth,
+                        fit: BoxFit.cover,
                         alignment: Alignment.topCenter,
                       ),
                     ),
@@ -1179,15 +1203,23 @@ class _BrandFeaturedProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
+            AspectRatio(
+              aspectRatio: 1.08,
               child: Container(
                 width: double.infinity,
                 color: GlameColors.coldLightGrey,
+                clipBehavior: Clip.hardEdge,
+                decoration: const BoxDecoration(
+                  color: GlameColors.coldLightGrey,
+                ),
                 child: product.imageUrl == null
                     ? const ColoredBox(color: GlameColors.coldLightGrey)
                     : CachedNetworkImage(
                         imageUrl: product.imageUrl!,
-                        fit: BoxFit.contain,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.center,
                         placeholder: (context, _) =>
                             const ColoredBox(color: GlameColors.coldLightGrey),
                         errorWidget: (context, _, _) =>

@@ -15,8 +15,11 @@ class CatalogState {
   final int? priceMin;
   final int? priceMax;
   final String? material;
+  final String? vstavka;
   final String? pokrytie;
+  final String? razmer;
   final String? tipZamka;
+  final String? color;
   final String? sort;
   final String? search;
   final bool inStockOnly;
@@ -33,8 +36,11 @@ class CatalogState {
     required this.priceMin,
     required this.priceMax,
     required this.material,
+    required this.vstavka,
     required this.pokrytie,
+    required this.razmer,
     required this.tipZamka,
+    required this.color,
     required this.sort,
     required this.search,
     required this.inStockOnly,
@@ -53,8 +59,11 @@ class CatalogState {
       priceMin: null,
       priceMax: null,
       material: null,
+      vstavka: null,
       pokrytie: null,
+      razmer: null,
       tipZamka: null,
+      color: null,
       sort: null,
       search: null,
       inStockOnly: false,
@@ -73,8 +82,11 @@ class CatalogState {
     int? priceMin,
     int? priceMax,
     String? material,
+    String? vstavka,
     String? pokrytie,
+    String? razmer,
     String? tipZamka,
+    String? color,
     String? sort,
     String? search,
     bool? inStockOnly,
@@ -91,8 +103,11 @@ class CatalogState {
       priceMin: priceMin ?? this.priceMin,
       priceMax: priceMax ?? this.priceMax,
       material: material ?? this.material,
+      vstavka: vstavka ?? this.vstavka,
       pokrytie: pokrytie ?? this.pokrytie,
+      razmer: razmer ?? this.razmer,
       tipZamka: tipZamka ?? this.tipZamka,
+      color: color ?? this.color,
       sort: sort ?? this.sort,
       search: search ?? this.search,
       inStockOnly: inStockOnly ?? this.inStockOnly,
@@ -128,8 +143,11 @@ class CatalogController extends StateNotifier<CatalogState> {
       priceMin: state.priceMin,
       priceMax: state.priceMax,
       material: state.material,
+      vstavka: state.vstavka,
       pokrytie: state.pokrytie,
+      razmer: state.razmer,
       tipZamka: state.tipZamka,
+      color: state.color,
       sort: state.sort,
       search: state.search,
       inStockOnly: state.inStockOnly,
@@ -157,8 +175,11 @@ class CatalogController extends StateNotifier<CatalogState> {
       priceMin: null,
       priceMax: null,
       material: null,
+      vstavka: null,
       pokrytie: null,
+      razmer: null,
       tipZamka: null,
+      color: null,
       sort: null,
       search: nextSearch.isEmpty ? null : nextSearch,
       inStockOnly: state.inStockOnly,
@@ -173,22 +194,35 @@ class CatalogController extends StateNotifier<CatalogState> {
   Future<void> setFilters({
     int? priceMin,
     int? priceMax,
+    String? brand,
     String? material,
+    String? vstavka,
     String? pokrytie,
+    String? razmer,
     String? tipZamka,
+    String? color,
     String? sort,
   }) async {
-    state = state.copyWith(
-      priceMin: priceMin,
-      priceMax: priceMax,
-      material: material,
-      pokrytie: pokrytie,
-      tipZamka: tipZamka,
-      sort: sort,
-      items: [],
+    state = CatalogState(
+      items: const [],
       total: 0,
+      loading: false,
+      category: state.category,
       hasMore: true,
       error: null,
+      oneColumn: state.oneColumn,
+      brand: _norm(brand),
+      priceMin: priceMin,
+      priceMax: priceMax,
+      material: _norm(material),
+      vstavka: _norm(vstavka),
+      pokrytie: _norm(pokrytie),
+      razmer: _norm(razmer),
+      tipZamka: _norm(tipZamka),
+      color: _norm(color),
+      sort: _norm(sort),
+      search: state.search,
+      inStockOnly: state.inStockOnly,
     );
     await refresh();
   }
@@ -207,8 +241,11 @@ class CatalogController extends StateNotifier<CatalogState> {
       priceMin: state.priceMin,
       priceMax: state.priceMax,
       material: state.material,
+      vstavka: state.vstavka,
       pokrytie: state.pokrytie,
+      razmer: state.razmer,
       tipZamka: state.tipZamka,
+      color: state.color,
       sort: state.sort,
       search: next.isEmpty ? null : next,
       inStockOnly: state.inStockOnly,
@@ -242,8 +279,11 @@ class CatalogController extends StateNotifier<CatalogState> {
         priceMin: state.priceMin,
         priceMax: state.priceMax,
         material: state.material,
+        vstavka: state.vstavka,
         pokrytie: state.pokrytie,
+        razmer: state.razmer,
         tipZamka: state.tipZamka,
+        color: state.color,
         sort: state.sort,
       );
       final itemsRaw = raw['items'];
@@ -286,8 +326,11 @@ class CatalogController extends StateNotifier<CatalogState> {
         priceMin: state.priceMin,
         priceMax: state.priceMax,
         material: state.material,
+        vstavka: state.vstavka,
         pokrytie: state.pokrytie,
+        razmer: state.razmer,
         tipZamka: state.tipZamka,
+        color: state.color,
         sort: state.sort,
       );
       final itemsRaw = raw['items'];
@@ -315,4 +358,9 @@ class CatalogController extends StateNotifier<CatalogState> {
       );
     }
   }
+}
+
+String? _norm(String? value) {
+  final next = (value ?? '').trim();
+  return next.isEmpty ? null : next;
 }

@@ -28,13 +28,26 @@ class HomeSpacesBlock extends ConsumerWidget {
     final items = spaces.isEmpty ? _fallbackSpaces : spaces;
     final compact = viewportHeight != null;
     final targetHeight = viewportHeight;
-    final topPadding = compact ? 88.0 : 70.0;
-    final bottomPadding = compact ? 18.0 : 42.0;
-    final cardGap = compact ? 12.0 : 26.0;
+    final topBarBottom =
+        MediaQuery.of(context).padding.top +
+        GlameUi.heroTopOffset +
+        GlameUi.heroTopBarHeight;
+    final topPadding = compact ? topBarBottom + 26.0 : 70.0;
+    final bottomPadding = compact ? 14.0 : 42.0;
+    final cardGap = compact ? 8.0 : 26.0;
+    final headerHeight = compact ? 50.0 : 110.0;
+    final headerGap = compact ? 14.0 : 44.0;
+    final cardCount = items.isEmpty ? 1 : items.length;
     final availableHeight =
-        ((targetHeight ?? 860) - topPadding - bottomPadding - 110 - cardGap)
-            .clamp(420.0, 620.0);
-    final cardHeight = availableHeight / 2;
+        (targetHeight ?? 860) -
+        topPadding -
+        bottomPadding -
+        headerHeight -
+        headerGap -
+        (cardGap * (cardCount - 1));
+    final cardHeight = compact
+        ? (availableHeight / cardCount).clamp(168.0, 258.0)
+        : (availableHeight / cardCount).clamp(300.0, 420.0);
 
     return Container(
       height: targetHeight,
@@ -63,8 +76,12 @@ class HomeSpacesBlock extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _SpacesHeader(compact: compact, dark: true),
-                    SizedBox(height: compact ? 18 : 44),
+                    _SpacesHeader(
+                      compact: compact,
+                      dark: true,
+                      cities: items.map((item) => item.city).toList(),
+                    ),
+                    SizedBox(height: headerGap),
                     for (var i = 0; i < items.length; i++) ...[
                       _HomeSpaceCard(
                         space: items[i],
@@ -116,7 +133,9 @@ class StoresScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const _SpacesHeader(),
+                  _SpacesHeader(
+                    cities: items.map((item) => item.city).toList(),
+                  ),
                   const SizedBox(height: 28),
                   for (var i = 0; i < items.length; i++) ...[
                     _HomeSpaceCard(space: items[i]),
@@ -157,7 +176,7 @@ class SpaceDetailScreen extends ConsumerWidget {
                 orElse: () => _fallbackSpaces.first,
               ),
             );
-            final copy = _copyForSpace(space.slug);
+            final copy = _copyForSpace(space);
             final palette = _spacePaletteFor(space.slug);
             return ListView(
               padding: EdgeInsets.zero,
@@ -261,8 +280,9 @@ class SpaceDetailScreen extends ConsumerWidget {
 class _SpacesHeader extends StatelessWidget {
   final bool compact;
   final bool dark;
+  final List<String>? cities;
 
-  const _SpacesHeader({this.compact = false, this.dark = false});
+  const _SpacesHeader({this.compact = false, this.dark = false, this.cities});
 
   @override
   Widget build(BuildContext context) {
@@ -272,23 +292,26 @@ class _SpacesHeader extends StatelessWidget {
         Text.rich(
           TextSpan(
             children: [
-              TextSpan(text: 'Пространства\n'),
-              TextSpan(text: 'GLAME', style: TextStyle(letterSpacing: 2.6)),
+              TextSpan(text: compact ? 'Пространства ' : 'Пространства\n'),
+              TextSpan(
+                text: 'GLAME',
+                style: TextStyle(letterSpacing: compact ? 0 : 2.6),
+              ),
             ],
           ),
           style: TextStyle(
-            fontSize: compact ? 34 : 46,
+            fontSize: compact ? 20 : 46,
             height: 1.05,
             letterSpacing: 0,
             color: dark ? GlameColors.whiteGlame : GlameColors.graphite,
             fontWeight: FontWeight.w300,
           ),
         ),
-        SizedBox(height: compact ? 12 : 22),
+        SizedBox(height: compact ? 8 : 22),
         Text(
-          'Ялта и Симферополь',
+          _citySummary(cities),
           style: TextStyle(
-            fontSize: compact ? 16 : 20,
+            fontSize: compact ? 13 : 20,
             height: 1.3,
             color: dark ? GlameColors.steelGray : GlameColors.graphite,
             fontWeight: FontWeight.w300,
@@ -297,6 +320,20 @@ class _SpacesHeader extends StatelessWidget {
       ],
     );
   }
+}
+
+String _citySummary(List<String>? cities) {
+  final unique = <String>[];
+  for (final city in cities ?? const <String>[]) {
+    final value = city.trim();
+    if (value.isNotEmpty && !unique.contains(value)) {
+      unique.add(value);
+    }
+  }
+  if (unique.isEmpty) return 'Ялта и Симферополь';
+  if (unique.length == 1) return unique.first;
+  if (unique.length == 2) return '${unique.first} и ${unique.last}';
+  return '${unique.take(unique.length - 1).join(', ')} и ${unique.last}';
 }
 
 class _HomeSpaceCard extends StatelessWidget {
@@ -312,7 +349,7 @@ class _HomeSpaceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final copy = _copyForSpace(space.slug);
+    final copy = _copyForSpace(space);
     return InkWell(
       onTap: () {
         _trackSpacesEvent('home_block5_space_click', {
@@ -332,16 +369,16 @@ class _HomeSpaceCard extends StatelessWidget {
             final homeCard = forcedHeight != null;
             final cardHeight = forcedHeight ?? (narrow ? 406.0 : 392.0);
             final compactCard = compact || cardHeight < 280;
-            final citySize = compactCard ? 22.0 : (narrow ? 28.0 : 33.0);
-            final addressSize = compactCard ? 12.0 : (narrow ? 14.0 : 16.0);
-            final descriptionSize = compactCard ? 11.0 : (narrow ? 13.0 : 15.0);
-            final verticalGap = compactCard ? 12.0 : (narrow ? 24.0 : 34.0);
+            final citySize = compactCard ? 18.0 : (narrow ? 28.0 : 33.0);
+            final addressSize = compactCard ? 10.5 : (narrow ? 14.0 : 16.0);
+            final descriptionSize = compactCard ? 9.5 : (narrow ? 13.0 : 15.0);
+            final verticalGap = compactCard ? 8.0 : (narrow ? 24.0 : 34.0);
             final textPadding = compactCard
-                ? const EdgeInsets.fromLTRB(16, 16, 12, 16)
+                ? const EdgeInsets.fromLTRB(12, 10, 8, 10)
                 : narrow
                 ? const EdgeInsets.fromLTRB(20, 24, 14, 22)
                 : const EdgeInsets.fromLTRB(28, 32, 18, 28);
-            final ctaWidth = compactCard ? 132.0 : (narrow ? 154.0 : 176.0);
+            final ctaWidth = compactCard ? 118.0 : (narrow ? 154.0 : 176.0);
             final cardImageUrl = forcedHeight == null
                 ? space.cardImageUrl
                 : _homeCardImageForSpace(space);
@@ -373,6 +410,8 @@ class _HomeSpaceCard extends StatelessWidget {
                             children: [
                               Text(
                                 copy.cityLabel,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: citySize,
                                   height: 1.08,
@@ -386,19 +425,25 @@ class _HomeSpaceCard extends StatelessWidget {
                               SizedBox(height: verticalGap),
                               Text(
                                 copy.cardAddressLines.join('\n'),
+                                maxLines: compactCard ? 3 : null,
+                                overflow: compactCard
+                                    ? TextOverflow.ellipsis
+                                    : TextOverflow.visible,
                                 style: TextStyle(
                                   fontSize: addressSize,
-                                  height: 1.45,
+                                  height: compactCard ? 1.25 : 1.45,
                                   color: homeCard
                                       ? GlameColors.coldLightGray
                                       : GlameColors.graphite,
                                   fontWeight: FontWeight.w300,
                                 ),
                               ),
-                              SizedBox(height: narrow ? 22 : 30),
+                              SizedBox(
+                                height: compactCard ? 10 : (narrow ? 22 : 30),
+                              ),
                               if (compactCard) const SizedBox(height: 0),
                               Container(
-                                width: 36,
+                                width: compactCard ? 28 : 36,
                                 height: 1,
                                 color: homeCard
                                     ? GlameColors.borderGray
@@ -407,20 +452,26 @@ class _HomeSpaceCard extends StatelessWidget {
                               const Spacer(),
                               Text(
                                 copy.cardDescriptionLines.join('\n'),
+                                maxLines: compactCard ? 2 : null,
+                                overflow: compactCard
+                                    ? TextOverflow.ellipsis
+                                    : TextOverflow.visible,
                                 style: TextStyle(
                                   fontSize: descriptionSize,
-                                  height: 1.35,
+                                  height: compactCard ? 1.22 : 1.35,
                                   color: homeCard
                                       ? GlameColors.steelGray
                                       : GlameColors.graphite,
                                   fontWeight: FontWeight.w300,
                                 ),
                               ),
-                              SizedBox(height: narrow ? 18 : 24),
+                              SizedBox(
+                                height: compactCard ? 8 : (narrow ? 18 : 24),
+                              ),
                               SizedBox(
                                 width: ctaWidth,
                                 child: Container(
-                                  height: compactCard ? 34 : (narrow ? 40 : 44),
+                                  height: compactCard ? 28 : (narrow ? 40 : 44),
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     border: Border.all(
@@ -436,7 +487,7 @@ class _HomeSpaceCard extends StatelessWidget {
                                     'Смотреть пространство',
                                     style: TextStyle(
                                       fontSize: compactCard
-                                          ? 10
+                                          ? 8.5
                                           : (narrow ? 12 : 13),
                                       height: 1,
                                       color: homeCard
@@ -788,6 +839,7 @@ class _SpacesLoadError extends StatelessWidget {
 }
 
 class _SpaceStoreData {
+  final int sortOrder;
   final String slug;
   final String city;
   final String title;
@@ -801,6 +853,7 @@ class _SpaceStoreData {
   final List<String?> galleryImageUrls;
 
   const _SpaceStoreData({
+    required this.sortOrder,
     required this.slug,
     required this.city,
     required this.title,
@@ -868,6 +921,7 @@ class _ServiceMeaning {
 
 const _fallbackSpaces = <_SpaceStoreData>[
   _SpaceStoreData(
+    sortOrder: 1,
     slug: 'yalta',
     city: 'Ялта',
     title: 'Ялта',
@@ -887,6 +941,7 @@ const _fallbackSpaces = <_SpaceStoreData>[
     ],
   ),
   _SpaceStoreData(
+    sortOrder: 2,
     slug: 'simferopol',
     city: 'Симферополь',
     title: 'Симферополь',
@@ -915,11 +970,13 @@ List<_SpaceStoreData> _parseSpaces(List<dynamic> rawItems) {
         final city = _stringValue(item['city']);
         final title = _stringValue(item['title']) ?? city;
         final address = _stringValue(item['address']);
-        final slug = _stringValue(item['slug']) ?? _spaceSlug(city, title);
+        final slug =
+            _stringValue(item['slug']) ??
+            _spaceSlug(city, title) ??
+            _storeIdSlug(item['id']);
         if (city == null || title == null || address == null || slug == null) {
           return null;
         }
-        if (!_spaceCopyBySlug.containsKey(slug)) return null;
         final imageUrls = _orderedImageUrls(item);
         final lat = _doubleValue(item['latitude']);
         final lng = _doubleValue(item['longitude']);
@@ -933,6 +990,7 @@ List<_SpaceStoreData> _parseSpaces(List<dynamic> rawItems) {
         );
         final gallery = _spaceGalleryUrls(item, imageUrls, hero);
         return _SpaceStoreData(
+          sortOrder: _intValue(item['sort_order']) ?? 99,
           slug: slug,
           city: city,
           title: title,
@@ -949,7 +1007,11 @@ List<_SpaceStoreData> _parseSpaces(List<dynamic> rawItems) {
       .whereType<_SpaceStoreData>()
       .toList();
 
-  items.sort((a, b) => _spaceOrder(a.slug).compareTo(_spaceOrder(b.slug)));
+  items.sort((a, b) {
+    final bySort = a.sortOrder.compareTo(b.sortOrder);
+    if (bySort != 0) return bySort;
+    return _spaceOrder(a.slug).compareTo(_spaceOrder(b.slug));
+  });
   return items;
 }
 
@@ -1036,8 +1098,44 @@ const _spacePaletteBySlug = <String, _SpacePalette>{
   ),
 };
 
-_SpaceCopy _copyForSpace(String slug) {
-  return _spaceCopyBySlug[slug] ?? _spaceCopyBySlug.values.first;
+_SpaceCopy _copyForSpace(_SpaceStoreData space) {
+  final known = _spaceCopyBySlug[space.slug];
+  if (known != null) return known;
+
+  final hours = space.workingHours == null
+      ? null
+      : 'Часы: ${space.workingHours}';
+  return _SpaceCopy(
+    slug: space.slug,
+    cityLabel: space.city,
+    cardAddressLines: [space.address],
+    cardDescriptionLines: [
+      ?space.comment,
+      ?hours,
+      if (space.comment == null && hours == null) space.title,
+    ],
+    heroTitle: space.title,
+    heroSubtitle: 'пространство GLAME',
+    heroAddressLines: [space.address, ?space.workingHours],
+    detailDescription:
+        space.comment ??
+        'Пространство GLAME, где можно увидеть украшения, примерить их и уточнить наличие у консультанта.',
+    catalogButtonLabel: 'Смотреть украшения в ${space.city}',
+    serviceMeanings: const [
+      _ServiceMeaning(
+        '01 Подбор',
+        'Стилист помогает собрать украшение под образ, настроение и конкретный запрос.',
+      ),
+      _ServiceMeaning(
+        '02 Примерка',
+        'Украшения можно увидеть на себе и почувствовать в реальном свете пространства.',
+      ),
+      _ServiceMeaning(
+        '03 Наличие',
+        'Уточняем наличие по магазину и быстро ведём к нужным позициям.',
+      ),
+    ],
+  );
 }
 
 _SpacePalette _spacePaletteFor(String slug) {
@@ -1100,6 +1198,12 @@ String? _spaceSlug(String? city, String? title) {
   return null;
 }
 
+String? _storeIdSlug(Object? value) {
+  final id = _stringValue(value);
+  if (id == null) return null;
+  return 'store-${id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '-')}';
+}
+
 String? _stringValue(Object? value) {
   final text = (value as String?)?.trim();
   return text == null || text.isEmpty ? null : text;
@@ -1113,6 +1217,13 @@ double? _doubleValue(Object? value) {
   return null;
 }
 
+int? _intValue(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value.trim());
+  return null;
+}
+
 T? _itemAt<T>(List<T> items, int index) {
   if (index < 0 || index >= items.length) return null;
   return items[index];
@@ -1123,7 +1234,7 @@ Future<void> _openMaps(_SpaceStoreData store) async {
   if (point == null) return;
   _trackSpacesEvent('space_route_click', _spaceItemMap(store));
   final uri = Uri.parse(
-    'https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}',
+    'https://www.google.com/maps/dir/?api=1&destination=${point.latitude},${point.longitude}&travelmode=driving',
   );
   await launchUrl(uri, mode: LaunchMode.externalApplication);
 }

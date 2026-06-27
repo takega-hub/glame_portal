@@ -43,6 +43,7 @@ class AuthTextField extends StatelessWidget {
   final String label;
   final String hintText;
   final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
   final bool obscureText;
   final bool dark;
 
@@ -52,6 +53,7 @@ class AuthTextField extends StatelessWidget {
     required this.label,
     required this.hintText,
     this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
     this.obscureText = false,
     this.dark = false,
   });
@@ -64,6 +66,7 @@ class AuthTextField extends StatelessWidget {
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
+        textCapitalization: textCapitalization,
         obscureText: obscureText,
         style: const TextStyle(color: GlameColors.textPrimary),
         decoration: InputDecoration(hintText: hintText),

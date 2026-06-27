@@ -8,6 +8,7 @@ import '../../core/theme/glame_theme.dart';
 import '../customer/customer_cabinet_providers.dart';
 import '../customer/stylist_entry.dart';
 import '../home/home_providers.dart';
+import '../home/photo_upload_screen.dart';
 
 const String _block6FallbackBackgroundAsset =
     'assets/images/home/glame_home_block6_background_underlay.png';
@@ -34,10 +35,14 @@ class HomeHowToBuyBlock extends ConsumerWidget {
               : 'Сейчас не на связи · с 10:00 по МСК');
     final compact = viewportHeight != null;
     final targetHeight = viewportHeight;
-    final topPadding = compact ? 76.0 : 68.0;
-    final bottomPadding = compact ? 14.0 : 44.0;
-    final actionGap = compact ? 7.0 : 14.0;
-    final serviceGap = compact ? 20.0 : 48.0;
+    final topBarBottom =
+        MediaQuery.of(context).padding.top +
+        GlameUi.heroTopOffset +
+        GlameUi.heroTopBarHeight;
+    final topPadding = compact ? topBarBottom + 18.0 : 68.0;
+    final bottomPadding = compact ? 10.0 : 44.0;
+    final actionGap = compact ? 6.0 : 14.0;
+    final serviceGap = compact ? 14.0 : 48.0;
 
     return Container(
       height: targetHeight,
@@ -110,7 +115,7 @@ class HomeHowToBuyBlock extends ConsumerWidget {
                       number: '03',
                       title: 'Через AI-подбор',
                       text: 'По фото, форме, масштабу и стилю.',
-                      onTap: () => context.push('/selection/ai-photo'),
+                      onTap: () => showPhotoUploadSheet(context),
                       compact: compact,
                     ),
                     SizedBox(height: serviceGap),
@@ -202,12 +207,12 @@ class _Block6ActionPanel extends StatelessWidget {
           splashColor: _Block6Palette.white.withValues(alpha: 0.05),
           highlightColor: _Block6Palette.white.withValues(alpha: 0.03),
           child: Container(
-            constraints: BoxConstraints(minHeight: compact ? 72 : 104),
+            constraints: BoxConstraints(minHeight: compact ? 64 : 104),
             padding: EdgeInsets.fromLTRB(
-              compact ? 14 : 22,
               compact ? 12 : 22,
-              compact ? 14 : 20,
+              compact ? 9 : 22,
               compact ? 12 : 20,
+              compact ? 9 : 20,
             ),
             decoration: BoxDecoration(
               color: _Block6Palette.panelBackground,
@@ -233,7 +238,7 @@ class _Block6ActionPanel extends StatelessWidget {
                 SizedBox(width: compact ? 12 : 22),
                 Container(
                   width: 1,
-                  height: compact ? 42 : 58,
+                  height: compact ? 38 : 58,
                   color: _Block6Palette.line,
                 ),
                 SizedBox(width: compact ? 14 : 22),
@@ -244,29 +249,29 @@ class _Block6ActionPanel extends StatelessWidget {
                       Text(
                         title.toUpperCase(),
                         style: TextStyle(
-                          fontSize: compact ? 15.5 : 20,
+                          fontSize: compact ? 14.5 : 20,
                           height: 1.08,
                           letterSpacing: compact ? 0.5 : 0.4,
                           color: _Block6Palette.white,
                           fontWeight: FontWeight.w300,
                         ),
                       ),
-                      SizedBox(height: compact ? 5 : 9),
+                      SizedBox(height: compact ? 3 : 9),
                       Text(
                         text,
                         style: TextStyle(
-                          fontSize: compact ? 12.5 : 14,
-                          height: compact ? 1.22 : 1.28,
+                          fontSize: compact ? 11.5 : 14,
+                          height: compact ? 1.15 : 1.28,
                           color: _Block6Palette.lightText,
                           fontWeight: FontWeight.w300,
                         ),
                       ),
                       if (status != null) ...[
-                        SizedBox(height: compact ? 6 : 10),
+                        SizedBox(height: compact ? 4 : 10),
                         Text(
                           status!,
                           style: TextStyle(
-                            fontSize: compact ? 10.5 : 12,
+                            fontSize: compact ? 9.5 : 12,
                             height: 1.15,
                             color: _Block6Palette.steel,
                             fontWeight: FontWeight.w300,
@@ -310,8 +315,10 @@ class _Block6ServiceZone extends StatelessWidget {
               flex: 3,
               child: Text(
                 'Чтобы онлайн-покупка\nбыла спокойной',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: compact ? 18 : 22,
+                  fontSize: compact ? 16 : 22,
                   height: compact ? 1.08 : 1.12,
                   letterSpacing: 0,
                   color: _Block6Palette.white,
@@ -326,7 +333,7 @@ class _Block6ServiceZone extends StatelessWidget {
             ),
           ],
         ),
-        SizedBox(height: compact ? 10 : 18),
+        SizedBox(height: compact ? 8 : 18),
         Container(
           decoration: BoxDecoration(
             color: _Block6Palette.panelBackground,
@@ -405,12 +412,12 @@ class _Block6ServiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: compact ? 126 : 190,
+      height: compact ? 116 : 190,
       padding: EdgeInsets.fromLTRB(
-        compact ? 12 : 22,
-        compact ? 12 : 22,
-        compact ? 10 : 18,
-        compact ? 10 : 18,
+        compact ? 10 : 22,
+        compact ? 9 : 22,
+        compact ? 8 : 18,
+        compact ? 8 : 18,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -419,32 +426,33 @@ class _Block6ServiceTile extends StatelessWidget {
           Text(
             number,
             style: TextStyle(
-              fontSize: compact ? 12 : 30,
+              fontSize: compact ? 11 : 30,
               height: 1.0,
               color: _Block6Palette.steel,
               fontWeight: FontWeight.w300,
             ),
           ),
-          SizedBox(height: compact ? 10 : 18),
+          SizedBox(height: compact ? 6 : 18),
           Text(
             title,
             maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: compact ? 11.5 : 16,
+              fontSize: compact ? 10.5 : 16,
               height: compact ? 1.08 : 1.15,
               letterSpacing: compact ? 0.2 : 0.3,
               color: _Block6Palette.white,
               fontWeight: FontWeight.w300,
             ),
           ),
-          SizedBox(height: compact ? 7 : 14),
+          SizedBox(height: compact ? 4 : 14),
           Text(
             text,
-            maxLines: compact ? 5 : 6,
+            maxLines: compact ? 3 : 6,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: compact ? 9.2 : 14,
-              height: compact ? 1.16 : 1.28,
+              fontSize: compact ? 8.6 : 14,
+              height: compact ? 1.1 : 1.28,
               color: _Block6Palette.lightText,
               fontWeight: FontWeight.w300,
             ),
@@ -469,7 +477,7 @@ class _Block6GridDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: axis == Axis.vertical ? 1 : double.infinity,
-      height: axis == Axis.horizontal ? 1 : (compact ? 126 : 190),
+      height: axis == Axis.horizontal ? 1 : (compact ? 116 : 190),
       color: _Block6Palette.line,
     );
   }
@@ -495,190 +503,278 @@ class SelectionMethodScreen extends ConsumerWidget {
     final normalizedMode = (mode ?? '').trim().toLowerCase();
     final isGiftMode = normalizedMode == 'gift';
     final stylistStatus = ref.watch(stylistChatStatusProvider).asData?.value;
-    final heroTitle = isGiftMode
-        ? 'Выберите способ подобрать подарок'
-        : 'Выберите способ подбора';
-    final heroDescription = isGiftMode
-        ? 'Живой стилист поможет подобрать подарок под повод, бюджет и характер получателя. AI-подбор подскажет направление, если хотите начать с фото и стиля.'
-        : 'Живой стилист помогает онлайн или в пространстве. AI-подбор подсказывает подходящие линии, форму и масштаб по фото.';
-    final stylistActionLabel = isGiftMode
-        ? 'Открыть стилиста по подарку'
-        : 'Открыть стилиста';
-    final stylistDescription = isGiftMode
-        ? 'Поможет выбрать подарок, уточнить сценарий и довести выбор до покупки.'
-        : 'Онлайн или в пространстве. Поможет подобрать, проверить наличие и довести до покупки.';
-    final photoActionLabel = isGiftMode
-        ? 'Начать с AI-подбора'
-        : 'Запустить AI-подбор';
-    final photoDescription = isGiftMode
-        ? 'Подбор по фото и стилю поможет быстрее понять, какие украшения подойдут в подарок.'
-        : 'Подбор по фото, форме, масштабу и стилю с переходом в уже настроенный сценарий приложения.';
+
+    final content = _SelectionMethodContent(
+      isGiftMode: isGiftMode,
+      showAppBar: showAppBar,
+      stylistStatus: stylistStatus,
+    );
+    if (!showAppBar) {
+      return ColoredBox(color: GlameColors.nearBlack, child: content);
+    }
+
     return Scaffold(
-      backgroundColor: GlameColors.coldLightGrey,
-      appBar: showAppBar ? const GlameTopAppBar() : null,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      heroTitle,
-                      style: const TextStyle(
-                        fontSize: 30,
-                        height: 1.08,
-                        color: GlameColors.graphite,
-                        fontWeight: FontWeight.w300,
-                      ),
+      backgroundColor: GlameColors.nearBlack,
+      appBar: showAppBar ? const GlameTopAppBar(dark: true) : null,
+      body: content,
+    );
+  }
+}
+
+class _SelectionMethodContent extends StatelessWidget {
+  final bool isGiftMode;
+  final bool showAppBar;
+  final Map<String, dynamic>? stylistStatus;
+
+  const _SelectionMethodContent({
+    required this.isGiftMode,
+    required this.showAppBar,
+    required this.stylistStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: showAppBar,
+      bottom: false,
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        color: GlameColors.nearBlack,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(28, showAppBar ? 24 : 22, 28, 32),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _SelectionHeader(
+                    title: isGiftMode ? 'Подобрать подарок' : 'Подбор',
+                  ),
+                  const SizedBox(height: 20),
+                  _SelectionMethodRow(
+                    number: '01',
+                    title: 'Через AI-подбор',
+                    description: isGiftMode
+                        ? 'По поводу, стилю и масштабу'
+                        : 'По фото, форме и масштабу',
+                    onTap: () => showPhotoUploadSheet(context),
+                  ),
+                  const SizedBox(height: 14),
+                  _SelectionMethodRow(
+                    number: '02',
+                    title: 'С живым стилистом',
+                    description: 'Онлайн или в пространстве',
+                    onTap: () => showStylistContactSheet(
+                      context,
+                      initialMessage: isGiftMode
+                          ? 'Хочу подобрать подарок с помощью стилиста GLAME.'
+                          : null,
+                      source: isGiftMode
+                          ? 'selection_gift'
+                          : 'selection_screen',
+                      scenario: 'live_stylist',
+                      quickTags: isGiftMode
+                          ? const <String>['gift']
+                          : const <String>[],
+                      statusPayload: stylistStatus,
                     ),
+                  ),
+                  if (!isGiftMode) ...[
                     const SizedBox(height: 14),
-                    Text(
-                      heroDescription,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        height: 1.45,
-                        color: GlameColors.steelGrey,
-                        fontWeight: FontWeight.w300,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _SelectionOptionCard(
-                      title: isGiftMode
-                          ? 'Живой стилист по подарку'
-                          : 'Живой стилист',
-                      description: stylistDescription,
-                      actionLabel: stylistActionLabel,
-                      onTap: () => showStylistContactSheet(
-                        context,
-                        initialMessage: isGiftMode
-                            ? 'Хочу подобрать подарок с помощью стилиста GLAME.'
-                            : null,
-                        source: isGiftMode
-                            ? 'selection_gift'
-                            : 'selection_screen',
-                        scenario: 'live_stylist',
-                        quickTags: isGiftMode
-                            ? const <String>['gift']
-                            : const <String>[],
-                        statusPayload: stylistStatus,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _SelectionOptionCard(
-                      title: 'AI-подбор',
-                      description: photoDescription,
-                      actionLabel: photoActionLabel,
-                      onTap: () => context.push(
-                        isGiftMode
-                            ? '/selection/ai-photo?mode=gift'
-                            : '/selection/ai-photo',
-                      ),
+                    _SelectionMethodRow(
+                      number: '03',
+                      title: 'Подобрать подарок',
+                      description: 'Для особенного момента',
+                      onTap: () => context.push('/selection/gift'),
                     ),
                   ],
-                ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _SelectionOptionCard extends StatelessWidget {
-  const _SelectionOptionCard({
-    required this.title,
-    required this.description,
-    required this.actionLabel,
-    required this.onTap,
-  });
-
-  final String title;
-  final String description;
-  final String actionLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.56),
-        border: Border.all(color: GlameColors.lightGray),
-      ),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 22,
-              color: GlameColors.graphite,
-              fontWeight: FontWeight.w300,
+/*
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(28, showAppBar ? 24 : 22, 28, 32),
+              children: [
+                const _SelectionHeader(),
+                const SizedBox(height: 20),
+                _SelectionMethodRow(
+                  number: '01',
+                  title: 'Через AI-подбор',
+                  description: 'По фото, форме и масштабу',
+                  onTap: () => context.push(
+                    isGiftMode
+                        ? '/selection/ai-photo?mode=gift'
+                        : '/selection/ai-photo',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _SelectionMethodRow(
+                  number: '02',
+                  title: 'С живым стилистом',
+                  description: 'Онлайн или в пространстве',
+                  onTap: () => showStylistContactSheet(
+                    context,
+                    initialMessage: isGiftMode
+                        ? 'Хочу подобрать подарок с помощью стилиста GLAME.'
+                        : null,
+                    source: isGiftMode ? 'selection_gift' : 'selection_screen',
+                    scenario: 'live_stylist',
+                    quickTags: isGiftMode
+                        ? const <String>['gift']
+                        : const <String>[],
+                    statusPayload: stylistStatus,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _SelectionMethodRow(
+                  number: '03',
+                  title: 'Подобрать подарок',
+                  description: 'Для особенного момента',
+                  onTap: () => context.push('/selection/gift'),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 10),
-          Text(
-            description,
-            style: const TextStyle(
-              fontSize: 14,
-              height: 1.4,
-              color: GlameColors.steelGrey,
-              fontWeight: FontWeight.w300,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _ServiceActionButton(label: actionLabel, onTap: onTap),
-        ],
+        ),
       ),
     );
   }
 }
+*/
 
-class _ServiceActionButton extends StatelessWidget {
-  const _ServiceActionButton({required this.label, required this.onTap});
+class _SelectionHeader extends StatelessWidget {
+  final String title;
 
-  final String label;
+  const _SelectionHeader({this.title = 'Подбор'});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 24,
+            height: 1.1,
+            color: GlameColors.whiteGlame,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Divider(height: 1, thickness: 1, color: GlameColors.borderGray),
+      ],
+    );
+  }
+}
+
+class _SelectionMethodRow extends StatelessWidget {
+  const _SelectionMethodRow({
+    required this.number,
+    required this.title,
+    required this.description,
+    required this.onTap,
+  });
+
+  final String number;
+  final String title;
+  final String description;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: 54,
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            border: Border.all(color: GlameColors.graphite),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    color: GlameColors.graphite,
-                    fontWeight: FontWeight.w300,
+    return Semantics(
+      button: true,
+      label: title,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: GlameColors.whiteGlame.withValues(alpha: 0.05),
+          highlightColor: GlameColors.whiteGlame.withValues(alpha: 0.03),
+          child: Container(
+            height: 88,
+            decoration: BoxDecoration(
+              color: const Color(0xFF18191A),
+              border: Border.all(color: const Color(0xFF55585C)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 54,
+                  child: Center(
+                    child: Text(
+                      number,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: GlameColors.whiteGlame,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              const Text(
-                '→',
-                style: TextStyle(
-                  fontSize: 24,
-                  color: GlameColors.graphite,
-                  fontWeight: FontWeight.w300,
+                Container(width: 1, color: const Color(0xFF55585C)),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 17, 12, 15),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            height: 1.15,
+                            color: GlameColors.whiteGlame,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            height: 1.25,
+                            color: GlameColors.textSecondary,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(
+                  width: 48,
+                  child: Center(
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: 24,
+                      color: GlameColors.whiteGlame,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

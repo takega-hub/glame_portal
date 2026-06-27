@@ -160,6 +160,7 @@ class AuthController extends StateNotifier<AuthState> {
     required String password,
     required String fullName,
     String? birthDate,
+    String? referralCode,
   }) async {
     state = state.copyWith(loading: true, error: null);
     try {
@@ -168,6 +169,7 @@ class AuthController extends StateNotifier<AuthState> {
         password: password,
         fullName: fullName,
         birthDate: birthDate,
+        referralCode: referralCode,
       );
       // After registration, auto-login
       await login(email: phone, password: password);

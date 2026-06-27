@@ -9,6 +9,7 @@ import '../../core/theme/glame_theme.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/formatters/rub.dart';
 import '../home/home_providers.dart';
+import 'catalog_filter_sheet.dart';
 import 'catalog_controller.dart';
 import '../product/product_providers.dart';
 import '../wishlist/wishlist_controller.dart';
@@ -18,6 +19,7 @@ class CatalogScreen extends ConsumerStatefulWidget {
   final String? initialCategory;
   final String? initialBrand;
   final String? initialSearch;
+  final bool pickLookBase;
 
   const CatalogScreen({
     super.key,
@@ -25,6 +27,7 @@ class CatalogScreen extends ConsumerStatefulWidget {
     this.initialCategory,
     this.initialBrand,
     this.initialSearch,
+    this.pickLookBase = false,
   });
 
   @override
@@ -103,6 +106,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     final catalog = ref.watch(catalogControllerProvider);
     final controller = ref.read(catalogControllerProvider.notifier);
     final sectionsAsync = ref.watch(homeCatalogSectionsProvider);
+    final characteristicsAsync = ref.watch(productCharacteristicsProvider);
 
     final groupedItems = _groupCatalogItems(catalog.items);
 
@@ -127,7 +131,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         child: Column(
           children: [
             _buildHeader(context),
-            _buildSearchAndActions(context, catalog),
+            _buildSearchAndActions(context, catalog, characteristicsAsync),
             _buildCategoryTabs(categories, isWideScreen),
             Expanded(
               child: RefreshIndicator(
@@ -153,6 +157,10 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                                   '$i',
                             ),
                             item: item,
+                            pickMode: widget.pickLookBase,
+                            onPick: widget.pickLookBase
+                                ? (product) => context.pop(product)
+                                : null,
                           );
                         }, childCount: groupedItems.length),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -163,6 +171,8 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                           crossAxisSpacing: isWideScreen ? 24 : 14,
                           childAspectRatio: catalog.oneColumn
                               ? (isWideScreen ? 2.25 : 0.92)
+                              : widget.pickLookBase
+                              ? (isWideScreen ? 0.56 : 0.48)
                               : (isWideScreen ? 0.62 : 0.56),
                         ),
                       ),
@@ -207,6 +217,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
   Widget _buildHeader(BuildContext context) {
     final isWideScreen = MediaQuery.of(context).size.width > 768;
+    final title = widget.pickLookBase ? 'ВЫБЕРИТЕ ОСНОВУ' : widget.title;
     return Container(
       padding: EdgeInsets.fromLTRB(
         isWideScreen ? 40 : 20,
@@ -217,12 +228,25 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          if (widget.pickLookBase) ...[
+            IconButton(
+              tooltip: 'Назад',
+              onPressed: () => context.pop(),
+              style: IconButton.styleFrom(
+                foregroundColor: GlameColors.whiteGlame,
+                side: const BorderSide(color: GlameColors.borderGray),
+                shape: const CircleBorder(),
+              ),
+              icon: const Icon(Icons.arrow_back),
+            ),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.title,
+                  title,
                   style: TextStyle(
                     fontSize: isWideScreen ? 44 : 36,
                     fontWeight: FontWeight.w400,
@@ -248,9 +272,14 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     );
   }
 
-  Widget _buildSearchAndActions(BuildContext context, CatalogState catalog) {
+  Widget _buildSearchAndActions(
+    BuildContext context,
+    CatalogState catalog,
+    AsyncValue<Map<String, dynamic>> characteristicsAsync,
+  ) {
     final isWideScreen = MediaQuery.of(context).size.width > 768;
     final controller = ref.read(catalogControllerProvider.notifier);
+    final activeFilters = _activeFiltersCount(catalog);
     return Padding(
       padding: EdgeInsets.fromLTRB(
         isWideScreen ? 40 : 20,
@@ -297,6 +326,49 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                 ),
               ),
               const SizedBox(width: 10),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  IconButton.outlined(
+                    tooltip: 'Фильтры',
+                    onPressed: () =>
+                        _openFilters(context, catalog, characteristicsAsync),
+                    style: IconButton.styleFrom(
+                      foregroundColor: GlameColors.whiteGlame,
+                      side: BorderSide(
+                        color: activeFilters > 0
+                            ? GlameColors.whiteGlame
+                            : GlameColors.borderGray,
+                      ),
+                      shape: const RoundedRectangleBorder(),
+                    ),
+                    icon: const Icon(Icons.tune),
+                  ),
+                  if (activeFilters > 0)
+                    Positioned(
+                      top: -3,
+                      right: -3,
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          color: GlameColors.whiteGlame,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          activeFilters.toString(),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: GlameColors.nearBlack,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 10),
               IconButton.outlined(
                 tooltip: catalog.oneColumn ? 'Плитка' : 'Список',
                 onPressed: () {
@@ -341,6 +413,117 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openFilters(
+    BuildContext context,
+    CatalogState catalog,
+    AsyncValue<Map<String, dynamic>> characteristicsAsync,
+  ) async {
+    final characteristics = await _loadFilterCharacteristics(
+      characteristicsAsync,
+    );
+    if (!context.mounted) return;
+    final result = await showModalBottomSheet<CatalogFiltersDraft>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: GlameColors.nearBlack,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) {
+        return CatalogFilterSheet(
+          characteristics: characteristics,
+          countLoader: (draft) => _loadFilteredCount(catalog, draft),
+          initial: CatalogFiltersDraft(
+            priceMin: catalog.priceMin,
+            priceMax: catalog.priceMax,
+            brand: catalog.brand,
+            material: catalog.material,
+            vstavka: catalog.vstavka,
+            pokrytie: catalog.pokrytie,
+            razmer: catalog.razmer,
+            tipZamka: catalog.tipZamka,
+            color: catalog.color,
+            sort: catalog.sort,
+          ),
+        );
+      },
+    );
+    if (result == null || !mounted) return;
+    await ref
+        .read(catalogControllerProvider.notifier)
+        .setFilters(
+          priceMin: result.priceMin,
+          priceMax: result.priceMax,
+          brand: result.brand,
+          material: result.material,
+          vstavka: result.vstavka,
+          pokrytie: result.pokrytie,
+          razmer: result.razmer,
+          tipZamka: result.tipZamka,
+          color: result.color,
+          sort: result.sort,
+        );
+  }
+
+  Future<Map<String, dynamic>> _loadFilterCharacteristics(
+    AsyncValue<Map<String, dynamic>> characteristicsAsync,
+  ) async {
+    final loaded = characteristicsAsync.valueOrNull;
+    if (loaded != null && loaded.isNotEmpty) return loaded;
+    try {
+      return await ref.read(productCharacteristicsProvider.future);
+    } catch (_) {
+      return const <String, dynamic>{};
+    }
+  }
+
+  Future<int> _loadFilteredCount(
+    CatalogState catalog,
+    CatalogFiltersDraft draft,
+  ) async {
+    final raw = await ref
+        .read(catalogControllerProvider.notifier)
+        .api
+        .getProductsPaged(
+          skip: 0,
+          limit: 1,
+          category: catalog.category,
+          brand: draft.brand,
+          search: catalog.search,
+          inStock: catalog.inStockOnly ? true : null,
+          hasImages: true,
+          priceMin: draft.priceMin,
+          priceMax: draft.priceMax,
+          material: draft.material,
+          vstavka: draft.vstavka,
+          pokrytie: draft.pokrytie,
+          razmer: draft.razmer,
+          tipZamka: draft.tipZamka,
+          color: draft.color,
+          sort: draft.sort,
+        );
+    final total = raw['total'];
+    if (total is int) return total;
+    if (total is num) return total.toInt();
+    final items = raw['items'];
+    return items is List ? items.length : 0;
+  }
+
+  int _activeFiltersCount(CatalogState catalog) {
+    var count = 0;
+    if (catalog.priceMin != null) count++;
+    if (catalog.priceMax != null) count++;
+    if ((catalog.brand ?? '').trim().isNotEmpty) count++;
+    if ((catalog.material ?? '').trim().isNotEmpty) count++;
+    if ((catalog.vstavka ?? '').trim().isNotEmpty) count++;
+    if ((catalog.pokrytie ?? '').trim().isNotEmpty) count++;
+    if ((catalog.razmer ?? '').trim().isNotEmpty) count++;
+    if ((catalog.tipZamka ?? '').trim().isNotEmpty) count++;
+    if ((catalog.color ?? '').trim().isNotEmpty) count++;
+    if ((catalog.sort ?? '').trim().isNotEmpty) count++;
+    return count;
   }
 
   Widget _buildCategoryTabs(List<String> categories, bool isWideScreen) {
@@ -546,8 +729,15 @@ num? _asStockNumber(dynamic value) {
 
 class _ProductCardDarkrain extends ConsumerWidget {
   final Map<String, dynamic> item;
+  final bool pickMode;
+  final ValueChanged<Map<String, dynamic>>? onPick;
 
-  const _ProductCardDarkrain({super.key, required this.item});
+  const _ProductCardDarkrain({
+    super.key,
+    required this.item,
+    this.pickMode = false,
+    this.onPick,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -607,8 +797,23 @@ class _ProductCardDarkrain extends ConsumerWidget {
     }
     imageUrl ??= remoteImageUrl;
 
+    final pickProduct = <String, dynamic>{
+      ...item,
+      ...current,
+      'id': id,
+      'name': name,
+      'brand': brandRaw.isNotEmpty ? brandRaw : item['brand'],
+      'image_url': imageUrl,
+      'images': current['images'] ?? item['images'],
+      'price': current['price'] ?? item['price'],
+    };
+
     return InkWell(
-      onTap: id.isEmpty ? null : () => context.push('/product/$id'),
+      onTap: id.isEmpty
+          ? null
+          : pickMode
+          ? () => onPick?.call(pickProduct)
+          : () => context.push('/product/$id'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -694,6 +899,30 @@ class _ProductCardDarkrain extends ConsumerWidget {
                   : GlameColors.borderGray,
             ),
           ),
+          if (pickMode) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 36,
+              child: OutlinedButton(
+                onPressed: id.isEmpty ? null : () => onPick?.call(pickProduct),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: GlameColors.whiteGlame,
+                  side: const BorderSide(color: GlameColors.whiteGlame),
+                  shape: const RoundedRectangleBorder(),
+                  padding: EdgeInsets.zero,
+                ),
+                child: const Text(
+                  'ВЫБРАТЬ ОСНОВУ',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

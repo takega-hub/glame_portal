@@ -157,6 +157,37 @@ class _LooksScreenState extends ConsumerState<LooksScreen> {
                     );
                   }
 
+                  if (_presentation == _LooksPresentation.editorial) {
+                    return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 120),
+                      children: [
+                        _LooksEditorialFilterBar(
+                          filters: filters,
+                          activeFilter: activeFilter,
+                          onFilterSelected: (label) {
+                            setState(() => _selectedFilter = label);
+                          },
+                        ),
+                        _LooksPresentationBody(
+                          key: ValueKey(
+                            '${_presentation.name}:$activeFilter:${filteredPosts.length}',
+                          ),
+                          presentation: _presentation,
+                          posts: filteredPosts,
+                          maxWidth: constraints.maxWidth,
+                          activeFilter: activeFilter,
+                          isFollowing: _isFollowing,
+                          onHighlightTap: _handleHighlightTap,
+                          onToggleFollowing: _toggleFollowing,
+                          onMessageTap: _openStylistChat,
+                          onInviteTap: _inviteToLooksProfile,
+                          onOpenProfile: _openLooksProfile,
+                        ),
+                      ],
+                    );
+                  }
+
                   return ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(
@@ -370,7 +401,7 @@ class _LooksPresentationBody extends StatelessWidget {
             .map(
               (post) => Padding(
                 padding: const EdgeInsets.only(bottom: 20),
-                child: _LookEditorialCard(post: post),
+                child: _LookStitchEditorialCard(post: post),
               ),
             )
             .toList(growable: false),
@@ -859,6 +890,72 @@ class _PinnedBoxHeaderDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
+class _LooksEditorialFilterBar extends StatelessWidget {
+  final List<String> filters;
+  final String activeFilter;
+  final ValueChanged<String> onFilterSelected;
+
+  const _LooksEditorialFilterBar({
+    required this.filters,
+    required this.activeFilter,
+    required this.onFilterSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleFilters = filters.isEmpty ? const ['Все'] : filters;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: GlameColors.nearBlack,
+        border: Border(
+          top: BorderSide(color: GlameColors.borderGray),
+          bottom: BorderSide(color: GlameColors.borderGray),
+        ),
+      ),
+      child: SizedBox(
+        height: 58,
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+          scrollDirection: Axis.horizontal,
+          itemCount: visibleFilters.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 12),
+          itemBuilder: (context, index) {
+            final label = visibleFilters[index];
+            final selected = label == activeFilter;
+            return InkWell(
+              onTap: () => onFilterSelected(label),
+              child: Container(
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  color: selected ? GlameColors.whiteGlame : Colors.transparent,
+                  border: Border.all(
+                    color: selected
+                        ? GlameColors.whiteGlame
+                        : GlameColors.borderGray,
+                  ),
+                ),
+                child: Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    height: 1,
+                    letterSpacing: 0.8,
+                    color: selected
+                        ? GlameColors.nearBlack
+                        : GlameColors.whiteGlame,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class _LooksHeader extends StatelessWidget {
   final String? countLabel;
   final String? averagePriceLabel;
@@ -1185,6 +1282,203 @@ class _SkeletonBoxState extends State<_SkeletonBox>
           color: GlameColors.lightGray.withValues(alpha: 0.78),
           borderRadius: BorderRadius.circular(widget.radius),
         ),
+      ),
+    );
+  }
+}
+
+class _LookStitchEditorialCard extends StatelessWidget {
+  final Map<String, dynamic> post;
+
+  const _LookStitchEditorialCard({required this.post});
+
+  @override
+  Widget build(BuildContext context) {
+    final products = _products(post);
+    final title = _asString(post['name']).isEmpty
+        ? 'Образ GLAME'
+        : _asString(post['name']);
+    final description = _lookDescription(post);
+    final totalPrice = _lookTotalKopeks(post);
+    final image = _lookCover(post);
+    final labels = _lookLabels(
+      post,
+    ).where((label) => label != 'Все').take(2).toList(growable: false);
+    final id = _asString(post['id']);
+
+    return InkWell(
+      onTap: id.isEmpty ? null : () => context.push('/look/$id'),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: GlameColors.nearBlack,
+          border: Border(bottom: BorderSide(color: GlameColors.borderGray)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 4 / 5,
+              child: image != null && image.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: image,
+                      fit: BoxFit.cover,
+                      color: Colors.black.withValues(alpha: 0.18),
+                      colorBlendMode: BlendMode.darken,
+                      placeholder: (_, _) => const _LookEditorialPlaceholder(),
+                      errorWidget: (_, _, _) =>
+                          const _LookEditorialPlaceholder(),
+                    )
+                  : const _LookEditorialPlaceholder(),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (labels.isNotEmpty) ...[
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: labels
+                          .map(
+                            (label) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: GlameColors.borderGray,
+                                ),
+                              ),
+                              child: Text(
+                                '#${label.toUpperCase()}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  height: 1,
+                                  letterSpacing: 0.7,
+                                  color: GlameColors.whiteGlame,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                  Text(
+                    title.toUpperCase(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      height: 1.08,
+                      color: GlameColors.whiteGlame,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      description,
+                      maxLines: 5,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.42,
+                        color: GlameColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  Container(
+                    height: 54,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: GlameColors.whiteGlame),
+                    ),
+                    child: const Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'СМОТРЕТЬ ОБРАЗ',
+                            style: TextStyle(
+                              fontSize: 12,
+                              letterSpacing: 0.9,
+                              color: GlameColors.whiteGlame,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward,
+                          color: GlameColors.whiteGlame,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (products.isNotEmpty || totalPrice > 0) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      [
+                        if (products.isNotEmpty) _piecesLabel(products.length),
+                        if (totalPrice > 0) formatRubFromKopeks(totalPrice),
+                      ].join(' · '),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: GlameColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LookEditorialPlaceholder extends StatelessWidget {
+  const _LookEditorialPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(color: GlameColors.nearBlack),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Center(
+            child: Container(
+              width: 148,
+              height: 148,
+              decoration: BoxDecoration(
+                border: Border.all(color: GlameColors.borderGray),
+              ),
+              child: const Icon(
+                Icons.auto_awesome_outlined,
+                size: 34,
+                color: GlameColors.borderGray,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 22,
+            bottom: 22,
+            child: Text(
+              'GLAME',
+              style: TextStyle(
+                fontSize: 52,
+                height: 1,
+                letterSpacing: 2,
+                color: GlameColors.whiteGlame.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

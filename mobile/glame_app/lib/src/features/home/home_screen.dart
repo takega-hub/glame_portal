@@ -286,7 +286,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _openPhotoUpload() async {
     if (!mounted) return;
-    context.push('/selection/ai-photo');
+    await showPhotoUploadSheet(context);
   }
 
   Future<void> _openPhotoGuide() async {
@@ -1198,14 +1198,9 @@ class _HeroTextBlock extends StatelessWidget {
     );
     if (!boxed) return textColumn;
 
-    return Container(
+    return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 340),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: GlameColors.textPrimary.withValues(alpha: 0.2),
-        border: Border.all(color: GlameColors.surface2.withValues(alpha: 0.64)),
-      ),
-      child: textColumn,
+      child: Padding(padding: const EdgeInsets.all(20), child: textColumn),
     );
   }
 }
@@ -1283,7 +1278,7 @@ class _HomeNewInBlock extends ConsumerWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final blockHeight = viewportHeight ?? MediaQuery.of(context).size.height;
     final compact = isPagedLayout || screenWidth < 600;
-    final topPadding = isPagedLayout ? 118.0 : (compact ? 64.0 : 72.0);
+    final topPadding = isPagedLayout ? 132.0 : (compact ? 64.0 : 72.0);
     final bottomPadding = isPagedLayout ? 18.0 : (compact ? 64.0 : 72.0);
     final titleSize = compact ? 24.0 : 42.0;
     final linkSize = compact ? 14.0 : 19.0;
@@ -1369,9 +1364,9 @@ class _HomeNewInBlock extends ConsumerWidget {
                   final hintHeight = hasScrollHint ? 24.0 : 0.0;
                   final verticalGap = 16.0;
                   final rowGap = hasScrollHint ? 10.0 : 0.0;
-                  final preferredProductHeight = (availableHeight * 0.33).clamp(
-                    210.0,
-                    280.0,
+                  final preferredProductHeight = (availableHeight * 0.32).clamp(
+                    188.0,
+                    236.0,
                   );
                   final dynamicDropHeight =
                       (availableHeight -
@@ -1386,7 +1381,7 @@ class _HomeNewInBlock extends ConsumerWidget {
                               verticalGap -
                               rowGap -
                               hintHeight)
-                          .clamp(184.0, 240.0);
+                          .clamp(188.0, 236.0);
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1636,46 +1631,39 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
         'assets/images/home/home_block_3_photo_selection.png';
     final compact =
         viewportHeight != null || MediaQuery.of(context).size.width < 600;
-    final topPadding = compact ? 88.0 : 0.0;
     final bottomPadding = compact ? 18.0 : 36.0;
     final bodySize = compact ? 15.0 : 18.0;
     if (compact && viewportHeight != null) {
       const backgroundSource = fallbackPhotoAsset;
+      final topBarBottom =
+          MediaQuery.of(context).padding.top +
+          GlameUi.heroTopOffset +
+          GlameUi.heroTopBarHeight;
       return Container(
         color: GlameColors.nearBlack,
-        padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPadding),
+        padding: EdgeInsets.fromLTRB(8, 0, 8, bottomPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            SizedBox(height: topBarBottom),
             Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Positioned.fill(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: topPadding - 10),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: GlameColors.borderGray.withValues(
-                              alpha: 0.9,
-                            ),
-                          ),
-                        ),
-                        child: const ClipRect(
-                          child: _HomePhotoSelectionBackground(
-                            source: backgroundSource,
-                          ),
-                        ),
-                      ),
-                    ),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: GlameColors.borderGray.withValues(alpha: 0.9),
                   ),
-                ],
+                ),
+                child: const ClipRect(
+                  child: _HomePhotoSelectionBackground(
+                    source: backgroundSource,
+                    alignment: Alignment.topLeft,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 12),
-            const PhotoSelectionInfoCard(compact: true),
-            const SizedBox(height: 10),
+            const _HomePhotoSelectionNote(compact: true),
+            const SizedBox(height: 8),
             _HomePhotoActionButton(
               title: 'Загрузить фото',
               icon: Icons.photo_camera_outlined,
@@ -1777,10 +1765,81 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
   }
 }
 
+class _HomePhotoSelectionNote extends StatelessWidget {
+  final bool compact;
+
+  const _HomePhotoSelectionNote({this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: compact ? 54 : 70,
+      decoration: BoxDecoration(
+        color: GlameColors.surface2,
+        border: Border.all(color: GlameColors.softGray),
+      ),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 22),
+      child: Row(
+        children: [
+          Container(
+            width: compact ? 28 : 38,
+            height: compact ? 28 : 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: GlameColors.textPrimary),
+            ),
+            child: Icon(
+              Icons.info_outline,
+              size: compact ? 18 : 24,
+              color: GlameColors.textPrimary,
+            ),
+          ),
+          SizedBox(width: compact ? 12 : 18),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Сначала посмотрите, какое фото подойдет',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 13 : 18,
+                    height: 1.1,
+                    color: GlameColors.textPrimary,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                SizedBox(height: compact ? 4 : 6),
+                Text(
+                  'Это поможет получить более точный подбор.',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 11 : 14,
+                    height: 1.1,
+                    color: GlameColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HomePhotoSelectionBackground extends StatelessWidget {
   final String source;
+  final Alignment alignment;
 
-  const _HomePhotoSelectionBackground({required this.source});
+  const _HomePhotoSelectionBackground({
+    required this.source,
+    this.alignment = Alignment.topCenter,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1788,16 +1847,12 @@ class _HomePhotoSelectionBackground extends StatelessWidget {
       return CachedNetworkImage(
         imageUrl: source,
         fit: BoxFit.cover,
-        alignment: Alignment.topCenter,
+        alignment: alignment,
         placeholder: (_, _) => Container(color: const Color(0xFF111214)),
         errorWidget: (_, _, _) => Container(color: const Color(0xFF111214)),
       );
     }
-    return Image.asset(
-      source,
-      fit: BoxFit.cover,
-      alignment: Alignment.topCenter,
-    );
+    return Image.asset(source, fit: BoxFit.cover, alignment: alignment);
   }
 }
 
@@ -1844,17 +1899,7 @@ class _HomePhotoActionButton extends StatelessWidget {
           ? Material(
               color: Colors.transparent,
               child: Ink(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Color(0xFF202020),
-                      Color(0xFF0F0F10),
-                      Color(0xFF262626),
-                    ],
-                  ),
-                ),
+                decoration: const BoxDecoration(color: GlameColors.graphite),
                 child: InkWell(onTap: onTap, child: child),
               ),
             )
@@ -2043,7 +2088,7 @@ class _NewInProductCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              flex: 56,
+              flex: compact ? 74 : 70,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -2057,75 +2102,79 @@ class _NewInProductCard extends ConsumerWidget {
                               Container(color: GlameColors.warmGray),
                         )
                       : Container(color: GlameColors.warmGray),
-                ],
-              ),
-            ),
-            Container(height: 1, color: GlameColors.borderGray),
-            Expanded(
-              flex: compact ? 52 : 44,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  compact ? 12 : 16,
-                  compact ? 12 : 16,
-                  compact ? 12 : 16,
-                  compact ? 12 : 16,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Text(
-                      product.brand,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 10 : 12,
-                        height: 1.1,
-                        letterSpacing: 0.9,
-                        color: GlameColors.steelGray,
-                      ),
-                    ),
-                    SizedBox(height: compact ? 5 : 8),
-                    Text(
-                      product.name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 13 : 16,
-                        height: 1.2,
-                        color: GlameColors.whiteGlame,
-                      ),
-                    ),
-                    SizedBox(height: compact ? 5 : 8),
-                    Text(
-                      product.availability,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 11 : 13,
-                        height: 1.3,
-                        color: GlameColors.steelGray,
-                      ),
-                    ),
-                    const Spacer(),
-                    InkWell(
+                  Positioned(
+                    top: compact ? 6 : 10,
+                    right: compact ? 6 : 10,
+                    child: InkWell(
                       onTap: product.id.isEmpty
                           ? null
                           : () => ref
                                 .read(wishlistControllerProvider.notifier)
                                 .toggle(product.id),
                       child: Container(
-                        width: compact ? 34 : 38,
-                        height: compact ? 34 : 38,
+                        width: compact ? 28 : 38,
+                        height: compact ? 28 : 38,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
+                          color: GlameColors.graphite.withValues(alpha: 0.62),
                           border: Border.all(color: GlameColors.borderGray),
                         ),
                         child: Icon(
                           isFavorite ? Icons.favorite : Icons.favorite_border,
-                          size: compact ? 18 : 20,
+                          size: compact ? 16 : 20,
                           color: GlameColors.whiteGlame,
                         ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(height: 1, color: GlameColors.borderGray),
+            Expanded(
+              flex: compact ? 34 : 36,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  compact ? 10 : 16,
+                  compact ? 7 : 14,
+                  compact ? 10 : 16,
+                  compact ? 7 : 14,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      product.brand,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 9 : 12,
+                        height: 1.1,
+                        letterSpacing: 0.9,
+                        color: GlameColors.steelGray,
+                      ),
+                    ),
+                    SizedBox(height: compact ? 2 : 6),
+                    Text(
+                      product.name,
+                      maxLines: compact ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 12 : 16,
+                        height: 1.15,
+                        color: GlameColors.whiteGlame,
+                      ),
+                    ),
+                    SizedBox(height: compact ? 2 : 6),
+                    Text(
+                      product.availability,
+                      maxLines: compact ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 10 : 13,
+                        height: 1.15,
+                        color: GlameColors.steelGray,
                       ),
                     ),
                   ],
@@ -2268,7 +2317,11 @@ const List<_HomeSlideData> _fallbackHeroSlides = <_HomeSlideData>[
     imageUrl: null,
     imageAction: null,
     primaryButtonText: 'Смотреть подборку',
-    primaryAction: _HomeSlideAction(legacyLink: '/collections/complete-look'),
+    primaryAction: _HomeSlideAction(
+      type: 'looks',
+      payload: <String, dynamic>{'filter': 'Собранный образ'},
+      legacyLink: '/home?tab=5',
+    ),
     secondaryButtonText: 'Подобрать под меня',
     secondaryAction: _HomeSlideAction(
       type: 'selection',
@@ -2283,7 +2336,11 @@ const List<_HomeSlideData> _fallbackHeroSlides = <_HomeSlideData>[
     imageUrl: null,
     imageAction: null,
     primaryButtonText: 'Смотреть подарки',
-    primaryAction: _HomeSlideAction(legacyLink: '/collections/gift'),
+    primaryAction: _HomeSlideAction(
+      type: 'selection',
+      payload: <String, dynamic>{'mode': 'gift'},
+      legacyLink: '/selection/gift',
+    ),
     secondaryButtonText: 'Подобрать подарок',
     secondaryAction: _HomeSlideAction(
       type: 'selection',
@@ -2299,7 +2356,11 @@ const List<_HomeSlideData> _fallbackHeroSlides = <_HomeSlideData>[
     imageUrl: null,
     imageAction: null,
     primaryButtonText: 'Смотреть акценты',
-    primaryAction: _HomeSlideAction(legacyLink: '/collections/accent'),
+    primaryAction: _HomeSlideAction(
+      type: 'looks',
+      payload: <String, dynamic>{'filter': 'Акцент'},
+      legacyLink: '/home?tab=5',
+    ),
     secondaryButtonText: 'Подобрать под меня',
     secondaryAction: _HomeSlideAction(
       type: 'selection',
@@ -2314,7 +2375,11 @@ const List<_HomeSlideData> _fallbackHeroSlides = <_HomeSlideData>[
     imageUrl: null,
     imageAction: null,
     primaryButtonText: 'Смотреть подборку',
-    primaryAction: _HomeSlideAction(legacyLink: '/collections/resort'),
+    primaryAction: _HomeSlideAction(
+      type: 'looks',
+      payload: <String, dynamic>{'filter': 'Отдых'},
+      legacyLink: '/home?tab=5',
+    ),
     secondaryButtonText: 'Подобрать под меня',
     secondaryAction: _HomeSlideAction(
       type: 'selection',
@@ -2329,7 +2394,11 @@ const List<_HomeSlideData> _fallbackHeroSlides = <_HomeSlideData>[
     imageUrl: null,
     imageAction: null,
     primaryButtonText: 'Смотреть подборку',
-    primaryAction: _HomeSlideAction(legacyLink: '/collections/wedding'),
+    primaryAction: _HomeSlideAction(
+      type: 'looks',
+      payload: <String, dynamic>{'filter': 'Свадьба'},
+      legacyLink: '/home?tab=5',
+    ),
     secondaryButtonText: 'Подобрать под меня',
     secondaryAction: _HomeSlideAction(
       type: 'selection',

@@ -19,7 +19,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _phone = TextEditingController();
   final _password = TextEditingController();
   final _fullName = TextEditingController();
+  final _referralCode = TextEditingController();
   DateTime? _birthDate;
+
+  String? get _normalizedReferralCode {
+    final value = _referralCode.text.trim().toUpperCase();
+    return value.isEmpty ? null : value;
+  }
 
   String? get _formattedBirthDate {
     final value = _birthDate;
@@ -32,6 +38,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _phone.dispose();
     _password.dispose();
     _fullName.dispose();
+    _referralCode.dispose();
     super.dispose();
   }
 
@@ -114,6 +121,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 obscureText: true,
                 dark: true,
               ),
+              const SizedBox(height: 12),
+              AuthTextField(
+                controller: _referralCode,
+                label: 'Реферальный код (если есть)',
+                hintText: 'Введите код приглашения',
+                textCapitalization: TextCapitalization.characters,
+                dark: true,
+              ),
               const SizedBox(height: 16),
               if (auth.error != null)
                 GlamePanel(
@@ -158,6 +173,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 ?.toIso8601String()
                                 .split('T')
                                 .first,
+                            referralCode: _normalizedReferralCode,
                           );
                           if (!mounted) return;
                           final n = widget.nextRoute;
