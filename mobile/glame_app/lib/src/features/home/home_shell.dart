@@ -11,6 +11,7 @@ import '../cart/cart_screen.dart';
 import '../catalog/catalog_screen.dart';
 import '../customer/customer_cabinet_providers.dart';
 import '../customer/stylist_entry.dart';
+import '../gift_certificate/gift_certificate_screen.dart';
 import '../looks/looks_screen.dart';
 import '../stores/stores_screen.dart';
 import '../wishlist/wishlist_screen.dart';
@@ -129,7 +130,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                     ),
                     Expanded(
                       child: ColoredBox(
-                        color: index == 3
+                        color: index == 3 || index == 8
                             ? GlameColors.nearBlack
                             : GlameColors.surface2,
                         child: page,
@@ -178,6 +179,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         tabIndex == 3 ||
         tabIndex == 4 ||
         tabIndex == 5 ||
+        tabIndex == 8 ||
         tabIndex == 11;
   }
 
@@ -241,11 +243,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       return const CatalogScreen(title: 'НОВИНКИ', initialCategory: 'NEW');
     }
     if (index == 8) {
-      return const _StaticInfoScreen(
-        title: 'Подарочный сертификат',
-        body:
-            'Подарочный сертификат GLAME — аккуратный способ подарить выбор. Номинал и условия использования уточняются в магазинах и у консультантов.',
-      );
+      return const GiftCertificateScreen();
     }
     if (index == 9) {
       return const _StaticInfoScreen(

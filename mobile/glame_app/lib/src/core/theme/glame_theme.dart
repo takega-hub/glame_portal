@@ -254,18 +254,12 @@ class GlameTopAppBar extends StatelessWidget implements PreferredSizeWidget {
     final background = transparent
         ? Colors.transparent
         : (dark ? GlameColors.nearBlack : GlameColors.surface2);
-    final borderColor = dark ? GlameColors.borderGray : GlameColors.lightGray;
     return Material(
       color: background,
       elevation: 0,
       child: Container(
         height: height,
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          border: transparent
-              ? null
-              : Border(bottom: BorderSide(color: borderColor)),
-        ),
         child: SafeArea(
           bottom: false,
           child: Stack(
