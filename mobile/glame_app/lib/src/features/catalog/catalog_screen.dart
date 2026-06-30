@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/glame_theme.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/formatters/rub.dart';
+import '../auth/auth_controller.dart';
 import '../home/home_providers.dart';
 import 'catalog_filter_sheet.dart';
 import 'catalog_controller.dart';
@@ -427,25 +428,28 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     final result = await showModalBottomSheet<CatalogFiltersDraft>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: GlameColors.nearBlack,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
+      useSafeArea: true,
+      backgroundColor: const Color(0xFFF7F6F4),
+      shape: const RoundedRectangleBorder(),
       builder: (context) {
-        return CatalogFilterSheet(
-          characteristics: characteristics,
-          countLoader: (draft) => _loadFilteredCount(catalog, draft),
-          initial: CatalogFiltersDraft(
-            priceMin: catalog.priceMin,
-            priceMax: catalog.priceMax,
-            brand: catalog.brand,
-            material: catalog.material,
-            vstavka: catalog.vstavka,
-            pokrytie: catalog.pokrytie,
-            razmer: catalog.razmer,
-            tipZamka: catalog.tipZamka,
-            color: catalog.color,
-            sort: catalog.sort,
+        return SizedBox(
+          height: MediaQuery.sizeOf(context).height,
+          child: CatalogFilterSheet(
+            characteristics: characteristics,
+            countLoader: (draft) => _loadFilteredCount(catalog, draft),
+            initial: CatalogFiltersDraft(
+              priceMin: catalog.priceMin,
+              priceMax: catalog.priceMax,
+              brand: catalog.brand,
+              material: catalog.material,
+              vstavka: catalog.vstavka,
+              pokrytie: catalog.pokrytie,
+              razmer: catalog.razmer,
+              tipZamka: catalog.tipZamka,
+              color: catalog.color,
+              sort: catalog.sort,
+              inStockOnly: catalog.inStockOnly,
+            ),
           ),
         );
       },
@@ -464,6 +468,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
           tipZamka: result.tipZamka,
           color: result.color,
           sort: result.sort,
+          inStockOnly: result.inStockOnly,
         );
   }
 
@@ -492,7 +497,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
           category: catalog.category,
           brand: draft.brand,
           search: catalog.search,
-          inStock: catalog.inStockOnly ? true : null,
+          inStock: draft.inStockOnly ? true : null,
           hasImages: true,
           priceMin: draft.priceMin,
           priceMax: draft.priceMax,
@@ -754,7 +759,9 @@ class _ProductCardDarkrain extends ConsumerWidget {
         ? null
         : _normalizeCatalogDisplayLabel(brandRaw).toUpperCase();
     final isAvailable = [item, ...variants].any(_hasPositiveStock);
-    var priceLabel = _buildPriceLabel(item, variants);
+    final loyaltyPoints =
+        ref.watch(authControllerProvider).user?.loyaltyPoints ?? 0;
+    var priceLabel = _buildPriceLabel(item, variants, loyaltyPoints);
     String? remoteImageUrl;
     if (id.isNotEmpty) {
       final remoteVariants = ref.watch(productVariantsProvider(id));
@@ -776,7 +783,11 @@ class _ProductCardDarkrain extends ConsumerWidget {
           if (baseImages is List && baseImages.isNotEmpty) {
             remoteImageUrl = resolveAssetUrl(baseImages.first);
           }
-          return _buildPriceLabel(base.isEmpty ? item : base, remote);
+          return _buildPriceLabel(
+            base.isEmpty ? item : base,
+            remote,
+            loyaltyPoints,
+          );
         },
         orElse: () => '',
       );
@@ -949,6 +960,7 @@ class _ProductCardDarkrain extends ConsumerWidget {
   String _buildPriceLabel(
     Map<String, dynamic> item,
     List<Map<String, dynamic>> variants,
+    int loyaltyPoints,
   ) {
     final candidates = <Map<String, dynamic>>[item, ...variants];
     final all = candidates
@@ -959,7 +971,9 @@ class _ProductCardDarkrain extends ConsumerWidget {
 
     final positive = all.where((x) => x > 0).toList();
     if (positive.isEmpty) return '';
-    final prices = positive;
+    final prices = positive
+        .map((price) => discountedPriceKopeks(price, loyaltyPoints))
+        .toList();
     prices.sort();
 
     final min = prices.first;

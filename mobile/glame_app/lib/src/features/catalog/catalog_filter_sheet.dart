@@ -16,6 +16,7 @@ class CatalogFiltersDraft {
   final String? tipZamka;
   final String? color;
   final String? sort;
+  final bool inStockOnly;
 
   const CatalogFiltersDraft({
     required this.priceMin,
@@ -28,6 +29,7 @@ class CatalogFiltersDraft {
     required this.tipZamka,
     required this.color,
     required this.sort,
+    required this.inStockOnly,
   });
 }
 
@@ -62,10 +64,12 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
   String? tipZamka;
   String? color;
   String? sort;
+  bool inStockOnly = false;
   Timer? _countDebounce;
   int? _matchingCount;
   bool _loadingCount = false;
   int _countRequestId = 0;
+  String? _expandedSection;
 
   @override
   void initState() {
@@ -88,6 +92,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
     tipZamka = widget.initial.tipZamka;
     color = widget.initial.color;
     sort = widget.initial.sort;
+    inStockOnly = widget.initial.inStockOnly;
     priceMin.addListener(_scheduleCountRefresh);
     priceMax.addListener(_scheduleCountRefresh);
     _scheduleCountRefresh(immediate: true);
@@ -103,6 +108,10 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final categoryValues = _characteristicValues(
+      widget.characteristics,
+      'Категория',
+    );
     final brandValues = _characteristicValues(widget.characteristics, 'Бренд');
     final colorValues = _characteristicValues(widget.characteristics, 'Цвет');
     final sizeValues = _characteristicValues(widget.characteristics, 'Размер');
@@ -122,7 +131,222 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
       widget.characteristics,
       'Тип замка',
     );
+    final collectionValues = _characteristicValues(
+      widget.characteristics,
+      'Коллекция',
+    );
+    final seasonValues = _characteristicValues(widget.characteristics, 'Сезон');
+    final styleValues = _characteristicValues(widget.characteristics, 'Стиль');
 
+    return Material(
+      color: const Color(0xFFF7F6F4),
+      child: SafeArea(
+        child: Column(
+          children: [
+            _LightHeader(onReset: _reset),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  14,
+                  0,
+                  14,
+                  16 + MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _InStockRow(
+                      value: inStockOnly,
+                      onChanged: (value) {
+                        setState(() => inStockOnly = value);
+                        _scheduleCountRefresh();
+                      },
+                    ),
+                    _SortRow(
+                      label: _sortLabel(sort),
+                      onTap: () => _showSortPicker(context),
+                    ),
+                    const SizedBox(height: 12),
+                    _LightPriceFields(priceMin: priceMin, priceMax: priceMax),
+                    const SizedBox(height: 8),
+                    _ExpandableFilterSection(
+                      title: 'Категория',
+                      selected: null,
+                      expanded: _expandedSection == 'category',
+                      onTap: () => _toggleSection('category'),
+                      children: _choiceRows(
+                        categoryValues,
+                        selected: null,
+                        onSelect: (_) {},
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Марки и капсулы',
+                      selected: brand,
+                      expanded: _expandedSection == 'brand',
+                      onTap: () => _toggleSection('brand'),
+                      children: _choiceRows(
+                        brandValues,
+                        selected: brand,
+                        onSelect: (value) {
+                          setState(() => brand = value);
+                          _scheduleCountRefresh();
+                        },
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Коллекция',
+                      selected: null,
+                      expanded: _expandedSection == 'collection',
+                      onTap: () => _toggleSection('collection'),
+                      children: _choiceRows(
+                        collectionValues,
+                        selected: null,
+                        onSelect: (_) {},
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Цвет',
+                      selected: color,
+                      expanded: _expandedSection == 'color',
+                      onTap: () => _toggleSection('color'),
+                      children: _choiceRows(
+                        colorValues,
+                        selected: color,
+                        onSelect: (value) {
+                          setState(() => color = value);
+                          _scheduleCountRefresh();
+                        },
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Размер',
+                      selected: razmer,
+                      expanded: _expandedSection == 'size',
+                      onTap: () => _toggleSection('size'),
+                      children: _choiceRows(
+                        sizeValues,
+                        selected: razmer,
+                        onSelect: (value) {
+                          setState(() => razmer = value);
+                          _scheduleCountRefresh();
+                        },
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Материал верха',
+                      selected: material,
+                      expanded: _expandedSection == 'material',
+                      onTap: () => _toggleSection('material'),
+                      children: _choiceRows(
+                        materialValues,
+                        selected: material,
+                        onSelect: (value) {
+                          setState(() => material = value);
+                          _scheduleCountRefresh();
+                        },
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Вставка',
+                      selected: vstavka,
+                      expanded: _expandedSection == 'insert',
+                      onTap: () => _toggleSection('insert'),
+                      children: _choiceRows(
+                        insertValues,
+                        selected: vstavka,
+                        onSelect: (value) {
+                          setState(() => vstavka = value);
+                          _scheduleCountRefresh();
+                        },
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Покрытие',
+                      selected: pokrytie,
+                      expanded: _expandedSection == 'coating',
+                      onTap: () => _toggleSection('coating'),
+                      children: _choiceRows(
+                        pokrytieValues,
+                        selected: pokrytie,
+                        onSelect: (value) {
+                          setState(() => pokrytie = value);
+                          _scheduleCountRefresh();
+                        },
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Тип замка',
+                      selected: tipZamka,
+                      expanded: _expandedSection == 'lock',
+                      onTap: () => _toggleSection('lock'),
+                      children: _choiceRows(
+                        tipZamkaValues,
+                        selected: tipZamka,
+                        onSelect: (value) {
+                          setState(() => tipZamka = value);
+                          _scheduleCountRefresh();
+                        },
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Сезон',
+                      selected: null,
+                      expanded: _expandedSection == 'season',
+                      onTap: () => _toggleSection('season'),
+                      children: _choiceRows(
+                        seasonValues,
+                        selected: null,
+                        onSelect: (_) {},
+                        light: true,
+                      ),
+                    ),
+                    _ExpandableFilterSection(
+                      title: 'Стиль',
+                      selected: null,
+                      expanded: _expandedSection == 'style',
+                      onTap: () => _toggleSection('style'),
+                      children: _choiceRows(
+                        styleValues,
+                        selected: null,
+                        onSelect: (_) {},
+                        light: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+              child: SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: FilledButton(
+                  onPressed: _apply,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF2F2925),
+                    foregroundColor: Colors.white,
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: Text(_buttonLabel()),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    // ignore: dead_code
     return SafeArea(
       top: false,
       child: ConstrainedBox(
@@ -274,14 +498,20 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
     List<String> values, {
     required String? selected,
     required ValueChanged<String?> onSelect,
+    bool light = false,
   }) {
     if (values.isEmpty) {
-      return const [
+      return [
         Padding(
-          padding: EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.only(bottom: 10),
           child: Text(
             'Нет доступных значений',
-            style: TextStyle(fontSize: 13, color: GlameColors.textSecondary),
+            style: TextStyle(
+              fontSize: 13,
+              color: light
+                  ? const Color(0xFF8B8B8B)
+                  : GlameColors.textSecondary,
+            ),
           ),
         ),
       ];
@@ -292,9 +522,16 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
             label: value,
             selected: selected == value,
             onTap: () => onSelect(selected == value ? null : value),
+            light: light,
           ),
         )
         .toList();
+  }
+
+  void _toggleSection(String id) {
+    setState(() {
+      _expandedSection = _expandedSection == id ? null : id;
+    });
   }
 
   void _toggleSort(String value) {
@@ -316,6 +553,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
       tipZamka = null;
       color = null;
       sort = null;
+      inStockOnly = false;
     });
     _scheduleCountRefresh();
   }
@@ -336,7 +574,56 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
       tipZamka: _norm(tipZamka),
       color: _norm(color),
       sort: _norm(sort),
+      inStockOnly: inStockOnly,
     );
+  }
+
+  String _sortLabel(String? value) {
+    return switch (value) {
+      'newest' => 'по новизне',
+      'price_asc' => 'дешевле',
+      'price_desc' => 'дороже',
+      _ => 'по умолчанию',
+    };
+  }
+
+  Future<void> _showSortPicker(BuildContext context) async {
+    final next = await showModalBottomSheet<String?>(
+      context: context,
+      backgroundColor: const Color(0xFFF7F6F4),
+      shape: const RoundedRectangleBorder(),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _SortChoice(label: 'по умолчанию', value: null, current: sort),
+                _SortChoice(
+                  label: 'по новизне',
+                  value: 'newest',
+                  current: sort,
+                ),
+                _SortChoice(
+                  label: 'по цене: дешевле',
+                  value: 'price_asc',
+                  current: sort,
+                ),
+                _SortChoice(
+                  label: 'по цене: дороже',
+                  value: 'price_desc',
+                  current: sort,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (!mounted) return;
+    setState(() => sort = next);
+    _scheduleCountRefresh();
   }
 
   void _scheduleCountRefresh({bool immediate = false}) {
@@ -430,6 +717,289 @@ class _Header extends StatelessWidget {
           ),
         ),
         Divider(height: 1, color: GlameColors.borderGray.withAlpha(140)),
+      ],
+    );
+  }
+}
+
+class _LightHeader extends StatelessWidget {
+  final VoidCallback onReset;
+
+  const _LightHeader({required this.onReset});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 54,
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Назад',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back, size: 20),
+            color: const Color(0xFF242424),
+          ),
+          const Expanded(
+            child: Text(
+              'Фильтры',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF202020),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onReset,
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF777777),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            child: const Text('Сброс'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InStockRow extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _InStockRow({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Только в наличии',
+              style: TextStyle(fontSize: 13, color: Color(0xFF222222)),
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: const Color(0xFF2F2925),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SortRow extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _SortRow({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Сортировка',
+                style: TextStyle(fontSize: 13, color: Color(0xFF222222)),
+              ),
+            ),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF333333)),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right, size: 20, color: Color(0xFF222222)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SortChoice extends StatelessWidget {
+  final String label;
+  final String? value;
+  final String? current;
+
+  const _SortChoice({
+    required this.label,
+    required this.value,
+    required this.current,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = value == current;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(label),
+      trailing: selected ? const Icon(Icons.check, size: 18) : null,
+      onTap: () => Navigator.of(context).pop(value),
+    );
+  }
+}
+
+class _LightPriceFields extends StatelessWidget {
+  final TextEditingController priceMin;
+  final TextEditingController priceMax;
+
+  const _LightPriceFields({required this.priceMin, required this.priceMax});
+
+  @override
+  Widget build(BuildContext context) {
+    final min =
+        int.tryParse(priceMin.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 250;
+    final max =
+        int.tryParse(priceMax.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 52990;
+    final start = min.clamp(0, 52990).toDouble();
+    final end = max.clamp(0, 52990).toDouble();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Цена, руб',
+          style: TextStyle(fontSize: 13, color: Color(0xFF222222)),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _LightPriceInput(controller: priceMin, label: 'от'),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 26),
+              child: Text('—', style: TextStyle(color: Color(0xFF9A9A9A))),
+            ),
+            Expanded(
+              child: _LightPriceInput(controller: priceMax, label: 'до'),
+            ),
+          ],
+        ),
+        RangeSlider(
+          values: RangeValues(
+            start <= end ? start : end,
+            end >= start ? end : start,
+          ),
+          min: 0,
+          max: 52990,
+          activeColor: const Color(0xFFBDD6EE),
+          inactiveColor: const Color(0xFFD9E6F3),
+          onChanged: (values) {
+            priceMin.text = values.start.round().toString();
+            priceMax.text = values.end.round().toString();
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _LightPriceInput extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+
+  const _LightPriceInput({required this.controller, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      style: const TextStyle(fontSize: 12, color: Color(0xFF222222)),
+      decoration: InputDecoration(
+        prefixText: '$label  ',
+        prefixStyle: const TextStyle(color: Color(0xFF9A9A9A)),
+        isDense: true,
+        contentPadding: const EdgeInsets.only(bottom: 7),
+        border: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+        ),
+        enabledBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+        ),
+        focusedBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFBDD6EE)),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExpandableFilterSection extends StatelessWidget {
+  final String title;
+  final String? selected;
+  final bool expanded;
+  final VoidCallback onTap;
+  final List<Widget> children;
+
+  const _ExpandableFilterSection({
+    required this.title,
+    required this.selected,
+    required this.expanded,
+    required this.onTap,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSelected = (selected ?? '').trim().isNotEmpty;
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF222222),
+                    ),
+                  ),
+                ),
+                if (hasSelected)
+                  Container(
+                    width: 20,
+                    height: 20,
+                    alignment: Alignment.center,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFD7E6F6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Text(
+                      '1',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF2F4050)),
+                    ),
+                  ),
+                Icon(
+                  expanded ? Icons.expand_less : Icons.chevron_right,
+                  size: 21,
+                  color: const Color(0xFF222222),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (expanded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 0, 0, 8),
+            child: Column(children: children),
+          ),
       ],
     );
   }
@@ -530,11 +1100,13 @@ class _ChoiceRow extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool light;
 
   const _ChoiceRow({
     required this.label,
     required this.selected,
     required this.onTap,
+    this.light = false,
   });
 
   @override
@@ -550,14 +1122,20 @@ class _ChoiceRow extends StatelessWidget {
               height: 16,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: selected ? GlameColors.whiteGlame : Colors.transparent,
-                border: Border.all(color: GlameColors.borderGray),
+                color: selected
+                    ? (light ? const Color(0xFF2F2925) : GlameColors.whiteGlame)
+                    : Colors.transparent,
+                border: Border.all(
+                  color: light
+                      ? const Color(0xFFD8D8D8)
+                      : GlameColors.borderGray,
+                ),
               ),
               child: selected
-                  ? const Icon(
+                  ? Icon(
                       Icons.check,
                       size: 12,
-                      color: GlameColors.nearBlack,
+                      color: light ? Colors.white : GlameColors.nearBlack,
                     )
                   : null,
             ),
@@ -567,10 +1145,12 @@ class _ChoiceRow extends StatelessWidget {
                 label,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   height: 1.2,
-                  color: GlameColors.whiteGlame,
+                  color: light
+                      ? const Color(0xFF222222)
+                      : GlameColors.whiteGlame,
                 ),
               ),
             ),

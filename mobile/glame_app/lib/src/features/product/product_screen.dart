@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -1508,14 +1507,6 @@ String? _extractProductId(Map<String, dynamic>? product) {
   return null;
 }
 
-int _discountedPriceKopeks(int basePriceKopeks, int loyaltyPoints) {
-  if (basePriceKopeks <= 0 || loyaltyPoints <= 0) return basePriceKopeks;
-  final maxDiscountByRule = (basePriceKopeks * 0.1).round();
-  final availableByPoints = loyaltyPoints * 100;
-  final discount = math.min(maxDiscountByRule, availableByPoints);
-  return math.max(0, basePriceKopeks - discount);
-}
-
 class _PriceWithBonus extends StatelessWidget {
   final String priceLabel;
   final int? basePriceKopeks;
@@ -1540,7 +1531,7 @@ class _PriceWithBonus extends StatelessWidget {
         ),
       );
     }
-    final discounted = _discountedPriceKopeks(price, loyaltyPoints);
+    final discounted = discountedPriceKopeks(price, loyaltyPoints);
     final hasDiscount = discounted < price;
     if (!hasDiscount) {
       return Text(
@@ -2312,7 +2303,7 @@ class _LookBundlePrice extends StatelessWidget {
         style: TextStyle(fontSize: 12, color: GlameColors.textSecondary),
       );
     }
-    final discounted = _discountedPriceKopeks(total, loyaltyPoints);
+    final discounted = discountedPriceKopeks(total, loyaltyPoints);
     final hasDiscount = discounted < total;
     return Column(
       children: [

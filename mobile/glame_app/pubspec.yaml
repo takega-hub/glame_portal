@@ -71,6 +71,7 @@ flutter:
     - assets/images/brand/
     - assets/images/home/
     - assets/images/service/
+    - assets/images/gift_certificate/
 
   fonts:
     - family: Clinica Pro

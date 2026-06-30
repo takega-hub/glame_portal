@@ -66,6 +66,16 @@ class CustomerCabinetApi {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> getGiftCertificates() async {
+    final resp = await _dio.get('/gift-certificates/my');
+    final raw = resp.data;
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((x) => Map<String, dynamic>.from(x))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> getOrderPaymentStatus(String orderId) async {
     final resp = await _dio.get('/orders/$orderId/payment-status');
     return Map<String, dynamic>.from(resp.data as Map);
@@ -153,7 +163,9 @@ class CustomerCabinetApi {
         .toList();
   }
 
-  Future<List<Map<String, dynamic>>> addFavoriteProduct(String productId) async {
+  Future<List<Map<String, dynamic>>> addFavoriteProduct(
+    String productId,
+  ) async {
     final resp = await _dio.post('/customer/favorite-products/$productId');
     final raw = resp.data;
     if (raw is! List) return const <Map<String, dynamic>>[];
@@ -180,6 +192,26 @@ class CustomerCabinetApi {
     return Map<String, dynamic>.from(resp.data as Map);
   }
 
+  Future<Map<String, dynamic>> upsertGeneratedLook({
+    String? id,
+    String? name,
+    String? goal,
+    int? totalPrice,
+    required List<Map<String, dynamic>> products,
+  }) async {
+    final resp = await _dio.post(
+      '/customer/saved-looks/generated',
+      data: {
+        if (id != null && id.trim().isNotEmpty) 'id': id.trim(),
+        if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+        if (goal != null && goal.trim().isNotEmpty) 'goal': goal.trim(),
+        ?totalPrice == null ? null : 'total_price': totalPrice,
+        'products': products,
+      },
+    );
+    return Map<String, dynamic>.from(resp.data as Map);
+  }
+
   Future<Map<String, dynamic>> sendStylistChatMessage({
     required String text,
     String? productId,
@@ -200,10 +232,7 @@ class CustomerCabinetApi {
         'favorite_product_ids': favoriteProductIds.join(','),
       ?photo == null ? null : 'photo': photo,
     });
-    final resp = await _dio.post(
-      '/customer/stylist-chat/messages',
-      data: form,
-    );
+    final resp = await _dio.post('/customer/stylist-chat/messages', data: form);
     return Map<String, dynamic>.from(resp.data as Map);
   }
 

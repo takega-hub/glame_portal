@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../core/formatters/rub.dart';
 import '../../core/theme/glame_theme.dart';
 import '../../core/widgets/glame_auth_gate.dart';
 import '../auth/auth_controller.dart';
@@ -648,8 +649,8 @@ class _BottomNavHome extends StatelessWidget {
         onTap: onTap,
         child: Center(
           child: SizedBox(
-            width: 24,
-            height: 24,
+            width: 32,
+            height: 32,
             child: Opacity(
               opacity: selected ? 1 : 0.64,
               child: Image.asset(GlameAssets.sign, fit: BoxFit.contain),
@@ -717,18 +718,9 @@ class _GlameDrawer extends StatelessWidget {
       shape: const RoundedRectangleBorder(),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
           child: ListView(
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Image.asset(
-                  GlameAssets.logoSilver,
-                  height: 46,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              const SizedBox(height: 28),
               const _DrawerSectionLabel('Навигация'),
               _DrawerItem('Главная', 0, selectedIndex, onSelected),
               _DrawerItem('Украшения', 1, selectedIndex, onSelected),
@@ -761,21 +753,6 @@ class _GlameDrawer extends StatelessWidget {
               _DrawerRouteItem(
                 label: isLoggedIn ? 'Выйти' : 'Войти',
                 onTap: isLoggedIn ? onLogout : onLogin,
-              ),
-              const SizedBox(height: 40),
-              Image.asset(
-                GlameAssets.logoSilver,
-                height: 22,
-                alignment: Alignment.centerLeft,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Новости и коллекции в наших соцсетях',
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1.35,
-                  color: GlameColors.coldLightGray,
-                ),
               ),
             ],
           ),
@@ -986,6 +963,11 @@ class _Profile extends ConsumerWidget {
                         _ProfileAction(
                           label: 'Мои заказы',
                           onTap: () => _showProfileOrdersDialog(context, ref),
+                        ),
+                        _ProfileAction(
+                          label: 'Подарочные сертификаты',
+                          onTap: () =>
+                              _showProfileGiftCertificatesDialog(context, ref),
                         ),
                         _ProfileAction(
                           label: 'История покупок',
@@ -2180,6 +2162,22 @@ Future<void> _showProfileHistoryDialog(BuildContext context, WidgetRef ref) {
   );
 }
 
+Future<void> _showProfileGiftCertificatesDialog(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  ref.invalidate(customerGiftCertificatesProvider);
+  return _showProfileDataDialog(
+    context: context,
+    title: 'Сертификаты',
+    provider: customerGiftCertificatesProvider,
+    itemBuilder: (certificate) =>
+        _ProfileGiftCertificateDialogItem(certificate: certificate),
+    emptyText: 'У вас пока нет подарочных сертификатов.',
+    errorText: 'Не удалось загрузить сертификаты.',
+  );
+}
+
 Future<void> _showProfileDataDialog({
   required BuildContext context,
   required String title,
@@ -2330,11 +2328,51 @@ class _ProfileOrderDialogItem extends StatelessWidget {
     return _ProfileDialogItemFrame(
       title: 'Заказ ${_shortId(id)}',
       meta: created,
-      value: amount == null ? null : _formatRub(amount),
+      value: amount == null ? null : formatRubFromKopeks(amount),
       lines: [
         _ProfileDialogLine(label: 'Статус', value: status),
         _ProfileDialogLine(label: 'Оплата', value: payment),
         ?_deliverySummaryLine(order['delivery']),
+      ],
+    );
+  }
+}
+
+class _ProfileGiftCertificateDialogItem extends StatelessWidget {
+  final Map<String, dynamic> certificate;
+
+  const _ProfileGiftCertificateDialogItem({required this.certificate});
+
+  @override
+  Widget build(BuildContext context) {
+    final number =
+        _profileItemString(certificate['series'] ?? certificate['number']) ??
+        'Сертификат';
+    final created = _profileDateLabel(
+      certificate['activated_at'] ??
+          certificate['created_at'] ??
+          certificate['createdAt'],
+    );
+    final status = _certificateStatusLabel(
+      _profileItemString(certificate['status']) ?? '',
+    );
+    final nominal = _profileMoneyValue(certificate['nominal_amount']);
+    final balance = _profileMoneyValue(certificate['balance_amount']);
+    final pin = _profileItemString(certificate['pin']);
+
+    return _ProfileDialogItemFrame(
+      title: 'Сертификат ${_shortId(number)}',
+      meta: created,
+      value: nominal == null ? null : formatRubFromKopeks(nominal),
+      lines: [
+        _ProfileDialogLine(label: 'Статус', value: status),
+        _ProfileDialogLine(label: 'Серия', value: number),
+        if (balance != null)
+          _ProfileDialogLine(
+            label: 'Баланс',
+            value: formatRubFromKopeks(balance),
+          ),
+        if (pin != null) _ProfileDialogLine(label: 'PIN', value: pin),
       ],
     );
   }
@@ -2563,6 +2601,25 @@ String _paymentStatusLabel(String? value) {
       return 'Нет данных';
     default:
       return value;
+  }
+}
+
+String _certificateStatusLabel(String status) {
+  switch (status) {
+    case 'active':
+      return 'Активен';
+    case 'pending':
+      return 'Ожидает оплаты';
+    case 'reserved':
+      return 'Зарезервирован';
+    case 'redeemed':
+      return 'Использован';
+    case 'canceled':
+      return 'Отменён';
+    case 'expired':
+      return 'Истёк';
+    default:
+      return status.isEmpty ? 'Не указан' : status;
   }
 }
 

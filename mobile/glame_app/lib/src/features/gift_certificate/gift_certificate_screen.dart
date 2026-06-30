@@ -1,30 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/glame_theme.dart';
+import '../auth/auth_controller.dart';
+import 'gift_certificate_api.dart';
 
-class GiftCertificateScreen extends StatefulWidget {
+class GiftCertificateScreen extends ConsumerStatefulWidget {
   const GiftCertificateScreen({super.key});
 
   @override
-  State<GiftCertificateScreen> createState() => _GiftCertificateScreenState();
+  ConsumerState<GiftCertificateScreen> createState() =>
+      _GiftCertificateScreenState();
 }
 
-class _GiftCertificateScreenState extends State<GiftCertificateScreen> {
+class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _nameController = TextEditingController();
   final _messageController = TextEditingController();
   final _senderController = TextEditingController();
-  final _customAmountController = TextEditingController();
 
   int _step = 0;
   int _amount = 5000;
   int _design = 0;
-  int _accent = 0;
   bool _sendLater = false;
+  bool _submitting = false;
   DateTime? _sendAt;
+  Map<String, dynamic>? _purchaseResult;
 
-  static const _amounts = [5000, 10000, 20000, 50000];
+  static const _amounts = [3000, 5000, 10000, 20000];
 
   @override
   void dispose() {
@@ -33,7 +39,6 @@ class _GiftCertificateScreenState extends State<GiftCertificateScreen> {
     _nameController.dispose();
     _messageController.dispose();
     _senderController.dispose();
-    _customAmountController.dispose();
     super.dispose();
   }
 
@@ -53,7 +58,7 @@ class _GiftCertificateScreenState extends State<GiftCertificateScreen> {
                   _StepHeader(
                     step: _step,
                     title: switch (_step) {
-                      0 => 'Дизайн и номинал',
+                      0 => 'Номинал',
                       1 => 'Кому и когда',
                       _ => 'Оплата',
                     },
@@ -63,28 +68,18 @@ class _GiftCertificateScreenState extends State<GiftCertificateScreen> {
                     duration: const Duration(milliseconds: 180),
                     child: switch (_step) {
                       0 => _DesignStep(
-                        key: const ValueKey('design'),
+                        key: const ValueKey('amount'),
                         amount: _amount,
                         design: _design,
-                        accent: _accent,
-                        customAmountController: _customAmountController,
+                        onAmountChanged: (value) =>
+                            setState(() => _amount = value),
                         onDesignChanged: (value) =>
                             setState(() => _design = value),
-                        onAccentChanged: (value) =>
-                            setState(() => _accent = value),
-                        onAmountChanged: (value) {
-                          setState(() {
-                            _amount = value;
-                            _customAmountController.clear();
-                          });
-                        },
-                        onCustomAmountChanged: _setCustomAmount,
                       ),
                       1 => _RecipientStep(
                         key: const ValueKey('recipient'),
                         amount: _amount,
                         design: _design,
-                        accent: _accent,
                         phoneController: _phoneController,
                         emailController: _emailController,
                         nameController: _nameController,
@@ -92,22 +87,26 @@ class _GiftCertificateScreenState extends State<GiftCertificateScreen> {
                         senderController: _senderController,
                         sendLater: _sendLater,
                         sendAt: _sendAt,
-                        onSendModeChanged: (later) =>
-                            setState(() => _sendLater = later),
+                        onSendModeChanged: (later) {
+                          setState(() => _sendLater = later);
+                          if (later && _sendAt == null) {
+                            _pickSendDateTime();
+                          }
+                        },
                         onPickDate: _pickSendDateTime,
                       ),
                       _ => _PaymentStep(
                         key: const ValueKey('payment'),
                         amount: _amount,
                         design: _design,
-                        accent: _accent,
                         phone: _phoneController.text,
                         email: _emailController.text,
                         recipientName: _nameController.text,
                         sendLater: _sendLater,
                         sendAt: _sendAt,
+                        purchaseResult: _purchaseResult,
                         onEditRecipient: () => setState(() => _step = 1),
-                        onEditDesign: () => setState(() => _step = 0),
+                        onEditAmount: () => setState(() => _step = 0),
                       ),
                     },
                   ),
@@ -116,8 +115,9 @@ class _GiftCertificateScreenState extends State<GiftCertificateScreen> {
             ),
             _BottomActionBar(
               step: _step,
+              submitting: _submitting,
               canGoBack: _step > 0,
-              onBack: () => setState(() => _step -= 1),
+              onBack: _submitting ? () {} : () => setState(() => _step -= 1),
               onNext: _handlePrimaryAction,
             ),
           ],
@@ -126,66 +126,166 @@ class _GiftCertificateScreenState extends State<GiftCertificateScreen> {
     );
   }
 
-  void _setCustomAmount(String raw) {
-    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
-    final value = int.tryParse(digits);
-    if (value == null) return;
-    setState(() => _amount = value.clamp(1000, 500000));
-  }
-
   Future<void> _pickSendDateTime() async {
     final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _sendAt ?? now.add(const Duration(days: 1)),
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 365)),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: GlameColors.whiteGlame,
-            onPrimary: GlameColors.nearBlack,
-            surface: GlameColors.nearBlack,
-            onSurface: GlameColors.whiteGlame,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (date == null || !mounted) return;
+    final initial = _sendAt ?? now.add(const Duration(hours: 2));
+    var selectedDate = DateTime(initial.year, initial.month, initial.day);
+    var selectedHour = initial.hour;
+    var selectedMinute = (initial.minute / 5).round() * 5;
+    if (selectedMinute >= 60) {
+      selectedMinute = 0;
+      selectedHour = (selectedHour + 1) % 24;
+    }
 
-    final time = await showTimePicker(
+    final result = await showModalBottomSheet<DateTime>(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(_sendAt ?? now),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: GlameColors.whiteGlame,
-            onPrimary: GlameColors.nearBlack,
-            surface: GlameColors.nearBlack,
-            onSurface: GlameColors.whiteGlame,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (time == null) return;
+      isScrollControlled: true,
+      backgroundColor: GlameColors.nearBlack,
+      barrierColor: Colors.black.withValues(alpha: 0.62),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final candidate = DateTime(
+              selectedDate.year,
+              selectedDate.month,
+              selectedDate.day,
+              selectedHour,
+              selectedMinute,
+            );
+            final isPast = candidate.isBefore(now);
 
-    setState(() {
-      _sendAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  22,
+                  18,
+                  22,
+                  18 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Дата и время отправки',
+                            style: TextStyle(
+                              color: GlameColors.whiteGlame,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          icon: const Icon(
+                            Icons.close,
+                            color: GlameColors.whiteGlame,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: const ColorScheme.dark(
+                          primary: GlameColors.whiteGlame,
+                          onPrimary: GlameColors.nearBlack,
+                          surface: GlameColors.nearBlack,
+                          onSurface: GlameColors.whiteGlame,
+                        ),
+                        textButtonTheme: TextButtonThemeData(
+                          style: TextButton.styleFrom(
+                            foregroundColor: GlameColors.whiteGlame,
+                          ),
+                        ),
+                      ),
+                      child: CalendarDatePicker(
+                        initialDate: selectedDate.isBefore(now)
+                            ? DateTime(now.year, now.month, now.day)
+                            : selectedDate,
+                        firstDate: DateTime(now.year, now.month, now.day),
+                        lastDate: now.add(const Duration(days: 365)),
+                        onDateChanged: (date) {
+                          setSheetState(() {
+                            selectedDate = DateTime(
+                              date.year,
+                              date.month,
+                              date.day,
+                            );
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _TimeSelect(
+                            label: 'Час',
+                            value: selectedHour,
+                            values: List.generate(24, (index) => index),
+                            onChanged: (value) =>
+                                setSheetState(() => selectedHour = value),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _TimeSelect(
+                            label: 'Минуты',
+                            value: selectedMinute,
+                            values: List.generate(12, (index) => index * 5),
+                            onChanged: (value) =>
+                                setSheetState(() => selectedMinute = value),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (isPast) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Выберите время позже текущего.',
+                        style: TextStyle(
+                          color: GlameColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    FilledButton(
+                      onPressed: isPast
+                          ? null
+                          : () => Navigator.pop(sheetContext, candidate),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(54),
+                        backgroundColor: GlameColors.whiteGlame,
+                        disabledBackgroundColor: GlameColors.borderGray,
+                        foregroundColor: GlameColors.nearBlack,
+                        shape: const RoundedRectangleBorder(),
+                      ),
+                      child: const Text('СОХРАНИТЬ'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null || !mounted) return;
+    setState(() => _sendAt = result);
   }
 
   void _handlePrimaryAction() {
+    if (_submitting) return;
     if (_step == 0) {
-      if (_amount < 1000) {
-        _showMessage('Минимальный номинал сертификата — 1 000 ₽');
+      if (!_amounts.contains(_amount)) {
+        _showMessage('Выберите номинал сертификата из доступных в 1С');
         return;
       }
       setState(() => _step = 1);
@@ -206,9 +306,50 @@ class _GiftCertificateScreenState extends State<GiftCertificateScreen> {
       return;
     }
 
-    _showMessage(
-      'Оплата сертификата будет подключена после интеграции бэкенда',
-    );
+    _purchaseCertificate();
+  }
+
+  Future<void> _purchaseCertificate() async {
+    if (ref.read(authControllerProvider).user == null) {
+      _showMessage('Войдите, чтобы купить сертификат');
+      context.go('/login?next=${Uri.encodeComponent('/home?tab=8')}');
+      return;
+    }
+
+    setState(() => _submitting = true);
+    try {
+      final api = ref.read(giftCertificateApiProvider);
+      final origin = Uri.base.origin;
+      final resp = await api.purchase(
+        amountKopeks: _amount * 100,
+        returnUrl: origin,
+        recipientName: _nameController.text,
+        recipientPhone: _phoneController.text,
+        recipientEmail: _emailController.text,
+        message: _messageController.text,
+        senderName: _senderController.text,
+        design: _design,
+        sendAt: _sendLater ? _sendAt : null,
+      );
+      if (!mounted) return;
+      setState(() => _purchaseResult = resp);
+
+      final confirmationUrl = (resp['confirmation_url'] ?? '').toString();
+      final uri = Uri.tryParse(confirmationUrl);
+      if (uri != null) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+      _showMessage(
+        'Серия сертификата создана в 1С. После оплаты сертификат станет активным.',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage('Не удалось создать оплату сертификата');
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
   }
 
   void _showMessage(String message) {
@@ -246,7 +387,7 @@ class _StepHeader extends StatelessWidget {
           title,
           textAlign: TextAlign.center,
           style: const TextStyle(
-            fontFamily: 'Kudry Headline',
+            fontFamily: 'Clinica Pro',
             fontSize: 25,
             height: 1.05,
             color: GlameColors.whiteGlame,
@@ -274,23 +415,15 @@ class _StepHeader extends StatelessWidget {
 class _DesignStep extends StatelessWidget {
   final int amount;
   final int design;
-  final int accent;
-  final TextEditingController customAmountController;
-  final ValueChanged<int> onDesignChanged;
-  final ValueChanged<int> onAccentChanged;
   final ValueChanged<int> onAmountChanged;
-  final ValueChanged<String> onCustomAmountChanged;
+  final ValueChanged<int> onDesignChanged;
 
   const _DesignStep({
     super.key,
     required this.amount,
     required this.design,
-    required this.accent,
-    required this.customAmountController,
-    required this.onDesignChanged,
-    required this.onAccentChanged,
     required this.onAmountChanged,
-    required this.onCustomAmountChanged,
+    required this.onDesignChanged,
   });
 
   @override
@@ -301,24 +434,42 @@ class _DesignStep extends StatelessWidget {
         const Text(
           'Подарочный сертификат',
           style: TextStyle(
-            fontFamily: 'Kudry Headline',
+            fontFamily: 'Clinica Pro',
             fontSize: 28,
             height: 1.08,
             color: GlameColors.whiteGlame,
           ),
         ),
         const SizedBox(height: 24),
-        _CertificatePreview(amount: amount, design: design, accent: accent),
+        _CertificatePreview(amount: amount, design: design),
         const SizedBox(height: 34),
-        _SegmentTabs(
-          labels: const ['Текстура', 'Цвет'],
-          selected: accent,
-          onChanged: onAccentChanged,
+        const Text('ВЫБЕРИТЕ ДИЗАЙН', style: _labelStyle),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _DesignButton(
+                title: 'Светлый',
+                asset:
+                    'assets/images/gift_certificate/glame_gift_certificate_template_01.png',
+                selected: design == 0,
+                onTap: () => onDesignChanged(0),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _DesignButton(
+                title: 'Темный',
+                asset:
+                    'assets/images/gift_certificate/glame_gift_certificate_template_02.png',
+                selected: design == 1,
+                onTap: () => onDesignChanged(1),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 18),
-        _DesignGrid(selected: design, mode: accent, onChanged: onDesignChanged),
-        const SizedBox(height: 34),
-        const Text('ВЫБЕРИТЕ НОМИНАЛ ИЛИ ВВЕДИТЕ СУММУ', style: _labelStyle),
+        const SizedBox(height: 30),
+        const Text('ВЫБЕРИТЕ НОМИНАЛ', style: _labelStyle),
         const SizedBox(height: 16),
         Wrap(
           spacing: 14,
@@ -328,21 +479,11 @@ class _DesignStep extends StatelessWidget {
               width: (MediaQuery.sizeOf(context).width - 70) / 2,
               child: _AmountButton(
                 amount: value,
-                selected:
-                    amount == value && customAmountController.text.isEmpty,
+                selected: amount == value,
                 onTap: () => onAmountChanged(value),
               ),
             );
           }).toList(),
-        ),
-        const SizedBox(height: 14),
-        _DarkTextField(
-          controller: customAmountController,
-          label: 'Другая сумма',
-          keyboardType: TextInputType.number,
-          suffix: '₽',
-          icon: Icons.edit_outlined,
-          onChanged: onCustomAmountChanged,
         ),
         const SizedBox(height: 30),
         const Center(child: _TermsLink()),
@@ -354,7 +495,6 @@ class _DesignStep extends StatelessWidget {
 class _RecipientStep extends StatelessWidget {
   final int amount;
   final int design;
-  final int accent;
   final TextEditingController phoneController;
   final TextEditingController emailController;
   final TextEditingController nameController;
@@ -369,7 +509,6 @@ class _RecipientStep extends StatelessWidget {
     super.key,
     required this.amount,
     required this.design,
-    required this.accent,
     required this.phoneController,
     required this.emailController,
     required this.nameController,
@@ -386,12 +525,7 @@ class _RecipientStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _CertificatePreview(
-          amount: amount,
-          design: design,
-          accent: accent,
-          compact: true,
-        ),
+        _CertificatePreview(amount: amount, design: design, compact: true),
         const SizedBox(height: 34),
         _DarkTextField(
           controller: phoneController,
@@ -457,31 +591,37 @@ class _RecipientStep extends StatelessWidget {
 class _PaymentStep extends StatelessWidget {
   final int amount;
   final int design;
-  final int accent;
   final String phone;
   final String email;
   final String recipientName;
   final bool sendLater;
   final DateTime? sendAt;
+  final Map<String, dynamic>? purchaseResult;
   final VoidCallback onEditRecipient;
-  final VoidCallback onEditDesign;
+  final VoidCallback onEditAmount;
 
   const _PaymentStep({
     super.key,
     required this.amount,
     required this.design,
-    required this.accent,
     required this.phone,
     required this.email,
     required this.recipientName,
     required this.sendLater,
     required this.sendAt,
+    required this.purchaseResult,
     required this.onEditRecipient,
-    required this.onEditDesign,
+    required this.onEditAmount,
   });
 
   @override
   Widget build(BuildContext context) {
+    final certificate = purchaseResult?['certificate'] is Map
+        ? Map<String, dynamic>.from(purchaseResult!['certificate'] as Map)
+        : const <String, dynamic>{};
+    final series = (certificate['series'] ?? certificate['number'] ?? '')
+        .toString();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -489,7 +629,7 @@ class _PaymentStep extends StatelessWidget {
           'ПОДАРОЧНЫЙ\nСЕРТИФИКАТ',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontFamily: 'Kudry Headline',
+            fontFamily: 'Clinica Pro',
             fontSize: 31,
             height: 1.12,
             color: GlameColors.whiteGlame,
@@ -499,9 +639,8 @@ class _PaymentStep extends StatelessWidget {
         _CertificatePreview(
           amount: amount,
           design: design,
-          accent: accent,
-          showAmount: false,
           compact: true,
+          series: series.isEmpty ? null : series,
         ),
         const SizedBox(height: 30),
         _SummaryRow(
@@ -527,9 +666,9 @@ class _PaymentStep extends StatelessWidget {
           onTap: onEditRecipient,
         ),
         _SummaryRow(
-          label: 'Дизайн',
-          value: 'Вариант ${design + 1}',
-          onTap: onEditDesign,
+          label: 'Макет',
+          value: design == 1 ? 'Темный GLAME' : 'Светлый GLAME',
+          onTap: onEditAmount,
         ),
         const SizedBox(height: 24),
         Row(
@@ -556,224 +695,271 @@ class _PaymentStep extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 28),
+        if (purchaseResult != null) ...[
+          _PurchaseResultCard(result: purchaseResult!),
+          const SizedBox(height: 24),
+        ],
         const Center(child: _TermsLink()),
       ],
     );
   }
 }
 
-class _CertificatePreview extends StatelessWidget {
-  final int amount;
-  final int design;
-  final int accent;
-  final bool compact;
-  final bool showAmount;
+class _PurchaseResultCard extends StatelessWidget {
+  final Map<String, dynamic> result;
 
-  const _CertificatePreview({
-    required this.amount,
-    required this.design,
-    required this.accent,
-    this.compact = false,
-    this.showAmount = true,
-  });
+  const _PurchaseResultCard({required this.result});
 
   @override
   Widget build(BuildContext context) {
-    final gradient =
-        _certificateGradients[(design + accent) % _certificateGradients.length];
-    return AspectRatio(
-      aspectRatio: compact ? 1.72 : 1.58,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: GlameColors.borderGray),
-          gradient: gradient,
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CustomPaint(painter: _CertificatePatternPainter(design: design)),
-            Center(
-              child: Opacity(
-                opacity: 0.72,
-                child: GlameHeaderLogo(height: compact ? 30 : 38, silver: true),
-              ),
-            ),
-            if (showAmount)
-              Positioned(
-                right: 24,
-                bottom: 24,
-                child: Text(
-                  _formatRub(amount),
-                  style: TextStyle(
-                    fontSize: compact ? 20 : 26,
-                    color: GlameColors.whiteGlame,
-                    shadows: const [
-                      Shadow(color: Colors.black54, blurRadius: 8),
-                    ],
-                  ),
-                ),
-              ),
-            if (!showAmount)
-              const Positioned(
-                left: 0,
-                right: 0,
-                bottom: 22,
-                child: Text(
-                  'ПРЕДПРОСМОТР СЕРТИФИКАТА',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    letterSpacing: 1.6,
-                    color: GlameColors.whiteGlame,
-                    decoration: TextDecoration.underline,
-                    decorationColor: GlameColors.whiteGlame,
-                  ),
-                ),
-              ),
-          ],
-        ),
+    final certificate = result['certificate'] is Map
+        ? Map<String, dynamic>.from(result['certificate'] as Map)
+        : const <String, dynamic>{};
+    final series = (certificate['series'] ?? certificate['number'] ?? '')
+        .toString();
+    final number = (certificate['number'] ?? series).toString();
+    final onecSeriesRef = (certificate['onec_series_ref_key'] ?? '').toString();
+    final pin = (result['pin'] ?? certificate['pin'] ?? '').toString();
+    final confirmationUrl = (result['confirmation_url'] ?? '').toString();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: GlameColors.graphite,
+        border: Border.all(color: GlameColors.borderGray),
       ),
-    );
-  }
-}
-
-class _DesignGrid extends StatelessWidget {
-  final int selected;
-  final int mode;
-  final ValueChanged<int> onChanged;
-
-  const _DesignGrid({
-    required this.selected,
-    required this.mode,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      itemCount: 6,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 1,
-      ),
-      itemBuilder: (context, index) {
-        return InkWell(
-          onTap: () => onChanged(index),
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                width: selected == index ? 2 : 1,
-                color: selected == index
-                    ? GlameColors.whiteGlame
-                    : GlameColors.borderGray,
-              ),
-              gradient:
-                  _certificateGradients[(index + mode) %
-                      _certificateGradients.length],
-            ),
-            child: CustomPaint(
-              painter: _CertificatePatternPainter(design: index),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'СЕРТИФИКАТ СОЗДАН',
+            style: TextStyle(
+              color: GlameColors.whiteGlame,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.6,
             ),
           ),
-        );
-      },
+          const SizedBox(height: 12),
+          if (series.isNotEmpty) _ResultLine(label: 'Серия', value: series),
+          if (number.isNotEmpty && number != series) ...[
+            const SizedBox(height: 8),
+            _ResultLine(label: 'Номер', value: number),
+          ],
+          if (pin.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _ResultLine(label: 'PIN', value: pin),
+          ],
+          if (onecSeriesRef.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _ResultLine(label: '1С', value: onecSeriesRef),
+          ],
+          const SizedBox(height: 12),
+          const Text(
+            'После оплаты сертификат станет активным, а серия будет отмечена в 1С как проданная. При покупке в магазине продавец проводит сертификат по серии.',
+            style: TextStyle(color: GlameColors.coldLightGray, height: 1.35),
+          ),
+          if (confirmationUrl.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            OutlinedButton(
+              onPressed: () async {
+                final uri = Uri.tryParse(confirmationUrl);
+                if (uri == null) return;
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              },
+              child: const Text('ПЕРЕЙТИ К ОПЛАТЕ'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
 
-class _CertificatePatternPainter extends CustomPainter {
-  final int design;
+class _ResultLine extends StatelessWidget {
+  final String label;
+  final String value;
 
-  const _CertificatePatternPainter({required this.design});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.07)
-      ..strokeWidth = 1;
-
-    if (design % 3 == 0) {
-      for (double y = -size.height; y < size.height * 2; y += 22) {
-        canvas.drawLine(
-          Offset(-10, y),
-          Offset(size.width + 30, y + size.height * 0.45),
-          paint,
-        );
-      }
-    } else if (design % 3 == 1) {
-      for (double x = 0; x < size.width; x += 18) {
-        canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-      }
-    } else {
-      for (double x = 8; x < size.width; x += 30) {
-        for (double y = 8; y < size.height; y += 30) {
-          canvas.drawCircle(
-            Offset(x, y),
-            6,
-            paint..style = PaintingStyle.stroke,
-          );
-        }
-      }
-      paint.style = PaintingStyle.fill;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CertificatePatternPainter oldDelegate) {
-    return oldDelegate.design != design;
-  }
-}
-
-class _SegmentTabs extends StatelessWidget {
-  final List<String> labels;
-  final int selected;
-  final ValueChanged<int> onChanged;
-
-  const _SegmentTabs({
-    required this.labels,
-    required this.selected,
-    required this.onChanged,
-  });
+  const _ResultLine({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: List.generate(labels.length, (index) {
-        final isSelected = selected == index;
-        return Expanded(
-          child: InkWell(
-            onTap: () => onChanged(index),
-            child: Container(
-              height: 46,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: isSelected
-                        ? GlameColors.whiteGlame
-                        : GlameColors.borderGray,
-                    width: isSelected ? 2 : 1,
+      children: [
+        SizedBox(
+          width: 72,
+          child: Text(label.toUpperCase(), style: _labelStyle),
+        ),
+        Expanded(
+          child: SelectableText(
+            value,
+            style: const TextStyle(
+              color: GlameColors.whiteGlame,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CertificatePreview extends StatelessWidget {
+  static const _templateAssets = [
+    'assets/images/gift_certificate/glame_gift_certificate_template_01.png',
+    'assets/images/gift_certificate/glame_gift_certificate_template_02.png',
+  ];
+
+  final int amount;
+  final int design;
+  final bool compact;
+  final String? series;
+
+  const _CertificatePreview({
+    required this.amount,
+    required this.design,
+    this.compact = false,
+    this.series,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 590 / 417,
+      child: Container(
+        decoration: BoxDecoration(color: GlameColors.whiteGlame),
+        clipBehavior: Clip.hardEdge,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final height = constraints.maxHeight;
+            final hasSeries = series != null && series!.isNotEmpty;
+            final isDark = design == 1;
+            final textColor = isDark
+                ? GlameColors.whiteGlame
+                : const Color(0xFF707173);
+            final asset = _templateAssets[design.clamp(0, 1).toInt()];
+
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(
+                  asset,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const ColoredBox(color: GlameColors.whiteGlame),
+                ),
+                Positioned(
+                  left: width * 0.08,
+                  right: width * 0.08,
+                  top: height * 0.28,
+                  height: height * 0.41,
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: Text(
+                      amount.toString(),
+                      style: TextStyle(
+                        fontFamily: 'Clinica Pro',
+                        color: textColor,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              child: Text(
-                labels[index],
-                style: TextStyle(
-                  fontSize: 16,
-                  color: isSelected
-                      ? GlameColors.whiteGlame
-                      : GlameColors.textSecondary,
-                  fontWeight: FontWeight.w700,
+                if (hasSeries)
+                  Positioned(
+                    left: width * 0.22,
+                    right: width * 0.22,
+                    top: height * 0.77,
+                    child: Text(
+                      'СЕРИЯ ${series!}',
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 9 : 11,
+                        letterSpacing: 0.7,
+                        color: textColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _DesignButton extends StatelessWidget {
+  final String title;
+  final String asset;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DesignButton({
+    required this.title,
+    required this.asset,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Ink(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: selected ? GlameColors.graphite : GlameColors.nearBlack,
+          border: Border.all(
+            color: selected ? GlameColors.whiteGlame : GlameColors.borderGray,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AspectRatio(
+              aspectRatio: 590 / 417,
+              child: ClipRect(
+                child: Image.asset(
+                  asset,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const ColoredBox(color: GlameColors.graphite),
                 ),
               ),
             ),
-          ),
-        );
-      }),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Icon(
+                  selected ? Icons.check_circle : Icons.circle_outlined,
+                  color: selected
+                      ? GlameColors.whiteGlame
+                      : GlameColors.steelGray,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: GlameColors.whiteGlame,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -820,21 +1006,15 @@ class _DarkTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final String? hint;
-  final String? suffix;
-  final IconData? icon;
   final TextInputType? keyboardType;
   final int maxLines;
-  final ValueChanged<String>? onChanged;
 
   const _DarkTextField({
     required this.controller,
     required this.label,
     this.hint,
-    this.suffix,
-    this.icon,
     this.keyboardType,
     this.maxLines = 1,
-    this.onChanged,
   });
 
   @override
@@ -848,16 +1028,10 @@ class _DarkTextField extends StatelessWidget {
           controller: controller,
           keyboardType: keyboardType,
           maxLines: maxLines,
-          onChanged: onChanged,
           style: const TextStyle(color: GlameColors.whiteGlame, fontSize: 18),
           cursorColor: GlameColors.whiteGlame,
           decoration: InputDecoration(
             hintText: hint,
-            prefixIcon: icon == null
-                ? null
-                : Icon(icon, color: GlameColors.textSecondary),
-            suffixText: suffix,
-            suffixStyle: const TextStyle(color: GlameColors.whiteGlame),
             filled: false,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 18,
@@ -953,6 +1127,53 @@ class _OutlineAction extends StatelessWidget {
   }
 }
 
+class _TimeSelect extends StatelessWidget {
+  final String label;
+  final int value;
+  final List<int> values;
+  final ValueChanged<int> onChanged;
+
+  const _TimeSelect({
+    required this.label,
+    required this.value,
+    required this.values,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<int>(
+      initialValue: value,
+      dropdownColor: GlameColors.nearBlack,
+      iconEnabledColor: GlameColors.whiteGlame,
+      decoration: InputDecoration(
+        labelText: label.toUpperCase(),
+        labelStyle: _labelStyle,
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: GlameColors.borderGray),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: GlameColors.whiteGlame),
+        ),
+      ),
+      style: const TextStyle(color: GlameColors.whiteGlame, fontSize: 18),
+      items: values
+          .map(
+            (item) => DropdownMenuItem<int>(
+              value: item,
+              child: Text(item.toString().padLeft(2, '0')),
+            ),
+          )
+          .toList(growable: false),
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
+    );
+  }
+}
+
 class _SummaryRow extends StatelessWidget {
   final String label;
   final String value;
@@ -1025,12 +1246,14 @@ class _TermsLink extends StatelessWidget {
 
 class _BottomActionBar extends StatelessWidget {
   final int step;
+  final bool submitting;
   final bool canGoBack;
   final VoidCallback onBack;
   final VoidCallback onNext;
 
   const _BottomActionBar({
     required this.step,
+    required this.submitting,
     required this.canGoBack,
     required this.onBack,
     required this.onNext,
@@ -1070,7 +1293,7 @@ class _BottomActionBar extends StatelessWidget {
           ],
           Expanded(
             child: FilledButton(
-              onPressed: onNext,
+              onPressed: submitting ? null : onNext,
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(54),
                 backgroundColor: GlameColors.whiteGlame,
@@ -1082,7 +1305,13 @@ class _BottomActionBar extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              child: Text(step == 2 ? 'ПЕРЕЙТИ К ОПЛАТЕ' : 'ПРОДОЛЖИТЬ'),
+              child: submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(step == 2 ? 'ПЕРЕЙТИ К ОПЛАТЕ' : 'ПРОДОЛЖИТЬ'),
             ),
           ),
         ],
@@ -1097,39 +1326,6 @@ const _labelStyle = TextStyle(
   color: GlameColors.textSecondary,
   fontWeight: FontWeight.w700,
 );
-
-final _certificateGradients = <LinearGradient>[
-  const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFF2B2D2F), Color(0xFF090A0B), Color(0xFF5E6366)],
-  ),
-  const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFF0D171B), Color(0xFF173441), Color(0xFF050707)],
-  ),
-  const LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFF202020), Color(0xFF050505)],
-  ),
-  const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFF3A3A38), Color(0xFF111111), Color(0xFF242928)],
-  ),
-  const LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFF14211F), Color(0xFF33433C), Color(0xFF090B0A)],
-  ),
-  const LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFF4A4E4F), Color(0xFF17191A), Color(0xFF050505)],
-  ),
-];
 
 String _formatRub(int amount) {
   final text = amount.toString().replaceAllMapped(

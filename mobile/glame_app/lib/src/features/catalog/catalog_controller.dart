@@ -202,6 +202,7 @@ class CatalogController extends StateNotifier<CatalogState> {
     String? tipZamka,
     String? color,
     String? sort,
+    bool? inStockOnly,
   }) async {
     state = CatalogState(
       items: const [],
@@ -222,7 +223,7 @@ class CatalogController extends StateNotifier<CatalogState> {
       color: _norm(color),
       sort: _norm(sort),
       search: state.search,
-      inStockOnly: state.inStockOnly,
+      inStockOnly: inStockOnly ?? state.inStockOnly,
     );
     await refresh();
   }

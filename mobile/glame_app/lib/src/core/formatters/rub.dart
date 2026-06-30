@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 int? _parseInt(dynamic value) {
   if (value == null) return null;
   if (value is int) return value;
@@ -26,4 +28,12 @@ String formatRubFromKopeks(dynamic rawKopeks) {
   final rub = abs ~/ 100;
   final rubStr = _groupThousands(rub);
   return '$sign$rubStr ₽';
+}
+
+int discountedPriceKopeks(int basePriceKopeks, int loyaltyPoints) {
+  if (basePriceKopeks <= 0 || loyaltyPoints <= 0) return basePriceKopeks;
+  final maxDiscountByRule = (basePriceKopeks * 0.1).round();
+  final availableByPoints = loyaltyPoints * 100;
+  final discount = math.min(maxDiscountByRule, availableByPoints);
+  return math.max(0, basePriceKopeks - discount);
 }

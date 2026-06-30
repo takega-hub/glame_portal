@@ -15,6 +15,7 @@ class CheckoutApi {
     required String returnUrl,
     Map<String, dynamic>? delivery,
     Map<String, dynamic>? contact,
+    Map<String, dynamic>? giftCertificate,
   }) async {
     final resp = await _dio.post(
       '/checkout',
@@ -26,9 +27,36 @@ class CheckoutApi {
         'return_url': returnUrl,
         ...?(delivery == null ? null : {'delivery': delivery}),
         ...?(contact == null ? null : {'contact': contact}),
+        ...?(giftCertificate == null
+            ? null
+            : {'gift_certificate': giftCertificate}),
       },
     );
     return Map<String, dynamic>.from(resp.data as Map);
+  }
+
+  Future<Map<String, dynamic>> validateGiftCertificate({
+    required String number,
+    String? pin,
+  }) async {
+    final resp = await _dio.post(
+      '/gift-certificates/validate',
+      data: {
+        'number': number,
+        if (pin != null && pin.trim().isNotEmpty) 'pin': pin.trim(),
+      },
+    );
+    return Map<String, dynamic>.from(resp.data as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> giftCertificates() async {
+    final resp = await _dio.get('/gift-certificates/my');
+    final raw = resp.data;
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((x) => Map<String, dynamic>.from(x))
+        .toList();
   }
 
   Future<Map<String, dynamic>> loyalty() async {

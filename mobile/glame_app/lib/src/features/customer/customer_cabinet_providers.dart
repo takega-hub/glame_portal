@@ -53,6 +53,13 @@ final customerOrdersProvider = FutureProvider<List<Map<String, dynamic>>>((
   return withStatuses;
 });
 
+final customerGiftCertificatesProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+      final auth = ref.watch(authControllerProvider);
+      if (auth.user == null) return const <Map<String, dynamic>>[];
+      return ref.watch(customerCabinetApiProvider).getGiftCertificates();
+    });
+
 final stylistChatMessagesProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
 ) async {

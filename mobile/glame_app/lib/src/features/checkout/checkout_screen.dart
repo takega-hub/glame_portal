@@ -29,6 +29,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final phone = TextEditingController();
   final address = TextEditingController();
   final cdekCityQuery = TextEditingController();
+  final giftCertificateNumber = TextEditingController();
+  final giftCertificatePin = TextEditingController();
 
   String paymentMethod = 'cod';
   String deliveryMethod = 'pickup'; // pickup | cdek_pvz
@@ -36,17 +38,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool loadingDeliveryData = false;
   bool loadingCdekPvz = false;
   bool loadingLoyalty = true;
+  bool loadingGiftCertificates = true;
+  bool validatingGiftCertificate = false;
   bool useBonuses = false;
   bool contactPrefilled = false;
   bool deliveryPrefApplied = false;
   Map<String, dynamic>? result;
   String? deliveryError;
   String? loyaltyError;
+  String? giftCertificateError;
+  String? giftCertificatesError;
   int loyaltyPoints = 0;
   String? _loyaltyUserId;
+  String? _giftCertificatesUserId;
+  Map<String, dynamic>? giftCertificatePreview;
 
   Map<String, dynamic>? cdekOptions;
   List<Map<String, dynamic>> pickupStores = const [];
+  List<Map<String, dynamic>> giftCertificates = const [];
   Map<String, dynamic>? selectedStore;
   Map<String, dynamic>? selectedCdekCity;
   List<Map<String, dynamic>> cdekCities = const [];
@@ -67,6 +76,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     phone.dispose();
     address.dispose();
     cdekCityQuery.dispose();
+    giftCertificateNumber.dispose();
+    giftCertificatePin.dispose();
     super.dispose();
   }
 
@@ -111,7 +122,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               : loyaltyPoints)
         : 0;
     final bonusDiscountAmount = bonusPointsToUse * 100;
-    final total = totalBeforeBonuses - bonusDiscountAmount;
+    final payableAfterBonuses = totalBeforeBonuses - bonusDiscountAmount;
+    final giftCertificateDiscountAmount = _giftCertificateDiscountAmount(
+      payableAfterBonuses,
+    );
+    final total = payableAfterBonuses - giftCertificateDiscountAmount;
 
     final steps = const ['Корзина', 'Адрес', 'Оплата', 'Подтверждение'];
 
@@ -192,6 +207,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       totalBeforeBonuses,
                       deliveryAmount,
                       bonusDiscountAmount,
+                      giftCertificateDiscountAmount,
                       bonusPointsToUse,
                       total,
                     ),
@@ -214,6 +230,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     int totalBeforeBonuses,
     int deliveryAmount,
     int bonusDiscountAmount,
+    int giftCertificateDiscountAmount,
     int bonusPointsToUse,
     int total,
   ) {
@@ -238,9 +255,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             child: Text('Номер заказа: $orderId'),
           ),
           const SizedBox(height: 10),
-          if (provider == 'cod')
+          if (provider == 'cod' ||
+              provider == 'bonus' ||
+              provider == 'gift_certificate')
             Text(
-              provider == 'bonus'
+              provider == 'gift_certificate'
+                  ? 'Оплачено сертификатом'
+                  : provider == 'bonus'
                   ? 'Оплачено бонусами'
                   : 'Оплата при получении',
               style: Theme.of(
@@ -278,6 +299,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             subtotal: subtotal,
             deliveryAmount: deliveryAmount,
             bonusDiscountAmount: bonusDiscountAmount,
+            giftCertificateDiscountAmount: giftCertificateDiscountAmount,
             total: total,
           ),
           const Spacer(),
@@ -519,6 +541,24 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ? null
                 : (value) => setState(() => useBonuses = value),
           ),
+          const SizedBox(height: 10),
+          _GiftCertificatePaymentOption(
+            numberController: giftCertificateNumber,
+            pinController: giftCertificatePin,
+            certificates: giftCertificates,
+            loadingCertificates: loadingGiftCertificates,
+            certificatesError: giftCertificatesError,
+            preview: giftCertificatePreview,
+            error: giftCertificateError,
+            loading: validatingGiftCertificate,
+            appliedAmount: giftCertificateDiscountAmount,
+            onSelectCertificate: _selectGiftCertificate,
+            onValidate: _validateGiftCertificate,
+            onClear: () => setState(() {
+              giftCertificatePreview = null;
+              giftCertificateError = null;
+            }),
+          ),
           const Spacer(),
           Row(
             children: [
@@ -553,6 +593,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           subtotal: subtotal,
           deliveryAmount: deliveryAmount,
           bonusDiscountAmount: bonusDiscountAmount,
+          giftCertificateDiscountAmount: giftCertificateDiscountAmount,
           total: total,
         ),
         const SizedBox(height: 12),
@@ -585,7 +626,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         const SizedBox(height: 6),
         Text(
           total == 0
-              ? 'Оплата: бонусами'
+              ? giftCertificateDiscountAmount > 0
+                    ? 'Оплата: сертификатом'
+                    : 'Оплата: бонусами'
               : paymentMethod == 'cod'
               ? 'Оплата: при получении'
               : 'Оплата: картой',
@@ -627,6 +670,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               'name': name.text.trim(),
                               'phone': phone.text.trim(),
                             },
+                            giftCertificate: giftCertificateDiscountAmount <= 0
+                                ? null
+                                : {
+                                    'number': giftCertificateNumber.text.trim(),
+                                    if (giftCertificatePin.text
+                                        .trim()
+                                        .isNotEmpty)
+                                      'pin': giftCertificatePin.text.trim(),
+                                    'amount': giftCertificateDiscountAmount,
+                                  },
                           );
                           await cartController.refresh();
                           setState(() => result = resp);
@@ -694,6 +747,64 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         setState(() {
           loadingDeliveryData = false;
         });
+      }
+    }
+  }
+
+  int _giftCertificateDiscountAmount(int payableAmount) {
+    final preview = giftCertificatePreview;
+    if (preview == null || payableAmount <= 0) return 0;
+    final balance = _asInt(preview['balance_amount']) ?? 0;
+    return balance.clamp(0, payableAmount);
+  }
+
+  void _selectGiftCertificate(Map<String, dynamic> certificate) {
+    final number = (certificate['number'] ?? certificate['series'] ?? '')
+        .toString()
+        .trim();
+    if (number.isEmpty) return;
+    final pin = (certificate['pin'] ?? '').toString().trim();
+    setState(() {
+      giftCertificateNumber.text = number;
+      giftCertificatePin.text = pin;
+      giftCertificatePreview = certificate;
+      giftCertificateError = null;
+    });
+  }
+
+  Future<void> _validateGiftCertificate() async {
+    final number = giftCertificateNumber.text.trim();
+    if (number.isEmpty) {
+      setState(() {
+        giftCertificatePreview = null;
+        giftCertificateError = 'Укажите номер сертификата';
+      });
+      return;
+    }
+    setState(() {
+      validatingGiftCertificate = true;
+      giftCertificateError = null;
+    });
+    try {
+      final api = ref.read(checkoutApiProvider);
+      final preview = await api.validateGiftCertificate(
+        number: number,
+        pin: giftCertificatePin.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() {
+        giftCertificatePreview = preview;
+        giftCertificateError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        giftCertificatePreview = null;
+        giftCertificateError = 'Сертификат не найден или недоступен';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => validatingGiftCertificate = false);
       }
     }
   }
@@ -791,10 +902,35 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  Future<void> _loadGiftCertificates() async {
+    setState(() {
+      loadingGiftCertificates = true;
+      giftCertificatesError = null;
+    });
+    try {
+      final api = ref.read(checkoutApiProvider);
+      final items = await api.giftCertificates();
+      if (!mounted) return;
+      setState(() {
+        giftCertificates = items;
+        loadingGiftCertificates = false;
+        giftCertificatesError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        giftCertificates = const [];
+        loadingGiftCertificates = false;
+        giftCertificatesError = 'Не удалось загрузить сертификаты';
+      });
+    }
+  }
+
   void _syncLoyaltyState(auth_model.User? user) {
     final nextId = user?.id;
-    if (_loyaltyUserId == nextId) return;
+    if (_loyaltyUserId == nextId && _giftCertificatesUserId == nextId) return;
     _loyaltyUserId = nextId;
+    _giftCertificatesUserId = nextId;
     if (nextId == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -803,11 +939,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           useBonuses = false;
           loadingLoyalty = false;
           loyaltyError = null;
+          giftCertificates = const [];
+          loadingGiftCertificates = false;
+          giftCertificatesError = null;
+          giftCertificatePreview = null;
+          giftCertificateError = null;
         });
       });
       return;
     }
     _loadLoyalty();
+    _loadGiftCertificates();
   }
 
   Future<void> _pickCdekCityFromCdekApi() async {
@@ -1791,16 +1933,195 @@ class _BonusPaymentOption extends StatelessWidget {
   }
 }
 
+class _GiftCertificatePaymentOption extends StatelessWidget {
+  final TextEditingController numberController;
+  final TextEditingController pinController;
+  final List<Map<String, dynamic>> certificates;
+  final bool loadingCertificates;
+  final String? certificatesError;
+  final Map<String, dynamic>? preview;
+  final String? error;
+  final bool loading;
+  final int appliedAmount;
+  final ValueChanged<Map<String, dynamic>> onSelectCertificate;
+  final VoidCallback onValidate;
+  final VoidCallback onClear;
+
+  const _GiftCertificatePaymentOption({
+    required this.numberController,
+    required this.pinController,
+    required this.certificates,
+    required this.loadingCertificates,
+    required this.certificatesError,
+    required this.preview,
+    required this.error,
+    required this.loading,
+    required this.appliedAmount,
+    required this.onSelectCertificate,
+    required this.onValidate,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final balance = _jsonInt(preview?['balance_amount']) ?? 0;
+    final number = (preview?['number'] ?? '').toString();
+    final availableCertificates = certificates.where((certificate) {
+      final status = (certificate['status'] ?? '').toString().toLowerCase();
+      final certBalance = _jsonInt(certificate['balance_amount']) ?? 0;
+      return certBalance > 0 && (status == 'active' || status == 'reserved');
+    }).toList();
+    final selectedNumber = numberController.text.trim().isEmpty
+        ? null
+        : numberController.text.trim();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: preview == null ? GlameColors.nearBlack : GlameColors.graphite,
+        border: Border.all(
+          color: preview == null
+              ? GlameColors.borderGray
+              : GlameColors.whiteGlame,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.card_giftcard, color: GlameColors.whiteGlame),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Подарочный сертификат',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: GlameColors.whiteGlame,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (loadingCertificates)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: LinearProgressIndicator(minHeight: 2),
+            )
+          else if (availableCertificates.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              initialValue:
+                  availableCertificates.any(
+                    (certificate) =>
+                        (certificate['number'] ?? certificate['series'] ?? '')
+                            .toString()
+                            .trim() ==
+                        selectedNumber,
+                  )
+                  ? selectedNumber
+                  : null,
+              decoration: const InputDecoration(
+                labelText: 'Выбрать из моих сертификатов',
+              ),
+              items: availableCertificates.map((certificate) {
+                final certNumber =
+                    (certificate['number'] ?? certificate['series'] ?? '')
+                        .toString()
+                        .trim();
+                final certBalance =
+                    _jsonInt(certificate['balance_amount']) ?? 0;
+                return DropdownMenuItem<String>(
+                  value: certNumber,
+                  child: Text(
+                    '$certNumber · ${_rub(certBalance)}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                for (final certificate in availableCertificates) {
+                  final certNumber =
+                      (certificate['number'] ?? certificate['series'] ?? '')
+                          .toString()
+                          .trim();
+                  if (certNumber == value) {
+                    onSelectCertificate(certificate);
+                    break;
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+          ] else if (certificatesError != null) ...[
+            Text(
+              certificatesError!,
+              style: const TextStyle(color: GlameColors.coldLightGray),
+            ),
+            const SizedBox(height: 10),
+          ],
+          TextField(
+            controller: numberController,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: 'Номер сертификата',
+              hintText: 'Можно ввести вручную',
+            ),
+            onChanged: (_) {
+              if (preview != null) onClear();
+            },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: pinController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'PIN'),
+            onChanged: (_) {
+              if (preview != null) onClear();
+            },
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 10),
+            Text(error!, style: const TextStyle(color: GlameColors.gold)),
+          ],
+          if (preview != null) ...[
+            const SizedBox(height: 10),
+            _Row(label: 'Сертификат', value: number),
+            const SizedBox(height: 6),
+            _Row(label: 'Баланс', value: _rub(balance)),
+            const SizedBox(height: 6),
+            _Row(label: 'К списанию', value: '-${_rub(appliedAmount)}'),
+          ],
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: loading ? null : onValidate,
+            child: loading
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(preview == null ? 'Проверить' : 'Обновить'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Totals extends StatelessWidget {
   final int subtotal;
   final int deliveryAmount;
   final int bonusDiscountAmount;
+  final int giftCertificateDiscountAmount;
   final int total;
 
   const _Totals({
     required this.subtotal,
     required this.deliveryAmount,
     required this.bonusDiscountAmount,
+    required this.giftCertificateDiscountAmount,
     required this.total,
   });
 
@@ -1825,6 +2146,13 @@ class _Totals extends StatelessWidget {
           if (bonusDiscountAmount > 0) ...[
             const SizedBox(height: 10),
             _Row(label: 'Бонусами', value: '-${_rub(bonusDiscountAmount)}'),
+          ],
+          if (giftCertificateDiscountAmount > 0) ...[
+            const SizedBox(height: 10),
+            _Row(
+              label: 'Сертификат',
+              value: '-${_rub(giftCertificateDiscountAmount)}',
+            ),
           ],
           const SizedBox(height: 10),
           const Divider(height: 1, color: GlameColors.borderGray),
@@ -1914,4 +2242,11 @@ class _Row extends StatelessWidget {
 String _rub(int kopeks) {
   final rub = (kopeks / 100).toStringAsFixed(0);
   return '$rub ₽';
+}
+
+int? _jsonInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value);
+  return null;
 }

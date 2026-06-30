@@ -173,11 +173,21 @@ class AuthController extends StateNotifier<AuthState> {
       );
       // After registration, auto-login
       await login(email: phone, password: password);
-    } catch (e) {
+    } on DioException catch (e) {
+      final detail = e.response?.data is Map
+          ? (e.response?.data as Map)['detail']?.toString()
+          : null;
       state = state.copyWith(
         loading: false,
-        error: 'Ошибка регистрации (возможно номер уже занят)',
+        error: detail == 'Phone already registered'
+            ? 'Телефон уже зарегистрирован. Войдите в аккаунт.'
+            : detail == 'Invalid referral code'
+                ? 'Реферальный код не найден или неактивен.'
+                : detail ?? 'Ошибка регистрации',
       );
+      rethrow;
+    } catch (e) {
+      state = state.copyWith(loading: false, error: 'Ошибка регистрации');
       rethrow;
     }
   }

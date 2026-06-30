@@ -79,6 +79,8 @@ class _LookDetailScreenState extends ConsumerState<LookDetailScreen> {
           final mood = (look['mood'] as String?)?.trim();
           final totalCount = products.length;
           final selectedProducts = _selectedProducts(products);
+          final loyaltyPoints =
+              ref.watch(authControllerProvider).user?.loyaltyPoints ?? 0;
 
           return CustomScrollView(
             slivers: [
@@ -128,7 +130,11 @@ class _LookDetailScreenState extends ConsumerState<LookDetailScreen> {
                         isFavorited: look['favorited_by_me'] == true,
                         onVariantChanged: _setSelectedVariant,
                         selectedCount: selectedProducts.length,
-                        totalPrice: _totalPrice(selectedProducts),
+                        totalPrice: _discountedPriceKopeks(
+                          _totalPrice(selectedProducts),
+                          loyaltyPoints,
+                        ),
+                        loyaltyPoints: loyaltyPoints,
                         busy: _busy,
                         onCollect: () => _addLookBundleToCart(selectedProducts),
                         onTalkToStylist: () => showStylistContactSheet(
@@ -554,6 +560,7 @@ class _LookBodyCard extends StatelessWidget {
   final void Function(String, Map<String, dynamic>?) onVariantChanged;
   final int selectedCount;
   final int totalPrice;
+  final int loyaltyPoints;
   final bool busy;
   final VoidCallback onCollect;
   final VoidCallback onTalkToStylist;
@@ -576,6 +583,7 @@ class _LookBodyCard extends StatelessWidget {
     required this.onVariantChanged,
     required this.selectedCount,
     required this.totalPrice,
+    required this.loyaltyPoints,
     required this.busy,
     required this.onCollect,
     required this.onTalkToStylist,
@@ -593,6 +601,7 @@ class _LookBodyCard extends StatelessWidget {
       onVariantChanged: onVariantChanged,
       selectedCount: selectedCount,
       totalPrice: totalPrice,
+      loyaltyPoints: loyaltyPoints,
       busy: busy,
       onCollect: onCollect,
       onTalkToStylist: onTalkToStylist,
@@ -748,6 +757,7 @@ class _LookDetailStitchBody extends StatelessWidget {
   final void Function(String, Map<String, dynamic>?) onVariantChanged;
   final int selectedCount;
   final int totalPrice;
+  final int loyaltyPoints;
   final bool busy;
   final VoidCallback onCollect;
   final VoidCallback onTalkToStylist;
@@ -763,6 +773,7 @@ class _LookDetailStitchBody extends StatelessWidget {
     required this.onVariantChanged,
     required this.selectedCount,
     required this.totalPrice,
+    required this.loyaltyPoints,
     required this.busy,
     required this.onCollect,
     required this.onTalkToStylist,
@@ -827,6 +838,7 @@ class _LookDetailStitchBody extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 16),
                 child: _LookDetailProductCard(
                   product: displayProduct,
+                  loyaltyPoints: loyaltyPoints,
                   selected: selectedIds.contains(productId),
                   onToggleSelected: productId.isEmpty
                       ? null
@@ -854,12 +866,14 @@ class _LookDetailStitchBody extends StatelessWidget {
 
 class _LookDetailProductCard extends ConsumerWidget {
   final Map<String, dynamic> product;
+  final int loyaltyPoints;
   final bool selected;
   final VoidCallback? onToggleSelected;
   final ValueChanged<Map<String, dynamic>?> onVariantChanged;
 
   const _LookDetailProductCard({
     required this.product,
+    required this.loyaltyPoints,
     required this.selected,
     required this.onToggleSelected,
     required this.onVariantChanged,
@@ -871,7 +885,7 @@ class _LookDetailProductCard extends ConsumerWidget {
     final name = (product['name'] as String?)?.trim() ?? 'Украшение';
     final imageUrl = _productImage(product);
     final category = _cleanText(product['category']) ?? 'Jewelry';
-    final price = formatRubFromKopeks(product['price']);
+    final price = _priceKopeks(product);
     final isWishlisted =
         id.isNotEmpty && ref.watch(wishlistControllerProvider).contains(id);
 
@@ -986,13 +1000,9 @@ class _LookDetailProductCard extends ConsumerWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        price,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          color: GlameColors.whiteGlame,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      child: _LookCompositionPrice(
+                        priceKopeks: price,
+                        loyaltyPoints: loyaltyPoints,
                       ),
                     ),
                     TextButton(
@@ -1021,6 +1031,56 @@ class _LookDetailProductCard extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _LookCompositionPrice extends StatelessWidget {
+  final int priceKopeks;
+  final int loyaltyPoints;
+
+  const _LookCompositionPrice({
+    required this.priceKopeks,
+    required this.loyaltyPoints,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final discounted = _discountedPriceKopeks(priceKopeks, loyaltyPoints);
+    final hasDiscount = discounted < priceKopeks;
+    if (!hasDiscount) {
+      return Text(
+        formatRubFromKopeks(priceKopeks),
+        style: const TextStyle(
+          fontSize: 18,
+          color: GlameColors.whiteGlame,
+          fontWeight: FontWeight.w700,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          formatRubFromKopeks(priceKopeks),
+          style: const TextStyle(
+            fontSize: 12,
+            color: GlameColors.coldLightGray,
+            decoration: TextDecoration.lineThrough,
+            decorationColor: GlameColors.coldLightGray,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          formatRubFromKopeks(discounted),
+          style: const TextStyle(
+            fontSize: 18,
+            color: GlameColors.whiteGlame,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1954,10 +2014,25 @@ String _productId(Map<String, dynamic> product) {
 }
 
 int _totalPrice(List<Map<String, dynamic>> products) {
-  return products.fold<int>(
-    0,
-    (sum, product) => sum + ((product['price'] as num?)?.toInt() ?? 0),
-  );
+  return products.fold<int>(0, (sum, product) => sum + _priceKopeks(product));
+}
+
+int _priceKopeks(Map<String, dynamic> product) {
+  final raw = product['price'];
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  if (raw is String) return int.tryParse(raw) ?? 0;
+  return 0;
+}
+
+int _discountedPriceKopeks(int basePriceKopeks, int loyaltyPoints) {
+  if (basePriceKopeks <= 0 || loyaltyPoints <= 0) return basePriceKopeks;
+  final maxDiscountByRule = (basePriceKopeks * 0.1).round();
+  final availableByPoints = loyaltyPoints * 100;
+  final discount = maxDiscountByRule < availableByPoints
+      ? maxDiscountByRule
+      : availableByPoints;
+  return (basePriceKopeks - discount).clamp(0, basePriceKopeks).toInt();
 }
 
 String _lookDescription(Map<String, dynamic> look) {
