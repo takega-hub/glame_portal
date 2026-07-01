@@ -2414,7 +2414,8 @@ Future<void> _showProfileOrdersDialog(BuildContext context, WidgetRef ref) {
     context: context,
     title: 'Мои заказы',
     provider: customerOrdersProvider,
-    itemBuilder: (order) => _ProfileOrderDialogItem(order: order),
+    itemBuilder: (dialogContext, order) =>
+        _ProfileOrderDialogItem(order: order, dialogContext: dialogContext),
     emptyText: 'У вас пока нет заказов.',
     errorText: 'Не удалось загрузить заказы.',
   );
@@ -2426,7 +2427,8 @@ Future<void> _showProfileHistoryDialog(BuildContext context, WidgetRef ref) {
     context: context,
     title: 'История покупок',
     provider: customerPurchaseHistoryProvider,
-    itemBuilder: (purchase) => _ProfilePurchaseDialogItem(purchase: purchase),
+    itemBuilder: (_, purchase) =>
+        _ProfilePurchaseDialogItem(purchase: purchase),
     emptyText: 'История покупок пока пустая.',
     errorText: 'Не удалось загрузить историю покупок.',
   );
@@ -2441,7 +2443,7 @@ Future<void> _showProfileGiftCertificatesDialog(
     context: context,
     title: 'Сертификаты',
     provider: customerGiftCertificatesProvider,
-    itemBuilder: (certificate) =>
+    itemBuilder: (_, certificate) =>
         _ProfileGiftCertificateDialogItem(certificate: certificate),
     emptyText: 'У вас пока нет подарочных сертификатов.',
     errorText: 'Не удалось загрузить сертификаты.',
@@ -2452,7 +2454,8 @@ Future<void> _showProfileDataDialog({
   required BuildContext context,
   required String title,
   required ProviderListenable<AsyncValue<List<Map<String, dynamic>>>> provider,
-  required Widget Function(Map<String, dynamic> item) itemBuilder,
+  required Widget Function(BuildContext context, Map<String, dynamic> item)
+  itemBuilder,
   required String emptyText,
   required String errorText,
 }) {
@@ -2524,7 +2527,8 @@ Future<void> _showProfileDataDialog({
                           itemCount: items.length,
                           separatorBuilder: (_, _) =>
                               const SizedBox(height: 10),
-                          itemBuilder: (_, index) => itemBuilder(items[index]),
+                          itemBuilder: (itemContext, index) =>
+                              itemBuilder(itemContext, items[index]),
                         );
                       },
                     ),
@@ -2568,37 +2572,59 @@ class _ProfileDialogStateMessage extends StatelessWidget {
 
 class _ProfileOrderDialogItem extends StatelessWidget {
   final Map<String, dynamic> order;
+  final BuildContext dialogContext;
 
-  const _ProfileOrderDialogItem({required this.order});
+  const _ProfileOrderDialogItem({
+    required this.order,
+    required this.dialogContext,
+  });
 
   @override
   Widget build(BuildContext context) {
     final id = _profileItemString(order['id'] ?? order['number']) ?? 'заказ';
+    final rawStatus =
+        _profileItemString(order['order_status'] ?? order['status']) ?? '';
+    final rawPaymentStatus = _profileItemString(
+      order['payment_status'] ??
+          (order['payment'] is Map
+              ? (order['payment'] as Map)['status']
+              : null),
+    );
     final created = _profileDateLabel(
       order['created_at'] ?? order['createdAt'] ?? order['date'],
     );
-    final status = _orderStatusLabel(
-      _profileItemString(order['order_status'] ?? order['status']) ?? '',
-    );
-    final payment = _paymentStatusLabel(
-      _profileItemString(
-        order['payment_status'] ??
-            (order['payment'] is Map
-                ? (order['payment'] as Map)['status']
-                : null),
-      ),
-    );
+    final status = _orderStatusLabel(rawStatus);
+    final payment = _paymentStatusLabel(rawPaymentStatus);
     final amount = _profileMoneyValue(
       order['total_amount'] ??
           order['total'] ??
           order['amount'] ??
           order['total_price'],
     );
+    final confirmationUrl = _orderConfirmationUrl(order);
+    final canPay = _orderNeedsPayment(
+      orderStatus: rawStatus,
+      paymentStatus: rawPaymentStatus,
+    );
+    final canContinue = _orderCanContinue(
+      orderStatus: rawStatus,
+      paymentStatus: rawPaymentStatus,
+    );
+    final actionLabel = confirmationUrl == null
+        ? (canContinue ? 'Продолжить оформление' : null)
+        : (canPay ? 'Оплатить заказ' : null);
 
     return _ProfileDialogItemFrame(
       title: 'Заказ ${_shortId(id)}',
       meta: created,
       value: amount == null ? null : formatRubFromKopeks(amount),
+      actionLabel: actionLabel,
+      onTap: actionLabel == null
+          ? null
+          : () => _openOrderAction(
+              context: dialogContext,
+              confirmationUrl: confirmationUrl,
+            ),
       lines: [
         _ProfileDialogLine(label: 'Статус', value: status),
         _ProfileDialogLine(label: 'Оплата', value: payment),
@@ -2702,22 +2728,22 @@ class _ProfileDialogItemFrame extends StatelessWidget {
   final String? meta;
   final String? value;
   final List<_ProfileDialogLine> lines;
+  final String? actionLabel;
+  final VoidCallback? onTap;
 
   const _ProfileDialogItemFrame({
     required this.title,
     required this.meta,
     required this.value,
     required this.lines,
+    this.actionLabel,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final content = Padding(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: GlameColors.graphite.withValues(alpha: 0.55),
-        border: Border.all(color: GlameColors.borderGray),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2792,7 +2818,43 @@ class _ProfileDialogItemFrame extends StatelessWidget {
               ),
             ),
           ],
+          if (actionLabel != null) ...[
+            const SizedBox(height: 10),
+            Container(height: 1, color: GlameColors.borderGray),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    actionLabel!.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w700,
+                      color: GlameColors.whiteGlame,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward,
+                  size: 18,
+                  color: GlameColors.whiteGlame,
+                ),
+              ],
+            ),
+          ],
         ],
+      ),
+    );
+
+    return Material(
+      color: GlameColors.graphite.withValues(alpha: 0.55),
+      shape: Border.all(color: GlameColors.borderGray),
+      child: InkWell(
+        onTap: onTap,
+        splashColor: GlameColors.whiteGlame.withValues(alpha: 0.08),
+        highlightColor: GlameColors.whiteGlame.withValues(alpha: 0.04),
+        child: content,
       ),
     );
   }
@@ -2908,6 +2970,84 @@ _ProfileDialogLine? _deliverySummaryLine(Object? value) {
     label: 'Доставка',
     value: '$label: ${parts.join(', ')}',
   );
+}
+
+String? _orderConfirmationUrl(Map<String, dynamic> order) {
+  String? fromMap(Map<dynamic, dynamic>? map) {
+    if (map == null) return null;
+    final url = _profileItemString(
+      map['confirmation_url'] ??
+          map['confirmationUrl'] ??
+          map['payment_url'] ??
+          map['paymentUrl'],
+    );
+    return url == null || Uri.tryParse(url) == null ? null : url;
+  }
+
+  final direct = fromMap(order);
+  if (direct != null) return direct;
+
+  final payment = order['payment'];
+  if (payment is Map) {
+    final url = fromMap(payment);
+    if (url != null) return url;
+  }
+
+  final statusPayload = order['payment_status_payload'];
+  if (statusPayload is Map) {
+    final url = fromMap(statusPayload);
+    if (url != null) return url;
+    final statusPayment = statusPayload['payment'];
+    if (statusPayment is Map) return fromMap(statusPayment);
+  }
+  return null;
+}
+
+bool _orderNeedsPayment({
+  required String orderStatus,
+  required String? paymentStatus,
+}) {
+  final normalizedOrder = orderStatus.toLowerCase();
+  final normalizedPayment = paymentStatus?.toLowerCase();
+  if (normalizedOrder == 'canceled' || normalizedPayment == 'canceled') {
+    return false;
+  }
+  if (normalizedPayment == 'succeeded' || normalizedOrder == 'paid') {
+    return false;
+  }
+  return normalizedPayment == 'pending' ||
+      normalizedPayment == 'waiting_for_capture' ||
+      normalizedOrder == 'payment_pending';
+}
+
+bool _orderCanContinue({
+  required String orderStatus,
+  required String? paymentStatus,
+}) {
+  final normalizedOrder = orderStatus.toLowerCase();
+  final normalizedPayment = paymentStatus?.toLowerCase();
+  if (normalizedOrder == 'canceled' || normalizedPayment == 'canceled') {
+    return false;
+  }
+  if (normalizedPayment == 'succeeded' || normalizedOrder == 'paid') {
+    return false;
+  }
+  return normalizedOrder == 'pending' || normalizedOrder == 'payment_pending';
+}
+
+Future<void> _openOrderAction({
+  required BuildContext context,
+  required String? confirmationUrl,
+}) async {
+  Navigator.of(context).pop();
+  if (confirmationUrl == null) {
+    context.go('/checkout');
+    return;
+  }
+
+  final uri = Uri.tryParse(confirmationUrl);
+  if (uri == null) return;
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
 class _ProfileDotPatternPainter extends CustomPainter {
