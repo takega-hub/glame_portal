@@ -21,10 +21,21 @@ final customerLoyaltyProvider = FutureProvider<Map<String, dynamic>>((
 
 final customerPurchaseHistoryProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {
-      return ref
+      final rows = await ref
           .watch(customerCabinetApiProvider)
-          .getPurchaseHistory(limit: 20);
+          .getPurchaseHistory(limit: 50);
+      return rows.where(_isVisibleCustomerPurchase).take(20).toList();
     });
+
+bool _isVisibleCustomerPurchase(Map<String, dynamic> purchase) {
+  final title =
+      (purchase['product_name'] ?? purchase['name'] ?? purchase['title'])
+          .toString()
+          .trim()
+          .toLowerCase();
+  if (title == 'перенос продаж дк') return false;
+  return true;
+}
 
 final customerOrdersProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
