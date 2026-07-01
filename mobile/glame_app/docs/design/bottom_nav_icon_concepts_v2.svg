@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="980" viewBox="0 0 1200 980">
+  <defs>
+    <style>
+      .bg { fill: #111111; }
+      .title { font: 500 34px Arial, sans-serif; fill: #f4f4f1; letter-spacing: .04em; }
+      .subtitle { font: 400 20px Arial, sans-serif; fill: #a8a8a2; }
+      .label { font: 600 18px Arial, sans-serif; fill: #f0f0ec; letter-spacing: .08em; }
+      .note { font: 400 17px Arial, sans-serif; fill: #b8b8b4; }
+      .nav { fill: #ffffff; stroke: #e7e7e4; stroke-width: 1; }
+      .navDark { fill: #101010; stroke: #393939; stroke-width: 1; }
+      .icon { fill: none; stroke: #757575; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .active { fill: none; stroke: #141414; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+      .activeWhite { fill: none; stroke: #f7f7f3; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+      .dot { fill: #141414; }
+      .dotWhite { fill: #f7f7f3; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="980"/>
+  <text x="70" y="76" class="title">GLAME: нижнее меню / итерация 2</text>
+  <text x="70" y="112" class="subtitle">Первый знак оставляем фирменным. Перебираем только: Украшения, Мой стиль, Подбор, Профиль.</text>
+
+  <g transform="translate(70 170)">
+    <text x="0" y="0" class="label">A / Витрина + Образ + Скан</text>
+    <text x="0" y="32" class="note">Более предметно: каталог как витрина, стиль как сохраненный образ, подбор как скан лица/формы.</text>
+    <rect x="0" y="62" width="500" height="104" rx="30" class="nav"/>
+    <g transform="translate(32 82)">
+      <circle cx="50" cy="8" r="3.5" class="dot"/>
+      <g transform="translate(28 28)">
+        <path d="M25 5c-8 0-14 6-14 14s6 14 14 14c7 0 12-4 13-10H26" class="active"/>
+        <path d="M26 23h14v12" class="active"/>
+      </g>
+      <g transform="translate(126 26)">
+        <path d="M12 14h34v26H12z" class="icon"/>
+        <path d="M18 14c2-7 7-10 11-10s9 3 11 10" class="icon"/>
+        <path d="M20 25h18" class="icon"/>
+      </g>
+      <g transform="translate(224 26)">
+        <path d="M18 42V12l10-6 10 6v30" class="icon"/>
+        <path d="M12 42h32" class="icon"/>
+        <path d="M20 22h16" class="icon"/>
+      </g>
+      <g transform="translate(322 26)">
+        <path d="M12 14V8h8M40 8h8v8M48 38v8h-8M20 46h-8v-8" class="icon"/>
+        <path d="M22 28h16M30 20v16" class="icon"/>
+        <circle cx="30" cy="28" r="12" class="icon"/>
+      </g>
+      <g transform="translate(420 27)">
+        <circle cx="28" cy="17" r="9" class="icon"/>
+        <path d="M12 43c4-10 10-15 16-15s12 5 16 15" class="icon"/>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(630 170)">
+    <text x="0" y="0" class="label">B / Кольцо + Лукбук + Подбор</text>
+    <text x="0" y="32" class="note">Мягче и ювелирнее: украшения через кольцо, стиль через разворот, подбор через направляющие.</text>
+    <rect x="0" y="62" width="500" height="104" rx="30" class="nav"/>
+    <g transform="translate(32 82)">
+      <circle cx="50" cy="8" r="3.5" class="dot"/>
+      <g transform="translate(28 28)">
+        <path d="M25 5c-8 0-14 6-14 14s6 14 14 14c7 0 12-4 13-10H26" class="active"/>
+        <path d="M26 23h14v12" class="active"/>
+      </g>
+      <g transform="translate(126 26)">
+        <path d="M18 27c0-8 6-14 14-14s14 6 14 14-6 14-14 14-14-6-14-14z" class="icon"/>
+        <path d="M25 14l4-8h6l4 8" class="icon"/>
+      </g>
+      <g transform="translate(224 26)">
+        <path d="M13 10h14c4 0 7 3 7 7v29H20c-4 0-7-3-7-7z" class="icon"/>
+        <path d="M34 17c0-4 3-7 7-7h7v36h-7c-4 0-7-3-7-7" class="icon"/>
+      </g>
+      <g transform="translate(322 26)">
+        <path d="M14 18h12M14 38h12M36 18h12M36 38h12" class="icon"/>
+        <path d="M31 11v34" class="icon"/>
+        <circle cx="31" cy="28" r="5" class="icon"/>
+      </g>
+      <g transform="translate(420 27)">
+        <path d="M28 8c7 0 12 5 12 12s-5 12-12 12-12-5-12-12S21 8 28 8z" class="icon"/>
+        <path d="M12 45h32" class="icon"/>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(70 430)">
+    <text x="0" y="0" class="label">C / Минимальная предметность</text>
+    <text x="0" y="32" class="note">Самый чистый набор: меньше деталей, крупнее силуэты, лучше читается на маленьком размере.</text>
+    <rect x="0" y="62" width="500" height="104" rx="30" class="nav"/>
+    <g transform="translate(32 82)">
+      <circle cx="50" cy="8" r="3.5" class="dot"/>
+      <g transform="translate(28 28)">
+        <path d="M25 5c-8 0-14 6-14 14s6 14 14 14c7 0 12-4 13-10H26" class="active"/>
+        <path d="M26 23h14v12" class="active"/>
+      </g>
+      <g transform="translate(126 26)">
+        <path d="M16 20l16-14 16 14-16 22z" class="icon"/>
+        <path d="M16 20h32" class="icon"/>
+      </g>
+      <g transform="translate(224 26)">
+        <path d="M16 40l16-32 16 32" class="icon"/>
+        <path d="M22 28h20" class="icon"/>
+      </g>
+      <g transform="translate(322 26)">
+        <path d="M16 14h12M36 14h12M16 42h12M36 42h12" class="icon"/>
+        <path d="M32 20v16M24 28h16" class="icon"/>
+      </g>
+      <g transform="translate(420 27)">
+        <circle cx="28" cy="17" r="9" class="icon"/>
+        <path d="M17 43c2-8 7-13 11-13s9 5 11 13" class="icon"/>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(630 430)">
+    <text x="0" y="0" class="label">D / Для черного меню</text>
+    <text x="0" y="32" class="note">Та же логика, но сразу проверяем на черной нижней панели для темных экранов.</text>
+    <rect x="0" y="62" width="500" height="104" rx="30" class="navDark"/>
+    <g transform="translate(32 82)">
+      <circle cx="50" cy="8" r="3.5" class="dotWhite"/>
+      <g transform="translate(28 28)">
+        <path d="M25 5c-8 0-14 6-14 14s6 14 14 14c7 0 12-4 13-10H26" class="activeWhite"/>
+        <path d="M26 23h14v12" class="activeWhite"/>
+      </g>
+      <g transform="translate(126 26)">
+        <path d="M12 14h34v26H12z" class="icon"/>
+        <path d="M18 14c2-7 7-10 11-10s9 3 11 10" class="icon"/>
+        <path d="M20 25h18" class="icon"/>
+      </g>
+      <g transform="translate(224 26)">
+        <path d="M18 42V12l10-6 10 6v30" class="icon"/>
+        <path d="M12 42h32" class="icon"/>
+        <path d="M20 22h16" class="icon"/>
+      </g>
+      <g transform="translate(322 26)">
+        <path d="M12 14V8h8M40 8h8v8M48 38v8h-8M20 46h-8v-8" class="icon"/>
+        <circle cx="30" cy="28" r="12" class="icon"/>
+        <path d="M22 28h16M30 20v16" class="icon"/>
+      </g>
+      <g transform="translate(420 27)">
+        <circle cx="28" cy="17" r="9" class="icon"/>
+        <path d="M12 43c4-10 10-15 16-15s12 5 16 15" class="icon"/>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(70 720)">
+    <text x="0" y="0" class="label">Моя рекомендация сейчас</text>
+    <text x="0" y="38" class="note">Я бы дальше развивал вариант A: первый знак остается фирменным, каталог читается как витрина, стиль как образ, подбор как скан.</text>
+    <text x="0" y="72" class="note">Если “витрина” покажется слишком магазинной, можно взять из B кольцо для украшений, а остальные оставить из A.</text>
+  </g>
+</svg>

@@ -41,8 +41,8 @@ class HomeHowToBuyBlock extends ConsumerWidget {
         GlameUi.heroTopBarHeight;
     final topPadding = compact ? topBarBottom + 18.0 : 68.0;
     final bottomPadding = compact ? 10.0 : 44.0;
-    final actionGap = compact ? 6.0 : 14.0;
-    final serviceGap = compact ? 14.0 : 48.0;
+    final actionGap = compact ? 5.0 : 14.0;
+    final serviceGap = compact ? 8.0 : 48.0;
 
     return Container(
       height: targetHeight,
@@ -88,7 +88,7 @@ class HomeHowToBuyBlock extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _Block6Header(compact: compact),
-                    SizedBox(height: compact ? 12 : 44),
+                    SizedBox(height: compact ? 8 : 44),
                     _Block6ActionPanel(
                       number: '01',
                       title: 'Самостоятельно',
@@ -207,7 +207,7 @@ class _Block6ActionPanel extends StatelessWidget {
           splashColor: _Block6Palette.white.withValues(alpha: 0.05),
           highlightColor: _Block6Palette.white.withValues(alpha: 0.03),
           child: Container(
-            constraints: BoxConstraints(minHeight: compact ? 64 : 104),
+            constraints: BoxConstraints(minHeight: compact ? 60 : 104),
             padding: EdgeInsets.fromLTRB(
               compact ? 12 : 22,
               compact ? 9 : 22,
@@ -333,7 +333,7 @@ class _Block6ServiceZone extends StatelessWidget {
             ),
           ],
         ),
-        SizedBox(height: compact ? 8 : 18),
+        SizedBox(height: compact ? 6 : 18),
         Container(
           decoration: BoxDecoration(
             color: _Block6Palette.panelBackground,
@@ -412,10 +412,10 @@ class _Block6ServiceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: compact ? 116 : 190,
+      height: compact ? 108 : 190,
       padding: EdgeInsets.fromLTRB(
         compact ? 10 : 22,
-        compact ? 9 : 22,
+        compact ? 8 : 22,
         compact ? 8 : 18,
         compact ? 8 : 18,
       ),
@@ -432,7 +432,7 @@ class _Block6ServiceTile extends StatelessWidget {
               fontWeight: FontWeight.w300,
             ),
           ),
-          SizedBox(height: compact ? 6 : 18),
+          SizedBox(height: compact ? 5 : 18),
           Text(
             title,
             maxLines: 2,
@@ -445,7 +445,7 @@ class _Block6ServiceTile extends StatelessWidget {
               fontWeight: FontWeight.w300,
             ),
           ),
-          SizedBox(height: compact ? 4 : 14),
+          SizedBox(height: compact ? 3 : 14),
           Text(
             text,
             maxLines: compact ? 3 : 6,
@@ -477,7 +477,7 @@ class _Block6GridDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: axis == Axis.vertical ? 1 : double.infinity,
-      height: axis == Axis.horizontal ? 1 : (compact ? 116 : 190),
+      height: axis == Axis.horizontal ? 1 : (compact ? 108 : 190),
       color: _Block6Palette.line,
     );
   }

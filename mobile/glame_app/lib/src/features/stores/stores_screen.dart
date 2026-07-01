@@ -778,19 +778,20 @@ class _NetworkStoreImage extends StatelessWidget {
     }
 
     final source = url!.trim();
+    final localAsset = _localStoreImageAsset(source);
+    if (localAsset != null) {
+      return Image.asset(
+        localAsset,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _StoreImageFallback(),
+      );
+    }
+
     if (!source.startsWith('http://') && !source.startsWith('https://')) {
       return Image.asset(
         source,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Container(
-          color: GlameColors.coldLightGrey,
-          alignment: Alignment.center,
-          child: const Icon(
-            Icons.storefront_outlined,
-            color: GlameColors.steelGray,
-            size: 30,
-          ),
-        ),
+        errorBuilder: (_, _, _) => _StoreImageFallback(),
       );
     }
 
@@ -798,18 +799,53 @@ class _NetworkStoreImage extends StatelessWidget {
       imageUrl: source,
       fit: BoxFit.cover,
       placeholder: (_, _) => const ColoredBox(color: GlameColors.coldLightGrey),
-      errorWidget: (_, _, _) => Container(
-        color: GlameColors.coldLightGrey,
-        alignment: Alignment.center,
-        child: const Icon(
-          Icons.storefront_outlined,
-          color: GlameColors.steelGray,
-          size: 30,
-        ),
+      errorWidget: (_, _, _) => _StoreImageFallback(),
+    );
+  }
+}
+
+class _StoreImageFallback extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: GlameColors.coldLightGrey,
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.storefront_outlined,
+        color: GlameColors.steelGray,
+        size: 30,
       ),
     );
   }
 }
+
+String? _localStoreImageAsset(String source) {
+  final normalized = source.trim();
+  if (normalized.startsWith('assets/')) return normalized;
+  final uri = Uri.tryParse(normalized);
+  final filename = uri == null || uri.pathSegments.isEmpty
+      ? normalized.split('/').last
+      : uri.pathSegments.last;
+  if (_bundledStoreImageNames.contains(filename)) {
+    return 'assets/images/stores/$filename';
+  }
+  return null;
+}
+
+const _bundledStoreImageNames = <String>{
+  'glame_block5_yalta_card_photo.png',
+  'glame_space_yalta_hero_photo.png',
+  'glame_space_yalta_gallery_main.png',
+  'glame_space_yalta_gallery_01.png',
+  'glame_space_yalta_gallery_02.png',
+  'glame_block5_simferopol_card_photo.png',
+  'glame_space_simferopol_hero_photo.png',
+  'glame_space_simferopol_gallery_main.png',
+  'glame_space_simferopol_gallery_01.png',
+  'glame_space_simferopol_gallery_02.png',
+  'b6139bbb015f45229e6d75db6bccb7bb.jpg',
+  'c511c671b0d843fd8b99a44a674f5388.png',
+};
 
 class _SpacesLoadError extends StatelessWidget {
   const _SpacesLoadError();
@@ -1077,6 +1113,32 @@ const _spaceCopyBySlug = <String, _SpaceCopy>{
       ),
     ],
   ),
+  'mriya': _SpaceCopy(
+    slug: 'mriya',
+    cityLabel: 'Оползневое',
+    cardAddressLines: ['МРИЯ'],
+    cardDescriptionLines: ['Пространство GLAME', 'в курортном ритме.'],
+    heroTitle: 'GLAME МРИЯ',
+    heroSubtitle: 'пространство GLAME в МРИЯ',
+    heroAddressLines: ['Оползневое', 'МРИЯ'],
+    detailDescription:
+        'Пространство GLAME, где можно спокойно примерить украшения, собрать образ и уточнить наличие.',
+    catalogButtonLabel: 'Смотреть украшения в GLAME МРИЯ',
+    serviceMeanings: [
+      _ServiceMeaning(
+        '01 Подбор',
+        'Стилист помогает подобрать украшения под образ, повод и настроение.',
+      ),
+      _ServiceMeaning(
+        '02 Примерка',
+        'Украшения можно увидеть на себе и оценить в реальном свете пространства.',
+      ),
+      _ServiceMeaning(
+        '03 Наличие',
+        'Уточняем наличие по магазину и быстро ведём к нужным позициям.',
+      ),
+    ],
+  ),
 };
 
 const _spacePaletteBySlug = <String, _SpacePalette>{
@@ -1089,6 +1151,14 @@ const _spacePaletteBySlug = <String, _SpacePalette>{
     filledForeground: Colors.white,
   ),
   'simferopol': _SpacePalette(
+    overlayTop: Color(0x1A111316),
+    overlayBottom: Color(0xA6131518),
+    border: Color(0xFFD8DDE3),
+    panelBackground: Color(0xFFF6F7F9),
+    filledBackground: Color(0xFF1F2328),
+    filledForeground: Colors.white,
+  ),
+  'mriya': _SpacePalette(
     overlayTop: Color(0x1A111316),
     overlayBottom: Color(0xA6131518),
     border: Color(0xFFD8DDE3),
@@ -1148,6 +1218,8 @@ int _spaceOrder(String slug) {
       return 0;
     case 'simferopol':
       return 1;
+    case 'mriya':
+      return 2;
     default:
       return 99;
   }
@@ -1195,6 +1267,9 @@ String? _spaceSlug(String? city, String? title) {
   final normalized = '${city ?? ''} ${title ?? ''}'.toLowerCase();
   if (normalized.contains('ялт')) return 'yalta';
   if (normalized.contains('симфер')) return 'simferopol';
+  if (normalized.contains('мрия') || normalized.contains('оползнев')) {
+    return 'mriya';
+  }
   return null;
 }
 

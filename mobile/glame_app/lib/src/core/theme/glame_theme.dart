@@ -34,7 +34,7 @@ class GlameUi {
   static const double minTapTarget = 44;
   static const double heroTopBarHeight = 56;
   static const double heroTopOffset = 14;
-  static const double mobileBottomNavHeight = 56;
+  static const double mobileBottomNavHeight = 62;
   static const double bottomNavContentAir = 24;
   static const double heroPrimaryButtonWidth = 300;
   static const double heroPrimaryButtonY = 602;

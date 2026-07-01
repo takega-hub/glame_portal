@@ -70,6 +70,10 @@ flutter:
     - web/brand_assets/logos/
     - assets/images/brand/
     - assets/images/home/
+    - assets/images/home/hero/
+    - assets/icons/
+    - assets/images/stores/
+    - assets/data/
     - assets/images/service/
     - assets/images/gift_certificate/
     - assets/documents/

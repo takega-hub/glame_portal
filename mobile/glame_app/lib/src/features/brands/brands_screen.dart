@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/formatters/rub.dart';
 import '../../core/network/asset_url.dart';
@@ -10,14 +14,15 @@ import '../auth/auth_controller.dart';
 import '../customer/stylist_entry.dart';
 import '../home/home_api.dart';
 
-const String _block4HeroAsset =
-    'assets/images/home/home_block_4_collected_glame.png';
 const String _block4BackgroundAsset =
     'assets/images/home/glame_home_block4_open_display_background.png';
-const String _block4VisualAsset =
-    'assets/images/home/glame_home_block4_visual_image_no_text.png';
+const String _block4HomeBlockKey = 'collected_glame';
 const String _block4BrandsPageBlockKey = 'collected_glame_brands';
 const double _brandsPagePadding = 28;
+const double _block4CompactBrandSectionHeight = 340;
+const String _block4HomeCacheKey = 'glame.home.block4.collected_glame.v1';
+const String _block4HomeSnapshotAsset =
+    'assets/data/home_block4_collected_glame_snapshot.json';
 
 final _brandsApiProvider = Provider<HomeApi>((ref) {
   return HomeApi(ref.watch(apiClientProvider));
@@ -25,28 +30,22 @@ final _brandsApiProvider = Provider<HomeApi>((ref) {
 
 final homeCollectedGlameBlockProvider =
     FutureProvider<HomeBlockCollectedGlameData>((ref) async {
-      String? serverImage;
-      try {
-        final api = ref.watch(_brandsApiProvider);
-        final raw = await api.getHomeSlides(
-          blockKey: _block4BrandsPageBlockKey,
-        );
-        final slide = raw.isNotEmpty && raw.first is Map
-            ? Map<String, dynamic>.from(raw.first as Map)
-            : const <String, dynamic>{};
-        serverImage =
-            _nonEmptyString(slide['background_image_url']) ??
-            _nonEmptyString(slide['image_url']);
-      } catch (_) {
-        serverImage = null;
-      }
+      final api = ref.watch(_brandsApiProvider);
+      final slide = await _loadHomeBlock4Slide(api);
+      final serverImage =
+          _nonEmptyString(slide['background_image_url']) ??
+          _nonEmptyString(slide['image_url']);
+      final imageSource = serverImage ?? _block4BackgroundAsset;
       return HomeBlockCollectedGlameData(
         title: 'Собрано GLAME',
         subtitle: 'Мы отбираем главное. Чтобы вы выбирали свое.',
         ctaLabel: 'Смотреть бренды',
-        backgroundImage: serverImage ?? _block4BackgroundAsset,
-        visualImage: serverImage ?? _block4VisualAsset,
-        useSingleImage: serverImage != null,
+        backgroundImage: imageSource,
+        visualImage: imageSource,
+        imageCacheVersion:
+            _nonEmptyString(slide['updated_at']) ??
+            _nonEmptyString(slide['id']),
+        useSingleImage: true,
         brandNames: [
           'Geometry',
           'Magna',
@@ -69,6 +68,56 @@ final homeCollectedGlameBlockProvider =
 String? _nonEmptyString(Object? value) {
   final text = (value as String?)?.trim();
   return text == null || text.isEmpty ? null : text;
+}
+
+Future<Map<String, dynamic>> _loadHomeBlock4Slide(HomeApi api) async {
+  try {
+    final raw = await api.getHomeSlides(blockKey: _block4HomeBlockKey);
+    if (raw.isNotEmpty) {
+      await _saveHomeBlock4Cache(raw);
+      return _firstMap(raw);
+    }
+  } catch (_) {
+    // Keep block 4 available from local cache or bundled snapshot offline.
+  }
+
+  final cached = await _readHomeBlock4Cache();
+  if (cached.isNotEmpty) return _firstMap(cached);
+
+  final bundled = await _readHomeBlock4Snapshot();
+  return _firstMap(bundled);
+}
+
+Future<void> _saveHomeBlock4Cache(List<dynamic> slides) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_block4HomeCacheKey, jsonEncode(slides));
+}
+
+Future<List<dynamic>> _readHomeBlock4Cache() async {
+  final prefs = await SharedPreferences.getInstance();
+  final raw = prefs.getString(_block4HomeCacheKey);
+  if (raw == null || raw.isEmpty) return const <dynamic>[];
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is List) return decoded;
+  } catch (_) {
+    await prefs.remove(_block4HomeCacheKey);
+  }
+  return const <dynamic>[];
+}
+
+Future<List<dynamic>> _readHomeBlock4Snapshot() async {
+  final raw = await rootBundle.loadString(_block4HomeSnapshotAsset);
+  final decoded = jsonDecode(raw);
+  if (decoded is List) return decoded;
+  return const <dynamic>[];
+}
+
+Map<String, dynamic> _firstMap(List<dynamic> raw) {
+  if (raw.isNotEmpty && raw.first is Map) {
+    return Map<String, dynamic>.from(raw.first as Map);
+  }
+  return const <String, dynamic>{};
 }
 
 final brandsPageHeroProvider = FutureProvider<BrandsPageHeroData?>((ref) async {
@@ -151,6 +200,7 @@ class HomeBlockCollectedGlameData {
   final String ctaLabel;
   final String? backgroundImage;
   final String visualImage;
+  final String? imageCacheVersion;
   final bool useSingleImage;
   final List<String> brandNames;
 
@@ -160,6 +210,7 @@ class HomeBlockCollectedGlameData {
     required this.ctaLabel,
     required this.backgroundImage,
     required this.visualImage,
+    required this.imageCacheVersion,
     required this.useSingleImage,
     required this.brandNames,
   });
@@ -255,7 +306,9 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
         GlameUi.heroTopOffset +
         GlameUi.heroTopBarHeight;
     final contentWidth = width - (GlameUi.pagePadding * 2);
-    final compactBrandSectionHeight = compact ? 270.0 : 0.0;
+    final compactBrandSectionHeight = compact
+        ? _block4CompactBrandSectionHeight
+        : 0.0;
     final heroHeight = compact
         ? ((targetHeight ?? 760) - compactBrandSectionHeight).clamp(
             360.0,
@@ -290,6 +343,7 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
                     Positioned.fill(
                       child: _Block4ImageLayer(
                         source: data.visualImage,
+                        cacheVersion: data.imageCacheVersion,
                         fit: BoxFit.cover,
                         alignment: Alignment.topCenter,
                       ),
@@ -298,6 +352,7 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
                     Positioned.fill(
                       child: _Block4ImageLayer(
                         source: data.backgroundImage ?? _block4BackgroundAsset,
+                        cacheVersion: data.imageCacheVersion,
                         fit: BoxFit.cover,
                         alignment: Alignment.center,
                       ),
@@ -310,6 +365,7 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
                       child: IgnorePointer(
                         child: _Block4ImageLayer(
                           source: data.visualImage,
+                          cacheVersion: data.imageCacheVersion,
                           fit: BoxFit.cover,
                           alignment: Alignment.centerRight,
                         ),
@@ -504,11 +560,13 @@ class _CollectedGlameSkeletonBox extends StatelessWidget {
 
 class _Block4ImageLayer extends StatelessWidget {
   final String source;
+  final String? cacheVersion;
   final BoxFit fit;
   final Alignment alignment;
 
   const _Block4ImageLayer({
     required this.source,
+    this.cacheVersion,
     required this.fit,
     required this.alignment,
   });
@@ -516,10 +574,15 @@ class _Block4ImageLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedSource = resolveAssetUrl(source) ?? source;
+    final localAsset = _localBlock4ImageAsset(resolvedSource, cacheVersion);
+    if (localAsset != null) {
+      return Image.asset(localAsset, fit: fit, alignment: alignment);
+    }
     if (resolvedSource.startsWith('http://') ||
         resolvedSource.startsWith('https://')) {
       return CachedNetworkImage(
         imageUrl: resolvedSource,
+        cacheKey: _versionedBlock4CacheKey(resolvedSource, cacheVersion),
         fit: fit,
         alignment: alignment,
         placeholder: (context, _) =>
@@ -530,6 +593,26 @@ class _Block4ImageLayer extends StatelessWidget {
     }
     return Image.asset(resolvedSource, fit: fit, alignment: alignment);
   }
+}
+
+String _versionedBlock4CacheKey(String source, String? version) {
+  final cleanVersion = version?.trim();
+  if (cleanVersion == null || cleanVersion.isEmpty) return source;
+  return '$source@$cleanVersion';
+}
+
+String? _localBlock4ImageAsset(String source, String? cacheVersion) {
+  final uri = Uri.tryParse(source);
+  final filename = uri == null || uri.pathSegments.isEmpty
+      ? source.split('/').last
+      : uri.pathSegments.last;
+  final version = cacheVersion?.trim() ?? '';
+  return switch (filename) {
+    'b7f3d114066344e28bd533691b548718.jpg'
+        when version.startsWith('2026-05-09T14:21:11') =>
+      'assets/images/home/home_block4_collected_glame_current.jpg',
+    _ => null,
+  };
 }
 
 class _Block4BrandsGrid extends StatelessWidget {
@@ -857,7 +940,7 @@ class BrandDetailScreen extends ConsumerWidget {
             _BrandHeroCard(
               brand: brand,
               heroImageSource:
-                  heroAsync.valueOrNull?.imageSource ?? _block4HeroAsset,
+                  heroAsync.valueOrNull?.imageSource ?? _block4BackgroundAsset,
             ),
             const SizedBox(height: 16),
             _BrandDnaStrip(markers: brand.dnaMarkers),

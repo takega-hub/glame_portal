@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <style>
+      .bg { fill: #111111; }
+      .panel { fill: #f8f8f6; stroke: #d6d6d0; stroke-width: 1; }
+      .panelDark { fill: #141414; stroke: #3d3d3d; stroke-width: 1; }
+      .title { font: 500 34px Arial, sans-serif; fill: #f4f4f1; letter-spacing: .04em; }
+      .subtitle { font: 400 20px Arial, sans-serif; fill: #a8a8a2; }
+      .label { font: 600 18px Arial, sans-serif; fill: #f0f0ec; letter-spacing: .08em; }
+      .note { font: 400 17px Arial, sans-serif; fill: #b8b8b4; }
+      .navLight { fill: #ffffff; stroke: #e7e7e4; stroke-width: 1; }
+      .navDark { fill: #101010; stroke: #393939; stroke-width: 1; }
+      .iconInactive { fill: none; stroke: #8b8b87; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+      .iconActive { fill: none; stroke: #151515; stroke-width: 3.3; stroke-linecap: round; stroke-linejoin: round; }
+      .iconActiveLight { fill: none; stroke: #f6f6f3; stroke-width: 3.3; stroke-linecap: round; stroke-linejoin: round; }
+      .thinActive { fill: #151515; }
+      .thinActiveLight { fill: #f6f6f3; }
+      .mutedLine { stroke: #dededa; stroke-width: 1; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="900"/>
+  <text x="70" y="76" class="title">GLAME: концепты иконок нижнего меню</text>
+  <text x="70" y="112" class="subtitle">Задача: убрать текстовые названия, оставить узнаваемые разделы через чистые пиктограммы.</text>
+
+  <g transform="translate(70 170)">
+    <text x="0" y="0" class="label">01 / GLAME LINE</text>
+    <text x="0" y="32" class="note">Самый спокойный вариант: тонкие линейные иконки, активный раздел отмечен верхней чертой.</text>
+    <rect x="0" y="62" width="470" height="104" rx="28" class="navLight"/>
+    <g transform="translate(28 82)">
+      <rect x="37" y="0" width="26" height="3" rx="1.5" class="thinActive"/>
+      <g transform="translate(28 28)">
+        <path d="M25 5c-8 0-14 6-14 14s6 14 14 14c7 0 12-4 13-10H26" class="iconActive"/>
+        <path d="M26 23h14v12" class="iconActive"/>
+      </g>
+      <g transform="translate(120 28)">
+        <path d="M20 5h18l9 11-18 23L11 16z" class="iconInactive"/>
+        <path d="M20 5l9 34M38 5l-9 34M11 16h36" class="iconInactive"/>
+      </g>
+      <g transform="translate(212 28)">
+        <path d="M29 4l4 14 14 4-14 4-4 14-4-14-14-4 14-4z" class="iconInactive"/>
+        <path d="M12 8l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" class="iconInactive"/>
+      </g>
+      <g transform="translate(304 28)">
+        <path d="M16 37l25-25" class="iconInactive"/>
+        <path d="M33 8l7-4 4 7-7 4z" class="iconInactive"/>
+        <path d="M13 12l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" class="iconInactive"/>
+      </g>
+      <g transform="translate(396 28)">
+        <path d="M28 7a9 9 0 110 18 9 9 0 010-18z" class="iconInactive"/>
+        <path d="M12 43c3-10 10-15 16-15s13 5 16 15" class="iconInactive"/>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(650 170)">
+    <text x="0" y="0" class="label">02 / JEWELRY CUES</text>
+    <text x="0" y="32" class="note">Больше смысла в самих формах: украшения, образ, подбор и профиль читаются как отдельные сценарии.</text>
+    <rect x="0" y="62" width="470" height="104" rx="28" class="navLight"/>
+    <g transform="translate(28 82)">
+      <circle cx="50" cy="40" r="25" fill="#151515"/>
+      <g transform="translate(28 18)">
+        <path d="M25 5c-8 0-14 6-14 14s6 14 14 14c7 0 12-4 13-10H26" class="iconActiveLight"/>
+        <path d="M26 23h14v12" class="iconActiveLight"/>
+      </g>
+      <g transform="translate(120 28)">
+        <path d="M15 20c4-9 22-9 27 0 5 10-3 20-14 20S10 30 15 20z" class="iconInactive"/>
+        <path d="M19 17l5-10h10l5 10" class="iconInactive"/>
+      </g>
+      <g transform="translate(212 28)">
+        <path d="M12 32h26c4 0 7-3 7-7V12H19c-4 0-7 3-7 7z" class="iconInactive"/>
+        <path d="M19 12v20M37 12v20" class="iconInactive"/>
+      </g>
+      <g transform="translate(304 28)">
+        <path d="M14 36h28" class="iconInactive"/>
+        <path d="M18 31l10-20 10 20" class="iconInactive"/>
+        <path d="M29 9l4 8 8 4-8 4-4 8-4-8-8-4 8-4z" class="iconInactive"/>
+      </g>
+      <g transform="translate(396 28)">
+        <path d="M28 7a9 9 0 110 18 9 9 0 010-18z" class="iconInactive"/>
+        <path d="M12 43c3-10 10-15 16-15s13 5 16 15" class="iconInactive"/>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(70 425)">
+    <text x="0" y="0" class="label">03 / BLACK BAR</text>
+    <text x="0" y="32" class="note">Для черных экранов: меню выглядит как часть интерфейса, активная иконка светлая и крупнее.</text>
+    <rect x="0" y="62" width="470" height="104" rx="28" class="navDark"/>
+    <g transform="translate(28 82)">
+      <rect x="37" y="0" width="26" height="3" rx="1.5" class="thinActiveLight"/>
+      <g transform="translate(28 28)">
+        <path d="M25 5c-8 0-14 6-14 14s6 14 14 14c7 0 12-4 13-10H26" class="iconActiveLight"/>
+        <path d="M26 23h14v12" class="iconActiveLight"/>
+      </g>
+      <g transform="translate(120 28)">
+        <path d="M20 5h18l9 11-18 23L11 16z" class="iconInactive"/>
+        <path d="M20 5l9 34M38 5l-9 34M11 16h36" class="iconInactive"/>
+      </g>
+      <g transform="translate(212 28)">
+        <path d="M29 4l4 14 14 4-14 4-4 14-4-14-14-4 14-4z" class="iconInactive"/>
+        <path d="M12 8l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" class="iconInactive"/>
+      </g>
+      <g transform="translate(304 28)">
+        <path d="M16 37l25-25" class="iconInactive"/>
+        <path d="M33 8l7-4 4 7-7 4z" class="iconInactive"/>
+        <path d="M13 12l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" class="iconInactive"/>
+      </g>
+      <g transform="translate(396 28)">
+        <path d="M28 7a9 9 0 110 18 9 9 0 010-18z" class="iconInactive"/>
+        <path d="M12 43c3-10 10-15 16-15s13 5 16 15" class="iconInactive"/>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(650 425)">
+    <text x="0" y="0" class="label">04 / MINIMAL SYMBOLS</text>
+    <text x="0" y="32" class="note">Самый премиальный и тихий вариант: меньше деталей, больше воздуха, активность через точку.</text>
+    <rect x="0" y="62" width="470" height="104" rx="28" class="navLight"/>
+    <g transform="translate(28 82)">
+      <circle cx="50" cy="8" r="3.5" fill="#151515"/>
+      <g transform="translate(28 28)">
+        <path d="M25 5c-8 0-14 6-14 14s6 14 14 14c7 0 12-4 13-10H26" class="iconActive"/>
+        <path d="M26 23h14v12" class="iconActive"/>
+      </g>
+      <g transform="translate(120 28)">
+        <path d="M12 18l17-14 17 14-17 22z" class="iconInactive"/>
+      </g>
+      <g transform="translate(212 28)">
+        <path d="M29 7l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" class="iconInactive"/>
+      </g>
+      <g transform="translate(304 28)">
+        <path d="M15 35l26-26" class="iconInactive"/>
+        <path d="M38 7l5 5M13 12l5 5" class="iconInactive"/>
+      </g>
+      <g transform="translate(396 28)">
+        <path d="M28 9a8 8 0 110 16 8 8 0 010-16z" class="iconInactive"/>
+        <path d="M13 42c4-9 10-13 15-13s11 4 15 13" class="iconInactive"/>
+      </g>
+    </g>
+  </g>
+
+  <g transform="translate(70 705)">
+    <text x="0" y="0" class="label">Рекомендация</text>
+    <text x="0" y="38" class="note">Я бы выбрал 01 как базу: она ближе к текущей эстетике GLAME, хорошо читается без текста и легко адаптируется под белое/черное меню.</text>
+    <text x="0" y="72" class="note">Если хочется более “ювелирно” и менее системно - 02. Если хотим полностью уйти в премиальный минимализм - 04.</text>
+  </g>
+</svg>

@@ -457,6 +457,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         subtitle: _stringValue(raw['subtitle']),
         backgroundImageUrl: backgroundImageUrl,
         imageUrl: imageUrl,
+        localBackgroundAsset: _localHeroAssetForIndex(slides.length),
+        cacheVersion:
+            _stringValue(raw['updated_at']) ?? _stringValue(raw['id']),
         imageAction: _parseAction(
           raw,
           typeKey: 'image_action_type',
@@ -494,6 +497,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       subtitle: slide.subtitle ?? spec.subtitle,
       backgroundImageUrl: slide.backgroundImageUrl,
       imageUrl: slide.imageUrl,
+      localBackgroundAsset: slide.localBackgroundAsset,
+      cacheVersion: slide.cacheVersion,
       imageAction: slide.imageAction ?? spec.imageAction,
       primaryButtonText: slide.primaryButtonText ?? spec.primaryButtonText,
       primaryAction: slide.primaryAction ?? spec.primaryAction,
@@ -501,6 +506,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           slide.secondaryButtonText ?? spec.secondaryButtonText,
       secondaryAction: slide.secondaryAction ?? spec.secondaryAction,
     );
+  }
+
+  String? _localHeroAssetForIndex(int index) {
+    if (index < 0 || index >= _localHeroBackgroundAssets.length) return null;
+    return _localHeroBackgroundAssets[index];
   }
 
   String? _stringValue(Object? value) {
@@ -764,6 +774,8 @@ class _HomeHeroBlock extends StatelessWidget {
                   child: _HeroBackground(
                     backgroundImageUrl: slide.backgroundImageUrl,
                     imageUrl: slide.imageUrl,
+                    localBackgroundAsset: slide.localBackgroundAsset,
+                    cacheVersion: slide.cacheVersion,
                   ),
                 );
               },
@@ -891,10 +903,14 @@ class _HomeHeroBlock extends StatelessWidget {
 class _HeroBackground extends StatelessWidget {
   final String? backgroundImageUrl;
   final String? imageUrl;
+  final String? localBackgroundAsset;
+  final String? cacheVersion;
 
   const _HeroBackground({
     required this.backgroundImageUrl,
     required this.imageUrl,
+    required this.localBackgroundAsset,
+    required this.cacheVersion,
   });
 
   @override
@@ -902,7 +918,9 @@ class _HeroBackground extends StatelessWidget {
     final hasBackground =
         backgroundImageUrl != null && backgroundImageUrl!.isNotEmpty;
     final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
-    if (!hasBackground && !hasImage) {
+    final hasLocalBackground =
+        localBackgroundAsset != null && localBackgroundAsset!.isNotEmpty;
+    if (!hasBackground && !hasImage && !hasLocalBackground) {
       return Container(
         color: GlameColors.coolLightGray,
         alignment: Alignment.center,
@@ -917,19 +935,29 @@ class _HeroBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (hasBackground)
-          CachedNetworkImage(
-            imageUrl: backgroundImageUrl!,
+        if (hasLocalBackground)
+          Image.asset(
+            localBackgroundAsset!,
             fit: BoxFit.cover,
-            placeholder: (_, _) => Container(color: GlameColors.coolLightGray),
-            errorWidget: (_, _, _) =>
-                Container(color: GlameColors.coolLightGray),
+            alignment: Alignment.center,
           )
         else
           Container(color: GlameColors.coolLightGray),
+        if (hasBackground)
+          CachedNetworkImage(
+            imageUrl: backgroundImageUrl!,
+            cacheKey: _versionedImageCacheKey(
+              backgroundImageUrl!,
+              cacheVersion,
+            ),
+            fit: BoxFit.cover,
+            placeholder: (_, _) => const SizedBox.shrink(),
+            errorWidget: (_, _, _) => const SizedBox.shrink(),
+          ),
         if (hasImage)
           CachedNetworkImage(
             imageUrl: imageUrl!,
+            cacheKey: _versionedImageCacheKey(imageUrl!, cacheVersion),
             fit: BoxFit.cover,
             placeholder: (_, _) => const SizedBox.shrink(),
             errorWidget: (_, _, _) => const SizedBox.shrink(),
@@ -937,6 +965,12 @@ class _HeroBackground extends StatelessWidget {
       ],
     );
   }
+}
+
+String _versionedImageCacheKey(String url, String? version) {
+  final cleanVersion = version?.trim();
+  if (cleanVersion == null || cleanVersion.isEmpty) return url;
+  return '$url@$cleanVersion';
 }
 
 class _GlameHeroButton extends StatelessWidget {
@@ -1684,36 +1718,77 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
       );
     }
 
+    final blockWidth = MediaQuery.of(context).size.width;
+    final isTablet = blockWidth >= 600 && blockWidth < 1024;
+    final isDesktop = blockWidth >= 1024;
+    final horizontalPadding = isTablet ? 32.0 : 28.0;
+    final verticalPadding = isTablet ? 72.0 : 88.0;
+    final minHeight = isTablet
+        ? (blockWidth * 0.72).clamp(520.0, 640.0).toDouble()
+        : isDesktop
+        ? 640.0
+        : 0.0;
+    final contentWidth = isTablet ? blockWidth * 0.48 : 360.0;
+    final backgroundLeft = isTablet ? blockWidth * 0.38 : 0.0;
+    final backgroundRight = isTablet ? -32.0 : -40.0;
+
     return Container(
+      constraints: BoxConstraints(minHeight: minHeight),
       color: GlameColors.nearBlack,
       padding: EdgeInsets.fromLTRB(
-        28,
-        compact ? 80 : 88,
-        28,
-        compact ? 80 : 88,
+        horizontalPadding,
+        verticalPadding,
+        horizontalPadding,
+        verticalPadding,
       ),
       child: Stack(
         children: [
           Positioned.fill(
-            right: compact ? -120 : -40,
+            left: backgroundLeft,
+            right: backgroundRight,
             child: IgnorePointer(
               child: Opacity(
-                opacity: compact ? 0.32 : 0.42,
+                opacity: isTablet ? 0.58 : 0.42,
                 child: const _HomePhotoSelectionBackground(
                   source: fallbackPhotoAsset,
+                  alignment: Alignment.centerRight,
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      GlameColors.nearBlack,
+                      GlameColors.nearBlack.withValues(
+                        alpha: isTablet ? 0.88 : 0.74,
+                      ),
+                      GlameColors.nearBlack.withValues(
+                        alpha: isTablet ? 0.22 : 0,
+                      ),
+                    ],
+                    stops: const [0, 0.48, 1],
+                  ),
                 ),
               ),
             ),
           ),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 760),
+            constraints: BoxConstraints(
+              maxWidth: isTablet ? contentWidth : 760,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: compact ? 30 : 42,
+                    fontSize: isTablet ? 38 : 42,
                     fontWeight: FontWeight.w300,
                     height: 1.06,
                     color: GlameColors.whiteGlame,
@@ -1721,19 +1796,19 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
                 ),
                 const SizedBox(height: 22),
                 SizedBox(
-                  width: compact ? 300 : 360,
+                  width: isTablet ? contentWidth : 360,
                   child: Text(
                     subtitle,
                     style: TextStyle(
-                      fontSize: bodySize,
+                      fontSize: isTablet ? 17 : bodySize,
                       height: 1.45,
                       color: GlameColors.coldLightGray,
                     ),
                   ),
                 ),
-                SizedBox(height: compact ? 34 : 44),
+                SizedBox(height: isTablet ? 42 : 44),
                 SizedBox(
-                  width: double.infinity,
+                  width: isTablet ? contentWidth : double.infinity,
                   child: _HomePhotoActionButton(
                     title: 'Загрузить фото',
                     icon: Icons.photo_camera_outlined,
@@ -2263,6 +2338,8 @@ class _HomeSlideData {
   final String? subtitle;
   final String? backgroundImageUrl;
   final String? imageUrl;
+  final String? localBackgroundAsset;
+  final String? cacheVersion;
   final _HomeSlideAction? imageAction;
   final String? primaryButtonText;
   final _HomeSlideAction? primaryAction;
@@ -2274,6 +2351,8 @@ class _HomeSlideData {
     required this.subtitle,
     required this.backgroundImageUrl,
     required this.imageUrl,
+    required this.localBackgroundAsset,
+    required this.cacheVersion,
     required this.imageAction,
     required this.primaryButtonText,
     required this.primaryAction,
@@ -2290,20 +2369,26 @@ class _HomeSlideAction {
   const _HomeSlideAction({this.type, this.payload, this.legacyLink});
 }
 
+const List<String> _localHeroBackgroundAssets = <String>[
+  'assets/images/home/hero/home_hero_style_inside_01.png',
+  'assets/images/home/hero/home_hero_style_inside_02.png',
+];
+
 const _HomeSlideData _fallbackSlide = _HomeSlideData(
-  title: 'Стиль внутри',
+  title: 'СТИЛЬ ВНУТРИ',
   subtitle:
       'Украшения, которые собирают образ под ваш стиль, задачу и повод.\nОнлайн — по всей России.',
   backgroundImageUrl: null,
   imageUrl: null,
+  localBackgroundAsset: 'assets/images/home/hero/home_hero_style_inside_01.png',
+  cacheVersion: 'bundled-2026-06-30-01',
   imageAction: null,
   primaryButtonText: 'Собрать свой стиль',
   primaryAction: _HomeSlideAction(type: 'selection', legacyLink: '/selection'),
-  secondaryButtonText: 'Смотреть украшения',
+  secondaryButtonText: 'Смотреть новинки',
   secondaryAction: _HomeSlideAction(
-    type: 'catalog',
-    payload: <String, dynamic>{},
-    legacyLink: '/catalog',
+    type: 'home_block',
+    payload: <String, dynamic>{'block': '2'},
   ),
 );
 
@@ -2311,10 +2396,12 @@ const List<_HomeSlideData> _fallbackHeroSlides = <_HomeSlideData>[
   _fallbackSlide,
   _HomeSlideData(
     title: 'Собранный образ',
-    subtitle:
-        'Украшения складываются в цельный образ, когда форма, масштаб и настроение работают вместе.',
+    subtitle: 'Когда хочется выглядеть дорого, спокойно и без случайности.',
     backgroundImageUrl: null,
     imageUrl: null,
+    localBackgroundAsset:
+        'assets/images/home/hero/home_hero_style_inside_02.png',
+    cacheVersion: 'bundled-2026-06-30-02',
     imageAction: null,
     primaryButtonText: 'Смотреть подборку',
     primaryAction: _HomeSlideAction(
@@ -2327,97 +2414,5 @@ const List<_HomeSlideData> _fallbackHeroSlides = <_HomeSlideData>[
       type: 'selection',
       legacyLink: '/selection',
     ),
-  ),
-  _HomeSlideData(
-    title: 'Подарок',
-    subtitle:
-        'Подберите украшение как личный знак внимания: спокойно, точно и без случайности.',
-    backgroundImageUrl: null,
-    imageUrl: null,
-    imageAction: null,
-    primaryButtonText: 'Смотреть подарки',
-    primaryAction: _HomeSlideAction(
-      type: 'selection',
-      payload: <String, dynamic>{'mode': 'gift'},
-      legacyLink: '/selection/gift',
-    ),
-    secondaryButtonText: 'Подобрать подарок',
-    secondaryAction: _HomeSlideAction(
-      type: 'selection',
-      payload: <String, dynamic>{'mode': 'gift'},
-      legacyLink: '/selection/gift',
-    ),
-  ),
-  _HomeSlideData(
-    title: 'Акцентные украшения',
-    subtitle:
-        'Один выразительный акцент может собрать образ сильнее, чем лишние детали.',
-    backgroundImageUrl: null,
-    imageUrl: null,
-    imageAction: null,
-    primaryButtonText: 'Смотреть акценты',
-    primaryAction: _HomeSlideAction(
-      type: 'looks',
-      payload: <String, dynamic>{'filter': 'Акцент'},
-      legacyLink: '/home?tab=5',
-    ),
-    secondaryButtonText: 'Подобрать под меня',
-    secondaryAction: _HomeSlideAction(
-      type: 'selection',
-      legacyLink: '/selection',
-    ),
-  ),
-  _HomeSlideData(
-    title: 'На отдых',
-    subtitle:
-        'Легкие линии, свет, движение и украшения, которые не спорят с маршрутом.',
-    backgroundImageUrl: null,
-    imageUrl: null,
-    imageAction: null,
-    primaryButtonText: 'Смотреть подборку',
-    primaryAction: _HomeSlideAction(
-      type: 'looks',
-      payload: <String, dynamic>{'filter': 'Отдых'},
-      legacyLink: '/home?tab=5',
-    ),
-    secondaryButtonText: 'Подобрать под меня',
-    secondaryAction: _HomeSlideAction(
-      type: 'selection',
-      legacyLink: '/selection',
-    ),
-  ),
-  _HomeSlideData(
-    title: 'На свадьбу',
-    subtitle:
-        'Украшения для важного дня: деликатный свет, масштаб и образ без лишней драмы.',
-    backgroundImageUrl: null,
-    imageUrl: null,
-    imageAction: null,
-    primaryButtonText: 'Смотреть подборку',
-    primaryAction: _HomeSlideAction(
-      type: 'looks',
-      payload: <String, dynamic>{'filter': 'Свадьба'},
-      legacyLink: '/home?tab=5',
-    ),
-    secondaryButtonText: 'Подобрать под меня',
-    secondaryAction: _HomeSlideAction(
-      type: 'selection',
-      legacyLink: '/selection',
-    ),
-  ),
-  _HomeSlideData(
-    title: 'Ваш стиль не из шаблона',
-    subtitle:
-        'Начните персональный подбор: по фото, задаче, поводу или вместе со стилистом GLAME.',
-    backgroundImageUrl: null,
-    imageUrl: null,
-    imageAction: null,
-    primaryButtonText: 'Начать подбор',
-    primaryAction: _HomeSlideAction(
-      type: 'selection',
-      legacyLink: '/selection',
-    ),
-    secondaryButtonText: 'Написать стилисту',
-    secondaryAction: _HomeSlideAction(type: 'stylist'),
   ),
 ];
