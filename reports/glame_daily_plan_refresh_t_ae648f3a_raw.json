@@ -1,0 +1,302 @@
+{
+  "health": {
+    "status": "healthy"
+  },
+  "task": {
+    "completed_at": null,
+    "constraints": {},
+    "created_at": "2026-05-27T19:00:50.763034+00:00",
+    "deadline_at": null,
+    "error_message": null,
+    "id": "53165be0-bf1f-4e04-8913-bca59eb42a16",
+    "input_data": {
+      "description": "Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.",
+      "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+      "parameters": {
+        "approval_required": true,
+        "report_scope": "tasks_and_next_day_plan"
+      },
+      "title": "Ежедневный план на завтра"
+    },
+    "output_data": null,
+    "output_metadata": {},
+    "priority": 3,
+    "requirements": {
+      "no_mass_send_without_admin_approval": true,
+      "show_sources": true,
+      "use_real_data_only": true
+    },
+    "scheduled_at": "2026-05-27T19:00:50.792594+00:00",
+    "source_agent": "cron-scheduler",
+    "started_at": null,
+    "status": "pending",
+    "target_agent": "director-agent",
+    "target_metrics": {},
+    "task_context": {
+      "created_from": "admin_cron",
+      "cron_category": "director",
+      "cron_job_id": "daily_plan_approval",
+      "cron_title": "Ежедневный план на завтра",
+      "kanban_idempotency_key": "glame-platform-task:53165be0-bf1f-4e04-8913-bca59eb42a16",
+      "kanban_sync_status": "synced_full",
+      "kanban_synced_at": "2026-05-28T09:23:23Z",
+      "kanban_synced_fields": [
+        "title",
+        "passport",
+        "description",
+        "input_data",
+        "output_data",
+        "output_metadata",
+        "requirements",
+        "constraints",
+        "task_context",
+        "full_json"
+      ],
+      "kanban_task_id": "t_ae648f3a",
+      "manual_run": false,
+      "schedule_type": "daily"
+    },
+    "task_type": "tomorrow_plan_preparation",
+    "validation_errors": [],
+    "validation_result": null
+  },
+  "tasks": {
+    "_parse_error": "Invalid control character at: line 549 column 100 (char 19988)",
+    "_raw": "[\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-28T09:00:14.224661+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"f44f5bf0-50a9-4aa4-b450-a4d3d42102f9\",\n    \"input_data\": {\n      \"description\": \"AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"approval_required\": true,\n        \"create_segment\": true,\n        \"days_ahead\": 7\n      },\n      \"title\": \"Проверка клиентов с ДР\"\n    },\n    \"output_data\": {\n      \"agent_reply\": \"## AI CRM: сегмент подготовлен\\n\\n1. Данные использованы: карточки покупателей, история покупок, предпочтительный магазин/город, бренд и товарные признаки из чеков.\\n2. Сегмент сохранен в БД: `AI CRM | сегмент на согласование | 2805 0923 · db1e22`\\n3. ID сегмента: `db1e2214-4580-42fb-92bf-2e47a",
+    "_exit": 0
+  },
+  "kanban": {
+    "_parse_error": "Expecting property name enclosed in double quotes: line 430 column 1 (char 19990)",
+    "_raw": "{\n  \"columns\": [\n    {\n      \"cards\": [\n        {\n          \"assigned_to\": null,\n          \"completed_at\": null,\n          \"created_at\": \"2026-05-28T09:13:26.500965+00:00\",\n          \"deadline_at\": null,\n          \"description\": \"Мониторинг 1С выполнен Hermes по live API 2026-05-28T09:11Z. Продажи читаются: последние 1С-данные за 2026-05-27, 7 дней = 35 чеков / 428 065 ₽; сегодняшний offline-срез пока 0, что нормально для утренней проверки. Покупатели читаются: 6 216 клиентов, LTV 66 007 132.58 ₽. Остатки частично читаются: product sync completed, stock total 5 708 по inventory dashboard; но /api/admin/1c/sync/status возвращает HTTP 500 'Boolean value of this clause is not defined', analytics inventory health-score=no_data, analysis total=0. Создана директорская задача на разбор статуса/витрин аналитики остатков.\\n\\nПроверить backend /api/admin/1c/sync/status и пайплайн заполнения /api/analytics/inventory/health-score + /analysis: сейчас dashboard/report видят остатки, но analytics-сло",
+    "_exit": 0
+  },
+  "analytics": {
+    "aov": {
+      "aov": 0.0,
+      "order_count": 0,
+      "period": {
+        "end": "2026-05-28T09:33:37.124814",
+        "start": "2026-04-28T09:33:37.124814"
+      },
+      "total_revenue": 0.0
+    },
+    "conversion": {
+      "conversion_rates": {
+        "look_to_purchase": 0.0,
+        "product_to_purchase": 0.0
+      },
+      "events": {
+        "chat_message": 0,
+        "look_view": 1,
+        "product_click": 3,
+        "purchase": 0
+      },
+      "period": {
+        "end": "2026-05-28T09:33:37.124814",
+        "start": "2026-04-28T09:33:37.124814"
+      }
+    },
+    "engagement": {
+      "avg_events_per_session": 8.76923076923077,
+      "avg_session_duration_seconds": 63295.8491449,
+      "period": {
+        "end": "2026-05-28T09:33:37.124814",
+        "start": "2026-04-28T09:33:37.124814"
+      },
+      "total_events": 114,
+      "total_sessions": 13,
+      "unique_products_viewed": 1
+    },
+    "events_by_type": {
+      "look_view": 1,
+      "page_view": 85,
+      "product_click": 3,
+      "ui_click": 24,
+      "yandex_metrika_sync": 1
+    },
+    "period": {
+      "days": 30,
+      "end": "2026-05-28T09:33:37.124814",
+      "start": "2026-04-28T09:33:37.124814"
+    },
+    "total_events": 114
+  },
+  "today_sales": {
+    "checks_count": 0,
+    "date": "2026-05-28T00:00:00",
+    "items_sold": 0,
+    "orders_count": 0,
+    "period": "today",
+    "source": "orders_fallback",
+    "total_revenue": 0,
+    "total_revenue_rub": 0.0
+  },
+  "sales7": {
+    "average_check": 12037.76,
+    "average_check_rub": 12037.76,
+    "checks_count": 38,
+    "days": 7,
+    "items_sold": 179.0,
+    "last_sale_at": "2026-05-27T18:45:06+00:00",
+    "orders_count": 38,
+    "period": "last_7_days",
+    "since": "2026-05-21T09:33:39.421108",
+    "source": "sales_records",
+    "total_revenue": 457434.9999999998,
+    "total_revenue_rub": 457435.0,
+    "unique_customers": 22
+  },
+  "orders": {
+    "orders": [
+      {
+        "created_at": "2026-05-02T20:49:54.781958+00:00",
+        "customer_email": null,
+        "customer_name": "Орешникова Елена",
+        "discount_card": "79162668200",
+        "order_id": "73d1d53f-c080-4fc3-985e-d70bcbe48b4c",
+        "status": "pending",
+        "total_amount": 1208000,
+        "total_amount_rub": 12080.0
+      }
+    ]
+  },
+  "product_summary": {
+    "by_brand": {
+      "Antura": 1,
+      "BICOLOR": 73,
+      "BLACK MYSTIQUE": 118,
+      "CRYSTAL": 336,
+      "Claudio Canzian": 27,
+      "GEOMETRY": 723,
+      "Kalliope": 80,
+      "MAGNA": 284,
+      "PEARL": 431,
+      "PRISM OF ELEGANCE": 210,
+      "Raganella Princess": 98,
+      "UNOde50": 165,
+      "WRINKLES OG TIME": 167,
+      "unknown": 644
+    },
+    "by_category": {
+      "AGafi": 420,
+      "Antura": 55,
+      "Eva Rites": 15,
+      "Madreperla": 9,
+      "Men": 58,
+      "SALE": 253,
+      "Браслеты": 418,
+      "Броши": 11,
+      "Каффы": 149,
+      "Колье": 503,
+      "Кольца": 562,
+      "Кулоны": 46,
+      "Подарочная упаковка": 7,
+      "Прочее": 21,
+      "Серьги": 783,
+      "Сопутствующие материалы": 29,
+      "Чокеры": 18
+    },
+    "core_assortment": 0,
+    "total_active_products": 3357
+  },
+  "customer_summary": {
+    "available_customer_data": {
+      "app_behavior": [
+        "analytics_events",
+        "page_view",
+        "ui_click",
+        "product_view",
+        "look_view",
+        "chat_message",
+        "channel",
+        "utm",
+        "event_data"
+      ],
+      "communications": [
+        "generated_customer_messages",
+        "message",
+        "cta",
+        "event_type",
+        "event_brand",
+        "event_store",
+        "status",
+        "sent_at",
+        "payload"
+      ],
+      "loyalty": [
+        "loyalty_points",
+        "loyalty_transactions",
+        "transaction_type",
+        "points",
+        "balance_after",
+        "reason",
+        "description",
+        "source",
+        "expires_at"
+      ],
+      "profile": [
+        "id",
+        "phone",
+        "email",
+        "full_name",
+        "city",
+        "gender",
+        "discount_card_number",
+        "customer_id_1c",
+        "discount_card_id_1c",
+        "persona",
+        "preferences",
+        "customer_segment",
+        "rfm_score",
+        "purchase_preferences",
+        "preferred_store_name",
+        "secondary_store_name",
+        "synced_at"
+      ],
+      "purchase_history": [
+        "purchase_date",
+        "document_id_1c",
+        "store_id_1c",
+        "store_name",
+        "product_name",
+        "product_article",
+        "category",
+        "brand",
+        "quantity",
+        "price",
+        "total_amount"
+      ],
+      "saved_content": [
+        "saved_looks",
+        "favorite/generated",
+        "notes",
+        "is_purchased",
+        "recommended_occasions",
+        "look_name"
+      ],
+      "stylist": [
+        "live_stylist_conversations",
+        "conversation_status",
+        "scenario",
+        "source",
+        "assigned_stylist",
+        "internal_notes",
+        "result_purchase_status",
+        "stylist_chat_messages",
+        "attachments"
+      ]
+    },
+    "by_segment": {
+      "Active": 201,
+      "New": 433,
+      "Regular": 920,
+      "Sleeping": 4647,
+      "VIP": 8,
+      "unknown": 7
+    },
+    "customers_with_purchases": 6034,
+    "new_last_30_days": 76,
+    "total_customers": 6216,
+    "total_loyalty_points": 2029444
+  }
+}

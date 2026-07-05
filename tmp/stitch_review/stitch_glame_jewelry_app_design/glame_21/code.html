@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GLAME - Корзина</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-highest": "#333537",
+                    "on-primary-fixed-variant": "#444748",
+                    "surface-tint": "#c4c7c8",
+                    "on-tertiary-fixed-variant": "#42474b",
+                    "tertiary-fixed-dim": "#c2c7cb",
+                    "on-surface-variant": "#c4c7c8",
+                    "cold-light-gray": "#C7CBCF",
+                    "on-primary": "#2e3132",
+                    "error": "#ffb4ab",
+                    "on-background": "#e2e2e5",
+                    "inverse-surface": "#e2e2e5",
+                    "primary-fixed-dim": "#c4c7c8",
+                    "tertiary-fixed": "#dee3e7",
+                    "on-tertiary": "#2c3134",
+                    "on-tertiary-fixed": "#171c1f",
+                    "secondary-fixed-dim": "#c6c6c9",
+                    "on-secondary-fixed-variant": "#454749",
+                    "secondary-container": "#454749",
+                    "surface-container-lowest": "#0c0e10",
+                    "background": "#121416",
+                    "on-primary-container": "#626566",
+                    "surface-container-high": "#282a2c",
+                    "outline-variant": "#434749",
+                    "primary-container": "#e1e3e4",
+                    "tertiary-container": "#dee3e7",
+                    "on-secondary": "#2f3133",
+                    "border-gray": "#5C6064",
+                    "surface-container-low": "#1a1c1e",
+                    "surface-container": "#1e2022",
+                    "surface-variant": "#333537",
+                    "outline": "#8e9192",
+                    "on-error": "#690005",
+                    "on-surface": "#e2e2e5",
+                    "on-secondary-fixed": "#1a1c1e",
+                    "on-secondary-container": "#b4b5b7",
+                    "inverse-primary": "#5c5f60",
+                    "tertiary": "#ffffff",
+                    "soft-gray": "#D8DADB",
+                    "secondary": "#c6c6c9",
+                    "surface-dim": "#121416",
+                    "error-container": "#93000a",
+                    "surface": "#121416",
+                    "on-error-container": "#ffdad6",
+                    "primary": "#ffffff",
+                    "primary-fixed": "#e1e3e4",
+                    "on-tertiary-container": "#606569",
+                    "on-primary-fixed": "#191c1d",
+                    "inverse-on-surface": "#2f3133",
+                    "surface-bright": "#38393c",
+                    "secondary-fixed": "#e2e2e5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0px",
+                    "lg": "0px",
+                    "xl": "0px",
+                    "full": "0px"
+            },
+            "spacing": {
+                    "grid-gutter": "1px",
+                    "top-bar-height": "56px",
+                    "page-padding-h": "28px",
+                    "safe-air-bottom": "24px",
+                    "button-gap": "16px",
+                    "bottom-nav-height": "96px"
+            },
+            "fontFamily": {
+                    "label-sm": ["Hanken Grotesk"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "label-md": ["Hanken Grotesk"],
+                    "display-lg": ["Hanken Grotesk"],
+                    "body-md": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "body-lg": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "500"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased min-h-screen flex flex-col pt-top-bar-height pb-bottom-nav-height md:pb-0">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full h-[56px] z-50 bg-background md:bg-surface border-b border-border-gray flex items-center justify-between px-page-padding-h">
+<button aria-label="Menu" class="text-primary hover:opacity-70 transition-opacity active:scale-95">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg tracking-widest text-primary uppercase">GLAME</h1>
+<button aria-label="Search" class="text-primary hover:opacity-70 transition-opacity active:scale-95">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col w-full max-w-7xl mx-auto md:flex-row md:items-start md:pt-16">
+<!-- SideNav for Web -->
+<nav class="hidden md:flex flex-col h-full w-80 border-r border-border-gray py-8 sticky top-top-bar-height bg-surface shrink-0">
+<div class="px-page-padding-h mb-12">
+<span class="font-headline-lg text-headline-lg text-primary tracking-widest uppercase">GLAME</span>
+</div>
+<div class="flex flex-col gap-2">
+<a class="flex items-center px-page-padding-h py-4 text-on-surface-variant hover:bg-surface-container-high transition-all duration-200" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="grid_view">grid_view</span>
+<span class="font-body-lg text-body-lg">Collections</span>
+</a>
+<a class="flex items-center px-page-padding-h py-4 text-on-surface-variant hover:bg-surface-container-high transition-all duration-200" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="architecture">architecture</span>
+<span class="font-body-lg text-body-lg">Bespoke</span>
+</a>
+<a class="flex items-center px-page-padding-h py-4 text-on-surface-variant hover:bg-surface-container-high transition-all duration-200" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="factory">factory</span>
+<span class="font-body-lg text-body-lg">Atelier</span>
+</a>
+<a class="flex items-center px-page-padding-h py-4 text-on-surface-variant hover:bg-surface-container-high transition-all duration-200" href="#">
+<span class="material-symbols-outlined mr-4" data-icon="mail">mail</span>
+<span class="font-body-lg text-body-lg">Contact</span>
+</a>
+</div>
+</nav>
+<div class="flex-grow flex flex-col px-page-padding-h w-full max-w-3xl mx-auto">
+<div class="py-12 border-b border-border-gray flex flex-col items-center text-center">
+<h2 class="font-display-lg text-display-lg text-primary uppercase mb-16 md:mb-24">КОРЗИНА</h2>
+<div class="flex flex-col items-center justify-center min-h-[265px]">
+<div class="w-16 h-16 mb-8 border border-border-gray flex items-center justify-center bg-surface-container-lowest">
+<span class="material-symbols-outlined text-4xl text-on-surface-variant" data-icon="shopping_bag">shopping_bag</span>
+</div>
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile text-primary mb-4">В корзине пока пусто</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-12 max-w-md">Перейдите в каталог, чтобы выбрать украшение</p>
+<a class="inline-flex items-center justify-center h-[56px] min-w-[300px] bg-primary text-background font-label-md text-label-md uppercase tracking-widest hover:bg-surface-tint transition-colors" href="#">
+                        ПЕРЕЙТИ В КАТАЛОГ
+                    </a>
+</div>
+</div>
+<!-- Recommendations -->
+<div class="py-16">
+<h4 class="font-body-lg text-body-lg text-primary mb-8 uppercase tracking-widest">Вам может понравиться</h4>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-grid-gutter bg-border-gray border border-border-gray">
+<!-- Item 1 -->
+<div class="bg-surface flex flex-col group cursor-pointer">
+<div class="aspect-square bg-surface-container-lowest overflow-hidden relative border-b border-border-gray">
+<img alt="Minimalist ring" class="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 filter grayscale contrast-125" data-alt="A stark, minimalist architectural photograph of a sleek silver ring resting on a polished concrete slab. The lighting is cold, high-contrast, and deeply dramatic, casting sharp geometric shadows. The overall aesthetic aligns with a dark mode, premium digital layout, utilizing strict greyscale tones, deep blacks, and sharp metallic reflections to emphasize structural clarity over decorative warmth. The composition is rigidly centered and symmetrical." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbg6Ct-4VPPJEtG2zHubfZQhZZF4fWwsuaFyLOzgkKepDk127kgTUOYfDZMiV_6BTeWIVeYFgzJ5ln56ZrI4o_CTwEgaIjSYuyVwM756H2EhcM6DeDe0y7lOzE7yY5x-Dwgi2kaJL5MC86qIDMa1mHpnPsZasAaJwXEkvqV-6a2pLhxOQOsLzzZaZDK2kYhtj07rfw0GgJNosIvdSaA5LzaxBxTSsSdxpN89WtCypWlsPVWZXQHvd_7FLdSIzkE-LvdIrD0fxGtRo"/>
+</div>
+<div class="p-4 flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Кольцо</span>
+<span class="font-body-md text-body-md text-primary truncate">Структура 01</span>
+<span class="font-label-md text-label-md text-on-surface-variant mt-2">125 000 ₽</span>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="bg-surface flex flex-col group cursor-pointer">
+<div class="aspect-square bg-surface-container-lowest overflow-hidden relative border-b border-border-gray">
+<img alt="Geometric necklace" class="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 filter grayscale contrast-125" data-alt="A stark, minimalist architectural photograph of a geometric silver necklace draped over a block of dark brushed steel. The lighting is cold, high-contrast, and deeply dramatic, casting sharp geometric shadows. The overall aesthetic aligns with a dark mode, premium digital layout, utilizing strict greyscale tones, deep blacks, and sharp metallic reflections to emphasize structural clarity over decorative warmth. The composition relies on strong vertical and horizontal lines." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDYPik5z6VPcVUBaLRSvO_E__Bg6TO0f6SCl7-eWcrHhOfyELO7nrdsZJcZyzmhuAse96t2mLHEZo-5TSAu5pebG5Xh6Qr6Nx6XzWHLnQb3A0nOfZIgR7xeFw1LnqU8zUqe8rQPJqC5kCih5_O573GZ5IgP6MQiDxKNIGqlS0oRw29N2Ki_8o2KM0xJ3o_lwlpGqb3dYU2dc2aLHz6Q4utxfhvvhl-RIeKB_uEIXUV-rltnvrLHFfifdgqm7agJOcPr6LYxHJIhGek"/>
+</div>
+<div class="p-4 flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Колье</span>
+<span class="font-body-md text-body-md text-primary truncate">Вектор</span>
+<span class="font-label-md text-label-md text-on-surface-variant mt-2">240 000 ₽</span>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="bg-surface flex flex-col group cursor-pointer">
+<div class="aspect-square bg-surface-container-lowest overflow-hidden relative border-b border-border-gray">
+<img alt="Minimalist bracelet" class="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 filter grayscale contrast-125" data-alt="A stark, minimalist architectural photograph of a rigid silver cuff bracelet positioned against a backdrop of frosted glass. The lighting is cold, high-contrast, and deeply dramatic, casting sharp geometric shadows. The overall aesthetic aligns with a dark mode, premium digital layout, utilizing strict greyscale tones, deep blacks, and sharp metallic reflections to emphasize structural clarity over decorative warmth. The focus is on the object's precise, manufactured edges." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgKc7NYI0dC-ho4k56sEoKkEfuBDEtHIbGjdZNNcJ6v_egRQeGvHPeiUcmXs1ZpdW1LAL11CRuT7uhuZbg6X-MjnwdHMgrA8Vk-EhK-UducZj3WS3jULuwzy_9n0m8iRVp05VP9FBcGX1PzM6rAmlAL6eIUaACUOkxwJcO_cs39z80r5o8uXHGDGXJVDeqNLsH_KKtge3FgEflP8bklZxsW8h3KsFLY6MVVdQz80vX6KnpT9YFbyERH3z7jd1kIkeHTVfrly5M_JQ"/>
+</div>
+<div class="p-4 flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Браслет</span>
+<span class="font-body-md text-body-md text-primary truncate">Линия</span>
+<span class="font-label-md text-label-md text-on-surface-variant mt-2">180 000 ₽</span>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="bg-surface flex flex-col group cursor-pointer">
+<div class="aspect-square bg-surface-container-lowest overflow-hidden relative border-b border-border-gray">
+<img alt="Architectural earrings" class="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 filter grayscale contrast-125" data-alt="A stark, minimalist architectural photograph of angular silver earrings suspended in front of a dark, textured slate wall. The lighting is cold, high-contrast, and deeply dramatic, casting sharp geometric shadows. The overall aesthetic aligns with a dark mode, premium digital layout, utilizing strict greyscale tones, deep blacks, and sharp metallic reflections to emphasize structural clarity over decorative warmth. The image conveys a sense of clinical precision." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmfX_Skzw4eM-r_v6mYqiz6Str_8mIfrZcALNMgpgzjwHJYEncrl0y2KQI3ZSfVKswhb6HXhgu_nZF58u7EWLqoQ5Ru4trUkEzl5sNJCklhFF53ODt6I-5zvxdZBHEfq7sKb-zXDAljt94ItWcIG9qyty-napwhGFK_feaGcLM9WAThcqY8GCewUnIEPvZ3vWwiGWWBVzOl2Xhd67gplh1WNN8LGMEhnee1mFMTBmXN49W_veITn_-fU6XZ4WWT_h4PXjeh0PhuPc"/>
+</div>
+<div class="p-4 flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase mb-1">Серьги</span>
+<span class="font-body-md text-body-md text-primary truncate">Грань</span>
+<span class="font-label-md text-label-md text-on-surface-variant mt-2">95 000 ₽</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full h-[96px] bg-surface border-t border-border-gray flex justify-around items-center px-page-padding-h pb-safe-air-bottom z-50">
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:text-primary transition-colors" data-icon="home">home</span>
+<span class="font-label-sm text-label-sm uppercase group-hover:text-primary transition-colors">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:text-primary transition-colors" data-icon="diamond">diamond</span>
+<span class="font-label-sm text-label-sm uppercase group-hover:text-primary transition-colors">Jewelry</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:text-primary transition-colors" data-icon="auto_awesome">auto_awesome</span>
+<span class="font-label-sm text-label-sm uppercase group-hover:text-primary transition-colors">My Style</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary border-t-2 border-primary pt-2 w-16" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-label-sm text-label-sm uppercase">Cart</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 group" href="#">
+<span class="material-symbols-outlined mb-1 group-hover:text-primary transition-colors" data-icon="person">person</span>
+<span class="font-label-sm text-label-sm uppercase group-hover:text-primary transition-colors">Profile</span>
+</a>
+</nav>
+</body></html>

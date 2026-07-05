@@ -1,0 +1,16 @@
+HTTP 200 OK
+{
+  "opportunities": [
+    {
+      "customer_count": 5489,
+      "description": "5489 VIP клиентов не покупали 90+ дней - возможна программа реактивации",
+      "potential_revenue": 27445000,
+      "recommended_actions": [
+        "Специальные скидки",
+        "Персональные предложения"
+      ],
+      "type": "re-engagement"
+    }
+  ],
+  "total": 1
+}

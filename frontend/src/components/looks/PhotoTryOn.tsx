@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 interface PhotoTryOnProps {
   lookId?: string;
@@ -9,6 +11,7 @@ interface PhotoTryOnProps {
 }
 
 export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps) {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,6 +38,10 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
 
   const handleAnalyze = async () => {
     if (!photo) return;
+    if (!isAuthenticated) {
+      setError('Чтобы загрузить или сделать фото, войдите в аккаунт.');
+      return;
+    }
 
     setAnalyzing(true);
     setError(null);
@@ -59,6 +66,10 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
 
   const handleTryOn = async () => {
     if (!photo || !lookId) return;
+    if (!isAuthenticated) {
+      setError('Чтобы загрузить или сделать фото, войдите в аккаунт.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -86,6 +97,10 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
 
   const handleGenerateWithTryOn = async () => {
     if (!photo) return;
+    if (!isAuthenticated) {
+      setError('Чтобы загрузить или сделать фото, войдите в аккаунт.');
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -122,6 +137,20 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
       <h2 className="text-xl font-semibold text-gray-900 mb-4">Примерка образа на фото</h2>
 
       <div className="space-y-4">
+        {!authLoading && !isAuthenticated && (
+          <div className="border border-gray-300 bg-gray-50 p-4">
+            <p className="text-sm text-gray-900">
+              Чтобы загрузить или сделать фото, сначала войдите в аккаунт. Фото сохраняется и обрабатывается только после авторизации.
+            </p>
+            <Link
+              href="/login"
+              className="mt-3 inline-flex border border-gray-900 px-4 py-2 text-sm text-gray-900 transition hover:bg-gray-100"
+            >
+              Войти
+            </Link>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-900 mb-2">
             Загрузите ваше фото
@@ -135,8 +164,14 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
               className="hidden"
             />
             <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-900 bg-white hover:bg-gray-50 transition"
+              onClick={() => {
+                if (!isAuthenticated) {
+                  setError('Чтобы загрузить или сделать фото, войдите в аккаунт.');
+                  return;
+                }
+                fileInputRef.current?.click();
+              }}
+              className="px-4 py-2 border border-gray-300 text-gray-900 bg-white hover:bg-gray-50 transition"
             >
               Выбрать фото
             </button>
@@ -150,8 +185,8 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
           <div className="mt-4">
             <img
               src={preview}
-              alt="Preview"
-              className="max-w-xs rounded-lg border border-gray-200"
+              alt="Предпросмотр"
+              className="max-w-xs border border-gray-200"
             />
           </div>
         )}
@@ -161,7 +196,7 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
             <button
               onClick={handleAnalyze}
               disabled={analyzing}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition disabled:opacity-50"
+              className="px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 transition disabled:opacity-50"
             >
               {analyzing ? 'Анализ...' : 'Проанализировать фото'}
             </button>
@@ -169,7 +204,7 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
               <button
                 onClick={handleTryOn}
                 disabled={loading}
-                className="px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition disabled:opacity-50"
+                className="px-4 py-2 bg-gold-500 text-white hover:bg-gold-600 transition disabled:opacity-50"
               >
                 {loading ? 'Примерка...' : 'Примерка образа'}
               </button>
@@ -178,7 +213,7 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
               <button
                 onClick={handleGenerateWithTryOn}
                 disabled={loading}
-                className="px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition disabled:opacity-50"
+                className="px-4 py-2 bg-gold-500 text-white hover:bg-gold-600 transition disabled:opacity-50"
               >
                 {loading ? 'Генерация...' : 'Сгенерировать и примерить'}
               </button>
@@ -187,13 +222,13 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3">
+          <div className="bg-red-50 border border-red-200 p-3">
             <p className="text-red-700 text-sm">{error}</p>
           </div>
         )}
 
         {analysis && (
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+          <div className="bg-blue-50 border border-blue-200 p-4">
             <h3 className="font-semibold text-gray-900 mb-2">Результаты анализа:</h3>
             <div className="space-y-1 text-sm text-gray-900">
               <p><strong className="text-gray-900">Цветотип:</strong> <span className="text-gray-900">{analysis.color_type}</span></p>
@@ -235,8 +270,8 @@ export default function PhotoTryOn({ lookId, onTryOnComplete }: PhotoTryOnProps)
               <div>
                 <img
                   src={tryOnResult.try_on_result.try_on_image_url}
-                  alt="Try-on result"
-                  className="max-w-full rounded-lg border border-gray-200"
+                  alt="Результат примерки"
+                  className="max-w-full border border-gray-200"
                 />
               </div>
             )}

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Избранное - GLAME</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "soft-gray": "#D8DADB",
+                        "surface-variant": "#333537",
+                        "secondary-fixed": "#e2e2e5",
+                        "inverse-primary": "#5c5f60",
+                        "tertiary-fixed-dim": "#c2c7cb",
+                        "on-primary": "#2e3132",
+                        "on-primary-fixed": "#191c1d",
+                        "surface-container": "#1e2022",
+                        "primary-fixed": "#e1e3e4",
+                        "cold-light-gray": "#C7CBCF",
+                        "surface-dim": "#121416",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#282a2c",
+                        "tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#171c1f",
+                        "background": "#121416",
+                        "on-secondary": "#2f3133",
+                        "tertiary-container": "#dee3e7",
+                        "primary-container": "#e1e3e4",
+                        "outline-variant": "#434749",
+                        "on-background": "#e2e2e5",
+                        "error-container": "#93000a",
+                        "surface-tint": "#c4c7c8",
+                        "inverse-on-surface": "#2f3133",
+                        "surface-container-low": "#1a1c1e",
+                        "surface-container-highest": "#333537",
+                        "secondary": "#c6c6c9",
+                        "on-tertiary-container": "#606569",
+                        "outline": "#8e9192",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "surface-bright": "#38393c",
+                        "on-tertiary-fixed-variant": "#42474b",
+                        "surface": "#121416",
+                        "border-gray": "#5C6064",
+                        "secondary-container": "#454749",
+                        "on-secondary-fixed-variant": "#454749",
+                        "inverse-surface": "#e2e2e5",
+                        "tertiary-fixed": "#dee3e7",
+                        "primary-fixed-dim": "#c4c7c8",
+                        "primary": "#ffffff",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "on-primary-container": "#626566",
+                        "on-secondary-container": "#b4b5b7",
+                        "on-error-container": "#ffdad6",
+                        "on-surface": "#e2e2e5",
+                        "on-primary-fixed-variant": "#444748",
+                        "on-error": "#690005",
+                        "on-surface-variant": "#c4c7c8",
+                        "on-tertiary": "#2c3134",
+                        "surface-container-lowest": "#0c0e10"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "0px"
+                    },
+                    spacing: {
+                        "top-bar-height": "56px",
+                        "button-gap": "16px",
+                        "page-padding-h": "28px",
+                        "grid-gutter": "1px",
+                        "bottom-nav-height": "96px",
+                        "safe-air-bottom": "24px"
+                    },
+                    fontFamily: {
+                        "label-sm": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"]
+                    },
+                    fontSize: {
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col antialiased selection:bg-surface-variant selection:text-primary">
+<!-- Top App Bar -->
+<header class="fixed top-0 w-full h-[56px] z-50 bg-transparent border-b border-border-gray">
+<div class="flex items-center justify-between px-page-padding-h w-full h-full">
+<button aria-label="Menu" class="text-primary hover:opacity-70 transition-opacity active:scale-95 flex items-center justify-center w-10 h-10 -ml-2">
+<span class="material-symbols-outlined text-2xl" data-icon="menu">menu</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile tracking-widest text-primary font-bold uppercase pointer-events-none">GLAME</h1>
+<button aria-label="Cart" class="text-primary hover:opacity-70 transition-opacity active:scale-95 flex items-center justify-center w-10 h-10 -mr-2">
+<span class="material-symbols-outlined text-2xl" data-icon="shopping_bag">shopping_bag</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col pt-top-bar-height pb-[120px] relative overflow-hidden" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDwJrYqo1rL5RgaGMJFxivs92Ah_ZXM4Dgbbas0_MTo68crAyRjP3s3vXWjUciUC1rMScLB6NCEreZezbiyJh5KFKVh099KEb2LfFb_MGZdZSShcZ5scLaPjSnY4ENagNjEq0Mp3YPTUHOd-L3mTaK7VschTr9i-S8Jb4545SqgjgDJlSl8tVRDBj252Re7yGSbsk24U-T3cHSKP2tRacHXxiFtu-Z3mnWI0gASJCVaxwn9KmkL0wT4W8AtK0DXSfjAdGu8Yrsj64s'); background-size: cover; background-position: center; background-repeat: no-repeat;">
+<!-- Dark overlay to ensure text readability against the pattern while keeping the architectural feel -->
+<div class="absolute inset-0 bg-background/80 pointer-events-none"></div>
+<div class="relative z-10 flex-grow flex flex-col px-page-padding-h w-full max-w-md mx-auto h-full justify-center">
+<div class="flex flex-col items-center text-center mt-12 mb-auto">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-12">Избранное</h2>
+<!-- Graphic element -->
+<div class="w-32 h-32 mb-10 flex items-center justify-center opacity-80">
+<span class="material-symbols-outlined text-6xl text-on-surface-variant font-light" data-icon="favorite_border" style="font-size: 80px;">favorite_border</span>
+</div>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-[280px] mb-12">
+                    Здесь пока пусто. Сохраняйте украшения, которые вам понравились, чтобы не потерять их.
+                </p>
+<div class="flex flex-col gap-button-gap w-full mt-8">
+<!-- Primary CTA -->
+<button class="w-full h-[56px] bg-[#EFF1F2] text-[#222426] font-label-md text-label-md uppercase tracking-widest flex items-center justify-center hover:bg-white transition-colors active:scale-[0.98]">
+                        Перейти в каталог
+                    </button>
+<!-- Secondary CTA -->
+<button class="w-full h-[56px] bg-transparent border border-border-gray text-primary font-label-md text-label-md uppercase tracking-widest flex items-center justify-center hover:bg-surface-variant transition-colors active:scale-[0.98]">
+                        Написать стилисту
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Nav Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-page-padding-h pb-safe-air-bottom h-[96px] bg-surface border-t border-border-gray md:hidden">
+<!-- Inactive: Home -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 h-full hover:bg-surface-variant transition-colors active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-label-sm text-label-sm uppercase">Home</span>
+</a>
+<!-- Inactive: Jewelry -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 h-full hover:bg-surface-variant transition-colors active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="diamond">diamond</span>
+<span class="font-label-sm text-label-sm uppercase">Jewelry</span>
+</a>
+<!-- Active: My Style (Semantically mapping 'Избранное'/Wishlist to My Style) -->
+<a aria-current="page" class="flex flex-col items-center justify-center text-primary border-t-2 border-primary pt-2 w-16 h-full bg-surface-container-low" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="auto_awesome" data-weight="fill" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<span class="font-label-sm text-label-sm uppercase">My Style</span>
+</a>
+<!-- Inactive: Selection -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 h-full hover:bg-surface-variant transition-colors active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="auto_fix_high">auto_fix_high</span>
+<span class="font-label-sm text-label-sm uppercase">Selection</span>
+</a>
+<!-- Inactive: Profile -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 h-full hover:bg-surface-variant transition-colors active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-label-sm text-label-sm uppercase">Profile</span>
+</a>
+</nav>
+</body></html>

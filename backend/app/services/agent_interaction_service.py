@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc, asc, or_
+from sqlalchemy import select, and_, desc, asc, or_, func
 from datetime import datetime, timezone, timedelta
 import json
 import logging
@@ -118,7 +118,8 @@ class AgentInteractionService:
         task.validation_errors = validation_errors
         
         if is_valid:
-            task.status = InteractionStatus.VALIDATED.value
+            # После успешной валидации задача идет на человеческое одобрение (согласно Enterprise Blueprint)
+            task.status = InteractionStatus.PENDING_APPROVAL.value
         else:
             task.status = InteractionStatus.REJECTED.value
         
@@ -325,8 +326,9 @@ class AgentInteractionService:
             # По умолчанию - только задачи, готовые к обработке
             query = query.where(
                 AgentInteractionTask.status.in_([
-                    InteractionStatus.VALIDATED.value,
-                    InteractionStatus.QUEUED.value
+                    InteractionStatus.APPROVED.value,
+                    InteractionStatus.QUEUED.value,
+                    InteractionStatus.PROCESSING.value
                 ])
             )
         
@@ -379,8 +381,8 @@ class AgentInteractionService:
         if not task:
             raise ValueError(f"Задача с ID {task_id} не найдена")
         
-        if task.status != InteractionStatus.VALIDATED.value:
-            raise ValueError(f"Задача должна быть валидирована перед постановкой в очередь. Текущий статус: {task.status}")
+        if task.status != InteractionStatus.APPROVED.value:
+            raise ValueError(f"Задача должна быть одобрена перед постановкой в очередь. Текущий статус: {task.status}")
         
         # Рассчитываем приоритет
         task.priority = await self.calculate_task_priority(task)
@@ -463,6 +465,182 @@ class AgentInteractionService:
         await self.db.commit()
         
         return task
+    
+    async def delete_task(
+        self,
+        task_id: str,
+        deleted_by: Optional[str] = None,
+        reason: Optional[str] = None
+    ) -> AgentInteractionTask:
+        """Мягкое удаление задачи и привязанных сущностей"""
+        result = await self.db.execute(
+            select(AgentInteractionTask).where(AgentInteractionTask.id == task_id)
+        )
+        task = result.scalar_one_or_none()
+        if not task:
+            raise ValueError(f"Задача с ID {task_id} не найдена")
+        
+        if task.status == InteractionStatus.DELETED.value:
+            return task
+        
+        if task.status not in [InteractionStatus.COMPLETED.value, InteractionStatus.FAILED.value, InteractionStatus.CANCELLED.value]:
+            task.status = InteractionStatus.CANCELLED.value
+        task.status = InteractionStatus.DELETED.value
+        self.db.add(task)
+        await self.db.commit()
+        
+        # Отменяем передачи контента
+        handoffs_result = await self.db.execute(
+            select(AgentContentHandoff).where(AgentContentHandoff.task_id == task.id)
+        )
+        handoffs = handoffs_result.scalars().all()
+        for h in handoffs:
+            if h.status not in ("rejected", "cancelled"):
+                h.status = "cancelled"
+                self.db.add(h)
+        await self.db.commit()
+        
+        log = AgentInteractionLog(
+            task_id=task.id,
+            agent_name="task_manager",
+            event_type="task_deleted",
+            message="Задача помечена как удаленная",
+            event_data={"deleted_by": deleted_by, "reason": reason}
+        )
+        self.db.add(log)
+        await self.db.commit()
+        
+        return task
+    
+    # ============================================================================
+    # АВТОМАТИЧЕСКАЯ ЭСКАЛАЦИЯ ПРОСРОЧЕННЫХ ЗАДАЧ
+    # ============================================================================
+    
+    async def check_and_escalate_overdue_tasks(self) -> List[AgentInteractionTask]:
+        """
+        Проверка и автоматическая эскалация просроченных задач согласно Enterprise Blueprint.
+        Триггеры эскалации:
+        - Задача ожидает одобрения более 24 часов (дедлайн прошел или истекло время на аппрув)
+        - Любая задача в статусе PROCESSING превысила таймаут
+        Эскалация проходит по цепочке: Agent → AI Marketing Director → Ответственный человек → Елена
+        """
+        now = datetime.now(timezone.utc)
+        escalation_threshold = now - timedelta(hours=24)  # 24 часа на одобрение
+        escalated_tasks: List[AgentInteractionTask] = []
+        
+        # Получаем все задачи, которые нуждаются в эскалации
+        query = select(AgentInteractionTask).where(
+            and_(
+                # Задачи, ожидающие одобрения более 24 часов
+                or_(
+                    and_(
+                        AgentInteractionTask.status == InteractionStatus.PENDING_APPROVAL.value,
+                        AgentInteractionTask.created_at < escalation_threshold
+                    ),
+                    # Задачи с истекшим дедлайном
+                    and_(
+                        AgentInteractionTask.deadline_at < now,
+                        AgentInteractionTask.status.not_in([
+                            InteractionStatus.COMPLETED.value,
+                            InteractionStatus.CANCELLED.value,
+                            InteractionStatus.DELETED.value,
+                            InteractionStatus.REJECTED.value
+                        ])
+                    ),
+                    # Задачи, превысившие таймаут выполнения
+                    and_(
+                        AgentInteractionTask.status == InteractionStatus.PROCESSING.value,
+                        AgentInteractionTask.started_at < (now - timedelta(seconds=AgentInteractionTask.timeout_seconds))
+                    )
+                )
+            )
+        )
+        
+        result = await self.db.execute(query)
+        tasks = result.scalars().all()
+        
+        for task in tasks:
+            # Определяем уровень эскалации на основе предыдущих эскалаций
+            escalation_level = self._get_task_escalation_level(task)
+            
+            # Обновляем статус и уровень эскалации
+            task.task_context = {
+                **(task.task_context or {}),
+                "escalation_level": escalation_level,
+                "escalated_at": now.isoformat(),
+                "overdue_hours": int((now - task.created_at).total_seconds() / 3600)
+            }
+            
+            # Логируем эскалацию
+            escalated_log = AgentInteractionLog(
+                task_id=task.id,
+                agent_name="escalation_service",
+                event_type="task_escalated",
+                event_data={
+                    "escalation_level": escalation_level,
+                    "reason": f"Задача просрочена на {(now - task.created_at).total_seconds() / 3600:.1f} часов",
+                    "new_recipient": self._get_escalation_recipient(escalation_level)
+                },
+                message=f"Задача эскалирована на уровень {escalation_level}. Получатель: {self._get_escalation_recipient(escalation_level)}"
+            )
+            self.db.add(escalated_log)
+            escalated_tasks.append(task)
+        
+        if escalated_tasks:
+            await self.db.commit()
+        
+        return escalated_tasks
+    
+    def _get_task_escalation_level(self, task: AgentInteractionTask) -> int:
+        """Определяет текущий уровень эскалации задачи (1-4)"""
+        task_context = task.task_context or {}
+        current_level = task_context.get("escalation_level", 0)
+        return min(current_level + 1, 4)  # Максимум 4 уровня (до Елены)
+    
+    def _get_escalation_recipient(self, level: int) -> str:
+        """Возвращает получателя для определенного уровня эскалации согласно flow из Blueprint"""
+        recipients = {
+            1: "AI Marketing Director",    # Первый уровень
+            2: "Human Responsible",       # Второй уровень - ответственный специалист
+            3: "Elena (supervisor)",      # Третий уровень - руководитель
+            4: "Elena (final escalation)" # Финальный уровень - максимальный приоритет для Елены
+        }
+        return recipients.get(level, "AI Marketing Director")
+    
+    async def get_overdue_tasks_stats(self) -> Dict[str, Any]:
+        """Получение статистики по просроченным задачам для дашборда"""
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(hours=24)
+        
+        # Подсчитываем задачи по уровням эскалации
+        result = await self.db.execute(
+            select(
+                AgentInteractionTask.status,
+                func.count(AgentInteractionTask.id)
+            ).where(
+                or_(
+                    AgentInteractionTask.created_at < yesterday,
+                    and_(
+                        AgentInteractionTask.deadline_at < now,
+                        AgentInteractionTask.status.not_in([
+                            InteractionStatus.COMPLETED.value,
+                            InteractionStatus.CANCELLED.value,
+                            InteractionStatus.DELETED.value
+                        ])
+                    )
+                )
+            ).group_by(AgentInteractionTask.status)
+        )
+        
+        stats = {}
+        for row in result.all():
+            stats[row[0]] = row[1]
+        
+        return {
+            "total_overdue": sum(stats.values()),
+            "by_status": stats,
+            "checked_at": now.isoformat()
+        }
     
     # ============================================================================
     # ЛОГИРОВАНИЕ И АУДИТ

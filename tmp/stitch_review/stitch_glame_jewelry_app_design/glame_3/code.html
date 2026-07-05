@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GLAME - Бренды</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-low": "#1a1c1e",
+                    "error": "#ffb4ab",
+                    "soft-gray": "#D8DADB",
+                    "on-tertiary": "#2c3134",
+                    "on-surface": "#e2e2e5",
+                    "on-error": "#690005",
+                    "surface-container-lowest": "#0c0e10",
+                    "secondary": "#c6c6c9",
+                    "surface": "#121416",
+                    "tertiary-container": "#dee3e7",
+                    "on-primary-fixed": "#191c1d",
+                    "inverse-surface": "#e2e2e5",
+                    "primary-fixed-dim": "#c4c7c8",
+                    "tertiary-fixed-dim": "#c2c7cb",
+                    "inverse-on-surface": "#2f3133",
+                    "on-tertiary-fixed": "#171c1f",
+                    "on-secondary": "#2f3133",
+                    "outline-variant": "#434749",
+                    "surface-container-high": "#282a2c",
+                    "inverse-primary": "#5c5f60",
+                    "surface-container-highest": "#333537",
+                    "error-container": "#93000a",
+                    "tertiary-fixed": "#dee3e7",
+                    "background": "#121416",
+                    "on-surface-variant": "#c4c7c8",
+                    "secondary-fixed-dim": "#c6c6c9",
+                    "surface-tint": "#c4c7c8",
+                    "on-tertiary-container": "#606569",
+                    "surface-container": "#1e2022",
+                    "surface-bright": "#38393c",
+                    "primary-container": "#e1e3e4",
+                    "secondary-container": "#454749",
+                    "on-primary-container": "#626566",
+                    "surface-dim": "#121416",
+                    "on-secondary-container": "#b4b5b7",
+                    "surface-variant": "#333537",
+                    "primary-fixed": "#e1e3e4",
+                    "on-secondary-fixed": "#1a1c1e",
+                    "on-tertiary-fixed-variant": "#42474b",
+                    "tertiary": "#ffffff",
+                    "outline": "#8e9192",
+                    "secondary-fixed": "#e2e2e5",
+                    "on-primary-fixed-variant": "#444748",
+                    "on-error-container": "#ffdad6",
+                    "border-gray": "#5C6064",
+                    "cold-light-gray": "#C7CBCF",
+                    "on-secondary-fixed-variant": "#454749",
+                    "primary": "#ffffff",
+                    "on-background": "#e2e2e5",
+                    "on-primary": "#2e3132"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "bottom-nav-height": "96px",
+                    "page-padding-h": "28px",
+                    "safe-air-bottom": "24px",
+                    "grid-gutter": "1px",
+                    "top-bar-height": "56px",
+                    "button-gap": "16px"
+            },
+            "fontFamily": {
+                    "headline-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "label-md": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-md": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "headline-lg-mobile": [
+                            "Hanken Grotesk"
+                    ],
+                    "label-sm": [
+                            "Hanken Grotesk"
+                    ],
+                    "display-lg": [
+                            "Hanken Grotesk"
+                    ]
+            },
+            "fontSize": {
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "0em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "label-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        
+        .border-t-architectural { border-top: 1px solid #5C6064; }
+        .border-b-architectural { border-bottom: 1px solid #5C6064; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col pt-top-bar-height pb-bottom-nav-height">
+<!-- Top App Bar -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-md h-[56px] flex justify-between items-center px-page-padding-h border-b border-border-gray">
+<button aria-label="Go back" class="text-primary hover:opacity-80 transition-opacity p-2 -ml-2">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<div class="text-headline-lg-mobile font-headline-lg-mobile tracking-tighter text-primary">
+            GLAME
+        </div>
+<button aria-label="Search" class="text-primary hover:opacity-80 transition-opacity p-2 -mr-2">
+<span class="material-symbols-outlined" data-icon="search">search</span>
+</button>
+</header>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col">
+<!-- Page Title -->
+<div class="px-page-padding-h pt-8 pb-6">
+<h1 class="text-display-lg font-display-lg text-primary">Бренды</h1>
+</div>
+<!-- Editorial Hero -->
+<div class="relative w-full aspect-square md:aspect-video border-y border-border-gray overflow-hidden mb-8">
+<img alt="" class="absolute inset-0 w-full h-full object-cover" data-alt="A striking minimalist architectural composition featuring brushed steel and geometric glass structures. Soft, high-key white lighting creates a pristine, clinical atmosphere. A single piece of silver jewelry rests on a raw concrete plinth, emphasizing structural clarity and premium materials." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaWiOW_5YuWZPezkPstPGySoodyVbS9llFzLHoLN6Ei46GGSmv22CEmxu4A37KI_cKwAllKFnQX6pRP4VIUszG84jXxCS3UAGfIKstGSgKoDIBicHFLuYAJL8__0abTYxJAD1bd9ObXIvLf-j14-hWCp0NGsbQ_-kNvq0HNxEHkIixqsM4c9hu0JWLf7VOZzlSJEfEiEbdPguFpITAf8U4vOAKO1e0m2fJQ0Nrsc8vvDzEnm3eZ2X4glfQ3BjVwxoOvQnpcLK4_hE"/>
+<!-- Dark gradient overlay for text readability -->
+<div class="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent"></div>
+<div class="absolute bottom-0 left-0 right-0 p-page-padding-h">
+<p class="text-headline-lg-mobile font-headline-lg-mobile text-primary max-w-[80%]">
+                    Кураторская система украшений GLAME
+                </p>
+</div>
+</div>
+<!-- Brand List -->
+<div class="flex flex-col px-page-padding-h gap-grid-gutter mb-safe-air-bottom">
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Geometry</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">точность вместо случайности</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Magna</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">величие формы</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Pearl</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">абсолютная чистота</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Crystal</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">свет и геометрия</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Bicolor</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">дуальность металла</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Prism Of Elegance</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">преломление стиля</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">UNOde50</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">испанский темперамент</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Raganella Princess</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">современная классика</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Island Soul</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">природная текстура</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">AGafi</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">архитектура в миниатюре</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Antura</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">строгие линии</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Kalliope</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">поэзия формы</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Wrinkles of Time</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">фактура времени</p>
+</a>
+<!-- Brand Item -->
+<a class="group flex flex-col py-6 border-b border-border-gray hover:bg-surface-container-low transition-colors rounded-none" href="#">
+<div class="flex justify-between items-center w-full">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary group-hover:opacity-80 transition-opacity">Claudio Canzian</h2>
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</div>
+<p class="text-label-md font-label-md text-secondary mt-2 uppercase tracking-widest">миланская школа</p>
+</a>
+</div>
+</main>
+<!-- Bottom Nav Bar -->
+<nav class="bg-surface dark:bg-surface border-t border-border-gray rounded-none fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-[28px] h-[96px] pb-safe-air-bottom md:hidden">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary scale-110 active scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="layers">layers</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="auto_awesome">auto_awesome</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+</a>
+</nav>
+</body></html>

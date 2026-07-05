@@ -112,7 +112,7 @@ class InstagramService:
                 }
             ]
         """
-        fields = "id,media_type,media_url,caption,timestamp,permalink"
+        fields = "id,media_type,media_url,thumbnail_url,caption,timestamp,permalink"
         data = await self._make_request(
             f"{self.account_id}/media",
             params={
@@ -127,6 +127,7 @@ class InstagramService:
                 "id": item.get("id"),
                 "media_type": item.get("media_type"),
                 "media_url": item.get("media_url"),
+                "thumbnail_url": item.get("thumbnail_url"),
                 "caption": item.get("caption", ""),
                 "timestamp": item.get("timestamp"),
                 "permalink": item.get("permalink")

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Мой стиль - GLAME</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error": "#ffb4ab",
+                        "surface-dim": "#121416",
+                        "cold-light-gray": "#C7CBCF",
+                        "primary-fixed": "#e1e3e4",
+                        "surface-container": "#1e2022",
+                        "on-primary-fixed": "#191c1d",
+                        "on-primary": "#2e3132",
+                        "tertiary-fixed-dim": "#c2c7cb",
+                        "inverse-primary": "#5c5f60",
+                        "surface-variant": "#333537",
+                        "secondary-fixed": "#e2e2e5",
+                        "soft-gray": "#D8DADB",
+                        "border-gray": "#5C6064",
+                        "surface": "#121416",
+                        "surface-bright": "#38393c",
+                        "on-tertiary-fixed-variant": "#42474b",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "outline": "#8e9192",
+                        "on-tertiary-container": "#606569",
+                        "secondary": "#c6c6c9",
+                        "surface-container-low": "#1a1c1e",
+                        "surface-container-highest": "#333537",
+                        "surface-tint": "#c4c7c8",
+                        "inverse-on-surface": "#2f3133",
+                        "error-container": "#93000a",
+                        "on-background": "#e2e2e5",
+                        "primary-container": "#e1e3e4",
+                        "outline-variant": "#434749",
+                        "tertiary-container": "#dee3e7",
+                        "on-secondary": "#2f3133",
+                        "background": "#121416",
+                        "tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#171c1f",
+                        "surface-container-high": "#282a2c",
+                        "primary": "#ffffff",
+                        "primary-fixed-dim": "#c4c7c8",
+                        "tertiary-fixed": "#dee3e7",
+                        "inverse-surface": "#e2e2e5",
+                        "on-secondary-fixed-variant": "#454749",
+                        "secondary-container": "#454749",
+                        "surface-container-lowest": "#0c0e10",
+                        "on-tertiary": "#2c3134",
+                        "on-surface-variant": "#c4c7c8",
+                        "on-primary-fixed-variant": "#444748",
+                        "on-error": "#690005",
+                        "on-surface": "#e2e2e5",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-container": "#b4b5b7",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "on-primary-container": "#626566"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "0px"
+                    },
+                    "spacing": {
+                        "button-gap": "16px",
+                        "page-padding-h": "28px",
+                        "grid-gutter": "1px",
+                        "bottom-nav-height": "96px",
+                        "top-bar-height": "56px",
+                        "safe-air-bottom": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "label-sm": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #121416; color: #e2e2e5; margin: 0; padding: 0; min-height: 100vh; overflow-x: hidden; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
+        .filled-icon { font-variation-settings: 'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .glame-btn-primary {
+            display: flex; align-items: center; justify-content: center;
+            height: 56px; width: 100%; min-width: 300px;
+            background-color: #EFF1F2; color: #222426;
+            border-radius: 0; border: none;
+            transition: opacity 0.2s ease; cursor: pointer;
+        }
+        .glame-btn-primary:hover { opacity: 0.9; }
+        
+        .glame-btn-secondary {
+            display: flex; align-items: center; justify-content: center;
+            height: 56px; width: 100%;
+            background-color: transparent; color: #ffffff;
+            border-radius: 0; border: 1px solid #ffffff;
+            transition: background-color 0.2s ease; cursor: pointer;
+        }
+        .glame-btn-secondary:hover { background-color: rgba(255,255,255,0.05); }
+
+        .section-header {
+            display: flex; justify-content: space-between; align-items: baseline;
+            margin-bottom: 24px; padding-top: 32px;
+            border-top: 1px solid #5C6064;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface dark:bg-surface text-on-surface font-body-md antialiased pb-bottom-nav-height md:pb-0 pt-top-bar-height md:pt-top-bar-height">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-[28px] h-[56px] bg-transparent dark:bg-transparent border-b border-border-gray backdrop-blur-md">
+<div class="flex-1"></div>
+<div class="text-headline-lg-mobile font-headline-lg-mobile tracking-tighter text-primary dark:text-primary">GLAME</div>
+<div class="flex-1 flex justify-end">
+<button class="hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-primary dark:text-primary" data-icon="search">search</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="w-full max-w-[1200px] mx-auto px-page-padding-h pt-8 pb-safe-air-bottom">
+<!-- Page Title & Greeting -->
+<div class="mb-12">
+<h1 class="text-display-lg font-display-lg text-primary mb-2">Мой стиль</h1>
+<p class="text-body-lg font-body-lg text-on-surface-variant">Анна, добро пожаловать в ваше личное пространство.</p>
+</div>
+<!-- Action Panel -->
+<div class="flex flex-col md:flex-row gap-4 mb-16">
+<button class="glame-btn-primary flex-1 font-label-md text-label-md uppercase tracking-wider">
+                Обсудить со стилистом
+            </button>
+<button class="glame-btn-secondary flex-1 font-label-md text-label-md uppercase tracking-wider">
+                Собрать свой образ
+            </button>
+</div>
+<!-- Section: Избранные товары -->
+<div class="mb-16">
+<div class="section-header">
+<h2 class="text-headline-lg-mobile md:text-headline-lg font-headline-lg-mobile md:font-headline-lg text-primary">Избранные товары</h2>
+<span class="text-label-md font-label-md text-on-surface-variant uppercase">Показать все</span>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-grid-gutter bg-border-gray border border-border-gray">
+<!-- Product Card 1 -->
+<div class="bg-surface relative group">
+<button class="absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center bg-surface/50 backdrop-blur-sm border border-border-gray hover:bg-surface transition-colors">
+<span class="material-symbols-outlined text-primary filled-icon" data-icon="favorite">favorite</span>
+</button>
+<div class="aspect-[4/5] bg-surface-container relative overflow-hidden">
+<img alt="Product" class="w-full h-full object-cover grayscale opacity-80 group-hover:opacity-100 group-hover:grayscale-0 transition-all duration-500" data-alt="A striking minimalist jewelry piece, a thick brushed silver cuff bracelet, displayed on a stark black slate slab. The lighting is cold and precise, emphasizing the structural integrity and geometric lines of the metal. The mood is high-end, brutalist luxury. The background is a seamless deep grey abyss." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEI5RzG-jOVhLSlqGuAwJMOnGacTwYa5BtX1BpkVgYVzyUhxIGDDwu0seDWYG7mttTp9tAbgEKktKXwokF4FQu6HraCsE7hFJIDPwNtgFsnNfcT4ZSsG_beK_tri4bGz1f_4HBi5YGpX0GsBYbR6q4zbgmqLHqbxlDnUeRf1fc2awt7m5bnpmACA9X7FE_md70Q8ekosIO6OAAdDjEQbIXzhybAZTZGRIsL7XIA0D61P1v0JYjITboUtJ25bSz2CV-L4ld-nRjsc8"/>
+</div>
+<div class="p-4 border-t border-border-gray">
+<div class="flex justify-between items-start mb-1">
+<h3 class="text-body-md font-body-md text-primary truncate pr-2">Cuff 'Brutalist'</h3>
+<span class="text-label-md font-label-md text-primary shrink-0">45 000 ₽</span>
+</div>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Серебро 925, ручная обработка</p>
+</div>
+</div>
+<!-- Product Card 2 -->
+<div class="bg-surface relative group">
+<button class="absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center bg-surface/50 backdrop-blur-sm border border-border-gray hover:bg-surface transition-colors">
+<span class="material-symbols-outlined text-primary filled-icon" data-icon="favorite">favorite</span>
+</button>
+<div class="aspect-[4/5] bg-surface-container relative overflow-hidden">
+<img alt="Product" class="w-full h-full object-cover grayscale opacity-80 group-hover:opacity-100 group-hover:grayscale-0 transition-all duration-500" data-alt="A pair of structural geometric earrings made of cold white gold, resting on a raw concrete block. Sharp edges and flawless flat planes reflect a single source of cool white light. The composition is highly architectural and austere. The aesthetic embodies minimal luxury without any warmth or softness." src="https://lh3.googleusercontent.com/aida-public/AB6AXuApy7DM48suIB62GnBaKNsorYnPbGrbyLXm1DZU3RTybfTwWQ9Yce3OAKqIyAs5EcnDiTPU1TOlb_kshuuUBG8gec4KCUTFVwvhsTrmbdyAYRYVbCQFWU-U234TnX7S9EwJWOpmW193mNJph9WUgv3xbaO9PqZyRQgR9Snhmq30qQelKE6E6K6UY_ITxNLvmLhHf3tMxhqwb5-q6At7gVZEceKbsqRSXSCVUBClPKM_DA7gjsOUjq6irRsR-6tUZBO1S5wgKFc4PrQ"/>
+</div>
+<div class="p-4 border-t border-border-gray">
+<div class="flex justify-between items-start mb-1">
+<h3 class="text-body-md font-body-md text-primary truncate pr-2">Серьги 'Angle'</h3>
+<span class="text-label-md font-label-md text-primary shrink-0">62 000 ₽</span>
+</div>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Белое золото 585</p>
+</div>
+</div>
+<!-- Product Card 3 -->
+<div class="bg-surface relative group hidden md:block">
+<button class="absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center bg-surface/50 backdrop-blur-sm border border-border-gray hover:bg-surface transition-colors">
+<span class="material-symbols-outlined text-primary filled-icon" data-icon="favorite">favorite</span>
+</button>
+<div class="aspect-[4/5] bg-surface-container relative overflow-hidden">
+<img alt="Product" class="w-full h-full object-cover grayscale opacity-80 group-hover:opacity-100 group-hover:grayscale-0 transition-all duration-500" data-alt="A thick, heavy architectural ring made of matte palladium, featuring a single recessed channel. It sits on a sheet of frosted glass suspended above a dark surface. Cold, surgical lighting illuminates the sharp 0-radius edges. The image conveys weight, precision, and high-end industrial design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO43y3v0m2mxABs9FVvHIEMdtfx2Y63cNldMoN98vO1P6hkqn8r4UV2frQUgAOVfPR95Dd8vdO5uZcX-qaCHWbiw8p50-BCQVH-fwB_b9LNsZltz2VMStW-9OfASXc6xvmX5STiWROcewdBdKQAkAuH1nazPVLTvf9LeyIvgvWhTuE7791zFcf8xrLjkUCfnKTHOldf7VfdGRQ8FENhGtM_zfHSG2NvYHVQBiqSDmBky2gjvHjZp7HENjuaEurDcK2VCkV1g0Ie6g"/>
+</div>
+<div class="p-4 border-t border-border-gray">
+<div class="flex justify-between items-start mb-1">
+<h3 class="text-body-md font-body-md text-primary truncate pr-2">Кольцо 'Core'</h3>
+<span class="text-label-md font-label-md text-primary shrink-0">89 000 ₽</span>
+</div>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Палладий</p>
+</div>
+</div>
+<!-- Product Card 4 -->
+<div class="bg-surface relative group hidden md:block">
+<button class="absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center bg-surface/50 backdrop-blur-sm border border-border-gray hover:bg-surface transition-colors">
+<span class="material-symbols-outlined text-primary filled-icon" data-icon="favorite">favorite</span>
+</button>
+<div class="aspect-[4/5] bg-surface-container relative overflow-hidden flex items-center justify-center border border-border-gray border-dashed m-4">
+<div class="text-center p-6">
+<span class="material-symbols-outlined text-on-surface-variant mb-2 text-4xl" data-icon="add">add</span>
+<p class="text-label-md font-label-md text-on-surface-variant uppercase">В каталог</p>
+</div>
+</div>
+<div class="p-4 border-t border-border-gray h-[77px]">
+<!-- Empty space to match card height -->
+</div>
+</div>
+</div>
+</div>
+<!-- Section: Сохраненные образы -->
+<div class="mb-16">
+<div class="section-header">
+<h2 class="text-headline-lg-mobile md:text-headline-lg font-headline-lg-mobile md:font-headline-lg text-primary">Сохраненные образы</h2>
+<div class="flex gap-2">
+<button class="w-10 h-10 border border-border-gray flex items-center justify-center hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="chevron_left">chevron_left</span>
+</button>
+<button class="w-10 h-10 border border-border-gray flex items-center justify-center hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-primary" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Horizontal Scroll Container -->
+<div class="flex overflow-x-auto gap-4 pb-4 no-scrollbar -mx-page-padding-h px-page-padding-h md:mx-0 md:px-0">
+<!-- Look Card 1 -->
+<div class="min-w-[240px] w-[240px] shrink-0 border border-border-gray bg-surface group cursor-pointer">
+<div class="aspect-[3/4] overflow-hidden relative">
+<img alt="Look" class="w-full h-full object-cover grayscale opacity-90 group-hover:scale-105 group-hover:grayscale-0 transition-all duration-700" data-alt="A fashion editorial shot featuring a model in a stark, structured black overcoat standing in a raw concrete architectural space. The model wears thick silver geometric earrings. Lighting is harsh and cinematic. The aesthetic is cold, minimalist, and deeply atmospheric, aligning with a brutalist luxury brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTiZXw0cRr9T0TdsrLHwZHR720sDPuK79yCzXJHYxrCpXYtiLzbU1XLYTEvIY8qHybOrk8NozfgNcQ9-XgC0E7gvDyW07qDDwWICppTmfPXCtmlLIvrdTgPqf6_xvz7yKgTc4OF_nEJMabuvnbFZJ4etBz-5olHbGPO5yj_skdjRPtcw1jTGSRinYRojppl5y97G-5mI7qR7K_kFRJMXZYGalbXzuiwKdBIz0xnQHdIxIAx0yrL8x_tWgDWHB-xnGsADhlWEDecUc"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface to-transparent opacity-60"></div>
+<div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+<span class="text-label-md font-label-md text-primary uppercase bg-surface/80 backdrop-blur-sm px-2 py-1 border border-border-gray">Look 01</span>
+<span class="material-symbols-outlined text-primary" data-icon="arrow_outward">arrow_outward</span>
+</div>
+</div>
+</div>
+<!-- Look Card 2 -->
+<div class="min-w-[240px] w-[240px] shrink-0 border border-border-gray bg-surface group cursor-pointer">
+<div class="aspect-[3/4] overflow-hidden relative">
+<img alt="Look" class="w-full h-full object-cover grayscale opacity-90 group-hover:scale-105 group-hover:grayscale-0 transition-all duration-700" data-alt="Close-up of a model's neck and jawline, showing a heavy, rigid metal choker against pale skin. The background is a flat, expansive sheet of brushed steel. Shadows are razor-sharp. The visual tone is technical, austere, and exclusively focused on the structural volume of the jewelry piece." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIfTSxPAFw1rEcNQ0XpP1GCTKsEGkDB7roWk-T-qkSCwEYoWAnWiuvu5ABg4n4_0q-_6lGsFdLn9VcqobmBNRBHUZ4Nd_wsx-y-xUM55pknmgkxEhE0JJhlm5-LD_poMv4KEnS85HqUK_22jJiCy3sSZJ1L3_WCR7hLlFej8-lBbX0fiBjtX5ysPXgBGlq5ZFf4njJnylc9-TiknOjmPmo7sl2ImVXvcR0HzB75CBV_vxdYGIfmoEAaHJjnXMafcWs360HdSjSeow"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface to-transparent opacity-60"></div>
+<div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+<span class="text-label-md font-label-md text-primary uppercase bg-surface/80 backdrop-blur-sm px-2 py-1 border border-border-gray">Look 02</span>
+<span class="material-symbols-outlined text-primary" data-icon="arrow_outward">arrow_outward</span>
+</div>
+</div>
+</div>
+<!-- Look Card 3 -->
+<div class="min-w-[240px] w-[240px] shrink-0 border border-border-gray bg-surface group cursor-pointer">
+<div class="aspect-[3/4] overflow-hidden relative">
+<img alt="Look" class="w-full h-full object-cover grayscale opacity-90 group-hover:scale-105 group-hover:grayscale-0 transition-all duration-700" data-alt="A wide shot of a female figure standing in a vast, empty gallery with polished concrete floors and large glass windows. She wears an all-black structural silhouette and layered geometric metal bracelets. The atmosphere is quiet, cold, and monumental. High contrast monochrome tones dominate the scene." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZC0F_fvEw3Gq1j-REarYqFhw_ruMwdbi340ChAHjfFB0mAG-XacoG7p1AYONc6LCDQ2gOHM6e5MTv3cA59xIiQKL_3AN6ZNrIZm9F9T9aEh3NWn3DwlDZc3nYorRm_Cz0zxeHEcn0-FIiozI-HwhVHVHtV6fOyFQFWM4pcM4yPACZld-Y9FVRSyFUeHWMNmkQ4_U23FhSAgYQM0fE9pwtqRG-3hX1BaROofOrSaBJ4nB2W5-TUufAFmTDVrr88EUP-2AoLC2yuTU"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface to-transparent opacity-60"></div>
+<div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+<span class="text-label-md font-label-md text-primary uppercase bg-surface/80 backdrop-blur-sm px-2 py-1 border border-border-gray">Look 03</span>
+<span class="material-symbols-outlined text-primary" data-icon="arrow_outward">arrow_outward</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-[28px] h-[96px] pb-safe-air-bottom bg-surface dark:bg-surface border-t border-border-gray">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="grid_view">grid_view</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="layers">layers</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="auto_awesome">auto_awesome</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]" data-icon="favorite">favorite</span>
+</a>
+<!-- Active Tab: Profile/My Style -->
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary scale-110 active-nav-item" href="#">
+<span class="material-symbols-outlined text-[24px] filled-icon" data-icon="person">person</span>
+</a>
+</nav>
+<!-- Desktop Nav Cluster (Hidden on Mobile) -->
+<div class="hidden md:flex fixed top-0 left-1/2 -translate-x-1/2 z-50 h-[56px] items-center gap-8 px-8 bg-surface/80 backdrop-blur-md border-b border-border-gray border-l border-r">
+<a class="text-label-md font-label-md text-secondary hover:text-primary uppercase tracking-wider transition-colors" href="#">Каталог</a>
+<a class="text-label-md font-label-md text-secondary hover:text-primary uppercase tracking-wider transition-colors" href="#">Коллекции</a>
+<a class="text-label-md font-label-md text-secondary hover:text-primary uppercase tracking-wider transition-colors" href="#">Бренд</a>
+<a class="text-label-md font-label-md text-primary uppercase tracking-wider border-b border-primary pb-1" href="#">Мой стиль</a>
+</div>
+</body></html>

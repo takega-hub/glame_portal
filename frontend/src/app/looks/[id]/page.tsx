@@ -3,11 +3,27 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { LookWithProducts } from '@/types';
+import type { LookWithProducts, Product } from '@/types';
 import type { DigitalModelInfo } from '@/lib/api';
 import PhotoTryOn from '@/components/looks/PhotoTryOn';
 import ProductCard from '@/components/products/ProductCard';
-import Link from 'next/link';
+import ManualLookCreator from '@/components/looks/ManualLookCreator';
+
+function getVariantSpecEntries(product: Product): Array<[string, string]> {
+  const specs = product.specifications;
+  if (!specs || typeof specs !== 'object') return [];
+  return Object.entries(specs)
+    .filter(([key, value]) => {
+      if (['parent_external_id', 'Parent_Key', 'parent_key', 'characteristic_id', 'quantity', 'barcode'].includes(key)) {
+        return false;
+      }
+      if (value === null || value === undefined) return false;
+      const text = String(value).trim();
+      return Boolean(text) && text !== '00000000-0000-0000-0000-000000000000';
+    })
+    .slice(0, 4)
+    .map(([key, value]) => [key, String(value)]);
+}
 
 export default function LookDetailsPage() {
   const params = useParams();
@@ -20,7 +36,6 @@ export default function LookDetailsPage() {
   const [approving, setApproving] = useState(false);
   const [showTryOn, setShowTryOn] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [regeneratingImage, setRegeneratingImage] = useState(false);
   const [digitalModels, setDigitalModels] = useState<DigitalModelInfo[]>([]);
   const [imageGenerationMode, setImageGenerationMode] = useState<'default' | 'digital'>('digital');
@@ -28,12 +43,11 @@ export default function LookDetailsPage() {
   const [deleting, setDeleting] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [deletingImageIndex, setDeletingImageIndex] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({
-    name: '',
-    style: '',
-    mood: '',
-    description: '',
-  });
+  const [productSearch, setProductSearch] = useState('');
+  const [productSearchResults, setProductSearchResults] = useState<Product[]>([]);
+  const [searchingProducts, setSearchingProducts] = useState(false);
+  const [updatingProducts, setUpdatingProducts] = useState(false);
+  const [replaceTargetProductId, setReplaceTargetProductId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!lookId) return;
@@ -88,34 +102,7 @@ export default function LookDetailsPage() {
 
   const handleEdit = () => {
     if (!look) return;
-    setEditForm({
-      name: look.name || '',
-      style: look.style || '',
-      mood: look.mood || '',
-      description: look.description || '',
-    });
     setEditing(true);
-  };
-
-  const handleSave = async () => {
-    if (!look) return;
-    
-    setSaving(true);
-    setError(null);
-    try {
-      const updated = await api.updateLook(look.id, {
-        name: editForm.name,
-        style: editForm.style,
-        mood: editForm.mood,
-        description: editForm.description,
-      });
-      setLook(updated as LookWithProducts);
-      setEditing(false);
-    } catch (error: any) {
-      setError(error?.response?.data?.detail || 'Ошибка при сохранении образа');
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleRegenerateImage = async () => {
@@ -153,17 +140,7 @@ export default function LookDetailsPage() {
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditing(false);
-    if (look) {
-      setEditForm({
-        name: look.name || '',
-        style: look.style || '',
-        mood: look.mood || '',
-        description: look.description || '',
-      });
-    }
-  };
+  const handleCancelEdit = () => setEditing(false);
 
   const handleDelete = async () => {
     if (!look) return;
@@ -183,6 +160,80 @@ export default function LookDetailsPage() {
       setError(error?.response?.data?.detail || 'Ошибка при удалении образа');
       setDeleting(false);
     }
+  };
+
+  const handleSearchProducts = async () => {
+    const search = productSearch.trim();
+    if (!search) {
+      setProductSearchResults([]);
+      return;
+    }
+
+    setSearchingProducts(true);
+    setError(null);
+    try {
+      const result = await api.getProducts({ search, limit: 12, variants_only: true });
+      setProductSearchResults(Array.isArray(result) ? result : []);
+    } catch (error: any) {
+      setError(error?.response?.data?.detail || 'Ошибка при поиске товаров');
+    } finally {
+      setSearchingProducts(false);
+    }
+  };
+
+  const updateLookProducts = async (nextProductIds: string[]) => {
+    if (!look) return;
+
+    setUpdatingProducts(true);
+    setError(null);
+    try {
+      const updated = await api.updateLook(look.id, { product_ids: nextProductIds });
+      setLook(updated as LookWithProducts);
+      setReplaceTargetProductId(null);
+    } catch (error: any) {
+      setError(error?.response?.data?.detail || 'Ошибка при обновлении товаров образа');
+    } finally {
+      setUpdatingProducts(false);
+    }
+  };
+
+  const handleRemoveProduct = async (productId: string) => {
+    if (!look) return;
+    const productName = look.products?.find((item) => item.id === productId)?.name || 'товар';
+    if (!confirm(`Удалить "${productName}" из образа?`)) {
+      return;
+    }
+
+    const nextProductIds = (look.product_ids || []).filter((id) => id !== productId);
+    await updateLookProducts(nextProductIds);
+  };
+
+  const handleAddProduct = async (product: Product) => {
+    if (!look) return;
+    if ((look.product_ids || []).includes(product.id)) {
+      setError('Этот товар уже добавлен в образ');
+      return;
+    }
+
+    const nextProductIds = [...(look.product_ids || []), product.id];
+    await updateLookProducts(nextProductIds);
+  };
+
+  const handleReplaceProduct = async (product: Product) => {
+    if (!look || !replaceTargetProductId) return;
+    if ((look.product_ids || []).includes(product.id)) {
+      setError('Этот товар уже есть в образе. Сначала удалите его, если нужна замена.');
+      return;
+    }
+
+    const nextProductIds = [...(look.product_ids || [])];
+    const replaceIndex = nextProductIds.findIndex((id) => id === replaceTargetProductId);
+    if (replaceIndex === -1) {
+      setError('Не удалось найти товар для замены');
+      return;
+    }
+    nextProductIds[replaceIndex] = product.id;
+    await updateLookProducts(nextProductIds);
   };
 
   if (loading) {
@@ -212,6 +263,39 @@ export default function LookDetailsPage() {
               Вернуться к списку образов
             </button>
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (editing) {
+    return (
+      <main className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-6">
+            <button
+              onClick={() => setEditing(false)}
+              className="text-gray-600 hover:text-gray-900 mb-4"
+            >
+              ← Назад к образу
+            </button>
+          </div>
+          <ManualLookCreator
+            mode="edit"
+            initialLook={look}
+            selectedDigitalModel={
+              typeof look.generation_metadata?.digital_model === 'string'
+                ? look.generation_metadata.digital_model
+                : selectedDigitalModel
+            }
+            onCancel={handleCancelEdit}
+            onLookCreated={(updated) => {
+              if (updated) {
+                setLook(updated);
+              }
+              setEditing(false);
+            }}
+          />
         </div>
       </main>
     );
@@ -497,82 +581,25 @@ export default function LookDetailsPage() {
             {/* Информация об образе */}
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex justify-between items-start mb-4">
-                {editing ? (
-                  <input
-                    type="text"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                    className="text-2xl font-bold text-gray-900 border border-gray-300 rounded px-2 py-1 flex-1 mr-2"
-                    placeholder="Название образа"
-                  />
-                ) : (
-                  <h1 className="text-2xl font-bold text-gray-900">{look.name}</h1>
-                )}
-                {!editing && (
-                  <button
-                    onClick={handleEdit}
-                    className="ml-4 px-3 py-1 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-                  >
-                    Редактировать
-                  </button>
-                )}
+                <h1 className="text-2xl font-bold text-gray-900">{look.name}</h1>
+                <button
+                  onClick={handleEdit}
+                  className="ml-4 px-3 py-1 text-sm bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
+                >
+                  Редактировать
+                </button>
               </div>
-              
-              {editing ? (
-                <div className="space-y-4 mb-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Стиль</label>
-                    <input
-                      type="text"
-                      value={editForm.style}
-                      onChange={(e) => setEditForm({ ...editForm, style: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500"
-                      placeholder="Стиль образа"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Настроение</label>
-                    <input
-                      type="text"
-                      value={editForm.mood}
-                      onChange={(e) => setEditForm({ ...editForm, mood: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500"
-                      placeholder="Настроение образа"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Описание</label>
-                    <textarea
-                      value={editForm.description}
-                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500"
-                      placeholder="Описание образа"
-                      rows={4}
-                    />
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleSave}
-                      disabled={saving}
-                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition disabled:opacity-50"
-                    >
-                      {saving ? 'Сохранение...' : 'Сохранить'}
-                    </button>
-                    <button
-                      onClick={handleCancelEdit}
-                      disabled={saving}
-                      className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition disabled:opacity-50"
-                    >
-                      Отмена
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
+
+              <>
                   <div className="flex flex-wrap gap-2 mb-4">
                 {look.status === 'auto_generated' && (
                   <span className="px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded">
                     AI Генерация
+                  </span>
+                )}
+                {look.is_new && (
+                  <span className="px-3 py-1 border border-gray-900 text-gray-900 text-sm rounded">
+                    Новинка
                   </span>
                 )}
                 {look.approval_status === 'approved' && (
@@ -601,7 +628,7 @@ export default function LookDetailsPage() {
                       <p className="text-gray-900 mb-4">{look.description}</p>
                     )}
                   </>
-              )}
+              
 
               {/* Модные тренды */}
               {look.fashion_trends && look.fashion_trends.length > 0 && (
@@ -653,14 +680,155 @@ export default function LookDetailsPage() {
           {/* Правая колонка: Товары */}
           <div>
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <h2 className="text-xl font-semibold text-gray-900">
                 Товары в образе ({look.products?.length || 0})
-              </h2>
+                </h2>
+                {updatingProducts && (
+                  <span className="rounded-full bg-gold-100 px-3 py-1 text-xs font-medium text-gold-700">
+                    Обновление...
+                  </span>
+                )}
+              </div>
+
+              <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Управление товарами</h3>
+                    <p className="mt-1 text-xs text-gray-600">
+                      Ищите товар по артикулу, названию или коду и добавляйте его в образ.
+                    </p>
+                  </div>
+                  {replaceTargetProductId && (
+                    <button
+                      onClick={() => setReplaceTargetProductId(null)}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-white"
+                    >
+                      Отменить замену
+                    </button>
+                  )}
+                </div>
+
+                {replaceTargetProductId && (
+                  <div className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                    Режим замены активен. Выберите новый товар из результатов поиска, чтобы заменить текущий.
+                  </div>
+                )}
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        void handleSearchProducts();
+                      }
+                    }}
+                    placeholder="Введите артикул, код или название товара"
+                    className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500"
+                  />
+                  <button
+                    onClick={handleSearchProducts}
+                    disabled={searchingProducts || updatingProducts}
+                    className="rounded-md bg-gold-500 px-4 py-2 text-sm font-medium text-white hover:bg-gold-600 disabled:opacity-50"
+                  >
+                    {searchingProducts ? 'Поиск...' : 'Найти товар'}
+                  </button>
+                </div>
+
+                {productSearchResults.length > 0 && (
+                  <div className="mt-4 space-y-3">
+                    {productSearchResults.map((product) => {
+                      const alreadyInLook = (look.product_ids || []).includes(product.id);
+                      const imageUrl = product.images?.[0];
+                      const variantSpecs = getVariantSpecEntries(product);
+                      return (
+                        <div
+                          key={product.id}
+                          className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-3 sm:flex-row sm:items-center"
+                        >
+                          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-md bg-gray-100">
+                            {imageUrl ? (
+                              <img src={imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-xs text-gray-400">Нет фото</div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-gray-900">{product.name}</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Артикул: {product.article || product.external_code || '—'}
+                            </p>
+                            {variantSpecs.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {variantSpecs.map(([key, value]) => (
+                                  <span
+                                    key={`${product.id}-${key}`}
+                                    className="rounded-full bg-gray-100 px-2 py-1 text-[11px] text-gray-700"
+                                  >
+                                    {key}: {value}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {product.brand && <p className="mt-1 text-xs text-gray-500">{product.brand}</p>}
+                          </div>
+                          <div className="flex gap-2">
+                            {replaceTargetProductId ? (
+                              <button
+                                onClick={() => void handleReplaceProduct(product)}
+                                disabled={updatingProducts || alreadyInLook}
+                                className="rounded-md bg-indigo-500 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-600 disabled:opacity-50"
+                              >
+                                {alreadyInLook ? 'Уже в образе' : 'Заменить на этот'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => void handleAddProduct(product)}
+                                disabled={updatingProducts || alreadyInLook}
+                                className="rounded-md bg-green-500 px-3 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-50"
+                              >
+                                {alreadyInLook ? 'Уже добавлен' : 'Добавить'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               
               {look.products && look.products.length > 0 ? (
                 <div className="space-y-4">
                   {look.products.map((product) => (
-                    <ProductCard key={product.id} product={product} />
+                    <div key={product.id} className="rounded-lg border border-gray-200 p-3">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-xs text-gray-500">
+                          Артикул: {product.article || product.external_code || '—'}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setReplaceTargetProductId(product.id)}
+                            disabled={updatingProducts}
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium text-white transition disabled:opacity-50 ${
+                              replaceTargetProductId === product.id ? 'bg-indigo-700' : 'bg-indigo-500 hover:bg-indigo-600'
+                            }`}
+                          >
+                            {replaceTargetProductId === product.id ? 'Выберите новый товар ниже' : 'Заменить'}
+                          </button>
+                          <button
+                            onClick={() => void handleRemoveProduct(product.id)}
+                            disabled={updatingProducts}
+                            className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </div>
+                      <ProductCard product={product} />
+                    </div>
                   ))}
                 </div>
               ) : (

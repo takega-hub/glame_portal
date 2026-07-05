@@ -1,0 +1,101 @@
+HTTP 200 OK
+{
+  "available_customer_data": {
+    "app_behavior": [
+      "analytics_events",
+      "page_view",
+      "ui_click",
+      "product_view",
+      "look_view",
+      "chat_message",
+      "channel",
+      "utm",
+      "event_data"
+    ],
+    "communications": [
+      "generated_customer_messages",
+      "message",
+      "cta",
+      "event_type",
+      "event_brand",
+      "event_store",
+      "status",
+      "sent_at",
+      "payload"
+    ],
+    "loyalty": [
+      "loyalty_points",
+      "loyalty_transactions",
+      "transaction_type",
+      "points",
+      "balance_after",
+      "reason",
+      "description",
+      "source",
+      "expires_at"
+    ],
+    "profile": [
+      "id",
+      "phone",
+      "email",
+      "full_name",
+      "city",
+      "gender",
+      "discount_card_number",
+      "customer_id_1c",
+      "discount_card_id_1c",
+      "persona",
+      "preferences",
+      "customer_segment",
+      "rfm_score",
+      "purchase_preferences",
+      "preferred_store_name",
+      "secondary_store_name",
+      "synced_at"
+    ],
+    "purchase_history": [
+      "purchase_date",
+      "document_id_1c",
+      "store_id_1c",
+      "store_name",
+      "product_name",
+      "product_article",
+      "category",
+      "brand",
+      "quantity",
+      "price",
+      "total_amount"
+    ],
+    "saved_content": [
+      "saved_looks",
+      "favorite/generated",
+      "notes",
+      "is_purchased",
+      "recommended_occasions",
+      "look_name"
+    ],
+    "stylist": [
+      "live_stylist_conversations",
+      "conversation_status",
+      "scenario",
+      "source",
+      "assigned_stylist",
+      "internal_notes",
+      "result_purchase_status",
+      "stylist_chat_messages",
+      "attachments"
+    ]
+  },
+  "by_segment": {
+    "Active": 201,
+    "New": 433,
+    "Regular": 920,
+    "Sleeping": 4647,
+    "VIP": 8,
+    "unknown": 7
+  },
+  "customers_with_purchases": 6034,
+  "new_last_30_days": 76,
+  "total_customers": 6216,
+  "total_loyalty_points": 2029444
+}

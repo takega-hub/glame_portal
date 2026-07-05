@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GLAME - Checkout Success</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Hanken Grotesk (Mapping to design system typography) -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Design System Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "inverse-on-surface": "#2f3133",
+                    "secondary-fixed": "#e2e2e5",
+                    "on-primary-fixed-variant": "#444748",
+                    "tertiary-fixed": "#dee3e7",
+                    "on-tertiary-container": "#606569",
+                    "on-primary-fixed": "#191c1d",
+                    "on-primary": "#2e3132",
+                    "surface-container-high": "#282a2c",
+                    "secondary-container": "#454749",
+                    "tertiary": "#ffffff",
+                    "surface-tint": "#c4c7c8",
+                    "on-background": "#e2e2e5",
+                    "inverse-surface": "#e2e2e5",
+                    "on-secondary": "#2f3133",
+                    "secondary": "#c6c6c9",
+                    "on-secondary-fixed-variant": "#454749",
+                    "on-surface-variant": "#c4c7c8",
+                    "border-gray": "#5C6064",
+                    "background": "#121416",
+                    "surface-variant": "#333537",
+                    "surface": "#121416",
+                    "surface-bright": "#38393c",
+                    "outline": "#8e9192",
+                    "outline-variant": "#434749",
+                    "tertiary-fixed-dim": "#c2c7cb",
+                    "on-secondary-container": "#b4b5b7",
+                    "primary-container": "#e1e3e4",
+                    "surface-container": "#1e2022",
+                    "cold-light-gray": "#C7CBCF",
+                    "on-primary-container": "#626566",
+                    "primary": "#ffffff",
+                    "error-container": "#93000a",
+                    "on-tertiary": "#2c3134",
+                    "on-error-container": "#ffdad6",
+                    "error": "#ffb4ab",
+                    "on-tertiary-fixed": "#171c1f",
+                    "soft-gray": "#D8DADB",
+                    "surface-container-lowest": "#0c0e10",
+                    "surface-container-highest": "#333537",
+                    "primary-fixed-dim": "#c4c7c8",
+                    "tertiary-container": "#dee3e7",
+                    "secondary-fixed-dim": "#c6c6c9",
+                    "surface-container-low": "#1a1c1e",
+                    "on-secondary-fixed": "#1a1c1e",
+                    "surface-dim": "#121416",
+                    "on-surface": "#e2e2e5",
+                    "on-error": "#690005",
+                    "primary-fixed": "#e1e3e4",
+                    "inverse-primary": "#5c5f60",
+                    "on-tertiary-fixed-variant": "#42474b"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0px",
+                    "lg": "0px",
+                    "xl": "0px",
+                    "full": "0px"
+            },
+            "spacing": {
+                    "page-padding-h": "28px",
+                    "button-gap": "16px",
+                    "safe-air-bottom": "24px",
+                    "grid-gutter": "1px",
+                    "top-bar-height": "56px",
+                    "bottom-nav-height": "96px"
+            },
+            "fontFamily": {
+                    "label-sm": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "display-lg": ["Hanken Grotesk"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "label-md": ["Hanken Grotesk"],
+                    "body-md": ["Hanken Grotesk"],
+                    "body-lg": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                    "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                    "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                    "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                    "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                    "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                    "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Hide scrollbar for clean architectural look */
+        ::-webkit-scrollbar { display: none; }
+        * { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen flex flex-col pt-top-bar-height pb-bottom-nav-height antialiased selection:bg-surface-variant selection:text-primary">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-[28px] h-[56px] border-b border-border-gray bg-background text-primary transition-transform duration-200">
+<!-- Spacer to ensure true center alignment of logo when trailing icon is present -->
+<div class="w-6 h-6"></div>
+<div class="text-headline-lg-mobile font-headline-lg-mobile tracking-tighter">GLAME</div>
+<button class="w-6 h-6 flex items-center justify-center hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined text-primary">search</span>
+</button>
+</header>
+<!-- Main Canvas -->
+<main class="flex-grow flex flex-col px-page-padding-h pt-12 pb-12 w-full max-w-2xl mx-auto">
+<!-- Structural Top Line -->
+<div class="w-12 h-px bg-border-gray mb-8"></div>
+<!-- Confirmation Header -->
+<div class="mb-12">
+<h1 class="text-display-lg font-display-lg text-primary mb-6">Заказ<br/>оформлен</h1>
+<p class="text-body-lg font-body-lg text-on-surface-variant leading-relaxed max-w-sm">
+                Номер заказа №4812. Мы пришлем уведомление, когда курьер будет в пути.
+            </p>
+</div>
+<!-- Loyalty Reward Panel (Architectural Box) -->
+<div class="border border-border-gray bg-surface p-6 mb-12 relative overflow-hidden group">
+<!-- Subtle accent block -->
+<div class="absolute top-0 left-0 w-1 h-full bg-border-gray"></div>
+<div class="flex items-start justify-between">
+<div>
+<div class="text-label-sm font-label-sm text-on-surface-variant mb-2 uppercase tracking-widest">Программа лояльности</div>
+<div class="text-body-lg font-body-lg text-primary mb-1">Вам начислено +1,500 бонусов</div>
+<div class="text-body-md font-body-md text-secondary">Ваш текущий статус — Silver</div>
+</div>
+</div>
+</div>
+<!-- Order Summary Thumbnails -->
+<div class="mb-16">
+<div class="text-label-sm font-label-sm text-on-surface-variant mb-4 uppercase tracking-widest">Состав заказа</div>
+<div class="flex flex-wrap gap-4">
+<!-- Thumbnail 1 -->
+<div class="w-20 h-24 border border-border-gray bg-surface-container-low overflow-hidden relative" data-alt="A macro studio shot of a sleek, brutalist metallic perfume bottle with sharp geometric edges, resting on a raw concrete surface under cold, harsh light. The aesthetic is extremely minimalist, high-end, and technical, characterized by deep charcoal tones, icy silver reflections, and devoid of any warm colors.">
+<img alt="Item 1" class="w-full h-full object-cover opacity-80 mix-blend-luminosity hover:opacity-100 hover:mix-blend-normal transition-all duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrRicSfLNeX7hutAwaDC6iElYphSmcDF_LUzIdjGBNeeBAtE-5DooxNyd_n94NJ--zCRs_SdfWMxnsiel1d0f2wak2XKQLU3jorbNhH6X5TOpZWnTjhOxYOD2nR37pm2Yx61VwsdV-GCFJU1b6aAFCmbjYXYTTdm7L1X4lg5cfuqTczs-i3lt08cnhTOP6ansUALVtfB-_uGEa8YOja8HrroAURV6t3Aka8TQUZfnxS3iYSG2ObsW7RHi7rbvszqdwpMMQ0RaGD1I"/>
+</div>
+<!-- Thumbnail 2 -->
+<div class="w-20 h-24 border border-border-gray bg-surface-container-low overflow-hidden relative" data-alt="A minimalist overhead shot of a premium, matte black skincare jar with a perfectly flat lid, situated against a dark, textured slate background. A single, sharp beam of cool white light cuts across the composition, highlighting the precise 90-degree angles of the packaging. The mood is clinical, luxurious, and stark.">
+<img alt="Item 2" class="w-full h-full object-cover opacity-80 mix-blend-luminosity hover:opacity-100 hover:mix-blend-normal transition-all duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmNlPh42GWXUGp19sFjL0_fWKw5lwRJeKnXQlMCM_f-UCU_mrCqVQZnEjhYI6ivciXbY3BzgML9jrvqerx28lc376KYwluU8NiOHmv_Ro049RILBcTPlS6cwNs2dL0V1Py6NHdrPdtppcUHO4NHxZ8rrJZqkYetJ1BhEsWgrvz8izvupUy2qIK00vm4tXbdAuxZFr-2nKDumqz31Z-wd2ud95FcpibDteou7TFWU9nx43YSAwd7H8rtDHyqCeNAnhbG9LS9Msp710"/>
+</div>
+<!-- Thumbnail 3 -->
+<div class="w-20 h-24 border border-border-gray bg-surface-container-low overflow-hidden relative flex items-center justify-center text-label-sm font-label-sm text-on-surface-variant">
+                    +2
+                </div>
+</div>
+</div>
+<!-- Spacer to push CTAs to bottom if needed, otherwise just flow -->
+<div class="mt-auto"></div>
+<!-- CTAs -->
+<div class="flex flex-col gap-button-gap mt-8">
+<!-- Primary Action -->
+<button class="w-full h-[56px] bg-primary text-on-primary-fixed text-label-md font-label-md uppercase tracking-wider flex items-center justify-center hover:bg-opacity-90 active:scale-[0.98] transition-all duration-200">
+                Вернуться на главную
+            </button>
+<!-- Secondary Action -->
+<button class="w-full h-[56px] border border-border-gray bg-transparent text-primary text-label-md font-label-md uppercase tracking-wider flex items-center justify-center hover:bg-surface-container-low active:scale-[0.98] transition-all duration-200">
+                Мои заказы
+            </button>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-[28px] h-[96px] pb-safe-air-bottom border-t border-border-gray bg-surface text-label-sm font-label-sm">
+<!-- Active Nav Item (Mapped to Home/Main) -->
+<a class="flex flex-col items-center justify-center text-primary scale-110 active:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">grid_view</span>
+</a>
+<!-- Inactive Nav Items -->
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">layers</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">auto_awesome</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">favorite</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined">person</span>
+</a>
+</nav>
+</body></html>

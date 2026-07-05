@@ -64,9 +64,15 @@ async def main() -> None:
             batch_size=batch_size,
             load_all=load_all
         )
+        print(f"Cards stats: {cards_stats}")
 
         print("\nStarting sync_purchase_history...")
-        await service.sync_purchase_history(days=days)
+        purchase_stats = await service.sync_purchase_history(days=days)
+        print(f"Purchase stats: {purchase_stats}")
+
+        print("\nStarting sync_loyalty_points...")
+        loyalty_stats = await service.sync_loyalty_points()
+        print(f"Loyalty stats: {loyalty_stats}")
 
         print("\n" + "=" * 60)
         print("Sync completed.")

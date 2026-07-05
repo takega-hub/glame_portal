@@ -81,6 +81,7 @@ def add_role_column():
                 ("customer_id_1c", "VARCHAR(255)"),
                 ("discount_card_id_1c", "VARCHAR(255)"),
                 ("full_name", "VARCHAR(255)"),
+                ("birth_date", "DATE"),
                 ("loyalty_points", "INTEGER DEFAULT 0 NOT NULL"),
                 ("total_purchases", "INTEGER DEFAULT 0 NOT NULL"),
                 ("total_spent", "INTEGER DEFAULT 0 NOT NULL"),

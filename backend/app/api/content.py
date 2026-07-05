@@ -1779,6 +1779,149 @@ class RegenerateMediaRequest(BaseModel):
     style_intensity: str = "classic"  # classic | bold | edgy
 
 
+class HermesImageGenerationVariantRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    provider: str = "auto"  # auto | openrouter/platform | comfyui
+    prompt: Optional[str] = None
+    style_intensity: str = "classic"  # classic | bold | edgy
+    model_profile: Optional[str] = None
+    reference_image_urls: Optional[List[str]] = None
+    aspect_ratio: str = "1:1"
+    negative_prompt: Optional[str] = None
+
+
+class HermesImageGenerationRequest(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    prompt: str
+    reference_image_urls: Optional[List[str]] = None
+    model_profile: Optional[str] = None
+    provider: str = "auto"  # auto | openrouter/platform | comfyui
+    variants: int = 1
+    variant_options: Optional[List[HermesImageGenerationVariantRequest]] = None
+    asset_group: str = "hermes_generated"
+    filename_prefix: str = "hermes"
+    aspect_ratio: str = "1:1"
+    negative_prompt: Optional[str] = None
+    no_text_on_image: bool = True
+    allow_text_only_fallback: bool = False
+
+
+class HermesImageGenerationResult(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
+    url: str
+    prompt_used: str
+    provider: str
+    model: Optional[str] = None
+    reference_images_count: int = 0
+    model_reference_images_count: int = 0
+    reference_image_urls: List[str] = []
+    model_reference_image_urls: List[str] = []
+    asset_group: str
+    attempts: List[Dict[str, Any]] = []
+    variant_index: int
+    status: str = "success"
+    error: Optional[str] = None
+
+
+class HermesImageGenerationResponse(BaseModel):
+    results: List[HermesImageGenerationResult]
+    best_result: Optional[HermesImageGenerationResult] = None
+    requested_variants: int
+    succeeded: int
+    failed: int
+
+
+def _apply_image_style_intensity(prompt: str, style_intensity: str) -> str:
+    intensity = (style_intensity or "classic").strip().lower()
+    if intensity == "bold":
+        return prompt.rstrip() + "\n\nИнтенсивность стиля: bold — более смелая fashion editorial подача, выразительная поза, драматичный свет, но премиально и без дешёвого глянца."
+    if intensity == "edgy":
+        return prompt.rstrip() + "\n\nИнтенсивность стиля: edgy — дерзкий high-fashion editorial, сильная композиция, необычный ракурс, но украшение остаётся читаемым и эстетика GLAME остаётся премиальной."
+    return prompt.rstrip() + "\n\nИнтенсивность стиля: classic — элегантно, сдержанно, чистая премиальная GLAME эстетика."
+
+
+@router.post("/image-generation/generate", response_model=HermesImageGenerationResponse)
+async def generate_hermes_image(
+    request: HermesImageGenerationRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Универсальная генерация изображений для Hermes/Elena.
+
+    Позволяет агенту выбрать backend (OpenRouter/platform или ComfyUI), запросить
+    несколько вариантов и получить URL + prompt/model/provider/reference metadata
+    для последующего отбора приемлемого результата.
+    """
+    base_prompt = (request.prompt or "").strip()
+    if not base_prompt:
+        raise HTTPException(status_code=400, detail="prompt обязателен")
+
+    requested_variants = max(1, min(int(request.variants or 1), 4))
+    raw_options = list(request.variant_options or [])
+    if raw_options:
+        requested_variants = min(len(raw_options), 4)
+    else:
+        default_intensities = ["classic", "bold", "edgy", "classic"]
+        raw_options = [
+            HermesImageGenerationVariantRequest(
+                provider=request.provider,
+                style_intensity=default_intensities[i],
+                aspect_ratio=request.aspect_ratio,
+                negative_prompt=request.negative_prompt,
+            )
+            for i in range(requested_variants)
+        ]
+
+    image_service = ImageGenerationService(db=db)
+    results: List[HermesImageGenerationResult] = []
+    failed = 0
+
+    for idx, option in enumerate(raw_options[:requested_variants], start=1):
+        option_prompt = (option.prompt or base_prompt).strip()
+        prompt_used = _apply_image_style_intensity(option_prompt, option.style_intensity)
+        provider = option.provider or request.provider
+        reference_urls = option.reference_image_urls if option.reference_image_urls is not None else request.reference_image_urls
+        model_profile = option.model_profile if option.model_profile is not None else request.model_profile
+        aspect_ratio = option.aspect_ratio or request.aspect_ratio
+        negative_prompt = option.negative_prompt if option.negative_prompt is not None else request.negative_prompt
+
+        try:
+            generated = await image_service.generate_custom_image(
+                prompt=prompt_used,
+                reference_image_urls=reference_urls,
+                model_profile=model_profile,
+                asset_group=request.asset_group,
+                filename_prefix=f"{request.filename_prefix}_v{idx}",
+                provider=provider,
+                aspect_ratio=aspect_ratio,
+                negative_prompt=negative_prompt,
+                no_text_on_image=request.no_text_on_image,
+                allow_text_only_fallback=request.allow_text_only_fallback,
+            )
+            generated["variant_index"] = idx
+            generated["status"] = "success"
+            results.append(HermesImageGenerationResult(**generated))
+        except Exception as e:
+            failed += 1
+            logger.warning("Hermes image generation variant %s failed: %s", idx, e)
+
+    if not results:
+        raise HTTPException(
+            status_code=500,
+            detail="Не удалось сгенерировать ни один вариант изображения. Проверьте OpenRouter/ComfyUI настройки и модель генерации.",
+        )
+
+    return HermesImageGenerationResponse(
+        results=results,
+        best_result=results[0],
+        requested_variants=requested_variants,
+        succeeded=len(results),
+        failed=failed,
+    )
+
+
 async def _generate_photo_for_item(
     db: AsyncSession,
     item: ContentItem,
@@ -2743,6 +2886,7 @@ async def process_jewelry_photos(
     file: Optional[UploadFile] = File(None),
     files: Optional[List[UploadFile]] = File(None),
     revision_description: Optional[str] = Form(None),
+    prompt_override: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -2787,10 +2931,16 @@ async def process_jewelry_photos(
         image_bytes_list.append(data)
 
     revision = (revision_description or "").strip() or None
+    prompt = (prompt_override or "").strip() or None
 
     service = JewelryPhotoService(db=db)
     try:
-        urls = await service.process_batch(image_bytes_list, article_clean, revision_description=revision)
+        urls = await service.process_batch(
+            image_bytes_list,
+            article_clean,
+            revision_description=revision,
+            prompt_override=prompt,
+        )
     except ModelDoesNotSupportImageError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except JewelryPhotoServiceError as e:
@@ -2806,7 +2956,14 @@ async def process_jewelry_photos(
     # Явный JSON-ответ со списком строк, чтобы избежать проблем сериализации
     url_list = [str(u) for u in urls]
     logger.info("Jewelry photo process success: %s urls for article %s", len(url_list), article_clean)
-    return JSONResponse(status_code=200, content={"urls": url_list})
+    return JSONResponse(
+        status_code=200,
+        content={
+            "urls": url_list,
+            "provider": service.provider_info(),
+            "prompt_used": service.last_prompt_used,
+        },
+    )
 
 
 @router.post("/jewelry-photo/apply", response_model=JewelryPhotoApplyResponse)

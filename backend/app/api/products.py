@@ -1,16 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, and_, String, cast, text, bindparam, case
+from sqlalchemy import (
+    select,
+    func,
+    or_,
+    and_,
+    String,
+    cast,
+    text,
+    bindparam,
+    case,
+    exists,
+)
 from sqlalchemy.dialects.postgresql import JSONB
-from typing import List, Optional, Dict
+from sqlalchemy.orm import aliased
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 import logging
 import asyncio
 import json
 import os
 from app.database.connection import get_db
+from app.api.auth import get_current_user_optional
+from app.agents.customer_product_recommendation_agent import CustomerProductRecommendationAgent
 from app.models.product import Product
 from app.models.product_catalog_section import ProductCatalogSection
+from app.models.user import User
 from app.services.onec_products_service import OneCProductsService
 from app.services.onec_stock_service import OneCStockService
 from app.services.sync_progress_service import get_sync_progress_service
@@ -22,6 +37,64 @@ from uuid import UUID
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _json_parent_external_id(product: Product) -> str | None:
+    for payload in (product.specifications, product.sync_metadata):
+        if not isinstance(payload, dict):
+            continue
+        value = (
+            payload.get("parent_external_id")
+            or payload.get("Parent_Key")
+            or payload.get("parent_key")
+        )
+        if value and value != "00000000-0000-0000-0000-000000000000":
+            return str(value).strip()
+    return None
+
+
+def _base_article(article: str | None) -> str:
+    raw = (article or "").strip()
+    if not raw:
+        return ""
+    for separator in ("-", "_", " "):
+        if separator in raw:
+            head = raw.split(separator, 1)[0].strip()
+            if head:
+                return head
+    return raw
+
+
+def _product_response(product: Product, stock: float | None = None) -> "ProductResponse":
+    data = getattr(product, "__dict__", {})
+    return ProductResponse(
+        id=str(data.get("id")),
+        name=data.get("name") or "",
+        brand=data.get("brand"),
+        price=data.get("price") or 0,
+        category=data.get("category"),
+        images=data.get("images") or [],
+        tags=data.get("tags") or [],
+        description=data.get("description"),
+        article=data.get("article"),
+        vendor_code=data.get("vendor_code"),
+        barcode=data.get("barcode"),
+        unit=data.get("unit"),
+        weight=data.get("weight"),
+        volume=data.get("volume"),
+        country=data.get("country"),
+        warranty=data.get("warranty"),
+        full_description=data.get("full_description"),
+        specifications=data.get("specifications"),
+        external_id=data.get("external_id"),
+        external_code=data.get("external_code"),
+        is_active=data.get("is_active", True),
+        sync_status=data.get("sync_status"),
+        sync_metadata=data.get("sync_metadata"),
+        stock=stock,
+        is_core_assortment=data.get("is_core_assortment", False),
+        supports_brand_concept=data.get("supports_brand_concept", False),
+    )
 
 
 async def get_product_stock(db: AsyncSession, product_id: UUID) -> float | None:
@@ -69,6 +142,8 @@ class ProductResponse(BaseModel):
     sync_status: str | None = None
     sync_metadata: dict | None = None
     stock: float | None = None  # Общий остаток товара (сумма по всем складам)
+    is_core_assortment: bool = False
+    supports_brand_concept: bool = False
 
     class Config:
         from_attributes = True
@@ -82,12 +157,53 @@ class ProductCreate(BaseModel):
     images: List[str] = []
     tags: List[str] = []
     description: str | None = None
+    is_core_assortment: bool = False
+    supports_brand_concept: bool = False
+
+
+class ProductInventoryFlagsUpdate(BaseModel):
+    is_core_assortment: bool | None = None
+    supports_brand_concept: bool | None = None
 
 
 class ProductVariantsResponse(BaseModel):
     base: ProductResponse
     variants: List[ProductResponse]
     parent_external_id: str | None = None
+
+
+class ProductRecommendationResponse(BaseModel):
+    product: ProductResponse
+    score: float
+    reasons: List[str] = []
+
+
+class ReceiptBundleRuleResponse(BaseModel):
+    product: ProductResponse | None = None
+    score: float
+    reasons: List[str] = []
+    direction: str
+    pair_receipts: int
+    confidence: float
+    lift: float
+    support: float
+    jaccard: float | None = None
+    counterpart_key: str
+    counterpart_article: str | None = None
+    counterpart_name: str | None = None
+    counterpart_category: str | None = None
+    raw_rule: Dict[str, Any]
+
+
+class ReceiptBundleRecommendationsResponse(BaseModel):
+    source_product: ProductResponse
+    report_found: bool
+    report_path: str | None = None
+    generated_at: str | None = None
+    source: str | None = None
+    period_days: int | None = None
+    summary: Dict[str, Any] = {}
+    items: List[ReceiptBundleRuleResponse] = []
 
 
 class PagedProductsResponse(BaseModel):
@@ -155,6 +271,9 @@ async def get_products_paged(
     brand: Optional[str] = None,
     tags: Optional[str] = None,
     search: Optional[str] = None,
+    price_min: Optional[int] = Query(None, ge=0),
+    price_max: Optional[int] = Query(None, ge=0),
+    sort: Optional[str] = None,
     # Фильтры по характеристикам (из specifications)
     material: Optional[str] = None,
     vstavka: Optional[str] = None,  # Вставка
@@ -164,6 +283,7 @@ async def get_products_paged(
     tip_zamka: Optional[str] = None,  # Тип замка
     color: Optional[str] = None,  # Цвет
     in_stock: Optional[bool] = None,
+    has_images: Optional[bool] = None,
     # Универсальный фильтр по характеристикам (JSON строка вида {"Характеристика": "Значение"})
     specs: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
@@ -179,27 +299,10 @@ async def get_products_paged(
     try:
         filters = [Product.is_active == True]
         
-        # ПОКАЗЫВАЕМ ВАРИАНТЫ вместо основных товаров
-        # Варианты содержат все характеристики (Бренд, Цвет, Размер и т.д.)
-        # Основные товары часто не имеют характеристик
-        # 
-        # Стратегия: показываем товары с характеристиками (варианты)
-        # или товары без parent_external_id (основные товары без вариантов)
-        variant_filter = or_(
-            # Показываем варианты (имеют parent_external_id и характеристики)
-            and_(
-                Product.specifications.isnot(None),
-                cast(Product.specifications["parent_external_id"], String).isnot(None),
-                cast(Product.specifications["parent_external_id"], String) != ""
-            ),
-            # Показываем основные товары БЕЗ вариантов (нет parent_external_id)
-            or_(
-                Product.specifications.is_(None),
-                cast(Product.specifications["parent_external_id"], String).is_(None),
-                cast(Product.specifications["parent_external_id"], String) == ""
-            )
-        )
-        filters.append(variant_filter)
+        # Для витрины родительская номенклатура из 1С не является товаром:
+        # цены и остатки есть только у вариантов. Поэтому ниже забираем
+        # подходящие записи, группируем варианты и отдаём один реальный
+        # вариант на группу. Родители с дочерними вариантами исключаются.
         
         if category:
             # Фильтр по категории (название раздела каталога)
@@ -249,6 +352,65 @@ async def get_products_paged(
             )
             filters.append(Product.id.in_(stock_subquery))
             logger.info("Фильтр по наличию: только товары с количеством > 0")
+
+        if has_images is not None:
+            if has_images:
+                # jsonb_array_length > 0 OR (images is array and length > 0)
+                # To be safe with JSONB array
+                safe_images = case(
+                    (func.jsonb_typeof(Product.images) == "array", Product.images),
+                    else_=text("'[]'::jsonb")
+                )
+                parent_pid = func.coalesce(
+                    func.jsonb_extract_path_text(
+                        Product.specifications,
+                        "parent_external_id",
+                    ),
+                    func.jsonb_extract_path_text(
+                        Product.sync_metadata,
+                        "parent_external_id",
+                    ),
+                )
+                parent = aliased(Product)
+                parent_safe_images = case(
+                    (func.jsonb_typeof(parent.images) == "array", parent.images),
+                    else_=text("'[]'::jsonb"),
+                )
+                filters.append(
+                    or_(
+                        and_(
+                            Product.images.isnot(None),
+                            func.jsonb_array_length(safe_images) > 0,
+                        ),
+                        exists(
+                            select(1).select_from(parent).where(
+                                and_(
+                                    parent.is_active == True,
+                                    parent.external_id == parent_pid,
+                                    parent.images.isnot(None),
+                                    func.jsonb_array_length(parent_safe_images) > 0,
+                                )
+                            )
+                        ),
+                    )
+                )
+            else:
+                # either null or empty array
+                safe_images = case(
+                    (func.jsonb_typeof(Product.images) == "array", Product.images),
+                    else_=text("'[]'::jsonb")
+                )
+                filters.append(
+                    or_(
+                        Product.images.is_(None),
+                        func.jsonb_array_length(safe_images) == 0
+                    )
+                )
+
+        if price_min is not None:
+            filters.append(Product.price >= int(price_min))
+        if price_max is not None:
+            filters.append(Product.price <= int(price_max))
         
         # Фильтры по характеристикам из specifications
         # Используем прямой SQL оператор ->> для извлечения текста из JSONB
@@ -366,45 +528,82 @@ async def get_products_paged(
         if pokrytie:
             logger.debug(f"Фильтр по покрытию активен: '{pokrytie}'")
         
-        # ДЕДУПЛИКАЦИЯ ВАРИАНТОВ
-        # Для каждого parent_external_id показываем только один вариант (первый по ID)
-        # Используем подзапрос с ROW_NUMBER для выбора первого варианта из группы
-        from sqlalchemy import literal_column
+        query = select(Product).where(*filters)
         
-        # Подзапрос для выбора одного варианта на группу (parent_external_id)
-        # ROW_NUMBER() OVER (PARTITION BY parent_external_id ORDER BY id) = 1
-        # Для товаров без parent_external_id (основные товары) показываем все
-        
-        # Применяем фильтры и получаем список ID товаров
-        base_query = select(Product).where(*filters)
-        
-        # Добавляем дедупликацию через Python (так как DISTINCT ON сложен в SQLAlchemy)
-        # Альтернативный подход: выбираем все варианты, затем группируем
-        result = await db.execute(base_query)
-        all_products = result.scalars().all()
-        
-        # Группируем по parent_external_id и берем первый вариант из каждой группы
-        seen_parents = set()
-        deduplicated_products = []
-        
-        for product in all_products:
-            parent_id = None
-            if product.specifications and isinstance(product.specifications, dict):
-                parent_id = product.specifications.get('parent_external_id')
-            
-            # Если это вариант (имеет parent_id)
+        if sort:
+            sort_value = str(sort).strip().lower()
+
+            # ... сортировка ...
+            if sort_value in ("price_asc", "price_up"):
+                query = query.order_by(Product.price.asc())
+            elif sort_value in ("price_desc", "price_down"):
+                query = query.order_by(Product.price.desc())
+            elif sort_value in ("newest", "new", "date_desc"):
+                query = query.order_by(Product.updated_at.desc().nulls_last(), Product.created_at.desc().nulls_last())
+            elif sort_value in ("oldest", "date_asc"):
+                query = query.order_by(Product.updated_at.asc().nulls_last(), Product.created_at.asc().nulls_last())
+
+        result = await db.execute(query)
+        filtered_products = result.scalars().all()
+
+        # Остатки нужны для выбора лучшего представителя группы: сначала
+        # показываем вариант в наличии, затем вариант с ценой и фото.
+        from app.models.product_stock import ProductStock
+        all_filtered_ids = [p.id for p in filtered_products]
+        stocks_dict: Dict[UUID, float] = {}
+        if all_filtered_ids:
+            stocks_result = await db.execute(
+                select(
+                    ProductStock.product_id,
+                    func.sum(ProductStock.available_quantity).label('total_stock')
+                )
+                .where(ProductStock.product_id.in_(all_filtered_ids))
+                .group_by(ProductStock.product_id)
+            )
+            stocks_dict = {row[0]: float(row[1]) for row in stocks_result.all()}
+
+        parent_ids = {
+            parent_id
+            for parent_id in (_json_parent_external_id(p) for p in filtered_products)
+            if parent_id
+        }
+        groups: Dict[str, List[Product]] = {}
+        order: List[str] = []
+        for product in filtered_products:
+            parent_id = _json_parent_external_id(product)
+            if not parent_id and product.external_id and product.external_id in parent_ids:
+                continue
+
             if parent_id:
-                # Показываем только первый вариант из группы
-                if parent_id not in seen_parents:
-                    seen_parents.add(parent_id)
-                    deduplicated_products.append(product)
+                group_key = f"parent:{parent_id}"
             else:
-                # Основной товар без вариантов - всегда показываем
-                deduplicated_products.append(product)
-        
-        # Применяем пагинацию после дедупликации
-        total = len(deduplicated_products)
-        products = deduplicated_products[skip:skip + limit]
+                base_article = _base_article(product.article)
+                group_key = f"article:{base_article}" if base_article else f"id:{product.id}"
+
+            if group_key not in groups:
+                groups[group_key] = []
+                order.append(group_key)
+            groups[group_key].append(product)
+
+        def _has_images(product: Product) -> bool:
+            return isinstance(product.images, list) and len(product.images) > 0
+
+        def _variant_score(product: Product) -> tuple[int, int, int, str]:
+            stock = stocks_dict.get(product.id) or 0
+            return (
+                1 if stock > 0 else 0,
+                1 if (product.price or 0) > 0 else 0,
+                1 if _has_images(product) else 0,
+                product.article or product.name or "",
+            )
+
+        products = [
+            sorted(groups[key], key=_variant_score, reverse=True)[0]
+            for key in order
+            if groups.get(key)
+        ]
+        total = len(products)
+        products = products[skip:skip + limit]
         
         if category:
             logger.info(f"Фильтр по категории '{category}': найдено {total} товаров (после дедупликации)")
@@ -431,53 +630,34 @@ async def get_products_paged(
             all_categories = [row[0] for row in all_categories_result if row[0]]
             logger.warning(f"Товары с категорией '{category}' не найдены. Доступные категории в БД: {all_categories}")
 
-        # Получаем остатки для всех товаров одним запросом
-        from app.models.product_stock import ProductStock
-        product_ids = [p.id for p in products]
-        stocks_result = await db.execute(
-            select(
-                ProductStock.product_id,
-                func.sum(ProductStock.available_quantity).label('total_stock')
-            )
-            .where(ProductStock.product_id.in_(product_ids))
-            .group_by(ProductStock.product_id)
-        )
-        stocks_dict = {row[0]: float(row[1]) for row in stocks_result.all()}
-        
-        items = [
-            ProductResponse(
-                id=str(p.id),
-                name=p.name,
-                brand=p.brand,
-                price=p.price,
-                category=p.category,
-                images=p.images or [],
-                tags=p.tags or [],
-                description=p.description,
-                article=p.article if hasattr(p, "article") else None,
-                vendor_code=p.vendor_code if hasattr(p, "vendor_code") else None,
-                barcode=p.barcode if hasattr(p, "barcode") else None,
-                unit=p.unit if hasattr(p, "unit") else None,
-                weight=p.weight if hasattr(p, "weight") else None,
-                volume=p.volume if hasattr(p, "volume") else None,
-                country=p.country if hasattr(p, "country") else None,
-                warranty=p.warranty if hasattr(p, "warranty") else None,
-                full_description=p.full_description if hasattr(p, "full_description") else None,
-                specifications=p.specifications if hasattr(p, "specifications") else None,
-                external_id=p.external_id if hasattr(p, "external_id") else None,
-                external_code=p.external_code if hasattr(p, "external_code") else None,
-                is_active=p.is_active if hasattr(p, "is_active") else True,
-                sync_status=p.sync_status if hasattr(p, "sync_status") else None,
-                sync_metadata=p.sync_metadata if hasattr(p, "sync_metadata") else None,
-                stock=stocks_dict.get(p.id)
-            )
-            for p in products
-        ]
+        parents_by_external_id = {
+            p.external_id: p
+            for p in filtered_products
+            if p.external_id
+        }
+        items = []
+        for p in products:
+            response = _product_response(p, stocks_dict.get(p.id))
+            parent_id = _json_parent_external_id(p)
+            parent_product = parents_by_external_id.get(parent_id) if parent_id else None
+            if not response.images and parent_product and parent_product.images:
+                response.images = parent_product.images or []
+            base_article = _base_article(response.article)
+            if base_article:
+                response.article = base_article
+            items.append(response)
 
         return PagedProductsResponse(items=items, total=total, skip=skip, limit=limit)
     except Exception as e:
         logger.error(f"Ошибка при получении товаров (paged): {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Ошибка при загрузке товаров: {str(e)}")
+        error_msg = str(e)
+        low = error_msg.lower()
+        if "undefinedcolumn" in low or ("column" in low and "does not exist" in low):
+            raise HTTPException(
+                status_code=500,
+                detail="В БД не применены миграции (отсутствуют новые колонки products). Выполните: alembic upgrade head",
+            )
+        raise HTTPException(status_code=500, detail=f"Ошибка при загрузке товаров: {error_msg}")
 
 
 @router.get("/", response_model=List[ProductResponse])
@@ -488,6 +668,7 @@ async def get_products(
     brand: Optional[str] = None,
     tags: Optional[str] = None,
     search: Optional[str] = None,
+    variants_only: bool = Query(False, description="Вернуть только варианты товара с характеристиками"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -498,16 +679,16 @@ async def get_products(
     """
     try:
         query = select(Product).where(Product.is_active == True)
-        
-        # Исключаем варианты товаров из списка (показываем только основные товары)
-        # Варианты имеют parent_external_id в specifications
-        query = query.where(
-            or_(
-                Product.specifications.is_(None),
-                cast(Product.specifications["parent_external_id"], String).is_(None),
-                cast(Product.specifications["parent_external_id"], String) == ""
+        if not variants_only:
+            # Исключаем варианты товаров из списка (показываем только основные товары)
+            # Варианты имеют parent_external_id в specifications
+            query = query.where(
+                or_(
+                    Product.specifications.is_(None),
+                    cast(Product.specifications["parent_external_id"], String).is_(None),
+                    cast(Product.specifications["parent_external_id"], String) == ""
+                )
             )
-        )
         
         if category:
             # Фильтр по категории (название раздела каталога)
@@ -555,34 +736,97 @@ async def get_products(
             .group_by(ProductStock.product_id)
         )
         stocks_dict = {row[0]: float(row[1]) for row in stocks_result.all()}
+
+        parents_by_external_id: Dict[str, Product] = {}
+        if variants_only or products:
+            parent_ids = {
+                parent_id
+                for parent_id in (_json_parent_external_id(p) for p in products)
+                if parent_id
+            }
+            if parent_ids:
+                parents_result = await db.execute(select(Product).where(Product.external_id.in_(list(parent_ids))))
+                parent_products = parents_result.scalars().all()
+                parents_by_external_id = {
+                    p.external_id: p
+                    for p in parent_products
+                    if p.external_id
+                }
+
+        if variants_only:
+            def _has_images(product: Product) -> bool:
+                if isinstance(product.images, list) and len(product.images) > 0:
+                    return True
+                parent_id = _json_parent_external_id(product)
+                parent_product = parents_by_external_id.get(parent_id) if parent_id else None
+                return bool(parent_product and isinstance(parent_product.images, list) and len(parent_product.images) > 0)
+
+            def _spec_score(product: Product) -> int:
+                specs = product.specifications if isinstance(product.specifications, dict) else {}
+                score = 0
+                for key, value in specs.items():
+                    if key in {"parent_external_id", "Parent_Key", "parent_key", "characteristic_id", "quantity", "barcode"}:
+                        continue
+                    if value in (None, "", [], {}, "00000000-0000-0000-0000-000000000000"):
+                        continue
+                    score += 1
+                return score
+
+            def _variant_score(product: Product) -> tuple[int, int, int, int, int, str]:
+                stock = stocks_dict.get(product.id) or 0
+                return (
+                    1 if _json_parent_external_id(product) else 0,
+                    1 if stock > 0 else 0,
+                    1 if (product.price or 0) > 0 else 0,
+                    _spec_score(product),
+                    1 if _has_images(product) else 0,
+                    product.article or product.external_code or product.name or "",
+                )
+
+            groups: Dict[str, List[Product]] = {}
+            order: List[str] = []
+            parent_ids = {
+                parent_id
+                for parent_id in (_json_parent_external_id(p) for p in products)
+                if parent_id
+            }
+            for product in products:
+                parent_id = _json_parent_external_id(product)
+                if parent_id:
+                    group_key = f"parent:{parent_id}"
+                elif product.external_id and product.external_id in parent_ids:
+                    group_key = f"parent:{product.external_id}"
+                else:
+                    base_article = _base_article(product.article)
+                    group_key = f"article:{base_article}" if base_article else f"id:{product.id}"
+
+                if group_key not in groups:
+                    groups[group_key] = []
+                    order.append(group_key)
+                groups[group_key].append(product)
+
+            selected_products: List[Product] = []
+            for group_key in order:
+                group = groups[group_key]
+                child_variants = [product for product in group if _json_parent_external_id(product)]
+                if child_variants:
+                    selected_products.extend(sorted(child_variants, key=_variant_score, reverse=True))
+                else:
+                    selected_products.append(sorted(group, key=_variant_score, reverse=True)[0])
+
+            products = selected_products[skip:skip + limit]
         
         # Преобразуем в ProductResponse
-        return [ProductResponse(
-            id=str(p.id),
-            name=p.name,
-            brand=p.brand,
-            price=p.price,
-            category=p.category,
-            images=p.images or [],
-            tags=p.tags or [],
-            description=p.description,
-            article=p.article if hasattr(p, 'article') else None,
-            vendor_code=p.vendor_code if hasattr(p, 'vendor_code') else None,
-            barcode=p.barcode if hasattr(p, 'barcode') else None,
-            unit=p.unit if hasattr(p, 'unit') else None,
-            weight=p.weight if hasattr(p, 'weight') else None,
-            volume=p.volume if hasattr(p, 'volume') else None,
-            country=p.country if hasattr(p, 'country') else None,
-            warranty=p.warranty if hasattr(p, 'warranty') else None,
-            full_description=p.full_description if hasattr(p, 'full_description') else None,
-            specifications=p.specifications if hasattr(p, 'specifications') else None,
-            external_id=p.external_id if hasattr(p, 'external_id') else None,
-            external_code=p.external_code if hasattr(p, 'external_code') else None,
-            is_active=p.is_active if hasattr(p, 'is_active') else True,
-            sync_status=p.sync_status if hasattr(p, 'sync_status') else None,
-            sync_metadata=p.sync_metadata if hasattr(p, 'sync_metadata') else None,
-            stock=stocks_dict.get(p.id)
-        ) for p in products]
+        items: List[ProductResponse] = []
+        for p in products:
+            response = _product_response(p, stocks_dict.get(p.id))
+            if variants_only and not response.images:
+                parent_id = _json_parent_external_id(p)
+                parent_product = parents_by_external_id.get(parent_id) if parent_id else None
+                if parent_product and parent_product.images:
+                    response.images = parent_product.images or []
+            items.append(response)
+        return items
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -590,7 +834,10 @@ async def get_products(
         error_msg = str(e)
         
         # Более понятные сообщения об ошибках
-        if "does not exist" in error_msg.lower() or "relation" in error_msg.lower():
+        low = error_msg.lower()
+        if "undefinedcolumn" in low or ("column" in low and "does not exist" in low):
+            detail = "В БД не применены миграции (отсутствуют новые колонки products). Выполните: alembic upgrade head"
+        elif "does not exist" in low or "relation" in low:
             detail = "Таблица товаров не существует. Выполните миграцию БД: alembic upgrade head"
         elif "connection" in error_msg.lower() or "connect" in error_msg.lower():
             detail = "Не удалось подключиться к базе данных. Проверьте, что Docker контейнеры запущены."
@@ -601,6 +848,170 @@ async def get_products(
             status_code=500,
             detail=detail
         )
+
+
+def _serialize_receipt_bundle_rule(match) -> ReceiptBundleRuleResponse:
+    rule = match.rule
+    if match.direction == "left_to_right":
+        confidence = float(rule.get("confidence_left_to_right") or 0.0)
+    else:
+        confidence = float(rule.get("confidence_right_to_left") or 0.0)
+
+    reasons = [
+        f"Покупали вместе в {int(rule.get('pair_receipts') or 0)} чеках",
+        f"lift {float(rule.get('lift') or 0.0):.2f}",
+        f"confidence {confidence:.1%}",
+    ]
+    if match.counterpart_category:
+        reasons.append(f"категория: {match.counterpart_category}")
+
+    return ReceiptBundleRuleResponse(
+        product=_product_response(match.counterpart_product) if match.counterpart_product else None,
+        score=float(rule.get("score") or 0.0),
+        reasons=reasons,
+        direction=match.direction,
+        pair_receipts=int(rule.get("pair_receipts") or 0),
+        confidence=confidence,
+        lift=float(rule.get("lift") or 0.0),
+        support=float(rule.get("support") or 0.0),
+        jaccard=float(rule.get("jaccard") or 0.0) if rule.get("jaccard") is not None else None,
+        counterpart_key=match.counterpart_key,
+        counterpart_article=match.counterpart_article,
+        counterpart_name=match.counterpart_name,
+        counterpart_category=match.counterpart_category,
+        raw_rule=rule,
+    )
+
+
+async def _receipt_bundle_response(
+    db: AsyncSession,
+    product: Product,
+    limit: int,
+    min_score: float,
+    require_catalog_match: bool,
+) -> ReceiptBundleRecommendationsResponse:
+    from app.services.receipt_bundle_service import ReceiptBundleService
+
+    service = ReceiptBundleService(db)
+    report, matches = await service.recommendations_for_product(
+        product=product,
+        limit=limit,
+        min_score=min_score,
+        require_catalog_match=require_catalog_match,
+    )
+    return ReceiptBundleRecommendationsResponse(
+        source_product=_product_response(product),
+        report_found=report is not None,
+        report_path=report.get("_report_path") if report else None,
+        generated_at=report.get("generated_at") if report else None,
+        source=report.get("source") if report else None,
+        period_days=report.get("period_days") if report else None,
+        summary=report.get("summary") if report else {},
+        items=[_serialize_receipt_bundle_rule(match) for match in matches],
+    )
+
+
+@router.get("/receipt-bundles/by-article", response_model=ReceiptBundleRecommendationsResponse)
+async def get_receipt_bundle_recommendations_by_article(
+    article: str = Query(..., min_length=1),
+    limit: int = Query(6, ge=1, le=30),
+    min_score: float = Query(0.0, ge=0.0, le=1.0),
+    require_catalog_match: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+):
+    normalized = article.strip().lower()
+    result = await db.execute(
+        select(Product).where(
+            Product.is_active == True,
+            or_(
+                func.lower(Product.article) == normalized,
+                func.lower(Product.external_code) == normalized,
+                func.lower(Product.external_id) == normalized,
+            ),
+        )
+    )
+    product = result.scalars().first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    return await _receipt_bundle_response(
+        db=db,
+        product=product,
+        limit=limit,
+        min_score=min_score,
+        require_catalog_match=require_catalog_match,
+    )
+
+
+@router.get("/{product_id}/receipt-bundles", response_model=ReceiptBundleRecommendationsResponse)
+async def get_receipt_bundle_recommendations(
+    product_id: UUID,
+    limit: int = Query(6, ge=1, le=30),
+    min_score: float = Query(0.0, ge=0.0, le=1.0),
+    require_catalog_match: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Product).where(Product.id == product_id, Product.is_active == True))
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    return await _receipt_bundle_response(
+        db=db,
+        product=product,
+        limit=limit,
+        min_score=min_score,
+        require_catalog_match=require_catalog_match,
+    )
+
+
+@router.get("/{product_id}/recommendations", response_model=List[ProductRecommendationResponse])
+async def get_product_recommendations(
+    product_id: UUID,
+    limit: int = Query(3, ge=1, le=12),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        agent = CustomerProductRecommendationAgent(db)
+        recommendations = await agent.recommend_for_product(
+            product_id=product_id,
+            user=current_user,
+            limit=limit,
+        )
+        product_ids = [item.product.id for item in recommendations]
+        stocks: Dict[UUID, float | None] = {}
+        if product_ids:
+            from app.models.product_stock import ProductStock
+
+            stock_result = await db.execute(
+                select(
+                    ProductStock.product_id,
+                    func.sum(ProductStock.available_quantity).label("total_stock"),
+                )
+                .where(ProductStock.product_id.in_(product_ids))
+                .group_by(ProductStock.product_id)
+            )
+            stocks = {
+                row.product_id: float(row.total_stock)
+                for row in stock_result
+                if row.total_stock is not None
+            }
+
+        return [
+            ProductRecommendationResponse(
+                product=_product_response(item.product, stocks.get(item.product.id)),
+                score=item.score,
+                reasons=item.reasons,
+            )
+            for item in recommendations
+        ]
+    except Exception as e:
+        logger.error(
+            f"Ошибка при подборе рекомендаций для товара {product_id}: {e}",
+            exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Не удалось подобрать рекомендации")
 
 
 @router.get("/{product_id}", response_model=ProductResponse)
@@ -614,33 +1025,7 @@ async def get_product(product_id: UUID, db: AsyncSession = Depends(get_db)):
         # Вычисляем остаток товара
         stock = await get_product_stock(db, product.id)
         
-        # Возвращаем в том же формате, что и список, чтобы избежать проблем сериализации (UUID/JSON)
-        return ProductResponse(
-            id=str(product.id),
-            name=product.name,
-            brand=product.brand,
-            price=product.price,
-            category=product.category,
-            images=product.images or [],
-            tags=product.tags or [],
-            description=product.description,
-            article=product.article if hasattr(product, 'article') else None,
-            vendor_code=product.vendor_code if hasattr(product, 'vendor_code') else None,
-            barcode=product.barcode if hasattr(product, 'barcode') else None,
-            unit=product.unit if hasattr(product, 'unit') else None,
-            weight=product.weight if hasattr(product, 'weight') else None,
-            volume=product.volume if hasattr(product, 'volume') else None,
-            country=product.country if hasattr(product, 'country') else None,
-            warranty=product.warranty if hasattr(product, 'warranty') else None,
-            full_description=product.full_description if hasattr(product, 'full_description') else None,
-            specifications=product.specifications if hasattr(product, 'specifications') else None,
-            external_id=product.external_id if hasattr(product, 'external_id') else None,
-            external_code=product.external_code if hasattr(product, 'external_code') else None,
-            is_active=product.is_active if hasattr(product, 'is_active') else True,
-            sync_status=product.sync_status if hasattr(product, 'sync_status') else None,
-            sync_metadata=product.sync_metadata if hasattr(product, 'sync_metadata') else None,
-            stock=stock
-        )
+        return _product_response(product, stock)
     except HTTPException:
         raise
     except Exception as e:
@@ -764,15 +1149,20 @@ async def get_product_variants(
 
         variants: List[Product] = []
         if parent_external_id:
-            # Ищем варианты по parent_external_id в specifications
-            # Также проверяем sync_metadata для обратной совместимости
             variants_result = await db.execute(
                 select(Product).where(
                     and_(
                         or_(
-                            cast(Product.specifications["parent_external_id"], String) == parent_external_id,
-                            # Также проверяем sync_metadata для обратной совместимости
-                            cast(Product.sync_metadata["parent_external_id"], String) == parent_external_id
+                            func.jsonb_extract_path_text(
+                                Product.specifications,
+                                "parent_external_id",
+                            )
+                            == parent_external_id,
+                            func.jsonb_extract_path_text(
+                                Product.sync_metadata,
+                                "parent_external_id",
+                            )
+                            == parent_external_id,
                         ),
                         Product.is_active == True
                     )
@@ -783,7 +1173,7 @@ async def get_product_variants(
             # Дополнительный поиск: если варианты не найдены, ищем по артикулу
             # Варианты обычно имеют артикул вида "71136-G", где "71136" - артикул основного товара
             if not variants and product.article:
-                base_article = product.article.strip()
+                base_article = _base_article(product.article)
                 logger.info(f"Варианты не найдены по parent_external_id, ищем по артикулу (базовый артикул: {base_article})")
                 
                 # Ищем товары, артикул которых начинается с базового артикула и содержит дефис или другую букву
@@ -807,22 +1197,7 @@ async def get_product_variants(
                 
                 if article_variants:
                     logger.info(f"Найдено {len(article_variants)} вариантов по артикулу: {[v.article for v in article_variants]}")
-                    # Проверяем, что у них правильный parent_external_id или устанавливаем его
-                    for variant in article_variants:
-                        if variant.specifications and isinstance(variant.specifications, dict):
-                            variant_parent = variant.specifications.get("parent_external_id")
-                            if variant_parent != parent_external_id:
-                                # Обновляем parent_external_id если он неправильный
-                                logger.warning(f"Обновляем parent_external_id для варианта {variant.article}: {variant_parent} -> {parent_external_id}")
-                                variant.specifications["parent_external_id"] = parent_external_id
-                                await db.flush()
-                        else:
-                            # Если specifications нет, создаем его
-                            variant.specifications = {"parent_external_id": parent_external_id}
-                            await db.flush()
-                    
                     variants = article_variants
-                    await db.commit()
             
             # Если текущий товар - это вариант (есть parent_external_id), убеждаемся, что он включен в список вариантов
             if parent_external_id and product.id not in [v.id for v in variants]:
@@ -871,37 +1246,12 @@ async def get_product_variants(
         )
         stocks_dict = {row[0]: float(row[1]) for row in stocks_result.all()}
         
-        def _to_response(p: Product) -> ProductResponse:
-            return ProductResponse(
-                id=str(p.id),
-                name=p.name,
-                brand=p.brand,
-                price=p.price,
-                category=p.category,
-                images=p.images or [],
-                tags=p.tags or [],
-                description=p.description,
-                article=p.article if hasattr(p, "article") else None,
-                vendor_code=p.vendor_code if hasattr(p, "vendor_code") else None,
-                barcode=p.barcode if hasattr(p, "barcode") else None,
-                unit=p.unit if hasattr(p, "unit") else None,
-                weight=p.weight if hasattr(p, "weight") else None,
-                volume=p.volume if hasattr(p, "volume") else None,
-                country=p.country if hasattr(p, "country") else None,
-                warranty=p.warranty if hasattr(p, "warranty") else None,
-                full_description=p.full_description if hasattr(p, "full_description") else None,
-                specifications=p.specifications if hasattr(p, "specifications") else None,
-                external_id=p.external_id if hasattr(p, "external_id") else None,
-                external_code=p.external_code if hasattr(p, "external_code") else None,
-                is_active=p.is_active if hasattr(p, "is_active") else True,
-                sync_status=p.sync_status if hasattr(p, "sync_status") else None,
-                sync_metadata=p.sync_metadata if hasattr(p, "sync_metadata") else None,
-                stock=stocks_dict.get(p.id)
-            )
-
         return ProductVariantsResponse(
-            base=_to_response(base_product),
-            variants=[_to_response(v) for v in variants],
+            base=_product_response(base_product, stocks_dict.get(base_product.id)),
+            variants=[
+                _product_response(v, stocks_dict.get(v.id))
+                for v in sorted(variants, key=lambda p: (p.article or p.name or ""))
+            ],
             parent_external_id=parent_external_id,
         )
     except HTTPException:
@@ -937,6 +1287,57 @@ async def update_product(
     await db.commit()
     await db.refresh(db_product)
     return db_product
+
+
+@router.patch("/{product_id}/inventory-flags", response_model=ProductResponse)
+async def update_product_inventory_flags(
+    product_id: UUID,
+    payload: ProductInventoryFlagsUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Product).where(Product.id == product_id))
+    product = result.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if payload.is_core_assortment is not None:
+        product.is_core_assortment = bool(payload.is_core_assortment)
+    if payload.supports_brand_concept is not None:
+        product.supports_brand_concept = bool(payload.supports_brand_concept)
+
+    db.add(product)
+    await db.commit()
+    await db.refresh(product)
+
+    stock = await get_product_stock(db, product.id)
+    return ProductResponse(
+        id=str(product.id),
+        name=product.name,
+        brand=product.brand,
+        price=product.price,
+        category=product.category,
+        images=product.images or [],
+        tags=product.tags or [],
+        description=product.description,
+        article=product.article if hasattr(product, "article") else None,
+        vendor_code=product.vendor_code if hasattr(product, "vendor_code") else None,
+        barcode=product.barcode if hasattr(product, "barcode") else None,
+        unit=product.unit if hasattr(product, "unit") else None,
+        weight=product.weight if hasattr(product, "weight") else None,
+        volume=product.volume if hasattr(product, "volume") else None,
+        country=product.country if hasattr(product, "country") else None,
+        warranty=product.warranty if hasattr(product, "warranty") else None,
+        full_description=product.full_description if hasattr(product, "full_description") else None,
+        specifications=product.specifications if hasattr(product, "specifications") else None,
+        external_id=product.external_id if hasattr(product, "external_id") else None,
+        external_code=product.external_code if hasattr(product, "external_code") else None,
+        is_active=product.is_active if hasattr(product, "is_active") else True,
+        sync_status=product.sync_status if hasattr(product, "sync_status") else None,
+        sync_metadata=product.sync_metadata if hasattr(product, "sync_metadata") else None,
+        stock=stock,
+        is_core_assortment=product.is_core_assortment if hasattr(product, "is_core_assortment") else False,
+        supports_brand_concept=product.supports_brand_concept if hasattr(product, "supports_brand_concept") else False,
+    )
 
 
 @router.delete("/delete-all", response_model=dict)
@@ -1168,6 +1569,98 @@ async def sync_products_from_xml_url(
                 status_code=500,
                 detail=f"Ошибка синхронизации из XML: {str(e)}"
             )
+
+
+async def _run_odata_stock_sync_task(
+    task_id: str,
+    replace_all: bool,
+    page_size: int,
+    dry_run: bool,
+):
+    """Фоновая задача для синхронизации остатков из OData регистра 1С."""
+    from app.database.connection import AsyncSessionLocal
+
+    progress_service = get_sync_progress_service()
+    try:
+        await progress_service.update_task(
+            task_id=task_id,
+            status="running",
+            stage="odata_stock_sync",
+            stage_description="Загрузка движений остатков из OData 1С...",
+            progress=5,
+        )
+        async with AsyncSessionLocal() as db:
+            async with OneCStockService(db) as stock_service:
+                result = await stock_service.sync_stocks_from_odata_movements(
+                    page_size=page_size,
+                    replace_all=replace_all,
+                    dry_run=dry_run,
+                )
+        await progress_service.update_task(
+            task_id=task_id,
+            status="completed",
+            progress=100,
+            stage="completed",
+            stage_description="OData-синхронизация остатков завершена",
+            result=result,
+        )
+    except Exception as exc:
+        logger.error("OData stock sync task failed: %s", exc, exc_info=True)
+        await progress_service.update_task(
+            task_id=task_id,
+            status="failed",
+            progress=100,
+            stage="failed",
+            stage_description=f"Ошибка OData-синхронизации остатков: {str(exc)[:300]}",
+            result={"error": str(exc)},
+        )
+
+
+@router.post("/sync-stocks-odata", response_model=dict)
+async def sync_product_stocks_from_odata(
+    replace_all: bool = Query(True, description="Обнулить старые остатки перед записью OData-остатков"),
+    dry_run: bool = Query(False, description="Проверить расчет и сопоставление без записи в БД"),
+    page_size: int = Query(1000, ge=100, le=5000, description="Размер страницы OData"),
+    async_mode: bool = Query(True, description="Запустить в фоне с task_id"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Синхронизация остатков товаров из OData регистра 1С:
+    AccumulationRegister_ЗапасыНаСкладах_RecordType.
+    """
+    if async_mode:
+        progress_service = get_sync_progress_service()
+        task_id = await progress_service.create_task(
+            task_type="stocks_odata",
+            total=0,
+            description="Синхронизация остатков из OData 1С",
+        )
+        asyncio.create_task(
+            _run_odata_stock_sync_task(
+                task_id=task_id,
+                replace_all=replace_all,
+                page_size=page_size,
+                dry_run=dry_run,
+            )
+        )
+        return {
+            "status": "started",
+            "message": "OData-синхронизация остатков запущена в фоне",
+            "task_id": task_id,
+            "status_url": f"/api/products/sync-1c/status?task_id={task_id}",
+        }
+
+    try:
+        async with OneCStockService(db) as stock_service:
+            result = await stock_service.sync_stocks_from_odata_movements(
+                page_size=page_size,
+                replace_all=replace_all,
+                dry_run=dry_run,
+            )
+        return {"status": "success", "message": "OData-синхронизация остатков завершена", "result": result}
+    except Exception as exc:
+        logger.error("OData stock sync failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка OData-синхронизации остатков: {exc}")
 
 
 async def _run_xml_sync_task(

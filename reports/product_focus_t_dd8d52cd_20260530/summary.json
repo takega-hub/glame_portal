@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-05-30T18:02:14+00:00",
+  "counts": {
+    "marketing_link_rows": 205,
+    "promote_now": 10,
+    "order": 20,
+    "restock_before_promo": 15,
+    "jewelry_clearance": 18,
+    "packaging_mechanics": 12,
+    "exclude": 25
+  },
+  "artifacts": [
+    "/workspace/glame-platform/reports/product_focus_t_dd8d52cd_20260530/product_focus_decision.md",
+    "/workspace/glame-platform/reports/product_focus_t_dd8d52cd_20260530/raw_readonly_api_snapshot.json"
+  ]
+}

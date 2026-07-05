@@ -1,0 +1,199 @@
+{
+  "prepared_at": "2026-05-28T10:50:22Z",
+  "task": {
+    "id": "53165be0-bf1f-4e04-8913-bca59eb42a16",
+    "status": "pending",
+    "output_data_is_null": true,
+    "completed_at": null,
+    "requirements": {
+      "no_mass_send_without_admin_approval": true,
+      "show_sources": true,
+      "use_real_data_only": true
+    },
+    "parameters": {
+      "approval_required": true,
+      "report_scope": "tasks_and_next_day_plan"
+    }
+  },
+  "http_statuses": {
+    "health": 200,
+    "task": 200,
+    "agent_tasks": 200,
+    "director_kanban": 200,
+    "analytics_dashboard": 200,
+    "today_sales": 200,
+    "sales_period": 200,
+    "recent_orders": 200,
+    "product_summary": 200,
+    "customer_summary": 200
+  },
+  "agent_counts": {
+    "queued": 1,
+    "completed": 2,
+    "pending_approval": 1,
+    "cancelled": 15,
+    "pending": 1
+  },
+  "kanban_counts": {
+    "Нужно сделать": 2,
+    "В работе": 1,
+    "Готово": 1,
+    "Блокеры / отменено": 6
+  },
+  "top_cards": [
+    {
+      "status": "pending",
+      "priority": "P1",
+      "title": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков",
+      "target_agent": null,
+      "task_type": "assignment",
+      "id": "e6284d00-42f5-41c7-a50e-d89a5013f6e6"
+    },
+    {
+      "status": "pending_approval",
+      "priority": "P2",
+      "title": "Проверка клиентов с ДР",
+      "target_agent": "crm-agent",
+      "task_type": "crm_birthday_check",
+      "id": "f44f5bf0-50a9-4aa4-b450-a4d3d42102f9"
+    },
+    {
+      "status": "queued",
+      "priority": "P1",
+      "title": "Проверить устаревание синхронизации 1С",
+      "target_agent": "director-agent",
+      "task_type": "onec_sync_admin_review",
+      "id": "c6d56e55-1eed-4fc2-84eb-334519ff1994"
+    },
+    {
+      "status": "completed",
+      "priority": "P2",
+      "title": "Контроль синхронизации 1С",
+      "target_agent": "analytics-agent",
+      "task_type": "data_freshness_review",
+      "id": "35a0e2bf-ae46-48fd-8820-94fae2cd5d20"
+    },
+    {
+      "status": "cancelled",
+      "priority": "P2",
+      "title": "Контроль синхронизации 1С",
+      "target_agent": "analytics-agent",
+      "task_type": "data_freshness_review",
+      "id": "44e7f15e-bc88-459e-a340-a64f47a49b69"
+    },
+    {
+      "status": "cancelled",
+      "priority": "P2",
+      "title": "Контроль синхронизации 1С",
+      "target_agent": "analytics-agent",
+      "task_type": "data_freshness_review",
+      "id": "826999c2-69ed-4f59-a4d7-361bb4fffea1"
+    },
+    {
+      "status": "cancelled",
+      "priority": "P2",
+      "title": "Контроль синхронизации 1С",
+      "target_agent": "analytics-agent",
+      "task_type": "data_freshness_review",
+      "id": "192a6bfd-6fec-4ad1-a835-5e0bf241e156"
+    },
+    {
+      "status": "cancelled",
+      "priority": "P2",
+      "title": "Контроль синхронизации 1С",
+      "target_agent": "analytics-agent",
+      "task_type": "data_freshness_review",
+      "id": "316affe2-5acd-43fc-b8c8-e24e9507860e"
+    }
+  ],
+  "sales": {
+    "today_date": "2026-05-28T00:00:00",
+    "today_revenue": 0.0,
+    "today_checks": 0,
+    "today_items": 0,
+    "period_revenue": 457435.0,
+    "period_checks": 38,
+    "average_check": 12037.76,
+    "items_sold": 179.0,
+    "unique_customers": 22,
+    "last_sale": "2026-05-27T18:45:06+00:00",
+    "source": "sales_records",
+    "recent_order_count": 1,
+    "recent_order_amount": 12080.0,
+    "recent_order_statuses": [
+      "pending"
+    ]
+  },
+  "analytics": {
+    "total_events": 114,
+    "sessions": 13,
+    "avg_events_per_session": 8.76923076923077,
+    "events_by_type": {
+      "look_view": 1,
+      "page_view": 85,
+      "product_click": 3,
+      "ui_click": 24,
+      "yandex_metrika_sync": 1
+    },
+    "product_clicks": 3,
+    "purchase_events": 0,
+    "product_to_purchase_conversion": 0.0
+  },
+  "catalog_customers": {
+    "active_products": 3357,
+    "categories": {
+      "AGafi": 420,
+      "Antura": 55,
+      "Eva Rites": 15,
+      "Madreperla": 9,
+      "Men": 58,
+      "SALE": 253,
+      "Браслеты": 418,
+      "Броши": 11,
+      "Каффы": 149,
+      "Колье": 503,
+      "Кольца": 562,
+      "Кулоны": 46,
+      "Подарочная упаковка": 7,
+      "Прочее": 21,
+      "Серьги": 783,
+      "Сопутствующие материалы": 29,
+      "Чокеры": 18
+    },
+    "brands": {
+      "Antura": 1,
+      "BICOLOR": 73,
+      "BLACK MYSTIQUE": 118,
+      "CRYSTAL": 336,
+      "Claudio Canzian": 27,
+      "GEOMETRY": 723,
+      "Kalliope": 80,
+      "MAGNA": 284,
+      "PEARL": 431,
+      "PRISM OF ELEGANCE": 210,
+      "Raganella Princess": 98,
+      "UNOde50": 165,
+      "WRINKLES OG TIME": 167,
+      "unknown": 644
+    },
+    "customers_total": 6216,
+    "customers_with_purchases": 6034,
+    "new_30_days": 76,
+    "loyalty_points_total": 2029444,
+    "segments": {
+      "Active": 201,
+      "New": 433,
+      "Regular": 920,
+      "Sleeping": 4647,
+      "VIP": 8,
+      "unknown": 7
+    }
+  },
+  "birthday": {
+    "status": "pending_approval",
+    "matches_count": 8,
+    "segment_id": "db1e2214-4580-42fb-92bf-2e47aa558e31",
+    "segment_customer_count": 5791,
+    "artifact_path": "/workspace/glame-platform/reports/crm_birthday_check_f44f5bf0_2026-05-28.md"
+  }
+}

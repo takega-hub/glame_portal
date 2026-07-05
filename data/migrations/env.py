@@ -40,7 +40,8 @@ if config.config_file_name is not None:
 from app.database.connection import Base
 from app.models import (
     User, Product, Look, Session, AnalyticsEvent, AnalyticsMetric, WebsiteVisit, Store, StoreVisit,
-    KnowledgeDocument, ContentPlan, ContentItem, ContentPublication, AppSetting, MarketingCampaign
+    KnowledgeDocument, ContentPlan, ContentItem, ContentPublication, AppSetting, MarketingCampaign, InventoryTargetCategory, InventorySnapshot,
+    AdminRoleAccess
 )
 from app.models.catalog_section import CatalogSection
 

@@ -1,0 +1,2405 @@
+{
+  "health": {
+    "endpoint": "/health",
+    "exit_code": 0,
+    "status": 200,
+    "body": {
+      "status": "healthy"
+    },
+    "raw": "HTTP 200 OK\n{\n  \"status\": \"healthy\"\n}"
+  },
+  "task": {
+    "endpoint": "/api/agent-interactions/tasks/53165be0-bf1f-4e04-8913-bca59eb42a16",
+    "exit_code": 0,
+    "status": 200,
+    "body": {
+      "completed_at": null,
+      "constraints": {},
+      "created_at": "2026-05-27T19:00:50.763034+00:00",
+      "deadline_at": null,
+      "error_message": null,
+      "id": "53165be0-bf1f-4e04-8913-bca59eb42a16",
+      "input_data": {
+        "description": "Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.",
+        "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+        "parameters": {
+          "approval_required": true,
+          "report_scope": "tasks_and_next_day_plan"
+        },
+        "title": "Ежедневный план на завтра"
+      },
+      "output_data": null,
+      "output_metadata": {},
+      "priority": 3,
+      "requirements": {
+        "no_mass_send_without_admin_approval": true,
+        "show_sources": true,
+        "use_real_data_only": true
+      },
+      "scheduled_at": "2026-05-27T19:00:50.792594+00:00",
+      "source_agent": "cron-scheduler",
+      "started_at": null,
+      "status": "pending",
+      "target_agent": "director-agent",
+      "target_metrics": {},
+      "task_context": {
+        "created_from": "admin_cron",
+        "cron_category": "director",
+        "cron_job_id": "daily_plan_approval",
+        "cron_title": "Ежедневный план на завтра",
+        "kanban_idempotency_key": "glame-platform-task:53165be0-bf1f-4e04-8913-bca59eb42a16",
+        "kanban_sync_status": "synced_full",
+        "kanban_synced_at": "2026-05-28T09:23:23Z",
+        "kanban_synced_fields": [
+          "title",
+          "passport",
+          "description",
+          "input_data",
+          "output_data",
+          "output_metadata",
+          "requirements",
+          "constraints",
+          "task_context",
+          "full_json"
+        ],
+        "kanban_task_id": "t_ae648f3a",
+        "manual_run": false,
+        "schedule_type": "daily"
+      },
+      "task_type": "tomorrow_plan_preparation",
+      "validation_errors": [],
+      "validation_result": null
+    },
+    "raw": "HTTP 200 OK\n{\n  \"completed_at\": null,\n  \"constraints\": {},\n  \"created_at\": \"2026-05-27T19:00:50.763034+00:00\",\n  \"deadline_at\": null,\n  \"error_message\": null,\n  \"id\": \"53165be0-bf1f-4e04-8913-bca59eb42a16\",\n  \"input_data\": {\n    \"description\": \"Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.\",\n    \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n    \"parameters\": {\n      \"approval_required\": true,\n      \"report_scope\": \"tasks_and_next_day_plan\"\n    },\n    \"title\": \"Ежедневный план на завтра\"\n  },\n  \"output_data\": null,\n  \"output_metadata\": {},\n  \"priority\": 3,\n  \"requirements\": {\n    \"no_mass_send_without_admin_approval\": true,\n    \"show_sources\": true,\n    \"use_real_data_only\": true\n  },\n  \"scheduled_at\": \"2026-05-27T19:00:50.792594+00:00\",\n  \"source_agent\": \"cron-scheduler\",\n  \"started_at\": null,\n  \"status\": \"pending\",\n  \"target_agent\": \"director-agent\",\n  \"target_metrics\": {},\n  \"task_context\": {\n    \"created_from\": \"admin_cron\",\n    \"cron_category\": \"director\",\n    \"cron_job_id\": \"daily_plan_approval\",\n    \"cron_title\": \"Ежедневный план на завтра\",\n    \"kanban_idempotency_key\": \"glame-platform-task:53165be0-bf1f-4e04-8913-bca59eb42a16\",\n    \"kanban_sync_status\": \"synced_full\",\n    \"kanban_synced_at\": \"2026-05-28T09:23:23Z\",\n    \"kanban_synced_fields\": [\n      \"title\",\n      \"passport\",\n      \"description\",\n      \"input_data\",\n      \"output_data\",\n      \"output_metadata\",\n      \"requirements\",\n      \"constraints\",\n      \"task_context\",\n      \"full_json\"\n    ],\n    \"kanban_task_id\": \"t_ae648f3a\",\n    \"manual_run\": false,\n    \"schedule_type\": \"daily\"\n  },\n  \"task_type\": \"tomorrow_plan_preparation\",\n  \"validation_errors\": [],\n  \"validation_result\": null\n}"
+  },
+  "agent_tasks": {
+    "endpoint": "/api/agent-interactions/tasks?limit=20",
+    "exit_code": 0,
+    "status": 200,
+    "body": [
+      {
+        "completed_at": null,
+        "constraints": {
+          "do_not_print_secrets": true,
+          "do_not_run_mass_send": true
+        },
+        "created_at": "2026-05-28T10:10:14.691789+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "c6d56e55-1eed-4fc2-84eb-334519ff1994",
+        "input_data": {
+          "description": "Мониторинг 1С выявил нарушение hourly freshness: customer sync старше 49 часов, продажи/чеки за текущий день не подтверждены, stock/inventory analytics работает через live fallback. Нужно проверить расписания customer sync, sales/checks sync и inventory analytics recalculation.",
+          "expected_result": "Админ/директор подтверждает причину задержки 1С sync и решение: перезапуск/исправление расписания либо явное принятие текущего состояния.",
+          "monitor_summary": "Live API healthy and 1C-facing endpoints are readable, but hourly freshness is not verified: customer sync is older than 49h, sales latest non-zero day is 2026-05-27, stock/inventory analytics is served by live_inventory_control_fallback and no active product sync task is running.",
+          "sources": {
+            "admin_1c_sync_status": {
+              "active_tasks": 0,
+              "endpoint": "/api/admin/1c/sync/status",
+              "errors": [],
+              "http_status": 200,
+              "last_sync": "2026-05-26T08:27:30.235770+00:00",
+              "total_customers": 6216
+            },
+            "auth_onec_sync_status": {
+              "endpoint": "/api/auth/onec-sync-status",
+              "http_status": 200,
+              "job_id": null,
+              "last_attempt_at": null,
+              "status": null
+            },
+            "customers_overview": {
+              "endpoint": "/api/admin/customers/analytics/overview",
+              "http_status": 200,
+              "total_customers": 6216,
+              "total_revenue": 66007132.58
+            },
+            "health": {
+              "endpoint": "/health",
+              "http_status": 200,
+              "status": "healthy"
+            },
+            "inventory_analysis": {
+              "endpoint": "/api/analytics/inventory/analysis?limit=5",
+              "http_status": 200,
+              "source": "live_inventory_control_fallback",
+              "status": "success"
+            },
+            "inventory_health": {
+              "endpoint": "/api/analytics/inventory/health-score",
+              "http_status": 200,
+              "source": "live_inventory_control_fallback",
+              "status": "excellent",
+              "stock_total": 5708.0,
+              "total_products": 3357
+            },
+            "products_sync_status": {
+              "detail": "Нет активных задач синхронизации товаров. Запустите синхронизацию через POST /api/products/sync-xml",
+              "endpoint": "/api/products/sync-1c/status",
+              "http_status": 404
+            },
+            "sales_daily": {
+              "endpoint": "/api/analytics/1c-sales/daily?days=7&auto_sync=false",
+              "http_status": 200,
+              "latest_nonzero_date": "2026-05-27",
+              "today": {
+                "date": "2026-05-28",
+                "orders": 0,
+                "revenue": 0
+              }
+            },
+            "sales_metrics": {
+              "endpoint": "/api/analytics/1c-sales/metrics?days=7&auto_sync=false",
+              "http_status": 200,
+              "latest_metric_date": "2026-05-27",
+              "total": 6,
+              "total_orders": 35,
+              "total_revenue": 428065.0
+            },
+            "stock_dashboard": {
+              "checks_count": 604,
+              "endpoint": "/api/inventory/dashboard",
+              "http_status": 200,
+              "sales_revenue": 6312924.19,
+              "sku_count": 634,
+              "stock_total": 5708.0
+            }
+          },
+          "title": "Проверить устаревание синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 2,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": null,
+        "source_agent": "analytics-agent",
+        "started_at": null,
+        "status": "pending_approval",
+        "target_agent": "director-agent",
+        "target_metrics": {},
+        "task_context": {
+          "artifact_json": "/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.json",
+          "artifact_md": "/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.md",
+          "created_from": "onec_data_sync_monitor",
+          "detected_at": "2026-05-28T10:05:13+00:00",
+          "finding_status": "needs_admin_attention",
+          "kanban_idempotency_key": "glame-platform-task:c6d56e55-1eed-4fc2-84eb-334519ff1994",
+          "kanban_sync_status": "synced_full",
+          "kanban_synced_at": "2026-05-28T10:17:11Z",
+          "kanban_synced_fields": [
+            "title",
+            "passport",
+            "description",
+            "input_data",
+            "output_data",
+            "output_metadata",
+            "requirements",
+            "constraints",
+            "task_context",
+            "full_json"
+          ],
+          "kanban_task_id": "t_87aab376",
+          "source_kanban_task_id": "t_edbb0e9b",
+          "source_platform_task_id": "35a0e2bf-ae46-48fd-8820-94fae2cd5d20"
+        },
+        "task_type": "onec_sync_admin_review",
+        "validation_errors": [],
+        "validation_result": {
+          "errors": [],
+          "is_valid": true,
+          "rules_checked": 0,
+          "timestamp": "2026-05-28T10:10:14.753818+00:00",
+          "warnings": []
+        }
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T09:54:26.869858+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "35a0e2bf-ae46-48fd-8820-94fae2cd5d20",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T09:54:26.892103+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "completed",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "kanban_idempotency_key": "glame-platform-task:35a0e2bf-ae46-48fd-8820-94fae2cd5d20",
+          "kanban_sync_status": "synced_full",
+          "kanban_synced_at": "2026-05-28T10:02:09Z",
+          "kanban_synced_fields": [
+            "title",
+            "passport",
+            "description",
+            "input_data",
+            "output_data",
+            "output_metadata",
+            "requirements",
+            "constraints",
+            "task_context",
+            "full_json"
+          ],
+          "kanban_task_id": "t_edbb0e9b",
+          "manual_run": false,
+          "monitor_result": {
+            "artifact_json": "/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.json",
+            "artifact_md": "/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.md",
+            "checked_at": "2026-05-28T10:05:13+00:00",
+            "director_review_task_id": "c6d56e55-1eed-4fc2-84eb-334519ff1994",
+            "source_status": {
+              "1c_customers": "readable_but_last_sync_stale",
+              "1c_sales": "readable_but_stale_or_suspicious_for_hourly_freshness",
+              "1c_stock": "readable_live_fallback_no_active_sync"
+            },
+            "status": "needs_admin_attention",
+            "summary": "Live API healthy and 1C-facing endpoints are readable, but hourly freshness is not verified: customer sync is older than 49h, sales latest non-zero day is 2026-05-27, stock/inventory analytics is served by live_inventory_control_fallback and no active product sync task is running."
+          },
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T09:00:14.224661+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "f44f5bf0-50a9-4aa4-b450-a4d3d42102f9",
+        "input_data": {
+          "description": "AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "approval_required": true,
+            "create_segment": true,
+            "days_ahead": 7
+          },
+          "title": "Проверка клиентов с ДР"
+        },
+        "output_data": {
+          "agent_reply": "## AI CRM: сегмент подготовлен\n\n1. Данные использованы: карточки покупателей, история покупок, предпочтительный магазин/город, бренд и товарные признаки из чеков.\n2. Сегмент сохранен в БД: `AI CRM | сегмент на согласование | 2805 0923 · db1e22`\n3. ID сегмента: `db1e2214-4580-42fb-92bf-2e47aa558e31`\n4. Размер сегмента: 5791 покупателей. Цель: целевой размер не указан. Первичный фильтр дал 5791.\n5. Где редактировать: `/admin/customers/segments` или карточка задачи `/ai-marketer/tasks/f44f5bf0-50a9-4aa4-b450-a4d3d42102f9`.\n\n### Правила сегмента\n```json\n{\"logic\": \"AND\", \"filters\": [{\"field\": \"is_customer\", \"operator\": \"equals\", \"value\": true}, {\"field\": \"total_purchases\", \"operator\": \">=\", \"value\": 1}]}\n```\n\n### Риски и согласование\n- Перед отправкой проверить согласия на канал коммуникации и финальный список исключений.\n\nСтатус: сегмент готов для карточки директора и согласования администратором. Исходная формулировка: Проверка клиентов с ДР AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование. Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется. {\"show_sources\": true, \"use_real_data_only\": true, \"no_mass_send_without_admin_approval\": true}",
+          "artifact_path": "/workspace/glame-platform/reports/crm_birthday_check_f44f5bf0_2026-05-28.md",
+          "customers": [
+            {
+              "age": 47,
+              "birth_date": "1979-05-29",
+              "city": null,
+              "customer_segment": "New",
+              "days_until": 1,
+              "full_name": "Лесовик елена",
+              "last_purchase_date": null,
+              "loyalty_points": 305,
+              "phone_masked": "79***09",
+              "target_date": "2026-05-29",
+              "total_purchases": 0,
+              "total_spent": 0.0,
+              "user_id": "ea647a27-22b9-4c21-b0c2-b34f47d4d225"
+            },
+            {
+              "age": 31,
+              "birth_date": "1995-06-01",
+              "city": "Симферополь",
+              "customer_segment": "Regular",
+              "days_until": 4,
+              "full_name": "виктория Дурман",
+              "last_purchase_date": "2026-01-09T17:39:48+00:00",
+              "loyalty_points": 141,
+              "phone_masked": "79***12",
+              "target_date": "2026-06-01",
+              "total_purchases": 1,
+              "total_spent": 469000.0,
+              "user_id": "9e9ccbc7-db04-4bfa-ba77-36f82886ca86"
+            },
+            {
+              "age": 54,
+              "birth_date": "1972-06-01",
+              "city": "Симферополь",
+              "customer_segment": "Regular",
+              "days_until": 4,
+              "full_name": "Зиналиева Гульнара",
+              "last_purchase_date": "2026-02-13T11:17:56+00:00",
+              "loyalty_points": 99,
+              "phone_masked": "79***21",
+              "target_date": "2026-06-01",
+              "total_purchases": 1,
+              "total_spent": 329000.0,
+              "user_id": "3fcbd8d7-b06b-4ffe-b897-7c125c09743d"
+            },
+            {
+              "age": 25,
+              "birth_date": "2001-06-02",
+              "city": "Симферополь",
+              "customer_segment": "Regular",
+              "days_until": 5,
+              "full_name": "Елена Копылова",
+              "last_purchase_date": "2025-12-28T14:08:09+00:00",
+              "loyalty_points": 240,
+              "phone_masked": "79***89",
+              "target_date": "2026-06-02",
+              "total_purchases": 2,
+              "total_spent": 1118000.0,
+              "user_id": "f681b763-5982-435d-8912-ada6081d04de"
+            },
+            {
+              "age": 54,
+              "birth_date": "1972-06-03",
+              "city": "Ялта",
+              "customer_segment": "Active",
+              "days_until": 6,
+              "full_name": "Николаенко Наталья",
+              "last_purchase_date": "2026-01-04T16:43:02+00:00",
+              "loyalty_points": 480,
+              "phone_masked": "79***88",
+              "target_date": "2026-06-03",
+              "total_purchases": 5,
+              "total_spent": 3215000.0,
+              "user_id": "8816a870-f7b6-4e44-9927-8eb26bee349d"
+            },
+            {
+              "age": 42,
+              "birth_date": "1984-06-03",
+              "city": "Симферополь",
+              "customer_segment": "Active",
+              "days_until": 6,
+              "full_name": "Ханум Азизова",
+              "last_purchase_date": "2026-01-03T14:24:21+00:00",
+              "loyalty_points": 464,
+              "phone_masked": "79***60",
+              "target_date": "2026-06-03",
+              "total_purchases": 3,
+              "total_spent": 1547000.0,
+              "user_id": "636baa4a-cb0a-47e4-9b5d-eccc13cc790d"
+            },
+            {
+              "age": 53,
+              "birth_date": "1973-06-04",
+              "city": "Симферополь",
+              "customer_segment": "Regular",
+              "days_until": 7,
+              "full_name": "Татьяна Пошукайло",
+              "last_purchase_date": "2026-01-09T13:33:17+00:00",
+              "loyalty_points": 207,
+              "phone_masked": "79***82",
+              "target_date": "2026-06-04",
+              "total_purchases": 1,
+              "total_spent": 689000.0,
+              "user_id": "01d1d765-c5f8-4572-a391-ccbb82b471b3"
+            },
+            {
+              "age": 52,
+              "birth_date": "1974-06-04",
+              "city": null,
+              "customer_segment": "New",
+              "days_until": 7,
+              "full_name": "Кулик Любовь",
+              "last_purchase_date": null,
+              "loyalty_points": 174,
+              "phone_masked": "79***79",
+              "target_date": "2026-06-04",
+              "total_purchases": 0,
+              "total_spent": 0.0,
+              "user_id": "cd766855-c089-4ab9-af2e-af47b1f17073"
+            }
+          ],
+          "customers_with_valid_birth_date": 414,
+          "date_checked": "2026-05-28",
+          "days_ahead": 7,
+          "matches_count": 8,
+          "needs_user_attention": true,
+          "scenario_for_approval": {
+            "approval_required": true,
+            "audiences": {
+              "active_regular": "персональное поздравление + предложение подборки",
+              "new_no_purchases": "сервисное поздравление + приглашение в магазин/каталог"
+            },
+            "draft_message": "Здравствуйте, {Имя}! Команда GLAME поздравляет вас с наступающим днем рождения 💫 Если захотите подобрать украшение к празднику или подарок для себя, мы с радостью поможем в магазине или онлайн.",
+            "mass_send_started": false,
+            "recommendation": "Согласовать список и текст, затем отправлять поздравление вручную/через approved CRM flow."
+          },
+          "segment_action": "created",
+          "segment_customer_count": 5791,
+          "segment_id": "db1e2214-4580-42fb-92bf-2e47aa558e31",
+          "segment_name": "AI CRM | сегмент на согласование | 2805 0923 · db1e22",
+          "segment_rules": {
+            "filters": [
+              {
+                "field": "is_customer",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 1
+              }
+            ],
+            "logic": "AND"
+          },
+          "segment_verification": "Segment preview endpoint must return the same 8 static user IDs via rules field id IN list.",
+          "source": "live GLAME DB users table, cross-checked via admin customers endpoint shape",
+          "title": "Проверка клиентов с ДР",
+          "total_customers_scanned": 6216
+        },
+        "output_metadata": {
+          "closed_by": "crm-passport-auto-run",
+          "closure_status": "pending_approval",
+          "evaluated_at": "2026-05-28T09:23:23.862760",
+          "requirements_satisfied": {
+            "no_mass_send_without_admin_approval": true,
+            "show_sources": true,
+            "use_real_data_only": true
+          }
+        },
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T09:00:14.244622+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": "2026-05-28T09:16:18.971969+00:00",
+        "status": "pending_approval",
+        "target_agent": "crm-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "crm",
+          "cron_job_id": "birthday_customers_check",
+          "cron_title": "Проверка клиентов с ДР",
+          "dialog_run_id": "c868b3cf-06ef-4c95-9a8b-0b5eb1733462",
+          "dialog_started_at": "2026-05-28T09:23:20.690194",
+          "dialog_started_by": "glame-agent@local",
+          "kanban_idempotency_key": "glame-platform-task:f44f5bf0-50a9-4aa4-b450-a4d3d42102f9",
+          "kanban_sync_status": "synced_full",
+          "kanban_synced_at": "2026-05-28T09:23:20Z",
+          "kanban_synced_fields": [
+            "title",
+            "passport",
+            "description",
+            "input_data",
+            "output_data",
+            "output_metadata",
+            "requirements",
+            "constraints",
+            "task_context",
+            "full_json"
+          ],
+          "kanban_task_id": "t_2865ab3a",
+          "manual_run": false,
+          "passport_source_hash": "a0404e366114a2983e8223aed536e4cc0d10450e12ad974678ffa7b74dfcd423",
+          "schedule_type": "daily",
+          "segment_customer_count": 5791,
+          "segment_edit_path": "/admin/customers/segments",
+          "segment_id": "db1e2214-4580-42fb-92bf-2e47aa558e31",
+          "segment_initial_customer_count": 5791,
+          "segment_meta": {
+            "brand": null,
+            "channel": null,
+            "city": null,
+            "edit_path": "/admin/customers/segments",
+            "name": "AI CRM | сегмент на согласование | 2805 0923"
+          },
+          "segment_name": "AI CRM | сегмент на согласование | 2805 0923 · db1e22",
+          "segment_rules": {
+            "filters": [
+              {
+                "field": "is_customer",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 1
+              }
+            ],
+            "logic": "AND"
+          }
+        },
+        "task_type": "crm_birthday_check",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T08:54:14.061830+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "44e7f15e-bc88-459e-a340-a64f47a49b69",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T08:54:14.103815+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T07:54:06.293743+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "826999c2-69ed-4f59-a4d7-361bb4fffea1",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T07:54:06.312185+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T06:54:04.776876+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "192a6bfd-6fec-4ad1-a835-5e0bf241e156",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T06:54:04.803409+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T05:54:03.440938+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "316affe2-5acd-43fc-b8c8-e24e9507860e",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T05:54:03.469196+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T04:54:02.296108+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "1d816402-cd50-43dd-b804-87ada2b13d1b",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T04:54:02.323374+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T03:54:00.964092+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "95211832-8b05-4a26-ac76-83991df7a19b",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T03:54:00.986039+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T02:53:59.861110+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "5b069572-9ac3-47c8-9535-6042c184f5c3",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T02:53:59.883145+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T01:53:58.712123+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "6a7d5276-d2a9-4c9a-911b-72af89d12f1b",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T01:53:58.738205+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-28T00:53:57.610679+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "d95ba2b2-182a-4af0-a4c3-6c83f2570e2b",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-28T00:53:57.633269+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-27T23:53:56.467143+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "c20b5c8e-df8a-4ce7-baf3-a9f0ac976925",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-27T23:53:56.490314+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-27T22:53:55.359341+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "377dff0d-15f5-474b-adb4-00b97ad16887",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-27T22:53:55.381939+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-27T21:53:54.263878+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "e4d17c46-eef9-4acc-adad-d125dc92362c",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-27T21:53:54.287172+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-27T20:53:53.039979+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "aa55a016-4d1a-4ae4-b130-16f54cef426c",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-27T20:53:53.068229+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-27T19:53:51.870401+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "ebbbc2ff-afdf-49d0-82fb-d9079c4228cc",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-27T19:53:51.895422+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-27T19:00:50.763034+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "53165be0-bf1f-4e04-8913-bca59eb42a16",
+        "input_data": {
+          "description": "Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "approval_required": true,
+            "report_scope": "tasks_and_next_day_plan"
+          },
+          "title": "Ежедневный план на завтра"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-27T19:00:50.792594+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "pending",
+        "target_agent": "director-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "director",
+          "cron_job_id": "daily_plan_approval",
+          "cron_title": "Ежедневный план на завтра",
+          "kanban_idempotency_key": "glame-platform-task:53165be0-bf1f-4e04-8913-bca59eb42a16",
+          "kanban_sync_status": "synced_full",
+          "kanban_synced_at": "2026-05-28T09:23:23Z",
+          "kanban_synced_fields": [
+            "title",
+            "passport",
+            "description",
+            "input_data",
+            "output_data",
+            "output_metadata",
+            "requirements",
+            "constraints",
+            "task_context",
+            "full_json"
+          ],
+          "kanban_task_id": "t_ae648f3a",
+          "manual_run": false,
+          "schedule_type": "daily"
+        },
+        "task_type": "tomorrow_plan_preparation",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-27T18:53:50.591742+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "050568d6-c7b9-44ca-bca5-07f5acebe387",
+        "input_data": {
+          "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "interval_minutes": 60,
+            "sources": [
+              "1c_sales",
+              "1c_stock",
+              "1c_customers"
+            ]
+          },
+          "title": "Контроль синхронизации 1С"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-27T18:53:50.613930+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": null,
+        "status": "cancelled",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "data",
+          "cron_job_id": "onec_data_sync_monitor",
+          "cron_title": "Контроль синхронизации 1С",
+          "manual_run": false,
+          "schedule_type": "hourly"
+        },
+        "task_type": "data_freshness_review",
+        "validation_errors": [],
+        "validation_result": null
+      },
+      {
+        "completed_at": null,
+        "constraints": {},
+        "created_at": "2026-05-27T18:00:49.655612+00:00",
+        "deadline_at": null,
+        "error_message": null,
+        "id": "19a200b8-0628-4f2e-87cd-1ab123e2dfd9",
+        "input_data": {
+          "description": "AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+          "parameters": {
+            "approval_required": false,
+            "period": "today"
+          },
+          "title": "Ежедневный маркетинговый анализ"
+        },
+        "output_data": null,
+        "output_metadata": {},
+        "priority": 3,
+        "requirements": {
+          "no_mass_send_without_admin_approval": true,
+          "show_sources": true,
+          "use_real_data_only": true
+        },
+        "scheduled_at": "2026-05-27T18:00:49.681377+00:00",
+        "source_agent": "cron-scheduler",
+        "started_at": "2026-05-28T09:28:39.706697+00:00",
+        "status": "completed",
+        "target_agent": "analytics-agent",
+        "target_metrics": {},
+        "task_context": {
+          "created_from": "admin_cron",
+          "cron_category": "analytics",
+          "cron_job_id": "marketing_daily_analysis",
+          "cron_title": "Ежедневный маркетинговый анализ",
+          "kanban_idempotency_key": "glame-platform-task:19a200b8-0628-4f2e-87cd-1ab123e2dfd9",
+          "kanban_sync_status": "synced_full",
+          "kanban_synced_at": "2026-05-28T09:23:23Z",
+          "kanban_synced_fields": [
+            "title",
+            "passport",
+            "description",
+            "input_data",
+            "output_data",
+            "output_metadata",
+            "requirements",
+            "constraints",
+            "task_context",
+            "full_json"
+          ],
+          "kanban_task_id": "t_fb532c8b",
+          "manual_run": false,
+          "schedule_type": "daily"
+        },
+        "task_type": "daily_marketing_analysis",
+        "validation_errors": [],
+        "validation_result": null
+      }
+    ],
+    "raw": "_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-28T04:54:02.323374+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-28T03:54:00.964092+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"95211832-8b05-4a26-ac76-83991df7a19b\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-28T03:54:00.986039+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-28T02:53:59.861110+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"5b069572-9ac3-47c8-9535-6042c184f5c3\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-28T02:53:59.883145+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-28T01:53:58.712123+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"6a7d5276-d2a9-4c9a-911b-72af89d12f1b\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-28T01:53:58.738205+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-28T00:53:57.610679+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"d95ba2b2-182a-4af0-a4c3-6c83f2570e2b\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-28T00:53:57.633269+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-27T23:53:56.467143+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"c20b5c8e-df8a-4ce7-baf3-a9f0ac976925\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-27T23:53:56.490314+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-27T22:53:55.359341+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"377dff0d-15f5-474b-adb4-00b97ad16887\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-27T22:53:55.381939+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-27T21:53:54.263878+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"e4d17c46-eef9-4acc-adad-d125dc92362c\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-27T21:53:54.287172+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-27T20:53:53.039979+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"aa55a016-4d1a-4ae4-b130-16f54cef426c\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-27T20:53:53.068229+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-27T19:53:51.870401+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"ebbbc2ff-afdf-49d0-82fb-d9079c4228cc\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-27T19:53:51.895422+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-27T19:00:50.763034+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"53165be0-bf1f-4e04-8913-bca59eb42a16\",\n    \"input_data\": {\n      \"description\": \"Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"approval_required\": true,\n        \"report_scope\": \"tasks_and_next_day_plan\"\n      },\n      \"title\": \"Ежедневный план на завтра\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-27T19:00:50.792594+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"pending\",\n    \"target_agent\": \"director-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"director\",\n      \"cron_job_id\": \"daily_plan_approval\",\n      \"cron_title\": \"Ежедневный план на завтра\",\n      \"kanban_idempotency_key\": \"glame-platform-task:53165be0-bf1f-4e04-8913-bca59eb42a16\",\n      \"kanban_sync_status\": \"synced_full\",\n      \"kanban_synced_at\": \"2026-05-28T09:23:23Z\",\n      \"kanban_synced_fields\": [\n        \"title\",\n        \"passport\",\n        \"description\",\n        \"input_data\",\n        \"output_data\",\n        \"output_metadata\",\n        \"requirements\",\n        \"constraints\",\n        \"task_context\",\n        \"full_json\"\n      ],\n      \"kanban_task_id\": \"t_ae648f3a\",\n      \"manual_run\": false,\n      \"schedule_type\": \"daily\"\n    },\n    \"task_type\": \"tomorrow_plan_preparation\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-27T18:53:50.591742+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"050568d6-c7b9-44ca-bca5-07f5acebe387\",\n    \"input_data\": {\n      \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"interval_minutes\": 60,\n        \"sources\": [\n          \"1c_sales\",\n          \"1c_stock\",\n          \"1c_customers\"\n        ]\n      },\n      \"title\": \"Контроль синхронизации 1С\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-27T18:53:50.613930+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": null,\n    \"status\": \"cancelled\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"data\",\n      \"cron_job_id\": \"onec_data_sync_monitor\",\n      \"cron_title\": \"Контроль синхронизации 1С\",\n      \"manual_run\": false,\n      \"schedule_type\": \"hourly\"\n    },\n    \"task_type\": \"data_freshness_review\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  },\n  {\n    \"completed_at\": null,\n    \"constraints\": {},\n    \"created_at\": \"2026-05-27T18:00:49.655612+00:00\",\n    \"deadline_at\": null,\n    \"error_message\": null,\n    \"id\": \"19a200b8-0628-4f2e-87cd-1ab123e2dfd9\",\n    \"input_data\": {\n      \"description\": \"AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.\",\n      \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n      \"parameters\": {\n        \"approval_required\": false,\n        \"period\": \"today\"\n      },\n      \"title\": \"Ежедневный маркетинговый анализ\"\n    },\n    \"output_data\": null,\n    \"output_metadata\": {},\n    \"priority\": 3,\n    \"requirements\": {\n      \"no_mass_send_without_admin_approval\": true,\n      \"show_sources\": true,\n      \"use_real_data_only\": true\n    },\n    \"scheduled_at\": \"2026-05-27T18:00:49.681377+00:00\",\n    \"source_agent\": \"cron-scheduler\",\n    \"started_at\": \"2026-05-28T09:28:39.706697+00:00\",\n    \"status\": \"completed\",\n    \"target_agent\": \"analytics-agent\",\n    \"target_metrics\": {},\n    \"task_context\": {\n      \"created_from\": \"admin_cron\",\n      \"cron_category\": \"analytics\",\n      \"cron_job_id\": \"marketing_daily_analysis\",\n      \"cron_title\": \"Ежедневный маркетинговый анализ\",\n      \"kanban_idempotency_key\": \"glame-platform-task:19a200b8-0628-4f2e-87cd-1ab123e2dfd9\",\n      \"kanban_sync_status\": \"synced_full\",\n      \"kanban_synced_at\": \"2026-05-28T09:23:23Z\",\n      \"kanban_synced_fields\": [\n        \"title\",\n        \"passport\",\n        \"description\",\n        \"input_data\",\n        \"output_data\",\n        \"output_metadata\",\n        \"requirements\",\n        \"constraints\",\n        \"task_context\",\n        \"full_json\"\n      ],\n      \"kanban_task_id\": \"t_fb532c8b\",\n      \"manual_run\": false,\n      \"schedule_type\": \"daily\"\n    },\n    \"task_type\": \"daily_marketing_analysis\",\n    \"validation_errors\": [],\n    \"validation_result\": null\n  }\n]"
+  },
+  "director_kanban": {
+    "endpoint": "/api/director/tasks/kanban?limit=10",
+    "exit_code": 0,
+    "status": 200,
+    "body": {
+      "columns": [
+        {
+          "cards": [
+            {
+              "assigned_to": "director-agent",
+              "completed_at": null,
+              "created_at": "2026-05-28T10:10:14.691789+00:00",
+              "deadline_at": null,
+              "description": "Мониторинг 1С выявил нарушение hourly freshness: customer sync старше 49 часов, продажи/чеки за текущий день не подтверждены, stock/inventory analytics работает через live fallback. Нужно проверить расписания customer sync, sales/checks sync и inventory analytics recalculation.",
+              "detailed_result": null,
+              "execution_notes": null,
+              "extra_data": {
+                "board": null,
+                "href": "/ai-marketer/tasks/c6d56e55-1eed-4fc2-84eb-334519ff1994",
+                "input_data": {
+                  "description": "Мониторинг 1С выявил нарушение hourly freshness: customer sync старше 49 часов, продажи/чеки за текущий день не подтверждены, stock/inventory analytics работает через live fallback. Нужно проверить расписания customer sync, sales/checks sync и inventory analytics recalculation.",
+                  "expected_result": "Админ/директор подтверждает причину задержки 1С sync и решение: перезапуск/исправление расписания либо явное принятие текущего состояния.",
+                  "monitor_summary": "Live API healthy and 1C-facing endpoints are readable, but hourly freshness is not verified: customer sync is older than 49h, sales latest non-zero day is 2026-05-27, stock/inventory analytics is served by live_inventory_control_fallback and no active product sync task is running.",
+                  "sources": {
+                    "admin_1c_sync_status": {
+                      "active_tasks": 0,
+                      "endpoint": "/api/admin/1c/sync/status",
+                      "errors": [],
+                      "http_status": 200,
+                      "last_sync": "2026-05-26T08:27:30.235770+00:00",
+                      "total_customers": 6216
+                    },
+                    "auth_onec_sync_status": {
+                      "endpoint": "/api/auth/onec-sync-status",
+                      "http_status": 200,
+                      "job_id": null,
+                      "last_attempt_at": null,
+                      "status": null
+                    },
+                    "customers_overview": {
+                      "endpoint": "/api/admin/customers/analytics/overview",
+                      "http_status": 200,
+                      "total_customers": 6216,
+                      "total_revenue": 66007132.58
+                    },
+                    "health": {
+                      "endpoint": "/health",
+                      "http_status": 200,
+                      "status": "healthy"
+                    },
+                    "inventory_analysis": {
+                      "endpoint": "/api/analytics/inventory/analysis?limit=5",
+                      "http_status": 200,
+                      "source": "live_inventory_control_fallback",
+                      "status": "success"
+                    },
+                    "inventory_health": {
+                      "endpoint": "/api/analytics/inventory/health-score",
+                      "http_status": 200,
+                      "source": "live_inventory_control_fallback",
+                      "status": "excellent",
+                      "stock_total": 5708.0,
+                      "total_products": 3357
+                    },
+                    "products_sync_status": {
+                      "detail": "Нет активных задач синхронизации товаров. Запустите синхронизацию через POST /api/products/sync-xml",
+                      "endpoint": "/api/products/sync-1c/status",
+                      "http_status": 404
+                    },
+                    "sales_daily": {
+                      "endpoint": "/api/analytics/1c-sales/daily?days=7&auto_sync=false",
+                      "http_status": 200,
+                      "latest_nonzero_date": "2026-05-27",
+                      "today": {
+                        "date": "2026-05-28",
+                        "orders": 0,
+                        "revenue": 0
+                      }
+                    },
+                    "sales_metrics": {
+                      "endpoint": "/api/analytics/1c-sales/metrics?days=7&auto_sync=false",
+                      "http_status": 200,
+                      "latest_metric_date": "2026-05-27",
+                      "total": 6,
+                      "total_orders": 35,
+                      "total_revenue": 428065.0
+                    },
+                    "stock_dashboard": {
+                      "checks_count": 604,
+                      "endpoint": "/api/inventory/dashboard",
+                      "http_status": 200,
+                      "sales_revenue": 6312924.19,
+                      "sku_count": 634,
+                      "stock_total": 5708.0
+                    }
+                  },
+                  "title": "Проверить устаревание синхронизации 1С"
+                },
+                "source_agent": "analytics-agent",
+                "task_context": {
+                  "artifact_json": "/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.json",
+                  "artifact_md": "/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.md",
+                  "created_from": "onec_data_sync_monitor",
+                  "detected_at": "2026-05-28T10:05:13+00:00",
+                  "finding_status": "needs_admin_attention",
+                  "kanban_idempotency_key": "glame-platform-task:c6d56e55-1eed-4fc2-84eb-334519ff1994",
+                  "kanban_sync_status": "synced_full",
+                  "kanban_synced_at": "2026-05-28T10:17:11Z",
+                  "kanban_synced_fields": [
+                    "title",
+                    "passport",
+                    "description",
+                    "input_data",
+                    "output_data",
+                    "output_metadata",
+                    "requirements",
+                    "constraints",
+                    "task_context",
+                    "full_json"
+                  ],
+                  "kanban_task_id": "t_87aab376",
+                  "source_kanban_task_id": "t_edbb0e9b",
+                  "source_platform_task_id": "35a0e2bf-ae46-48fd-8820-94fae2cd5d20"
+                }
+              },
+              "id": "c6d56e55-1eed-4fc2-84eb-334519ff1994",
+              "priority": "P1",
+              "result_summary": null,
+              "source": "agent_interaction",
+              "status": "pending_approval",
+              "target_agent": "director-agent",
+              "task_type": "onec_sync_admin_review",
+              "title": "Проверить устаревание синхронизации 1С"
+            },
+            {
+              "assigned_to": null,
+              "completed_at": null,
+              "created_at": "2026-05-28T09:13:26.500965+00:00",
+              "deadline_at": null,
+              "description": "Мониторинг 1С выполнен Hermes по live API 2026-05-28T09:11Z. Продажи читаются: последние 1С-данные за 2026-05-27, 7 дней = 35 чеков / 428 065 ₽; сегодняшний offline-срез пока 0, что нормально для утренней проверки. Покупатели читаются: 6 216 клиентов, LTV 66 007 132.58 ₽. Остатки частично читаются: product sync completed, stock total 5 708 по inventory dashboard; но /api/admin/1c/sync/status возвращает HTTP 500 'Boolean value of this clause is not defined', analytics inventory health-score=no_data, analysis total=0. Создана директорская задача на разбор статуса/витрин аналитики остатков.\n\nПроверить backend /api/admin/1c/sync/status и пайплайн заполнения /api/analytics/inventory/health-score + /analysis: сейчас dashboard/report видят остатки, но analytics-слой возвращает no_data/0.",
+              "detailed_result": null,
+              "execution_notes": "[{\"agent\": \"unknown\", \"task\": \"Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков\", \"priority\": \"medium\"}]",
+              "extra_data": {
+                "href": null,
+                "plan": [
+                  {
+                    "agent": "unknown",
+                    "priority": "medium",
+                    "task": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков"
+                  }
+                ]
+              },
+              "id": "e6284d00-42f5-41c7-a50e-d89a5013f6e6",
+              "priority": "P1",
+              "related_message_id": null,
+              "result_summary": "Задача 'Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков' запланирована. Определено 1 подзадач.",
+              "source": "director_task",
+              "status": "pending",
+              "target_agent": null,
+              "task_type": "assignment",
+              "title": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков",
+              "user_id": "768cfa57-db4c-4efc-95d5-ebd1b138aebb",
+              "vector_id": null
+            },
+            {
+              "assigned_to": "crm-agent",
+              "completed_at": null,
+              "created_at": "2026-05-28T09:00:14.224661+00:00",
+              "deadline_at": null,
+              "description": "AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование.",
+              "detailed_result": {
+                "agent_reply": "## AI CRM: сегмент подготовлен\n\n1. Данные использованы: карточки покупателей, история покупок, предпочтительный магазин/город, бренд и товарные признаки из чеков.\n2. Сегмент сохранен в БД: `AI CRM | сегмент на согласование | 2805 0923 · db1e22`\n3. ID сегмента: `db1e2214-4580-42fb-92bf-2e47aa558e31`\n4. Размер сегмента: 5791 покупателей. Цель: целевой размер не указан. Первичный фильтр дал 5791.\n5. Где редактировать: `/admin/customers/segments` или карточка задачи `/ai-marketer/tasks/f44f5bf0-50a9-4aa4-b450-a4d3d42102f9`.\n\n### Правила сегмента\n```json\n{\"logic\": \"AND\", \"filters\": [{\"field\": \"is_customer\", \"operator\": \"equals\", \"value\": true}, {\"field\": \"total_purchases\", \"operator\": \">=\", \"value\": 1}]}\n```\n\n### Риски и согласование\n- Перед отправкой проверить согласия на канал коммуникации и финальный список исключений.\n\nСтатус: сегмент готов для карточки директора и согласования администратором. Исходная формулировка: Проверка клиентов с ДР AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование. Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется. {\"show_sources\": true, \"use_real_data_only\": true, \"no_mass_send_without_admin_approval\": true}",
+                "artifact_path": "/workspace/glame-platform/reports/crm_birthday_check_f44f5bf0_2026-05-28.md",
+                "customers": [
+                  {
+                    "age": 47,
+                    "birth_date": "1979-05-29",
+                    "city": null,
+                    "customer_segment": "New",
+                    "days_until": 1,
+                    "full_name": "Лесовик елена",
+                    "last_purchase_date": null,
+                    "loyalty_points": 305,
+                    "phone_masked": "79***09",
+                    "target_date": "2026-05-29",
+                    "total_purchases": 0,
+                    "total_spent": 0.0,
+                    "user_id": "ea647a27-22b9-4c21-b0c2-b34f47d4d225"
+                  },
+                  {
+                    "age": 31,
+                    "birth_date": "1995-06-01",
+                    "city": "Симферополь",
+                    "customer_segment": "Regular",
+                    "days_until": 4,
+                    "full_name": "виктория Дурман",
+                    "last_purchase_date": "2026-01-09T17:39:48+00:00",
+                    "loyalty_points": 141,
+                    "phone_masked": "79***12",
+                    "target_date": "2026-06-01",
+                    "total_purchases": 1,
+                    "total_spent": 469000.0,
+                    "user_id": "9e9ccbc7-db04-4bfa-ba77-36f82886ca86"
+                  },
+                  {
+                    "age": 54,
+                    "birth_date": "1972-06-01",
+                    "city": "Симферополь",
+                    "customer_segment": "Regular",
+                    "days_until": 4,
+                    "full_name": "Зиналиева Гульнара",
+                    "last_purchase_date": "2026-02-13T11:17:56+00:00",
+                    "loyalty_points": 99,
+                    "phone_masked": "79***21",
+                    "target_date": "2026-06-01",
+                    "total_purchases": 1,
+                    "total_spent": 329000.0,
+                    "user_id": "3fcbd8d7-b06b-4ffe-b897-7c125c09743d"
+                  },
+                  {
+                    "age": 25,
+                    "birth_date": "2001-06-02",
+                    "city": "Симферополь",
+                    "customer_segment": "Regular",
+                    "days_until": 5,
+                    "full_name": "Елена Копылова",
+                    "last_purchase_date": "2025-12-28T14:08:09+00:00",
+                    "loyalty_points": 240,
+                    "phone_masked": "79***89",
+                    "target_date": "2026-06-02",
+                    "total_purchases": 2,
+                    "total_spent": 1118000.0,
+                    "user_id": "f681b763-5982-435d-8912-ada6081d04de"
+                  },
+                  {
+                    "age": 54,
+                    "birth_date": "1972-06-03",
+                    "city": "Ялта",
+                    "customer_segment": "Active",
+                    "days_until": 6,
+                    "full_name": "Николаенко Наталья",
+                    "last_purchase_date": "2026-01-04T16:43:02+00:00",
+                    "loyalty_points": 480,
+                    "phone_masked": "79***88",
+                    "target_date": "2026-06-03",
+                    "total_purchases": 5,
+                    "total_spent": 3215000.0,
+                    "user_id": "8816a870-f7b6-4e44-9927-8eb26bee349d"
+                  },
+                  {
+                    "age": 42,
+                    "birth_date": "1984-06-03",
+                    "city": "Симферополь",
+                    "customer_segment": "Active",
+                    "days_until": 6,
+                    "full_name": "Ханум Азизова",
+                    "last_purchase_date": "2026-01-03T14:24:21+00:00",
+                    "loyalty_points": 464,
+                    "phone_masked": "79***60",
+                    "target_date": "2026-06-03",
+                    "total_purchases": 3,
+                    "total_spent": 1547000.0,
+                    "user_id": "636baa4a-cb0a-47e4-9b5d-eccc13cc790d"
+                  },
+                  {
+                    "age": 53,
+                    "birth_date": "1973-06-04",
+                    "city": "Симферополь",
+                    "customer_segment": "Regular",
+                    "days_until": 7,
+                    "full_name": "Татьяна Пошукайло",
+                    "last_purchase_date": "2026-01-09T13:33:17+00:00",
+                    "loyalty_points": 207,
+                    "phone_masked": "79***82",
+                    "target_date": "2026-06-04",
+                    "total_purchases": 1,
+                    "total_spent": 689000.0,
+                    "user_id": "01d1d765-c5f8-4572-a391-ccbb82b471b3"
+                  },
+                  {
+                    "age": 52,
+                    "birth_date": "1974-06-04",
+                    "city": null,
+                    "customer_segment": "New",
+                    "days_until": 7,
+                    "full_name": "Кулик Любовь",
+                    "last_purchase_date": null,
+                    "loyalty_points": 174,
+                    "phone_masked": "79***79",
+                    "target_date": "2026-06-04",
+                    "total_purchases": 0,
+                    "total_spent": 0.0,
+                    "user_id": "cd766855-c089-4ab9-af2e-af47b1f17073"
+                  }
+                ],
+                "customers_with_valid_birth_date": 414,
+                "date_checked": "2026-05-28",
+                "days_ahead": 7,
+                "matches_count": 8,
+                "needs_user_attention": true,
+                "scenario_for_approval": {
+                  "approval_required": true,
+                  "audiences": {
+                    "active_regular": "персональное поздравление + предложение подборки",
+                    "new_no_purchases": "сервисное поздравление + приглашение в магазин/каталог"
+                  },
+                  "draft_message": "Здравствуйте, {Имя}! Команда GLAME поздравляет вас с наступающим днем рождения 💫 Если захотите подобрать украшение к празднику или подарок для себя, мы с радостью поможем в магазине или онлайн.",
+                  "mass_send_started": false,
+                  "recommendation": "Согласовать список и текст, затем отправлять поздравление вручную/через approved CRM flow."
+                },
+                "segment_action": "created",
+                "segment_customer_count": 5791,
+                "segment_id": "db1e2214-4580-42fb-92bf-2e47aa558e31",
+                "segment_name": "AI CRM | сегмент на согласование | 2805 0923 · db1e22",
+                "segment_rules": {
+                  "filters": [
+                    {
+                      "field": "is_customer",
+                      "operator": "equals",
+                      "value": true
+                    },
+                    {
+                      "field": "total_purchases",
+                      "operator": ">=",
+                      "value": 1
+                    }
+                  ],
+                  "logic": "AND"
+                },
+                "segment_verification": "Segment preview endpoint must return the same 8 static user IDs via rules field id IN list.",
+                "source": "live GLAME DB users table, cross-checked via admin customers endpoint shape",
+                "title": "Проверка клиентов с ДР",
+                "total_customers_scanned": 6216
+              },
+              "execution_notes": null,
+              "extra_data": {
+                "board": null,
+                "href": "/ai-marketer/tasks/f44f5bf0-50a9-4aa4-b450-a4d3d42102f9",
+                "input_data": {
+                  "description": "AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование.",
+                  "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+                  "parameters": {
+                    "approval_required": true,
+                    "create_segment": true,
+                    "days_ahead": 7
+                  },
+                  "title": "Проверка клиентов с ДР"
+                },
+                "source_agent": "cron-scheduler",
+                "task_context": {
+                  "created_from": "admin_cron",
+                  "cron_category": "crm",
+                  "cron_job_id": "birthday_customers_check",
+                  "cron_title": "Проверка клиентов с ДР",
+                  "dialog_run_id": "c868b3cf-06ef-4c95-9a8b-0b5eb1733462",
+                  "dialog_started_at": "2026-05-28T09:23:20.690194",
+                  "dialog_started_by": "glame-agent@local",
+                  "kanban_idempotency_key": "glame-platform-task:f44f5bf0-50a9-4aa4-b450-a4d3d42102f9",
+                  "kanban_sync_status": "synced_full",
+                  "kanban_synced_at": "2026-05-28T09:23:20Z",
+                  "kanban_synced_fields": [
+                    "title",
+                    "passport",
+                    "description",
+                    "input_data",
+                    "output_data",
+                    "output_metadata",
+                    "requirements",
+                    "constraints",
+                    "task_context",
+                    "full_json"
+                  ],
+                  "kanban_task_id": "t_2865ab3a",
+                  "manual_run": false,
+                  "passport_source_hash": "a0404e366114a2983e8223aed536e4cc0d10450e12ad974678ffa7b74dfcd423",
+                  "schedule_type": "daily",
+                  "segment_customer_count": 5791,
+                  "segment_edit_path": "/admin/customers/segments",
+                  "segment_id": "db1e2214-4580-42fb-92bf-2e47aa558e31",
+                  "segment_initial_customer_count": 5791,
+                  "segment_meta": {
+                    "brand": null,
+                    "channel": null,
+                    "city": null,
+                    "edit_path": "/admin/customers/segments",
+                    "name": "AI CRM | сегмент на согласование | 2805 0923"
+                  },
+                  "segment_name": "AI CRM | сегмент на согласование | 2805 0923 · db1e22",
+                  "segment_rules": {
+                    "filters": [
+                      {
+                        "field": "is_customer",
+                        "operator": "equals",
+                        "value": true
+                      },
+                      {
+                        "field": "total_purchases",
+                        "operator": ">=",
+                        "value": 1
+                      }
+                    ],
+                    "logic": "AND"
+                  }
+                }
+              },
+              "id": "f44f5bf0-50a9-4aa4-b450-a4d3d42102f9",
+              "priority": "P2",
+              "result_summary": null,
+              "source": "agent_interaction",
+              "status": "pending_approval",
+              "target_agent": "crm-agent",
+              "task_type": "crm_birthday_check",
+              "title": "Проверка клиентов с ДР"
+            }
+          ],
+          "id": "todo",
+          "title": "Нужно сделать"
+        },
+        {
+          "cards": [],
+          "id": "in_progress",
+          "title": "В работе"
+        },
+        {
+          "cards": [
+            {
+              "assigned_to": "analytics-agent",
+              "completed_at": null,
+              "created_at": "2026-05-28T09:54:26.869858+00:00",
+              "deadline_at": null,
+              "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+              "detailed_result": null,
+              "execution_notes": null,
+              "extra_data": {
+                "board": null,
+                "href": "/ai-marketer/tasks/35a0e2bf-ae46-48fd-8820-94fae2cd5d20",
+                "input_data": {
+                  "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                  "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+                  "parameters": {
+                    "interval_minutes": 60,
+                    "sources": [
+                      "1c_sales",
+                      "1c_stock",
+                      "1c_customers"
+                    ]
+                  },
+                  "title": "Контроль синхронизации 1С"
+                },
+                "source_agent": "cron-scheduler",
+                "task_context": {
+                  "created_from": "admin_cron",
+                  "cron_category": "data",
+                  "cron_job_id": "onec_data_sync_monitor",
+                  "cron_title": "Контроль синхронизации 1С",
+                  "kanban_idempotency_key": "glame-platform-task:35a0e2bf-ae46-48fd-8820-94fae2cd5d20",
+                  "kanban_sync_status": "synced_full",
+                  "kanban_synced_at": "2026-05-28T10:02:09Z",
+                  "kanban_synced_fields": [
+                    "title",
+                    "passport",
+                    "description",
+                    "input_data",
+                    "output_data",
+                    "output_metadata",
+                    "requirements",
+                    "constraints",
+                    "task_context",
+                    "full_json"
+                  ],
+                  "kanban_task_id": "t_edbb0e9b",
+                  "manual_run": false,
+                  "monitor_result": {
+                    "artifact_json": "/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.json",
+                    "artifact_md": "/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.md",
+                    "checked_at": "2026-05-28T10:05:13+00:00",
+                    "director_review_task_id": "c6d56e55-1eed-4fc2-84eb-334519ff1994",
+                    "source_status": {
+                      "1c_customers": "readable_but_last_sync_stale",
+                      "1c_sales": "readable_but_stale_or_suspicious_for_hourly_freshness",
+                      "1c_stock": "readable_live_fallback_no_active_sync"
+                    },
+                    "status": "needs_admin_attention",
+                    "summary": "Live API healthy and 1C-facing endpoints are readable, but hourly freshness is not verified: customer sync is older than 49h, sales latest non-zero day is 2026-05-27, stock/inventory analytics is served by live_inventory_control_fallback and no active product sync task is running."
+                  },
+                  "schedule_type": "hourly"
+                }
+              },
+              "id": "35a0e2bf-ae46-48fd-8820-94fae2cd5d20",
+              "priority": "P2",
+              "result_summary": null,
+              "source": "agent_interaction",
+              "status": "completed",
+              "target_agent": "analytics-agent",
+              "task_type": "data_freshness_review",
+              "title": "Контроль синхронизации 1С"
+            }
+          ],
+          "id": "done",
+          "title": "Готово"
+        },
+        {
+          "cards": [
+            {
+              "assigned_to": "analytics-agent",
+              "completed_at": null,
+              "created_at": "2026-05-28T08:54:14.061830+00:00",
+              "deadline_at": null,
+              "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+              "detailed_result": null,
+              "execution_notes": null,
+              "extra_data": {
+                "board": null,
+                "href": "/ai-marketer/tasks/44e7f15e-bc88-459e-a340-a64f47a49b69",
+                "input_data": {
+                  "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                  "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+                  "parameters": {
+                    "interval_minutes": 60,
+                    "sources": [
+                      "1c_sales",
+                      "1c_stock",
+                      "1c_customers"
+                    ]
+                  },
+                  "title": "Контроль синхронизации 1С"
+                },
+                "source_agent": "cron-scheduler",
+                "task_context": {
+                  "created_from": "admin_cron",
+                  "cron_category": "data",
+                  "cron_job_id": "onec_data_sync_monitor",
+                  "cron_title": "Контроль синхронизации 1С",
+                  "manual_run": false,
+                  "schedule_type": "hourly"
+                }
+              },
+              "id": "44e7f15e-bc88-459e-a340-a64f47a49b69",
+              "priority": "P2",
+              "result_summary": null,
+              "source": "agent_interaction",
+              "status": "cancelled",
+              "target_agent": "analytics-agent",
+              "task_type": "data_freshness_review",
+              "title": "Контроль синхронизации 1С"
+            },
+            {
+              "assigned_to": "analytics-agent",
+              "completed_at": null,
+              "created_at": "2026-05-28T07:54:06.293743+00:00",
+              "deadline_at": null,
+              "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+              "detailed_result": null,
+              "execution_notes": null,
+              "extra_data": {
+                "board": null,
+                "href": "/ai-marketer/tasks/826999c2-69ed-4f59-a4d7-361bb4fffea1",
+                "input_data": {
+                  "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                  "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+                  "parameters": {
+                    "interval_minutes": 60,
+                    "sources": [
+                      "1c_sales",
+                      "1c_stock",
+                      "1c_customers"
+                    ]
+                  },
+                  "title": "Контроль синхронизации 1С"
+                },
+                "source_agent": "cron-scheduler",
+                "task_context": {
+                  "created_from": "admin_cron",
+                  "cron_category": "data",
+                  "cron_job_id": "onec_data_sync_monitor",
+                  "cron_title": "Контроль синхронизации 1С",
+                  "manual_run": false,
+                  "schedule_type": "hourly"
+                }
+              },
+              "id": "826999c2-69ed-4f59-a4d7-361bb4fffea1",
+              "priority": "P2",
+              "result_summary": null,
+              "source": "agent_interaction",
+              "status": "cancelled",
+              "target_agent": "analytics-agent",
+              "task_type": "data_freshness_review",
+              "title": "Контроль синхронизации 1С"
+            },
+            {
+              "assigned_to": "analytics-agent",
+              "completed_at": null,
+              "created_at": "2026-05-28T06:54:04.776876+00:00",
+              "deadline_at": null,
+              "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+              "detailed_result": null,
+              "execution_notes": null,
+              "extra_data": {
+                "board": null,
+                "href": "/ai-marketer/tasks/192a6bfd-6fec-4ad1-a835-5e0bf241e156",
+                "input_data": {
+                  "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                  "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+                  "parameters": {
+                    "interval_minutes": 60,
+                    "sources": [
+                      "1c_sales",
+                      "1c_stock",
+                      "1c_customers"
+                    ]
+                  },
+                  "title": "Контроль синхронизации 1С"
+                },
+                "source_agent": "cron-scheduler",
+                "task_context": {
+                  "created_from": "admin_cron",
+                  "cron_category": "data",
+                  "cron_job_id": "onec_data_sync_monitor",
+                  "cron_title": "Контроль синхронизации 1С",
+                  "manual_run": false,
+                  "schedule_type": "hourly"
+                }
+              },
+              "id": "192a6bfd-6fec-4ad1-a835-5e0bf241e156",
+              "priority": "P2",
+              "result_summary": null,
+              "source": "agent_interaction",
+              "status": "cancelled",
+              "target_agent": "analytics-agent",
+              "task_type": "data_freshness_review",
+              "title": "Контроль синхронизации 1С"
+            },
+            {
+              "assigned_to": "analytics-agent",
+              "completed_at": null,
+              "created_at": "2026-05-28T05:54:03.440938+00:00",
+              "deadline_at": null,
+              "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+              "detailed_result": null,
+              "execution_notes": null,
+              "extra_data": {
+                "board": null,
+                "href": "/ai-marketer/tasks/316affe2-5acd-43fc-b8c8-e24e9507860e",
+                "input_data": {
+                  "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                  "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+                  "parameters": {
+                    "interval_minutes": 60,
+                    "sources": [
+                      "1c_sales",
+                      "1c_stock",
+                      "1c_customers"
+                    ]
+                  },
+                  "title": "Контроль синхронизации 1С"
+                },
+                "source_agent": "cron-scheduler",
+                "task_context": {
+                  "created_from": "admin_cron",
+                  "cron_category": "data",
+                  "cron_job_id": "onec_data_sync_monitor",
+                  "cron_title": "Контроль синхронизации 1С",
+                  "manual_run": false,
+                  "schedule_type": "hourly"
+                }
+              },
+              "id": "316affe2-5acd-43fc-b8c8-e24e9507860e",
+              "priority": "P2",
+              "result_summary": null,
+              "source": "agent_interaction",
+              "status": "cancelled",
+              "target_agent": "analytics-agent",
+              "task_type": "data_freshness_review",
+              "title": "Контроль синхронизации 1С"
+            },
+            {
+              "assigned_to": "analytics-agent",
+              "completed_at": null,
+              "created_at": "2026-05-28T04:54:02.296108+00:00",
+              "deadline_at": null,
+              "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+              "detailed_result": null,
+              "execution_notes": null,
+              "extra_data": {
+                "board": null,
+                "href": "/ai-marketer/tasks/1d816402-cd50-43dd-b804-87ada2b13d1b",
+                "input_data": {
+                  "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                  "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+                  "parameters": {
+                    "interval_minutes": 60,
+                    "sources": [
+                      "1c_sales",
+                      "1c_stock",
+                      "1c_customers"
+                    ]
+                  },
+                  "title": "Контроль синхронизации 1С"
+                },
+                "source_agent": "cron-scheduler",
+                "task_context": {
+                  "created_from": "admin_cron",
+                  "cron_category": "data",
+                  "cron_job_id": "onec_data_sync_monitor",
+                  "cron_title": "Контроль синхронизации 1С",
+                  "manual_run": false,
+                  "schedule_type": "hourly"
+                }
+              },
+              "id": "1d816402-cd50-43dd-b804-87ada2b13d1b",
+              "priority": "P2",
+              "result_summary": null,
+              "source": "agent_interaction",
+              "status": "cancelled",
+              "target_agent": "analytics-agent",
+              "task_type": "data_freshness_review",
+              "title": "Контроль синхронизации 1С"
+            },
+            {
+              "assigned_to": "analytics-agent",
+              "completed_at": null,
+              "created_at": "2026-05-28T03:54:00.964092+00:00",
+              "deadline_at": null,
+              "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+              "detailed_result": null,
+              "execution_notes": null,
+              "extra_data": {
+                "board": null,
+                "href": "/ai-marketer/tasks/95211832-8b05-4a26-ac76-83991df7a19b",
+                "input_data": {
+                  "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                  "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.",
+                  "parameters": {
+                    "interval_minutes": 60,
+                    "sources": [
+                      "1c_sales",
+                      "1c_stock",
+                      "1c_customers"
+                    ]
+                  },
+                  "title": "Контроль синхронизации 1С"
+                },
+                "source_agent": "cron-scheduler",
+                "task_context": {
+                  "created_from": "admin_cron",
+                  "cron_category": "data",
+                  "cron_job_id": "onec_data_sync_monitor",
+                  "cron_title": "Контроль синхронизации 1С",
+                  "manual_run": false,
+                  "schedule_type": "hourly"
+                }
+              },
+              "id": "95211832-8b05-4a26-ac76-83991df7a19b",
+              "priority": "P2",
+              "result_summary": null,
+              "source": "agent_interaction",
+              "status": "cancelled",
+              "target_agent": "analytics-agent",
+              "task_type": "data_freshness_review",
+              "title": "Контроль синхронизации 1С"
+            }
+          ],
+          "id": "blocked",
+          "title": "Блокеры / отменено"
+        }
+      ],
+      "stats": {
+        "blocked": 6,
+        "done": 1,
+        "in_progress": 0,
+        "todo": 3
+      },
+      "total": 10
+    },
+    "raw": "       \"audiences\": {\n                \"active_regular\": \"персональное поздравление + предложение подборки\",\n                \"new_no_purchases\": \"сервисное поздравление + приглашение в магазин/каталог\"\n              },\n              \"draft_message\": \"Здравствуйте, {Имя}! Команда GLAME поздравляет вас с наступающим днем рождения 💫 Если захотите подобрать украшение к празднику или подарок для себя, мы с радостью поможем в магазине или онлайн.\",\n              \"mass_send_started\": false,\n              \"recommendation\": \"Согласовать список и текст, затем отправлять поздравление вручную/через approved CRM flow.\"\n            },\n            \"segment_action\": \"created\",\n            \"segment_customer_count\": 5791,\n            \"segment_id\": \"db1e2214-4580-42fb-92bf-2e47aa558e31\",\n            \"segment_name\": \"AI CRM | сегмент на согласование | 2805 0923 · db1e22\",\n            \"segment_rules\": {\n              \"filters\": [\n                {\n                  \"field\": \"is_customer\",\n                  \"operator\": \"equals\",\n                  \"value\": true\n                },\n                {\n                  \"field\": \"total_purchases\",\n                  \"operator\": \">=\",\n                  \"value\": 1\n                }\n              ],\n              \"logic\": \"AND\"\n            },\n            \"segment_verification\": \"Segment preview endpoint must return the same 8 static user IDs via rules field id IN list.\",\n            \"source\": \"live GLAME DB users table, cross-checked via admin customers endpoint shape\",\n            \"title\": \"Проверка клиентов с ДР\",\n            \"total_customers_scanned\": 6216\n          },\n          \"execution_notes\": null,\n          \"extra_data\": {\n            \"board\": null,\n            \"href\": \"/ai-marketer/tasks/f44f5bf0-50a9-4aa4-b450-a4d3d42102f9\",\n            \"input_data\": {\n              \"description\": \"AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование.\",\n              \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n              \"parameters\": {\n                \"approval_required\": true,\n                \"create_segment\": true,\n                \"days_ahead\": 7\n              },\n              \"title\": \"Проверка клиентов с ДР\"\n            },\n            \"source_agent\": \"cron-scheduler\",\n            \"task_context\": {\n              \"created_from\": \"admin_cron\",\n              \"cron_category\": \"crm\",\n              \"cron_job_id\": \"birthday_customers_check\",\n              \"cron_title\": \"Проверка клиентов с ДР\",\n              \"dialog_run_id\": \"c868b3cf-06ef-4c95-9a8b-0b5eb1733462\",\n              \"dialog_started_at\": \"2026-05-28T09:23:20.690194\",\n              \"dialog_started_by\": \"glame-agent@local\",\n              \"kanban_idempotency_key\": \"glame-platform-task:f44f5bf0-50a9-4aa4-b450-a4d3d42102f9\",\n              \"kanban_sync_status\": \"synced_full\",\n              \"kanban_synced_at\": \"2026-05-28T09:23:20Z\",\n              \"kanban_synced_fields\": [\n                \"title\",\n                \"passport\",\n                \"description\",\n                \"input_data\",\n                \"output_data\",\n                \"output_metadata\",\n                \"requirements\",\n                \"constraints\",\n                \"task_context\",\n                \"full_json\"\n              ],\n              \"kanban_task_id\": \"t_2865ab3a\",\n              \"manual_run\": false,\n              \"passport_source_hash\": \"a0404e366114a2983e8223aed536e4cc0d10450e12ad974678ffa7b74dfcd423\",\n              \"schedule_type\": \"daily\",\n              \"segment_customer_count\": 5791,\n              \"segment_edit_path\": \"/admin/customers/segments\",\n              \"segment_id\": \"db1e2214-4580-42fb-92bf-2e47aa558e31\",\n              \"segment_initial_customer_count\": 5791,\n              \"segment_meta\": {\n                \"brand\": null,\n                \"channel\": null,\n                \"city\": null,\n                \"edit_path\": \"/admin/customers/segments\",\n                \"name\": \"AI CRM | сегмент на согласование | 2805 0923\"\n              },\n              \"segment_name\": \"AI CRM | сегмент на согласование | 2805 0923 · db1e22\",\n              \"segment_rules\": {\n                \"filters\": [\n                  {\n                    \"field\": \"is_customer\",\n                    \"operator\": \"equals\",\n                    \"value\": true\n                  },\n                  {\n                    \"field\": \"total_purchases\",\n                    \"operator\": \">=\",\n                    \"value\": 1\n                  }\n                ],\n                \"logic\": \"AND\"\n              }\n            }\n          },\n          \"id\": \"f44f5bf0-50a9-4aa4-b450-a4d3d42102f9\",\n          \"priority\": \"P2\",\n          \"result_summary\": null,\n          \"source\": \"agent_interaction\",\n          \"status\": \"pending_approval\",\n          \"target_agent\": \"crm-agent\",\n          \"task_type\": \"crm_birthday_check\",\n          \"title\": \"Проверка клиентов с ДР\"\n        }\n      ],\n      \"id\": \"todo\",\n      \"title\": \"Нужно сделать\"\n    },\n    {\n      \"cards\": [],\n      \"id\": \"in_progress\",\n      \"title\": \"В работе\"\n    },\n    {\n      \"cards\": [\n        {\n          \"assigned_to\": \"analytics-agent\",\n          \"completed_at\": null,\n          \"created_at\": \"2026-05-28T09:54:26.869858+00:00\",\n          \"deadline_at\": null,\n          \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n          \"detailed_result\": null,\n          \"execution_notes\": null,\n          \"extra_data\": {\n            \"board\": null,\n            \"href\": \"/ai-marketer/tasks/35a0e2bf-ae46-48fd-8820-94fae2cd5d20\",\n            \"input_data\": {\n              \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n              \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n              \"parameters\": {\n                \"interval_minutes\": 60,\n                \"sources\": [\n                  \"1c_sales\",\n                  \"1c_stock\",\n                  \"1c_customers\"\n                ]\n              },\n              \"title\": \"Контроль синхронизации 1С\"\n            },\n            \"source_agent\": \"cron-scheduler\",\n            \"task_context\": {\n              \"created_from\": \"admin_cron\",\n              \"cron_category\": \"data\",\n              \"cron_job_id\": \"onec_data_sync_monitor\",\n              \"cron_title\": \"Контроль синхронизации 1С\",\n              \"kanban_idempotency_key\": \"glame-platform-task:35a0e2bf-ae46-48fd-8820-94fae2cd5d20\",\n              \"kanban_sync_status\": \"synced_full\",\n              \"kanban_synced_at\": \"2026-05-28T10:02:09Z\",\n              \"kanban_synced_fields\": [\n                \"title\",\n                \"passport\",\n                \"description\",\n                \"input_data\",\n                \"output_data\",\n                \"output_metadata\",\n                \"requirements\",\n                \"constraints\",\n                \"task_context\",\n                \"full_json\"\n              ],\n              \"kanban_task_id\": \"t_edbb0e9b\",\n              \"manual_run\": false,\n              \"monitor_result\": {\n                \"artifact_json\": \"/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.json\",\n                \"artifact_md\": \"/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.md\",\n                \"checked_at\": \"2026-05-28T10:05:13+00:00\",\n                \"director_review_task_id\": \"c6d56e55-1eed-4fc2-84eb-334519ff1994\",\n                \"source_status\": {\n                  \"1c_customers\": \"readable_but_last_sync_stale\",\n                  \"1c_sales\": \"readable_but_stale_or_suspicious_for_hourly_freshness\",\n                  \"1c_stock\": \"readable_live_fallback_no_active_sync\"\n                },\n                \"status\": \"needs_admin_attention\",\n                \"summary\": \"Live API healthy and 1C-facing endpoints are readable, but hourly freshness is not verified: customer sync is older than 49h, sales latest non-zero day is 2026-05-27, stock/inventory analytics is served by live_inventory_control_fallback and no active product sync task is running.\"\n              },\n              \"schedule_type\": \"hourly\"\n            }\n          },\n          \"id\": \"35a0e2bf-ae46-48fd-8820-94fae2cd5d20\",\n          \"priority\": \"P2\",\n          \"result_summary\": null,\n          \"source\": \"agent_interaction\",\n          \"status\": \"completed\",\n          \"target_agent\": \"analytics-agent\",\n          \"task_type\": \"data_freshness_review\",\n          \"title\": \"Контроль синхронизации 1С\"\n        }\n      ],\n      \"id\": \"done\",\n      \"title\": \"Готово\"\n    },\n    {\n      \"cards\": [\n        {\n          \"assigned_to\": \"analytics-agent\",\n          \"completed_at\": null,\n          \"created_at\": \"2026-05-28T08:54:14.061830+00:00\",\n          \"deadline_at\": null,\n          \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n          \"detailed_result\": null,\n          \"execution_notes\": null,\n          \"extra_data\": {\n            \"board\": null,\n            \"href\": \"/ai-marketer/tasks/44e7f15e-bc88-459e-a340-a64f47a49b69\",\n            \"input_data\": {\n              \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n              \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n              \"parameters\": {\n                \"interval_minutes\": 60,\n                \"sources\": [\n                  \"1c_sales\",\n                  \"1c_stock\",\n                  \"1c_customers\"\n                ]\n              },\n              \"title\": \"Контроль синхронизации 1С\"\n            },\n            \"source_agent\": \"cron-scheduler\",\n            \"task_context\": {\n              \"created_from\": \"admin_cron\",\n              \"cron_category\": \"data\",\n              \"cron_job_id\": \"onec_data_sync_monitor\",\n              \"cron_title\": \"Контроль синхронизации 1С\",\n              \"manual_run\": false,\n              \"schedule_type\": \"hourly\"\n            }\n          },\n          \"id\": \"44e7f15e-bc88-459e-a340-a64f47a49b69\",\n          \"priority\": \"P2\",\n          \"result_summary\": null,\n          \"source\": \"agent_interaction\",\n          \"status\": \"cancelled\",\n          \"target_agent\": \"analytics-agent\",\n          \"task_type\": \"data_freshness_review\",\n          \"title\": \"Контроль синхронизации 1С\"\n        },\n        {\n          \"assigned_to\": \"analytics-agent\",\n          \"completed_at\": null,\n          \"created_at\": \"2026-05-28T07:54:06.293743+00:00\",\n          \"deadline_at\": null,\n          \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n          \"detailed_result\": null,\n          \"execution_notes\": null,\n          \"extra_data\": {\n            \"board\": null,\n            \"href\": \"/ai-marketer/tasks/826999c2-69ed-4f59-a4d7-361bb4fffea1\",\n            \"input_data\": {\n              \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n              \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n              \"parameters\": {\n                \"interval_minutes\": 60,\n                \"sources\": [\n                  \"1c_sales\",\n                  \"1c_stock\",\n                  \"1c_customers\"\n                ]\n              },\n              \"title\": \"Контроль синхронизации 1С\"\n            },\n            \"source_agent\": \"cron-scheduler\",\n            \"task_context\": {\n              \"created_from\": \"admin_cron\",\n              \"cron_category\": \"data\",\n              \"cron_job_id\": \"onec_data_sync_monitor\",\n              \"cron_title\": \"Контроль синхронизации 1С\",\n              \"manual_run\": false,\n              \"schedule_type\": \"hourly\"\n            }\n          },\n          \"id\": \"826999c2-69ed-4f59-a4d7-361bb4fffea1\",\n          \"priority\": \"P2\",\n          \"result_summary\": null,\n          \"source\": \"agent_interaction\",\n          \"status\": \"cancelled\",\n          \"target_agent\": \"analytics-agent\",\n          \"task_type\": \"data_freshness_review\",\n          \"title\": \"Контроль синхронизации 1С\"\n        },\n        {\n          \"assigned_to\": \"analytics-agent\",\n          \"completed_at\": null,\n          \"created_at\": \"2026-05-28T06:54:04.776876+00:00\",\n          \"deadline_at\": null,\n          \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n          \"detailed_result\": null,\n          \"execution_notes\": null,\n          \"extra_data\": {\n            \"board\": null,\n            \"href\": \"/ai-marketer/tasks/192a6bfd-6fec-4ad1-a835-5e0bf241e156\",\n            \"input_data\": {\n              \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n              \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n              \"parameters\": {\n                \"interval_minutes\": 60,\n                \"sources\": [\n                  \"1c_sales\",\n                  \"1c_stock\",\n                  \"1c_customers\"\n                ]\n              },\n              \"title\": \"Контроль синхронизации 1С\"\n            },\n            \"source_agent\": \"cron-scheduler\",\n            \"task_context\": {\n              \"created_from\": \"admin_cron\",\n              \"cron_category\": \"data\",\n              \"cron_job_id\": \"onec_data_sync_monitor\",\n              \"cron_title\": \"Контроль синхронизации 1С\",\n              \"manual_run\": false,\n              \"schedule_type\": \"hourly\"\n            }\n          },\n          \"id\": \"192a6bfd-6fec-4ad1-a835-5e0bf241e156\",\n          \"priority\": \"P2\",\n          \"result_summary\": null,\n          \"source\": \"agent_interaction\",\n          \"status\": \"cancelled\",\n          \"target_agent\": \"analytics-agent\",\n          \"task_type\": \"data_freshness_review\",\n          \"title\": \"Контроль синхронизации 1С\"\n        },\n        {\n          \"assigned_to\": \"analytics-agent\",\n          \"completed_at\": null,\n          \"created_at\": \"2026-05-28T05:54:03.440938+00:00\",\n          \"deadline_at\": null,\n          \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n          \"detailed_result\": null,\n          \"execution_notes\": null,\n          \"extra_data\": {\n            \"board\": null,\n            \"href\": \"/ai-marketer/tasks/316affe2-5acd-43fc-b8c8-e24e9507860e\",\n            \"input_data\": {\n              \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n              \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n              \"parameters\": {\n                \"interval_minutes\": 60,\n                \"sources\": [\n                  \"1c_sales\",\n                  \"1c_stock\",\n                  \"1c_customers\"\n                ]\n              },\n              \"title\": \"Контроль синхронизации 1С\"\n            },\n            \"source_agent\": \"cron-scheduler\",\n            \"task_context\": {\n              \"created_from\": \"admin_cron\",\n              \"cron_category\": \"data\",\n              \"cron_job_id\": \"onec_data_sync_monitor\",\n              \"cron_title\": \"Контроль синхронизации 1С\",\n              \"manual_run\": false,\n              \"schedule_type\": \"hourly\"\n            }\n          },\n          \"id\": \"316affe2-5acd-43fc-b8c8-e24e9507860e\",\n          \"priority\": \"P2\",\n          \"result_summary\": null,\n          \"source\": \"agent_interaction\",\n          \"status\": \"cancelled\",\n          \"target_agent\": \"analytics-agent\",\n          \"task_type\": \"data_freshness_review\",\n          \"title\": \"Контроль синхронизации 1С\"\n        },\n        {\n          \"assigned_to\": \"analytics-agent\",\n          \"completed_at\": null,\n          \"created_at\": \"2026-05-28T04:54:02.296108+00:00\",\n          \"deadline_at\": null,\n          \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n          \"detailed_result\": null,\n          \"execution_notes\": null,\n          \"extra_data\": {\n            \"board\": null,\n            \"href\": \"/ai-marketer/tasks/1d816402-cd50-43dd-b804-87ada2b13d1b\",\n            \"input_data\": {\n              \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n              \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n              \"parameters\": {\n                \"interval_minutes\": 60,\n                \"sources\": [\n                  \"1c_sales\",\n                  \"1c_stock\",\n                  \"1c_customers\"\n                ]\n              },\n              \"title\": \"Контроль синхронизации 1С\"\n            },\n            \"source_agent\": \"cron-scheduler\",\n            \"task_context\": {\n              \"created_from\": \"admin_cron\",\n              \"cron_category\": \"data\",\n              \"cron_job_id\": \"onec_data_sync_monitor\",\n              \"cron_title\": \"Контроль синхронизации 1С\",\n              \"manual_run\": false,\n              \"schedule_type\": \"hourly\"\n            }\n          },\n          \"id\": \"1d816402-cd50-43dd-b804-87ada2b13d1b\",\n          \"priority\": \"P2\",\n          \"result_summary\": null,\n          \"source\": \"agent_interaction\",\n          \"status\": \"cancelled\",\n          \"target_agent\": \"analytics-agent\",\n          \"task_type\": \"data_freshness_review\",\n          \"title\": \"Контроль синхронизации 1С\"\n        },\n        {\n          \"assigned_to\": \"analytics-agent\",\n          \"completed_at\": null,\n          \"created_at\": \"2026-05-28T03:54:00.964092+00:00\",\n          \"deadline_at\": null,\n          \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n          \"detailed_result\": null,\n          \"execution_notes\": null,\n          \"extra_data\": {\n            \"board\": null,\n            \"href\": \"/ai-marketer/tasks/95211832-8b05-4a26-ac76-83991df7a19b\",\n            \"input_data\": {\n              \"description\": \"Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.\",\n              \"expected_result\": \"Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется.\",\n              \"parameters\": {\n                \"interval_minutes\": 60,\n                \"sources\": [\n                  \"1c_sales\",\n                  \"1c_stock\",\n                  \"1c_customers\"\n                ]\n              },\n              \"title\": \"Контроль синхронизации 1С\"\n            },\n            \"source_agent\": \"cron-scheduler\",\n            \"task_context\": {\n              \"created_from\": \"admin_cron\",\n              \"cron_category\": \"data\",\n              \"cron_job_id\": \"onec_data_sync_monitor\",\n              \"cron_title\": \"Контроль синхронизации 1С\",\n              \"manual_run\": false,\n              \"schedule_type\": \"hourly\"\n            }\n          },\n          \"id\": \"95211832-8b05-4a26-ac76-83991df7a19b\",\n          \"priority\": \"P2\",\n          \"result_summary\": null,\n          \"source\": \"agent_interaction\",\n          \"status\": \"cancelled\",\n          \"target_agent\": \"analytics-agent\",\n          \"task_type\": \"data_freshness_review\",\n          \"title\": \"Контроль синхронизации 1С\"\n        }\n      ],\n      \"id\": \"blocked\",\n      \"title\": \"Блокеры / отменено\"\n    }\n  ],\n  \"stats\": {\n    \"blocked\": 6,\n    \"done\": 1,\n    \"in_progress\": 0,\n    \"todo\": 3\n  },\n  \"total\": 10\n}"
+  },
+  "analytics": {
+    "endpoint": "/api/analytics/dashboard?days=30",
+    "exit_code": 0,
+    "status": 200,
+    "body": {
+      "aov": {
+        "aov": 0.0,
+        "order_count": 0,
+        "period": {
+          "end": "2026-05-28T10:18:47.949529",
+          "start": "2026-04-28T10:18:47.949529"
+        },
+        "total_revenue": 0.0
+      },
+      "conversion": {
+        "conversion_rates": {
+          "look_to_purchase": 0.0,
+          "product_to_purchase": 0.0
+        },
+        "events": {
+          "chat_message": 0,
+          "look_view": 1,
+          "product_click": 3,
+          "purchase": 0
+        },
+        "period": {
+          "end": "2026-05-28T10:18:47.949529",
+          "start": "2026-04-28T10:18:47.949529"
+        }
+      },
+      "engagement": {
+        "avg_events_per_session": 8.76923076923077,
+        "avg_session_duration_seconds": 63295.8491449,
+        "period": {
+          "end": "2026-05-28T10:18:47.949529",
+          "start": "2026-04-28T10:18:47.949529"
+        },
+        "total_events": 114,
+        "total_sessions": 13,
+        "unique_products_viewed": 1
+      },
+      "events_by_type": {
+        "look_view": 1,
+        "page_view": 85,
+        "product_click": 3,
+        "ui_click": 24,
+        "yandex_metrika_sync": 1
+      },
+      "period": {
+        "days": 30,
+        "end": "2026-05-28T10:18:47.949529",
+        "start": "2026-04-28T10:18:47.949529"
+      },
+      "total_events": 114
+    },
+    "raw": "HTTP 200 OK\n{\n  \"aov\": {\n    \"aov\": 0.0,\n    \"order_count\": 0,\n    \"period\": {\n      \"end\": \"2026-05-28T10:18:47.949529\",\n      \"start\": \"2026-04-28T10:18:47.949529\"\n    },\n    \"total_revenue\": 0.0\n  },\n  \"conversion\": {\n    \"conversion_rates\": {\n      \"look_to_purchase\": 0.0,\n      \"product_to_purchase\": 0.0\n    },\n    \"events\": {\n      \"chat_message\": 0,\n      \"look_view\": 1,\n      \"product_click\": 3,\n      \"purchase\": 0\n    },\n    \"period\": {\n      \"end\": \"2026-05-28T10:18:47.949529\",\n      \"start\": \"2026-04-28T10:18:47.949529\"\n    }\n  },\n  \"engagement\": {\n    \"avg_events_per_session\": 8.76923076923077,\n    \"avg_session_duration_seconds\": 63295.8491449,\n    \"period\": {\n      \"end\": \"2026-05-28T10:18:47.949529\",\n      \"start\": \"2026-04-28T10:18:47.949529\"\n    },\n    \"total_events\": 114,\n    \"total_sessions\": 13,\n    \"unique_products_viewed\": 1\n  },\n  \"events_by_type\": {\n    \"look_view\": 1,\n    \"page_view\": 85,\n    \"product_click\": 3,\n    \"ui_click\": 24,\n    \"yandex_metrika_sync\": 1\n  },\n  \"period\": {\n    \"days\": 30,\n    \"end\": \"2026-05-28T10:18:47.949529\",\n    \"start\": \"2026-04-28T10:18:47.949529\"\n  },\n  \"total_events\": 114\n}"
+  },
+  "today_sales": {
+    "endpoint": "/api/director/data/today-sales",
+    "exit_code": 0,
+    "status": 200,
+    "body": {
+      "checks_count": 0,
+      "date": "2026-05-28T00:00:00",
+      "items_sold": 0,
+      "orders_count": 0,
+      "period": "today",
+      "source": "orders_fallback",
+      "total_revenue": 0,
+      "total_revenue_rub": 0.0
+    },
+    "raw": "HTTP 200 OK\n{\n  \"checks_count\": 0,\n  \"date\": \"2026-05-28T00:00:00\",\n  \"items_sold\": 0,\n  \"orders_count\": 0,\n  \"period\": \"today\",\n  \"source\": \"orders_fallback\",\n  \"total_revenue\": 0,\n  \"total_revenue_rub\": 0.0\n}"
+  },
+  "sales_7d": {
+    "endpoint": "/api/director/data/sales-period?days=7",
+    "exit_code": 0,
+    "status": 200,
+    "body": {
+      "average_check": 12037.76,
+      "average_check_rub": 12037.76,
+      "checks_count": 38,
+      "days": 7,
+      "items_sold": 179.0,
+      "last_sale_at": "2026-05-27T18:45:06+00:00",
+      "orders_count": 38,
+      "period": "last_7_days",
+      "since": "2026-05-21T10:18:50.225447",
+      "source": "sales_records",
+      "total_revenue": 457434.9999999998,
+      "total_revenue_rub": 457435.0,
+      "unique_customers": 22
+    },
+    "raw": "HTTP 200 OK\n{\n  \"average_check\": 12037.76,\n  \"average_check_rub\": 12037.76,\n  \"checks_count\": 38,\n  \"days\": 7,\n  \"items_sold\": 179.0,\n  \"last_sale_at\": \"2026-05-27T18:45:06+00:00\",\n  \"orders_count\": 38,\n  \"period\": \"last_7_days\",\n  \"since\": \"2026-05-21T10:18:50.225447\",\n  \"source\": \"sales_records\",\n  \"total_revenue\": 457434.9999999998,\n  \"total_revenue_rub\": 457435.0,\n  \"unique_customers\": 22\n}"
+  },
+  "recent_orders": {
+    "endpoint": "/api/director/data/recent-orders?limit=10",
+    "exit_code": 0,
+    "status": 200,
+    "body": {
+      "orders": [
+        {
+          "created_at": "2026-05-02T20:49:54.781958+00:00",
+          "customer_email": null,
+          "customer_name": "Орешникова Елена",
+          "discount_card": "79162668200",
+          "order_id": "73d1d53f-c080-4fc3-985e-d70bcbe48b4c",
+          "status": "pending",
+          "total_amount": 1208000,
+          "total_amount_rub": 12080.0
+        }
+      ]
+    },
+    "raw": "HTTP 200 OK\n{\n  \"orders\": [\n    {\n      \"created_at\": \"2026-05-02T20:49:54.781958+00:00\",\n      \"customer_email\": null,\n      \"customer_name\": \"Орешникова Елена\",\n      \"discount_card\": \"79162668200\",\n      \"order_id\": \"73d1d53f-c080-4fc3-985e-d70bcbe48b4c\",\n      \"status\": \"pending\",\n      \"total_amount\": 1208000,\n      \"total_amount_rub\": 12080.0\n    }\n  ]\n}"
+  },
+  "product_summary": {
+    "endpoint": "/api/director/data/product-summary",
+    "exit_code": 0,
+    "status": 200,
+    "body": {
+      "by_brand": {
+        "Antura": 1,
+        "BICOLOR": 73,
+        "BLACK MYSTIQUE": 118,
+        "CRYSTAL": 336,
+        "Claudio Canzian": 27,
+        "GEOMETRY": 723,
+        "Kalliope": 80,
+        "MAGNA": 284,
+        "PEARL": 431,
+        "PRISM OF ELEGANCE": 210,
+        "Raganella Princess": 98,
+        "UNOde50": 165,
+        "WRINKLES OG TIME": 167,
+        "unknown": 644
+      },
+      "by_category": {
+        "AGafi": 420,
+        "Antura": 55,
+        "Eva Rites": 15,
+        "Madreperla": 9,
+        "Men": 58,
+        "SALE": 253,
+        "Браслеты": 418,
+        "Броши": 11,
+        "Каффы": 149,
+        "Колье": 503,
+        "Кольца": 562,
+        "Кулоны": 46,
+        "Подарочная упаковка": 7,
+        "Прочее": 21,
+        "Серьги": 783,
+        "Сопутствующие материалы": 29,
+        "Чокеры": 18
+      },
+      "core_assortment": 0,
+      "total_active_products": 3357
+    },
+    "raw": "HTTP 200 OK\n{\n  \"by_brand\": {\n    \"Antura\": 1,\n    \"BICOLOR\": 73,\n    \"BLACK MYSTIQUE\": 118,\n    \"CRYSTAL\": 336,\n    \"Claudio Canzian\": 27,\n    \"GEOMETRY\": 723,\n    \"Kalliope\": 80,\n    \"MAGNA\": 284,\n    \"PEARL\": 431,\n    \"PRISM OF ELEGANCE\": 210,\n    \"Raganella Princess\": 98,\n    \"UNOde50\": 165,\n    \"WRINKLES OG TIME\": 167,\n    \"unknown\": 644\n  },\n  \"by_category\": {\n    \"AGafi\": 420,\n    \"Antura\": 55,\n    \"Eva Rites\": 15,\n    \"Madreperla\": 9,\n    \"Men\": 58,\n    \"SALE\": 253,\n    \"Браслеты\": 418,\n    \"Броши\": 11,\n    \"Каффы\": 149,\n    \"Колье\": 503,\n    \"Кольца\": 562,\n    \"Кулоны\": 46,\n    \"Подарочная упаковка\": 7,\n    \"Прочее\": 21,\n    \"Серьги\": 783,\n    \"Сопутствующие материалы\": 29,\n    \"Чокеры\": 18\n  },\n  \"core_assortment\": 0,\n  \"total_active_products\": 3357\n}"
+  },
+  "customer_summary": {
+    "endpoint": "/api/director/data/customer-summary",
+    "exit_code": 0,
+    "status": 200,
+    "body": {
+      "available_customer_data": {
+        "app_behavior": [
+          "analytics_events",
+          "page_view",
+          "ui_click",
+          "product_view",
+          "look_view",
+          "chat_message",
+          "channel",
+          "utm",
+          "event_data"
+        ],
+        "communications": [
+          "generated_customer_messages",
+          "message",
+          "cta",
+          "event_type",
+          "event_brand",
+          "event_store",
+          "status",
+          "sent_at",
+          "payload"
+        ],
+        "loyalty": [
+          "loyalty_points",
+          "loyalty_transactions",
+          "transaction_type",
+          "points",
+          "balance_after",
+          "reason",
+          "description",
+          "source",
+          "expires_at"
+        ],
+        "profile": [
+          "id",
+          "phone",
+          "email",
+          "full_name",
+          "city",
+          "gender",
+          "discount_card_number",
+          "customer_id_1c",
+          "discount_card_id_1c",
+          "persona",
+          "preferences",
+          "customer_segment",
+          "rfm_score",
+          "purchase_preferences",
+          "preferred_store_name",
+          "secondary_store_name",
+          "synced_at"
+        ],
+        "purchase_history": [
+          "purchase_date",
+          "document_id_1c",
+          "store_id_1c",
+          "store_name",
+          "product_name",
+          "product_article",
+          "category",
+          "brand",
+          "quantity",
+          "price",
+          "total_amount"
+        ],
+        "saved_content": [
+          "saved_looks",
+          "favorite/generated",
+          "notes",
+          "is_purchased",
+          "recommended_occasions",
+          "look_name"
+        ],
+        "stylist": [
+          "live_stylist_conversations",
+          "conversation_status",
+          "scenario",
+          "source",
+          "assigned_stylist",
+          "internal_notes",
+          "result_purchase_status",
+          "stylist_chat_messages",
+          "attachments"
+        ]
+      },
+      "by_segment": {
+        "Active": 201,
+        "New": 433,
+        "Regular": 920,
+        "Sleeping": 4647,
+        "VIP": 8,
+        "unknown": 7
+      },
+      "customers_with_purchases": 6034,
+      "new_last_30_days": 76,
+      "total_customers": 6216,
+      "total_loyalty_points": 2029444
+    },
+    "raw": "HTTP 200 OK\n{\n  \"available_customer_data\": {\n    \"app_behavior\": [\n      \"analytics_events\",\n      \"page_view\",\n      \"ui_click\",\n      \"product_view\",\n      \"look_view\",\n      \"chat_message\",\n      \"channel\",\n      \"utm\",\n      \"event_data\"\n    ],\n    \"communications\": [\n      \"generated_customer_messages\",\n      \"message\",\n      \"cta\",\n      \"event_type\",\n      \"event_brand\",\n      \"event_store\",\n      \"status\",\n      \"sent_at\",\n      \"payload\"\n    ],\n    \"loyalty\": [\n      \"loyalty_points\",\n      \"loyalty_transactions\",\n      \"transaction_type\",\n      \"points\",\n      \"balance_after\",\n      \"reason\",\n      \"description\",\n      \"source\",\n      \"expires_at\"\n    ],\n    \"profile\": [\n      \"id\",\n      \"phone\",\n      \"email\",\n      \"full_name\",\n      \"city\",\n      \"gender\",\n      \"discount_card_number\",\n      \"customer_id_1c\",\n      \"discount_card_id_1c\",\n      \"persona\",\n      \"preferences\",\n      \"customer_segment\",\n      \"rfm_score\",\n      \"purchase_preferences\",\n      \"preferred_store_name\",\n      \"secondary_store_name\",\n      \"synced_at\"\n    ],\n    \"purchase_history\": [\n      \"purchase_date\",\n      \"document_id_1c\",\n      \"store_id_1c\",\n      \"store_name\",\n      \"product_name\",\n      \"product_article\",\n      \"category\",\n      \"brand\",\n      \"quantity\",\n      \"price\",\n      \"total_amount\"\n    ],\n    \"saved_content\": [\n      \"saved_looks\",\n      \"favorite/generated\",\n      \"notes\",\n      \"is_purchased\",\n      \"recommended_occasions\",\n      \"look_name\"\n    ],\n    \"stylist\": [\n      \"live_stylist_conversations\",\n      \"conversation_status\",\n      \"scenario\",\n      \"source\",\n      \"assigned_stylist\",\n      \"internal_notes\",\n      \"result_purchase_status\",\n      \"stylist_chat_messages\",\n      \"attachments\"\n    ]\n  },\n  \"by_segment\": {\n    \"Active\": 201,\n    \"New\": 433,\n    \"Regular\": 920,\n    \"Sleeping\": 4647,\n    \"VIP\": 8,\n    \"unknown\": 7\n  },\n  \"customers_with_purchases\": 6034,\n  \"new_last_30_days\": 76,\n  \"total_customers\": 6216,\n  \"total_loyalty_points\": 2029444\n}"
+  }
+}

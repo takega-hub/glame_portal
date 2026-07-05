@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.models.sales_record import SalesRecord
 from app.models.product_sales_analytics import ProductSalesAnalytics
 from app.models.product import Product
+from app.services.sales_record_filters import sales_record_eligible_product_filter
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,8 @@ class ProductAnalyticsService:
         ).where(
             and_(
                 SalesRecord.sale_date >= start_date,
-                SalesRecord.sale_date <= end_date
+                SalesRecord.sale_date <= end_date,
+                sales_record_eligible_product_filter(SalesRecord, func, and_),
             )
         )
         
@@ -254,10 +256,7 @@ class ProductAnalyticsService:
             and_(
                 SalesRecord.sale_date >= start_date,
                 SalesRecord.sale_date <= end_date,
-                # Исключаем упаковку и сопутку (товары с ценой за единицу меньше 3 рублей)
-                # Проверяем, что quantity > 0 и цена за единицу >= 3.0
-                SalesRecord.quantity > 0,
-                SalesRecord.revenue / SalesRecord.quantity >= 3.0
+                sales_record_eligible_product_filter(SalesRecord, func, and_, Product),
             )
         )
         
@@ -281,14 +280,6 @@ class ProductAnalyticsService:
             func.coalesce(SalesRecord.product_category, Product.category),
             func.coalesce(SalesRecord.product_brand, Product.brand),
             SalesRecord.product_type
-        ).having(
-            # Дополнительная фильтрация после группировки: исключаем товары, где средняя цена за единицу меньше 3 рублей
-            func.avg(
-                case(
-                    (SalesRecord.quantity > 0, SalesRecord.revenue / SalesRecord.quantity),
-                    else_=None
-                )
-            ) >= 3.0
         )
         
         # Сортируем
@@ -349,7 +340,8 @@ class ProductAnalyticsService:
             and_(
                 SalesRecord.sale_date >= start_date,
                 SalesRecord.sale_date <= end_date,
-                SalesRecord.product_category.isnot(None)
+                SalesRecord.product_category.isnot(None),
+                sales_record_eligible_product_filter(SalesRecord, func, and_),
             )
         )
         
@@ -392,7 +384,8 @@ class ProductAnalyticsService:
             and_(
                 SalesRecord.sale_date >= start_date,
                 SalesRecord.sale_date <= end_date,
-                SalesRecord.product_brand.isnot(None)
+                SalesRecord.product_brand.isnot(None),
+                sales_record_eligible_product_filter(SalesRecord, func, and_),
             )
         )
         
@@ -435,7 +428,8 @@ class ProductAnalyticsService:
             and_(
                 SalesRecord.sale_date >= start_date,
                 SalesRecord.sale_date <= end_date,
-                SalesRecord.product_type.isnot(None)
+                SalesRecord.product_type.isnot(None),
+                sales_record_eligible_product_filter(SalesRecord, func, and_),
             )
         )
         

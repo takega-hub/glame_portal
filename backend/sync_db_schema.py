@@ -87,6 +87,11 @@ async def sync_users_table():
     # Формат: (имя_поля, тип_SQL, nullable)
     fields_to_check = [
         ("city", "VARCHAR(100)", True),
+        ("birth_date", "DATE", True),
+        ("preferred_store_external_id", "VARCHAR(255)", True),
+        ("preferred_store_name", "VARCHAR(255)", True),
+        ("preferred_store_share", "DOUBLE PRECISION", True),
+        ("preferred_store_updated_at", "TIMESTAMP WITH TIME ZONE", True),
     ]
     
     added_count = 0

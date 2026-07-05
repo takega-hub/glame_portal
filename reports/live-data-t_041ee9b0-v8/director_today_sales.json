@@ -1,0 +1,11 @@
+HTTP 200 OK
+{
+  "checks_count": 0,
+  "date": "2026-05-28T00:00:00",
+  "items_sold": 0,
+  "orders_count": 0,
+  "period": "today",
+  "source": "orders_fallback",
+  "total_revenue": 0,
+  "total_revenue_rub": 0.0
+}

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Фильтры - GLAME</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#333537",
+                        "on-primary-fixed-variant": "#444748",
+                        "surface-tint": "#c4c7c8",
+                        "on-tertiary-fixed-variant": "#42474b",
+                        "tertiary-fixed-dim": "#c2c7cb",
+                        "on-surface-variant": "#c4c7c8",
+                        "cold-light-gray": "#C7CBCF",
+                        "on-primary": "#2e3132",
+                        "error": "#ffb4ab",
+                        "on-background": "#e2e2e5",
+                        "inverse-surface": "#e2e2e5",
+                        "primary-fixed-dim": "#c4c7c8",
+                        "tertiary-fixed": "#dee3e7",
+                        "on-tertiary": "#2c3134",
+                        "on-tertiary-fixed": "#171c1f",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "on-secondary-fixed-variant": "#454749",
+                        "secondary-container": "#454749",
+                        "surface-container-lowest": "#0c0e10",
+                        "background": "#121416",
+                        "on-primary-container": "#626566",
+                        "surface-container-high": "#282a2c",
+                        "outline-variant": "#434749",
+                        "primary-container": "#e1e3e4",
+                        "tertiary-container": "#dee3e7",
+                        "on-secondary": "#2f3133",
+                        "border-gray": "#5C6064",
+                        "surface-container-low": "#1a1c1e",
+                        "surface-container": "#1e2022",
+                        "surface-variant": "#333537",
+                        "outline": "#8e9192",
+                        "on-error": "#690005",
+                        "on-surface": "#e2e2e5",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "on-secondary-container": "#b4b5b7",
+                        "inverse-primary": "#5c5f60",
+                        "tertiary": "#ffffff",
+                        "soft-gray": "#D8DADB",
+                        "secondary": "#c6c6c9",
+                        "surface-dim": "#121416",
+                        "error-container": "#93000a",
+                        "surface": "#121416",
+                        "on-error-container": "#ffdad6",
+                        "primary": "#ffffff",
+                        "primary-fixed": "#e1e3e4",
+                        "on-tertiary-container": "#606569",
+                        "on-primary-fixed": "#191c1d",
+                        "inverse-on-surface": "#2f3133",
+                        "surface-bright": "#38393c",
+                        "secondary-fixed": "#e2e2e5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "0px"
+                    },
+                    "spacing": {
+                        "grid-gutter": "1px",
+                        "top-bar-height": "56px",
+                        "page-padding-h": "28px",
+                        "safe-air-bottom": "24px",
+                        "button-gap": "16px",
+                        "bottom-nav-height": "96px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #5C6064; }
+        
+        /* Checkbox styling override for architectural feel */
+        input[type="checkbox"] {
+            appearance: none;
+            background-color: transparent;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 20px;
+            height: 20px;
+            border: 1px solid #5C6064;
+            display: grid;
+            place-content: center;
+            border-radius: 0;
+            cursor: pointer;
+        }
+        input[type="checkbox"]::before {
+            content: "";
+            width: 10px;
+            height: 10px;
+            background-color: #ffffff;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+        }
+        input[type="checkbox"]:checked::before {
+            transform: scale(1);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface antialiased flex flex-col h-screen overflow-hidden selection:bg-surface-variant selection:text-primary">
+<!-- Top Navigation Header (Filter Modal State) -->
+<header class="fixed top-0 w-full h-[56px] flex items-center justify-between px-page-padding-h border-b border-border-gray bg-surface z-50">
+<button aria-label="Close filters" class="text-on-surface-variant hover:opacity-70 transition-opacity flex items-center justify-center w-10 h-10 -ml-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">close</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile tracking-widest text-primary md:hidden">Фильтры</h1>
+<h1 class="font-headline-lg text-headline-lg tracking-widest text-primary hidden md:block">Фильтры</h1>
+<button class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors">
+            Сбросить
+        </button>
+</header>
+<!-- Main Filter Content Area -->
+<main class="flex-1 overflow-y-auto mt-[56px] mb-[96px] pb-safe-air-bottom custom-scrollbar">
+<!-- Category Section -->
+<section class="border-b border-border-gray px-page-padding-h py-6">
+<h2 class="font-label-md text-label-md uppercase text-on-surface-variant mb-6">Категория</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input checked="" class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Кольца</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Серьги</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Подвески</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Браслеты</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Колье</span>
+</label>
+</div>
+</section>
+<!-- Brand Section -->
+<section class="border-b border-border-gray px-page-padding-h py-6">
+<h2 class="font-label-md text-label-md uppercase text-on-surface-variant mb-6">Бренд</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Geometry</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Magna</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input checked="" class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">GLAME Atelier</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Bespoke</span>
+</label>
+</div>
+</section>
+<!-- Metal Section -->
+<section class="border-b border-border-gray px-page-padding-h py-6">
+<h2 class="font-label-md text-label-md uppercase text-on-surface-variant mb-6">Металл</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Серебро 925</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Белое Золото</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Желтое Золото</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Платина</span>
+</label>
+</div>
+</section>
+<!-- Insertion Section -->
+<section class="border-b border-border-gray px-page-padding-h py-6">
+<h2 class="font-label-md text-label-md uppercase text-on-surface-variant mb-6">Вставка</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Жемчуг</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Кристаллы</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Бриллианты</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Без вставок</span>
+</label>
+</div>
+</section>
+<!-- Availability Section -->
+<section class="border-b border-border-gray px-page-padding-h py-6 mb-8">
+<h2 class="font-label-md text-label-md uppercase text-on-surface-variant mb-6">Наличие</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Онлайн</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Симферополь</span>
+</label>
+<label class="flex items-center space-x-4 cursor-pointer group">
+<input class="focus:ring-0 focus:outline-none" type="checkbox"/>
+<span class="font-body-md text-body-md group-hover:text-primary transition-colors">Ялта</span>
+</label>
+</div>
+</section>
+</main>
+<!-- Fixed Bottom Action Bar (Contextual for Filters, replaces standard navigation) -->
+<footer class="fixed bottom-0 w-full h-[96px] bg-surface border-t border-border-gray z-50 px-page-padding-h flex items-center justify-center pb-safe-air-bottom">
+<button class="w-full max-w-[400px] h-[56px] bg-[#EFF1F2] text-[#222426] font-label-md text-label-md uppercase tracking-widest flex items-center justify-center border border-transparent hover:bg-surface-variant hover:text-primary hover:border-border-gray transition-all duration-300">
+            Показать 124 Товаров
+        </button>
+</footer>
+<script>
+        // Simple micro-interaction for checkboxes to animate numbers (simulated)
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', () => {
+                const btn = document.querySelector('footer button');
+                // Simulate updating count
+                const currentCount = parseInt(btn.textContent.match(/\d+/)[0]);
+                const newCount = checkbox.checked ? currentCount - Math.floor(Math.random() * 15) : currentCount + Math.floor(Math.random() * 15);
+                btn.textContent = `Показать ${Math.max(1, newCount)} Товаров`;
+                
+                // Add a subtle flash effect to button
+                btn.classList.add('opacity-70');
+                setTimeout(() => btn.classList.remove('opacity-70'), 150);
+            });
+        });
+    </script>
+</body></html>

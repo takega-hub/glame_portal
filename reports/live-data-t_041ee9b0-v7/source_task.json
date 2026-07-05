@@ -1,0 +1,58 @@
+{
+  "id": "f8e38839-c63a-4a23-855d-afb00e3387b1",
+  "source_agent": "cron-scheduler",
+  "target_agent": "director-agent",
+  "task_type": "tomorrow_plan_preparation",
+  "task_context": {
+    "cron_title": "Ежедневный план на завтра",
+    "manual_run": false,
+    "cron_job_id": "daily_plan_approval",
+    "created_from": "admin_cron",
+    "cron_category": "director",
+    "schedule_type": "daily",
+    "kanban_task_id": "t_041ee9b0",
+    "kanban_synced_at": "2026-05-28T09:23:23Z",
+    "kanban_sync_status": "synced_full",
+    "kanban_synced_fields": [
+      "title",
+      "passport",
+      "description",
+      "input_data",
+      "output_data",
+      "output_metadata",
+      "requirements",
+      "constraints",
+      "task_context",
+      "full_json"
+    ],
+    "kanban_idempotency_key": "glame-platform-task:f8e38839-c63a-4a23-855d-afb00e3387b1"
+  },
+  "input_data": {
+    "title": "Ежедневный план на завтра",
+    "parameters": {
+      "report_scope": "tasks_and_next_day_plan",
+      "approval_required": true
+    },
+    "description": "Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.",
+    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+  },
+  "target_metrics": {},
+  "requirements": {
+    "show_sources": true,
+    "use_real_data_only": true,
+    "no_mass_send_without_admin_approval": true
+  },
+  "constraints": {},
+  "status": "pending",
+  "priority": 3,
+  "validation_result": null,
+  "validation_errors": [],
+  "output_data": null,
+  "output_metadata": {},
+  "error_message": null,
+  "created_at": "2026-05-26T19:00:08.577567+00:00",
+  "scheduled_at": "2026-05-26T19:00:08.607718+00:00",
+  "started_at": null,
+  "completed_at": null,
+  "deadline_at": null
+}

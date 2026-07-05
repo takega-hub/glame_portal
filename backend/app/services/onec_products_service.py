@@ -18,6 +18,7 @@ from app.models.product_stock import ProductStock
 from app.models.product_catalog_section import ProductCatalogSection
 from app.services.onec_images_service import OneCImagesService
 from app.services.yml_images_service import YMLImagesService
+from app.services.purchase_product_fields import derive_purchase_brand, derive_purchase_category
 
 logger = logging.getLogger(__name__)
 
@@ -344,8 +345,11 @@ class OneCProductsService:
         errors: List[str] = []
         total = len(products_data)
         
-        # Группируем предложения по product_id для быстрого поиска
+        # Группируем предложения по product_id и article для быстрого поиска.
+        # Для части товаров 1С product_id в offers.xml может не совпасть с external_id из import.xml,
+        # но артикул при этом корректный. В таком случае нужен fallback по article, иначе цена уходит в 0.
         offers_by_product: Dict[str, List[Dict[str, Any]]] = {}
+        offers_by_article: Dict[str, List[Dict[str, Any]]] = {}
         if offers_data:
             for offer_id, offer_info in offers_data.items():
                 product_id = offer_info.get('product_id')
@@ -355,6 +359,14 @@ class OneCProductsService:
                     offers_by_product[product_id].append({
                         **offer_info,
                         'id': offer_id,  # Используем 'id' для совместимости с кодом вариантов
+                    })
+                article_key = str(offer_info.get('article') or '').strip()
+                if article_key:
+                    if article_key not in offers_by_article:
+                        offers_by_article[article_key] = []
+                    offers_by_article[article_key].append({
+                        **offer_info,
+                        'id': offer_id,
                     })
         
         for idx, product_data in enumerate(products_data):
@@ -435,6 +447,13 @@ class OneCProductsService:
                 
                 # Ищем предложения для этого товара
                 product_offers = offers_by_product.get(external_id, []) if external_id else []
+                if not product_offers and article:
+                    product_offers = offers_by_article.get(article, [])
+                    if product_offers:
+                        logger.info(
+                            f"Для товара {product_data.get('name', 'Unknown')} не найдено offers по external_id={external_id}, "
+                            f"используем fallback по article={article}: найдено {len(product_offers)} предложений"
+                        )
                 
                 # Определяем основное предложение (без характеристики) и варианты (с характеристиками)
                 main_offer = None
@@ -460,7 +479,23 @@ class OneCProductsService:
                         main_offer = variant_offers[0]
                         variant_offers = variant_offers[1:]
                 
-                # Маппим данные основного товара
+                # Маппим данные основного товара.
+                # Для части номенклатуры 1С (например BICOLOR) базовое предложение приходит с ценой 0,
+                # а реальная цена хранится только в variant-offer с характеристикой.
+                # В этом случае используем первую ненулевую цену варианта как fallback для parent-карточки.
+                main_offer_price = main_offer.get("price") if main_offer else None
+                variant_fallback_price = next(
+                    (
+                        offer.get("price")
+                        for offer in variant_offers
+                        if offer.get("price") not in (None, 0)
+                    ),
+                    None,
+                )
+                fallback_price = None
+                if existing_product and getattr(existing_product, "price", None) not in (None, 0):
+                    fallback_price = existing_product.price
+
                 mapped = {
                     "name": product_data.get("name", "Unnamed product"),
                     "article": article,
@@ -468,7 +503,11 @@ class OneCProductsService:
                     "external_code": product_data.get("code_1c"),
                     "description": product_data.get("description"),
                     "full_description": product_data.get("full_description") or product_data.get("description"),
-                    "price": main_offer.get("price", 0) if main_offer else 0,
+                    "price": (
+                        main_offer_price
+                        if main_offer_price not in (None, 0)
+                        else (variant_fallback_price or fallback_price or 0)
+                    ),
                     "is_active": product_data.get("is_active", True),
                     "sync_status": "synced",
                     "sync_metadata": {
@@ -596,6 +635,20 @@ class OneCProductsService:
                 
                 if specifications:
                     mapped["specifications"] = specifications
+
+                inferred_brand = derive_purchase_brand(
+                    product_data.get("name"),
+                    mapped.get("brand"),
+                    mapped.get("category"),
+                )
+                inferred_category = derive_purchase_category(
+                    product_data.get("name"),
+                    mapped.get("category"),
+                )
+                if inferred_brand:
+                    mapped["brand"] = inferred_brand
+                if inferred_category:
+                    mapped["category"] = inferred_category
                 
                 # Логируем категорию товара для диагностики
                 if mapped.get("category"):
@@ -802,7 +855,7 @@ class OneCProductsService:
                                     variant_external_id = f"{variant_product_id}#{variant_offer.get('article', 'variant')}"
                             
                             variant_article = variant_offer.get('article')
-                            variant_price = variant_offer.get("price", 0)
+                            variant_price = variant_offer.get("price")
                             variant_barcode = variant_offer.get("barcode")
                             variant_quantity = variant_offer.get("quantity", 0)
                             characteristic_id = variant_offer.get("characteristic_id")
@@ -834,7 +887,15 @@ class OneCProductsService:
                             
                             if not variant_existing and variant_article:
                                 result = await self.db.execute(
-                                    select(Product).where(Product.article == variant_article)
+                                    select(Product).where(
+                                        and_(
+                                            Product.article == variant_article,
+                                            or_(
+                                                func.jsonb_extract_path_text(Product.specifications, "parent_external_id") == external_id,
+                                                Product.external_id == variant_external_id,
+                                            ),
+                                        )
+                                    )
                                 )
                                 variant_existing = result.scalar_one_or_none()
                             
@@ -858,10 +919,15 @@ class OneCProductsService:
                             
                             if variant_existing:
                                 # Обновляем существующий вариант
-                                variant_existing.price = variant_price
+                                if variant_price is not None:
+                                    variant_existing.price = variant_price
                                 variant_existing.article = variant_article or variant_existing.article
                                 if variant_images:
                                     variant_existing.images = variant_images
+                                if mapped.get("brand"):
+                                    variant_existing.brand = mapped.get("brand")
+                                if mapped.get("category"):
+                                    variant_existing.category = mapped.get("category")
                                 if variant_existing.specifications:
                                     variant_existing.specifications.update(variant_specs)
                                 else:
@@ -877,7 +943,8 @@ class OneCProductsService:
                                     external_code=product_data.get("code_1c"),
                                     description=product_data.get("description"),
                                     full_description=product_data.get("full_description") or product_data.get("description"),
-                                    price=variant_price,
+                                    price=variant_price or 0,
+                                    brand=mapped.get("brand"),
                                     category=mapped.get("category"),
                                     images=variant_images if variant_images else None,
                                     specifications=variant_specs,

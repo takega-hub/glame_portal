@@ -1,0 +1,27 @@
+{
+  "task_id": "t_edbb0e9b",
+  "platform_task_id": "35a0e2bf-ae46-48fd-8820-94fae2cd5d20",
+  "checked_at": "2026-05-28T10:05:13+00:00",
+  "status": "needs_admin_attention",
+  "reglement_interval_minutes": 60,
+  "summary": "Live API healthy and 1C-facing endpoints are readable, but hourly freshness is not verified: customer sync is older than 49h, sales latest non-zero day is 2026-05-27, stock/inventory analytics is served by live_inventory_control_fallback and no active product sync task is running.",
+  "sources": {
+    "health": {"endpoint": "/health", "http_status": 200, "status": "healthy"},
+    "admin_1c_sync_status": {"endpoint": "/api/admin/1c/sync/status", "http_status": 200, "active_tasks": 0, "errors": [], "last_sync": "2026-05-26T08:27:30.235770+00:00", "total_customers": 6216},
+    "sales_metrics": {"endpoint": "/api/analytics/1c-sales/metrics?days=7&auto_sync=false", "http_status": 200, "total": 6, "total_orders": 35, "total_revenue": 428065.0, "latest_metric_date": "2026-05-27"},
+    "sales_daily": {"endpoint": "/api/analytics/1c-sales/daily?days=7&auto_sync=false", "http_status": 200, "latest_nonzero_date": "2026-05-27", "today": {"date": "2026-05-28", "orders": 0, "revenue": 0}},
+    "stock_dashboard": {"endpoint": "/api/inventory/dashboard", "http_status": 200, "stock_total": 5708.0, "sku_count": 634, "checks_count": 604, "sales_revenue": 6312924.19},
+    "inventory_health": {"endpoint": "/api/analytics/inventory/health-score", "http_status": 200, "status": "excellent", "source": "live_inventory_control_fallback", "stock_total": 5708.0, "total_products": 3357},
+    "inventory_analysis": {"endpoint": "/api/analytics/inventory/analysis?limit=5", "http_status": 200, "status": "success", "source": "live_inventory_control_fallback"},
+    "customers_overview": {"endpoint": "/api/admin/customers/analytics/overview", "http_status": 200, "total_customers": 6216, "total_revenue": 66007132.58},
+    "products_sync_status": {"endpoint": "/api/products/sync-1c/status", "http_status": 404, "detail": "Нет активных задач синхронизации товаров. Запустите синхронизацию через POST /api/products/sync-xml"},
+    "auth_onec_sync_status": {"endpoint": "/api/auth/onec-sync-status", "http_status": 200, "status": null, "job_id": null, "last_attempt_at": null}
+  },
+  "source_status": {
+    "1c_sales": "readable_but_stale_or_suspicious_for_hourly_freshness",
+    "1c_stock": "readable_live_fallback_no_active_sync",
+    "1c_customers": "readable_but_last_sync_stale"
+  },
+  "recommendation": "Escalate to admin/director to verify 1C sync schedules/recalculate jobs before using this data for automated CRM or mass-send decisions.",
+  "artifact_md": "/workspace/glame-platform/reports/onec_data_sync_monitor_t_edbb0e9b_20260528_1005.md"
+}

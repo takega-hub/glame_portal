@@ -1,0 +1,19 @@
+{
+  "account_hash": "f80c7a28c7780081af8b273543b91fc9a1f29fbe2891e5f67218e4952bd2154a",
+  "accounts_count": 0,
+  "audit_date": "2026-07-02",
+  "balance_total": 0,
+  "generated_at": "2026-07-02T07:44:22.246544+00:00",
+  "hold_total": 0,
+  "lifetime_burned_total": 0,
+  "lifetime_earned_total": 0,
+  "previous_root_hash": "a296ba5ddd1a9261918475c24d2821877e31523298485d59ab7db8e6b618809a",
+  "public_reference": "/static/glm_audit_journal/2026-07-02.json",
+  "public_status": "published",
+  "published_at": "2026-07-02T07:44:22.422198+00:00",
+  "root_hash": "85f40c0a37fb2b66b871921979a713ffcd7dd45469eeaeed6b64b2f3f4a788a5",
+  "schema": "glame_token_public_audit_hash_v1",
+  "token_code": "GLM",
+  "transaction_hashes_count": 0,
+  "transactions_count": 0
+}

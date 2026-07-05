@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI Photo Selection Result - GLAME</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-on-surface": "#2f3133",
+                        "secondary-fixed": "#e2e2e5",
+                        "on-primary-fixed-variant": "#444748",
+                        "tertiary-fixed": "#dee3e7",
+                        "on-tertiary-container": "#606569",
+                        "on-primary-fixed": "#191c1d",
+                        "on-primary": "#2e3132",
+                        "surface-container-high": "#282a2c",
+                        "secondary-container": "#454749",
+                        "tertiary": "#ffffff",
+                        "surface-tint": "#c4c7c8",
+                        "on-background": "#e2e2e5",
+                        "inverse-surface": "#e2e2e5",
+                        "on-secondary": "#2f3133",
+                        "secondary": "#c6c6c9",
+                        "on-secondary-fixed-variant": "#454749",
+                        "on-surface-variant": "#c4c7c8",
+                        "border-gray": "#5C6064",
+                        "background": "#121416",
+                        "surface-variant": "#333537",
+                        "surface": "#121416",
+                        "surface-bright": "#38393c",
+                        "outline": "#8e9192",
+                        "outline-variant": "#434749",
+                        "tertiary-fixed-dim": "#c2c7cb",
+                        "on-secondary-container": "#b4b5b7",
+                        "primary-container": "#e1e3e4",
+                        "surface-container": "#1e2022",
+                        "cold-light-gray": "#C7CBCF",
+                        "on-primary-container": "#626566",
+                        "primary": "#ffffff",
+                        "error-container": "#93000a",
+                        "on-tertiary": "#2c3134",
+                        "on-error-container": "#ffdad6",
+                        "error": "#ffb4ab",
+                        "on-tertiary-fixed": "#171c1f",
+                        "soft-gray": "#D8DADB",
+                        "surface-container-lowest": "#0c0e10",
+                        "surface-container-highest": "#333537",
+                        "primary-fixed-dim": "#c4c7c8",
+                        "tertiary-container": "#dee3e7",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "surface-container-low": "#1a1c1e",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "surface-dim": "#121416",
+                        "on-surface": "#e2e2e5",
+                        "on-error": "#690005",
+                        "primary-fixed": "#e1e3e4",
+                        "inverse-primary": "#5c5f60",
+                        "on-tertiary-fixed-variant": "#42474b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "0px"
+                    },
+                    "spacing": {
+                        "page-padding-h": "28px",
+                        "button-gap": "16px",
+                        "safe-air-bottom": "24px",
+                        "grid-gutter": "1px",
+                        "top-bar-height": "56px",
+                        "bottom-nav-height": "96px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glame-pattern {
+            background-image: radial-gradient(#333537 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md antialiased min-h-screen flex flex-col glame-pattern">
+<!-- TopAppBar (Internal Variant) -->
+<header class="fixed top-0 w-full z-50 bg-background/90 backdrop-blur-md border-b border-border-gray h-[56px] flex justify-between items-center px-page-padding-h">
+<button class="text-primary hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="arrow_back" data-weight="fill" style="font-variation-settings: 'FILL' 1;">arrow_back</span>
+</button>
+<h1 class="text-headline-lg-mobile font-headline-lg-mobile tracking-tighter text-primary">Ваш подбор</h1>
+<div class="w-6"></div> <!-- Spacer for centering -->
+</header>
+<!-- Main Content -->
+<main class="flex-grow pt-[calc(56px+24px)] pb-[calc(96px+24px)] px-page-padding-h flex flex-col gap-8 max-w-3xl mx-auto w-full">
+<!-- Summary Section -->
+<section class="border border-border-gray p-6 bg-surface-container relative overflow-hidden">
+<div class="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+<p class="text-body-lg font-body-lg text-primary mb-4 relative z-10">
+                На основе анализа вашего фото, мы подобрали украшения, которые подчеркивают ваши черты.
+            </p>
+<div class="flex items-center gap-2 text-on-surface-variant text-label-md font-label-md">
+<span class="material-symbols-outlined" data-icon="memory">memory</span>
+<span>AI АНАЛИЗ ЗАВЕРШЕН</span>
+</div>
+</section>
+<!-- Recommendations Bento Grid -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-grid-gutter bg-border-gray border border-border-gray">
+<div class="bg-surface p-6 flex flex-col gap-2">
+<span class="material-symbols-outlined text-primary text-3xl mb-2" data-icon="category">category</span>
+<h3 class="text-label-md font-label-md text-on-surface-variant uppercase tracking-widest">Форма</h3>
+<p class="text-body-md font-body-md text-primary">Средний масштаб, мягкие углы.</p>
+</div>
+<div class="bg-surface p-6 flex flex-col gap-2">
+<span class="material-symbols-outlined text-primary text-3xl mb-2" data-icon="diamond">diamond</span>
+<h3 class="text-label-md font-label-md text-on-surface-variant uppercase tracking-widest">Металл</h3>
+<p class="text-body-md font-body-md text-primary">Холодное серебро или белое золото.</p>
+</div>
+<div class="bg-surface p-6 flex flex-col gap-2">
+<span class="material-symbols-outlined text-primary text-3xl mb-2" data-icon="texture">texture</span>
+<h3 class="text-label-md font-label-md text-on-surface-variant uppercase tracking-widest">Фактура</h3>
+<p class="text-body-md font-body-md text-primary">Гладкие полированные поверхности.</p>
+</div>
+</section>
+<!-- Recommended Products -->
+<section class="flex flex-col gap-6">
+<div class="flex justify-between items-end border-b border-border-gray pb-2">
+<h2 class="text-headline-lg-mobile font-headline-lg-mobile text-primary">Рекомендации</h2>
+</div>
+<div class="grid grid-cols-2 gap-grid-gutter bg-border-gray border border-border-gray">
+<!-- Product Card 1 -->
+<div class="bg-surface flex flex-col group cursor-pointer">
+<div class="aspect-square relative overflow-hidden bg-surface-container border-b border-border-gray">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="A macro photograph of a sleek, minimalist white gold necklace resting on a raw concrete surface. The lighting is cold, precise, and high-contrast, emphasizing the smooth, polished texture of the metal against the porous architectural background. The overall mood is modern, technical, and luxurious, adhering to a stark monochromatic palette." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC9nCfOiwnzKifWVKgUNFZsAImRwjqBDFOcKNB7E3W-LDYlOavaZx-ahXAEglxwkSxRQn7Li4jilGCTVlYNZsCPbbi0B2OobLWRLEfnEbbSd3qXrA0V7GiunnTJ8-dWt0TVmXGbtqzuBKa8accDWviXJ-UeEQzDdHMb8blBObc0FCLtmiZBORmytGSLwTF0f7mha2tx_6iF6HmQoe7ID-Hn8xpxTRmMjhlsvqwAMqFRiHsegNPW-UI0Na0rHAOqX9nYn-IKunwcpik');">
+</div>
+<button class="absolute top-2 right-2 w-10 h-10 border border-border-gray bg-background/80 backdrop-blur flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite_border">favorite_border</span>
+</button>
+</div>
+<div class="p-4 flex flex-col gap-1">
+<span class="text-label-sm font-label-sm text-on-surface-variant uppercase">Колье</span>
+<h3 class="text-body-md font-body-md text-primary truncate">Архитектурная Линия</h3>
+<p class="text-label-md font-label-md text-primary mt-2">₽ 45,000</p>
+</div>
+</div>
+<!-- Product Card 2 -->
+<div class="bg-surface flex flex-col group cursor-pointer">
+<div class="aspect-square relative overflow-hidden bg-surface-container border-b border-border-gray">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" data-alt="Close-up of a structural silver ring featuring geometric, soft-angled planes. It is positioned on a sheet of frosted glass with a dark, industrial metallic backdrop. The scene is illuminated by harsh, angular cool-toned studio lights, creating a sophisticated, ultra-modern aesthetic devoid of any warm or natural tones." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAVStJmCk8gZq4uQ0oDwaZFsVZRJN_6cuKcZcVqM17WQQRXdc79wD_ah2F9bz6oBCpRF621hQX29VZwBcvIdOp7RT6vHq2aJMKKHJKdu_dzJCwMYk2hgm-u6bhl3I_70nhg9JMJmpcFAVR7hlFZqtbjhi4x1CFUe2cvzCt64NqtHCqPv82kI2FgYeXVC9BZbPaLnP3UHSNPYUN5f3jQl_mhBEZlNY2f4I7kFz03JPZy7k74R9XNXOY5Z7YizjUPYEB28iCqe412np8');">
+</div>
+<button class="absolute top-2 right-2 w-10 h-10 border border-border-gray bg-background/80 backdrop-blur flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="favorite_border">favorite_border</span>
+</button>
+</div>
+<div class="p-4 flex flex-col gap-1">
+<span class="text-label-sm font-label-sm text-on-surface-variant uppercase">Кольцо</span>
+<h3 class="text-body-md font-body-md text-primary truncate">Сфера и Угол</h3>
+<p class="text-label-md font-label-md text-primary mt-2">₽ 32,500</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Action Panel -->
+<section class="flex flex-col gap-button-gap mt-4">
+<button class="w-full h-[56px] bg-primary text-background text-label-md font-label-md border border-primary hover:bg-transparent hover:text-primary transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" data-icon="bookmark">bookmark</span>
+                Сохранить в Мой стиль
+            </button>
+<button class="w-full h-[56px] bg-transparent text-primary text-label-md font-label-md border border-border-gray hover:border-primary transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+                Обсудить со стилистом
+            </button>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-surface border-t border-border-gray h-[96px] pb-safe-air-bottom flex justify-around items-center px-page-padding-h md:hidden">
+<button class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors w-16 h-16">
+<span class="material-symbols-outlined" data-icon="grid_view">grid_view</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors w-16 h-16">
+<span class="material-symbols-outlined" data-icon="layers">layers</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary scale-110 transition-transform duration-150 w-16 h-16 relative">
+<div class="absolute inset-0 bg-primary/10 -z-10 rounded-full blur-md"></div>
+<span class="material-symbols-outlined" data-icon="auto_awesome" data-weight="fill" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors w-16 h-16">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors w-16 h-16">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+</button>
+</nav>
+</body></html>

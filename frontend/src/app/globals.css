@@ -12,67 +12,41 @@
   --glame-metallic: 192, 192, 192; /* metallic-300 */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 248, 248, 248; /* concrete-50 */
-    --background-start-rgb: 26, 26, 26; /* concrete-900 */
-    --background-end-rgb: 45, 45, 45; /* concrete-800 */
+html {
+  color-scheme: light;
+}
+
+.bubble-in {
+  animation: fade-in-up 300ms ease-out both;
+}
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
+.attachment-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 0.5rem;
+  object-fit: cover;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: #111827;
+  background: #F5F5F5;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-/* Универсальное правило: если фон темный (проверяем через CSS переменные) */
-/* Если background-start-rgb темный (26, 26, 26 = concrete-900), текст светлый */
-/* Это работает всегда, когда используется темный фон */
-body {
-  /* Если фон темный через переменные, цвет текста уже установлен через --foreground-rgb */
-  /* Но добавим дополнительную защиту */
-}
-
-/* Дополнительное правило для случаев, когда фон темный, но медиа-запрос не сработал */
-/* Проверяем, если background содержит темные значения */
-body[style*="rgb(26"] *:not(.bg-white):not([class*="bg-white"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]),
-body[style*="rgb(45"] *:not(.bg-white):not([class*="bg-white"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]) {
-  color: #F8F8F8 !important;
-}
-
-/* Универсальное правило: если фон темный, текст должен быть светлым */
-/* Проверяем через CSS переменные - если background-start-rgb темный (26, 26, 26), текст светлый */
-@media (prefers-color-scheme: dark) {
-  /* Базовый цвет текста на темном фоне */
-  body {
-    color: #F8F8F8 !important; /* concrete-50 - светлый текст */
-  }
-  
-  /* Все текстовые элементы на темном фоне (кроме белых карточек) */
-  body > *:not(.bg-white):not([class*="bg-white"]):not([class*="bg-gray-50"]):not([class*="bg-gray-100"]):not([class*="bg-red-50"]):not([class*="bg-green-50"]):not([class*="bg-blue-50"]):not([class*="bg-yellow-50"]) {
-    color: #F8F8F8 !important;
-  }
-  
-  /* Исключения - белые и светлые карточки должны иметь темный текст */
-  .bg-white, [class*="bg-white"], [class*="bg-gray-50"], [class*="bg-gray-100"],
-  [class*="bg-red-50"], [class*="bg-green-50"], [class*="bg-blue-50"], [class*="bg-yellow-50"] {
-    color: #1A1A1A !important;
-  }
-  
-  .bg-white *, [class*="bg-white"] *, [class*="bg-gray-50"] *, [class*="bg-gray-100"] *,
-  [class*="bg-red-50"] *, [class*="bg-green-50"] *, [class*="bg-blue-50"] *, [class*="bg-yellow-50"] * {
-    color: #1A1A1A !important;
-  }
 }
 
 /* Улучшение видимости текста в полях ввода и выпадающих списках */
@@ -83,6 +57,8 @@ input[type="number"],
 textarea,
 select {
   color: #111827; /* text-gray-900 */
+  background-color: #ffffff !important;
+  color-scheme: light;
 }
 
 input::placeholder,
@@ -97,6 +73,38 @@ select option {
   background-color: #ffffff;
 }
 
+.app-admin-scope select {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  color-scheme: light !important;
+}
+
+.app-admin-scope select option {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+}
+
+.app-admin-scope .dark\:bg-gray-950 {
+  background-color: #ffffff !important;
+}
+
+.app-admin-scope .dark\:border-gray-800 {
+  border-color: #d1d5db !important;
+}
+
+.app-admin-scope .dark\:text-gray-400,
+.app-admin-scope .dark\:text-gray-300,
+.app-admin-scope .dark\:text-gray-200,
+.app-admin-scope .dark\:text-gray-100,
+.app-admin-scope .dark\:text-gray-50 {
+  color: #000000 !important;
+}
+
 /* Улучшение видимости текста в кнопках */
 button {
   color: inherit;
@@ -109,15 +117,61 @@ button {
   }
   
   body {
-    @apply bg-white text-gray-950;
+    @apply text-gray-950;
   }
-  
-  /* Если фон темный, текст светлый */
-  @media (prefers-color-scheme: dark) {
-    body {
-      @apply text-gray-50;
-    }
+}
+
+@layer components {
+  .glame-sidebar {
+    color: #111827;
+    color-scheme: light;
   }
+
+  .glame-nav-link {
+    color: #374151;
+  }
+
+  .glame-nav-link:hover {
+    color: #111827;
+  }
+
+  .glame-nav-link-active {
+    background-color: #fff9e6;
+    border-color: #ffe8a3;
+    color: #7c5d07;
+  }
+
+  .glame-nav-link-active .glame-nav-item-label {
+    color: #5e4805;
+  }
+
+  .bg-gold-50,
+  .bg-gold-100,
+  .bg-yellow-50,
+  .bg-yellow-100 {
+    color: #5e4805;
+  }
+}
+
+.agent-typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-typing .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #9CA3AF;
+  opacity: 0.6;
+  animation: agent-bounce 1.4s infinite ease-in-out;
+}
+.agent-typing .dot:nth-child(1) { animation-delay: 0s; }
+.agent-typing .dot:nth-child(2) { animation-delay: 0.2s; }
+.agent-typing .dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes agent-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.6; }
+  40% { transform: translateY(-4px); opacity: 1; }
 }
 
 :root {

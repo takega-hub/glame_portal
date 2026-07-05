@@ -13,6 +13,7 @@ from sqlalchemy.orm import aliased
 from app.models.sales_record import SalesRecord
 from app.models.product_stock import ProductStock
 from app.models.product import Product
+from app.services.sales_record_filters import sales_record_eligible_product_filter
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,8 @@ class ProductTurnoverService:
         ).where(
             and_(
                 SalesRecord.sale_date >= start_date,
-                SalesRecord.sale_date <= end_date
+                SalesRecord.sale_date <= end_date,
+                sales_record_eligible_product_filter(SalesRecord, func, and_, Product),
             )
         )
         

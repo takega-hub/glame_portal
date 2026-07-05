@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 import json
 import logging
+import re
 
 from app.agents.base_agent import BaseAgent
 from app.models.user import User
@@ -421,6 +422,131 @@ E Вести на сайт, онлайн-подбор
             return "У вас накоплена сумма, которой можно дополнить покупку"
         else:
             return "У вас накоплены бонусы, которые можно использовать при следующей покупке"
+
+    def _fallback_generated_message(
+        self,
+        client_id: UUID,
+        client_data: Dict[str, Any],
+        client_name: str,
+        gender: Optional[str],
+        segment: str,
+        event_type: str,
+        event_brand: str,
+        store_name: Optional[str],
+        bonus_value: str,
+        max_length: Optional[int] = None,
+        reason: str = "llm_empty_response",
+    ) -> Dict[str, Any]:
+        """Безопасный fallback, чтобы пустой/битый ответ LLM не ломал batch-генерацию."""
+        name_parts = (client_name or "").strip().split()
+        # В 1С часто хранится "Фамилия Имя", для обращения берем имя.
+        first_name = name_parts[1] if len(name_parts) >= 2 else (name_parts[0] if name_parts else "Клиент")
+        brand_part = f" {event_brand}" if event_brand else ""
+        store_part = f" в GLAME {store_name}" if store_name else " в GLAME"
+        bonus_part = f" {bonus_value}." if bonus_value else ""
+
+        if event_type == "brand_arrival":
+            message_candidates = [
+                (
+                    f"{first_name}, добрый день!{store_part} появилось новое поступление{brand_part}. "
+                    "Можем подготовить для вас короткую персональную подборку и показать самые интересные позиции."
+                    f"{bonus_part}"
+                ),
+                (
+                    f"{first_name}, добрый день! В GLAME {store_name or ''} новое поступление{brand_part}. "
+                    "Стилист подготовит для вас короткую подборку."
+                ),
+                f"{first_name}, в GLAME новое поступление{brand_part}. Подготовим для вас подборку.",
+                f"{first_name}, новое поступление{brand_part} в GLAME. Подготовим для вас подборку.",
+            ]
+            message = self._choose_complete_message(message_candidates, max_length)
+            cta = "Ответьте на сообщение, и стилист подготовит подборку."
+        elif event_type == "bonus_balance":
+            message_candidates = [
+                (
+                    f"{first_name}, добрый день! Напоминаем: {bonus_value or 'у вас есть бонусы GLAME'}. "
+                    "Можно использовать их при выборе украшения или подарка."
+                ),
+                f"{first_name}, у вас есть бонусы GLAME. Их можно использовать при следующей покупке.",
+            ]
+            message = self._choose_complete_message(message_candidates, max_length)
+            cta = "Напишите нам, если хотите подобрать варианты."
+        else:
+            message_candidates = [
+                (
+                    f"{first_name}, добрый день! Хотим пригласить вас{store_part}: стилист GLAME "
+                    "может подготовить для вас несколько украшений под ваш стиль и повод."
+                ),
+                f"{first_name}, приглашаем вас в GLAME. Стилист подготовит украшения под ваш стиль.",
+            ]
+            message = self._choose_complete_message(message_candidates, max_length)
+            cta = "Ответьте на сообщение, и мы предложим удобное время."
+
+        result = {
+            "client_id": str(client_id),
+            "phone": client_data.get("phone"),
+            "name": client_name,
+            "gender": gender,
+            "segment": segment,
+            "reason": event_type,
+            "message": message,
+            "cta": cta,
+            "generation_fallback": True,
+            "fallback_reason": reason,
+        }
+        if event_brand:
+            result["brand"] = event_brand
+        if store_name:
+            result["store"] = store_name
+        return result
+
+    @staticmethod
+    def _normalize_message_text(text: str) -> str:
+        return re.sub(r"\s+", " ", (text or "").strip())
+
+    def _fit_message_to_length(self, text: str, max_length: Optional[int]) -> str:
+        """Keep message within max_length without ending in a broken phrase."""
+        text = self._normalize_message_text(text)
+        if not max_length or max_length <= 0 or len(text) <= max_length:
+            return text
+
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+        collected: List[str] = []
+        current = ""
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            candidate = f"{current} {sentence}".strip() if current else sentence
+            if len(candidate) <= max_length:
+                current = candidate
+                collected.append(sentence)
+            else:
+                break
+        if current and len(current) >= min(max_length, max(30, int(max_length * 0.45))):
+            return current
+
+        clipped = text[:max_length].rstrip()
+        for sep in (".", "!", "?"):
+            pos = clipped.rfind(sep)
+            if pos >= 20:
+                return clipped[: pos + 1].strip()
+
+        words = clipped.rstrip(" ,;:.-").split()
+        while words and len(" ".join(words) + ".") > max_length:
+            words.pop()
+        return ((" ".join(words).rstrip(" ,;:.-") + ".") if words else text[:max_length].rstrip(" ,;:.-") + ".")
+
+    def _choose_complete_message(self, candidates: List[str], max_length: Optional[int]) -> str:
+        normalized = [self._normalize_message_text(item) for item in candidates if item and item.strip()]
+        if not normalized:
+            return ""
+        if not max_length:
+            return normalized[0]
+        for item in normalized:
+            if len(item) <= max_length:
+                return item
+        return self._fit_message_to_length(normalized[-1], max_length)
     
     async def get_store_name(self, store_id_1c: Optional[str], store_name: Optional[str] = None) -> Optional[str]:
         """
@@ -626,7 +752,8 @@ E Вести на сайт, онлайн-подбор
         self,
         client_id: UUID,
         event: Dict[str, Any],
-        client_data: Optional[Dict[str, Any]] = None
+        client_data: Optional[Dict[str, Any]] = None,
+        max_length: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Генерация персонального сообщения для клиента
@@ -635,6 +762,7 @@ E Вести на сайт, онлайн-подбор
             client_id: ID клиента
             event: Событие (type, brand, store и т.д.)
             client_data: Предзагруженные данные клиента (опционально)
+            max_length: Максимальная длина сообщения (опционально)
         
         Returns:
             Словарь с segment, message, cta и другой информацией
@@ -654,10 +782,13 @@ E Вести на сайт, онлайн-подбор
             event_type = event.get("type", "")
             event_brand = event.get("brand", "")
             
-            # Для brand_arrival обязательно проверяем наличие бренда в истории
+            # Для brand_arrival бренд описывает новое поступление/повод коммуникации.
+            # Наличие бренда в истории покупок усиливает персонализацию, но не является
+            # обязательным условием: аудитория может быть заранее собрана AI CRM по
+            # смежным критериям (серебро, крупные формы, VIP/active, магазин).
+            brand_in_history = False
             if event_type == "brand_arrival" and event_brand:
-                if not self.is_brand_in_history(client_data.get("purchase_history", []), event_brand):
-                    raise ValueError(f"Brand {event_brand} not found in client purchase history")
+                brand_in_history = self.is_brand_in_history(client_data.get("purchase_history", []), event_brand)
             
             # Для других типов событий бренд не обязателен, но если указан - проверяем
             elif event_brand and event_type in ["loyalty_level_up", "holiday_male"]:
@@ -734,6 +865,14 @@ E Вести на сайт, онлайн-подбор
             if bonus_balance > 0:
                 bonus_value = self.format_bonus_value(bonus_balance)
             
+            # Получаем описание события
+            # В API metadata распаковывается в event_dict, поэтому ищем description прямо в event
+            # Но на всякий случай проверяем и в metadata (если логика API изменится)
+            event_description = event.get("description")
+            if not event_description:
+                event_metadata = event.get("metadata") or {}
+                event_description = event_metadata.get("description", "")
+
             # Проверяем, нужно ли предлагать все магазины
             suggest_all_stores = client_data.get("suggest_all_stores", False)
             available_store_cities = client_data.get("available_store_cities", [])
@@ -753,17 +892,24 @@ E Вести на сайт, онлайн-подбор
                     "city": city or ""
                 },
                 "event": event,
+                "event_description": event_description,
                 "segment": segment,
                 "store_name": store_name,
                 "bonus_value": bonus_value,
                 "suggest_all_stores": suggest_all_stores,
-                "available_store_cities": available_store_cities
+                "available_store_cities": available_store_cities,
+                "max_length": max_length
             }
             
             # Формируем специфичные инструкции для разных типов событий
             event_instructions = ""
             if event_type == "brand_arrival":
-                event_instructions = f"Событие: в бутик пришел бренд {event_brand}. Сообщи об этом клиенту, упомянув его предыдущие покупки этого бренда."
+                history_hint = (
+                    "Если у клиента есть покупки этого бренда в истории, мягко используй это как персонализацию."
+                    if brand_in_history
+                    else "Не утверждай, что клиент уже покупал этот бренд; подай новинку через стиль, подбор и релевантность сегменту."
+                )
+                event_instructions = f"Событие: в бутик пришел бренд {event_brand}. Сообщи об этом клиенту. {history_hint}"
             elif event_type == "loyalty_level_up":
                 event_instructions = "Событие: клиент достиг нового уровня лояльности. Поздравь его и расскажи о преимуществах нового уровня."
             elif event_type == "bonus_balance":
@@ -772,6 +918,8 @@ E Вести на сайт, онлайн-подбор
                 event_instructions = "Событие: клиент давно не делал покупок (более 180 дней). Напиши сообщение о возвращении, мягко пригласи в бутик."
             elif event_type == "holiday_male":
                 event_instructions = "Событие: приближается праздник (14.02, 23.02 или 8.03). Предложи идеи для подарков мужчинам."
+            elif event_description:
+                event_instructions = f"Событие: {event_type}. Описание события: {event_description}. Сформируй сообщение, опираясь на это описание."
             else:
                 event_instructions = f"Событие: {event_type}. Сформируй соответствующее сообщение."
             
@@ -794,6 +942,7 @@ E Вести на сайт, онлайн-подбор
 Определенный сегмент: {segment}
 Местный клиент: {"да" if is_local else "нет"}
 Название бутика: {store_name or "не указано"}
+{f"Максимальная длина поля message: {max_length} символов. Составь 1-2 коротких законченных предложения, которые целиком помещаются в лимит. Не обрывай фразы, не используй многоточие и не заканчивай союзами/предлогами." if max_length else ""}
 {f"ВАЖНО: Город клиента ({city_from_profile}) не соответствует городам, где есть магазины GLAME ({', '.join(available_store_cities)}). Предложи клиенту прийти в любой удобный магазин GLAME, используя фразу 'приходите в какой удобнее' или 'приходите в любой удобный бутик GLAME'." if suggest_all_stores and available_store_cities else ""}
 {("Ценность бонусов: " + bonus_value) if bonus_value else ""}
 
@@ -802,6 +951,7 @@ E Вести на сайт, онлайн-подбор
 2. {f"Предложи прийти в любой удобный магазин GLAME (города: {', '.join(available_store_cities)}), используя фразу 'приходите в какой удобнее' или 'приходите в любой удобный бутик GLAME'" if suggest_all_stores and available_store_cities else ("Укажи бутик " + store_name if store_name and is_local else "Веди на сайт и онлайн-консультацию")}
 3. {"Упомяни бренд " + event_brand if event_brand else "Используй информацию о брендах из истории покупок"}
 4. {"Используй информацию о бонусах: " + bonus_value if bonus_value else ""}
+5. {f"СТРОГО соблюдай лимит длины поля message: не более {max_length} символов. Лучше короче, но законченным предложением." if max_length else "Пиши лаконично, но дружелюбно."}
 
 Верни ТОЛЬКО валидный JSON:
 {{
@@ -811,7 +961,7 @@ E Вести на сайт, онлайн-подбор
 }}"""
             
             # Получаем системный промпт из БД
-            system_prompt = await self.get_active_system_prompt(self.db, "communication", self.SYSTEM_PROMPT)
+            system_prompt = await self.get_active_system_prompt(self.db, "crm-agent", self.SYSTEM_PROMPT)
             
             # Генерируем ответ через LLM
             response_text = await self.generate_response(
@@ -820,6 +970,25 @@ E Вести на сайт, онлайн-подбор
                 temperature=0.7,
                 max_tokens=500
             )
+
+            if not isinstance(response_text, str) or not response_text.strip():
+                logger.warning(
+                    "LLM returned empty message for client %s, using deterministic fallback",
+                    client_id,
+                )
+                return self._fallback_generated_message(
+                    client_id=client_id,
+                    client_data=client_data,
+                    client_name=client_name,
+                    gender=gender,
+                    segment=segment,
+                    event_type=event_type,
+                    event_brand=event_brand,
+                    store_name=store_name,
+                    bonus_value=bonus_value,
+                    max_length=max_length,
+                    reason="llm_empty_response",
+                )
             
             # Парсим JSON ответ
             try:
@@ -840,7 +1009,7 @@ E Вести на сайт, онлайн-подбор
                     "gender": gender,  # Добавляем пол в результат
                     "segment": response_data.get("segment", segment),
                     "reason": event_type,
-                    "message": response_data.get("message", ""),
+                    "message": self._fit_message_to_length(response_data.get("message", ""), max_length),
                     "cta": response_data.get("cta", ""),
                 }
                 
@@ -854,7 +1023,19 @@ E Вести на сайт, онлайн-подбор
                 
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse LLM response as JSON: {response_text[:200]}")
-                raise ValueError(f"LLM returned invalid JSON: {e}")
+                return self._fallback_generated_message(
+                    client_id=client_id,
+                    client_data=client_data,
+                    client_name=client_name,
+                    gender=gender,
+                    segment=segment,
+                    event_type=event_type,
+                    event_brand=event_brand,
+                    store_name=store_name,
+                    bonus_value=bonus_value,
+                    max_length=max_length,
+                    reason=f"llm_invalid_json: {e}",
+                )
         
         except Exception as e:
             logger.exception(f"Error generating message for client {client_id}: {e}")

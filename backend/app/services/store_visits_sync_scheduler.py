@@ -46,9 +46,9 @@ async def run_nightly_store_visits_sync() -> None:
         return
     
     try:
-        # Находим путь к скрипту sync_ftp_stores.py (он находится в корне проекта)
+        # Находим путь к скрипту sync_ftp_stores.py
         project_root = Path(__file__).parent.parent.parent.parent
-        script_path = project_root / "sync_ftp_stores.py"
+        script_path = project_root / "scripts" / "data" / "sync_ftp_stores.py"
         
         if not script_path.exists():
             logger.error(f"Script not found: {script_path}")

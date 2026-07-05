@@ -8,6 +8,29 @@ interface SystemPromptPanelProps {
   isMarketer?: boolean;
 }
 
+const DEFAULT_PROMPT_TEMPLATES: Record<string, { name: string; description: string; versionName: string; prompt: string }> = {
+  'training-material-reformatter-agent': {
+    name: 'Базовый промпт агента учебных материалов',
+    description: 'Переформатирование загруженных исходников GLAME в draft learning pack: слайды, практика, шаблон ответа и критерии проверки.',
+    versionName: 'Default GLAME training reformatter',
+    prompt: `Ты — AI-агент GLAME для переформатирования загруженных исходников обучения продавцов в учебный learning pack.
+
+Твоя задача: из исходного документа/Markdown сделать черновой учебный пакет для продавца GLAME: слайды, практику, шаблон ответа, критерии проверки и пул проверочных вопросов для оценки знания.
+
+Правила GLAME:
+- не публикуй материал напрямую продавцам; результат всегда draft/review_required;
+- сохраняй смысл исходника, но переписывай его как обучение консультанта-стилиста, а не как сухой документ;
+- делай контент конкретным: клиентская ситуация, украшение, эффект на образ, GLAME-фраза, действие в смене;
+- тон поддерживающий, премиальный, без давления на клиента и без оценок внешности;
+- запрещены агрессивные продажи: “берите”, “дожимайте”, “закрывайте клиента”, “всем подходит”, “must-have”;
+- image_prompt и speaker_note — только для администратора/руководителя, не для продавца;
+- финальную обратную связь и публикацию подтверждает руководитель;
+- question_pool должен содержать 8–12 проверочных вопросов разного типа: короткий ответ, сценарий клиента, выбор формулировки, do/don't, применение в смене. Каждый вопрос должен иметь ожидаемый ответ/критерии и уровень сложности.
+
+Форматируй ответ строго как JSON по запрошенной схеме. Слайды и вопросы должны быть самостоятельными, понятными продавцу и готовыми к проверке руководителем.`,
+  },
+};
+
 export default function SystemPromptPanel({ agentType, isMarketer = false }: SystemPromptPanelProps) {
   const [versions, setVersions] = useState<SystemPromptVersion[]>([]);
   const [activeVersion, setActiveVersion] = useState<SystemPromptVersion | null>(null);
@@ -75,7 +98,7 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
     loadGenerationRequests();
   }, [loadVersions, loadGenerationRequests]);
 
-  const handleCreate = async () => {
+  const handleCreate = async (activate: boolean = false) => {
     if (!formName.trim() || !formPrompt.trim()) {
       setError('Название и системный промпт обязательны');
       return;
@@ -84,13 +107,20 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
     setLoading(true);
     setError(null);
     try {
-      await systemPrompts.createVersion(agentType, {
+      const newVersion = await systemPrompts.createVersion(agentType, {
         name: formName,
         system_prompt: formPrompt,
         description: formDescription || undefined,
         version_name: formVersionName || undefined,
       });
-      setSuccessMessage('Версия промпта создана успешно');
+
+      if (activate) {
+        await systemPrompts.activateVersion(agentType, newVersion.id);
+        setSuccessMessage('Версия создана и активирована');
+      } else {
+        setSuccessMessage('Версия промпта создана успешно');
+      }
+
       resetForm();
       setIsCreating(false);
       await loadVersions();
@@ -239,7 +269,7 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
     setShowEditModal(true);
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = async (activate: boolean = false) => {
     if (!editingPrompt || !editFormName.trim() || !editFormPrompt.trim()) {
       setError('Название и системный промпт обязательны');
       return;
@@ -254,7 +284,14 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
         system_prompt: editFormPrompt,
         version_name: editFormVersionName || undefined,
       });
-      setSuccessMessage('Версия промпта обновлена успешно');
+
+      if (activate) {
+        await systemPrompts.activateVersion(agentType, editingPrompt.id);
+        setSuccessMessage('Версия обновлена и активирована');
+      } else {
+        setSuccessMessage('Версия промпта обновлена успешно');
+      }
+
       setShowEditModal(false);
       setEditingPrompt(null);
       await loadVersions();
@@ -266,10 +303,11 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
   };
 
   const resetForm = () => {
-    setFormName('');
-    setFormDescription('');
-    setFormPrompt('');
-    setFormVersionName('');
+    const template = DEFAULT_PROMPT_TEMPLATES[agentType];
+    setFormName(template?.name || '');
+    setFormDescription(template?.description || '');
+    setFormPrompt(template?.prompt || '');
+    setFormVersionName(template?.versionName || '');
     setGenDescription('');
     setGenTone('');
     setGenAudience('');
@@ -305,7 +343,13 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
             {isGenerating ? 'Отменить' : 'Сгенерировать из описания'}
           </button>
           <button
-            onClick={() => setIsCreating(!isCreating)}
+            onClick={() => {
+              const next = !isCreating;
+              setIsCreating(next);
+              if (next && !formPrompt.trim()) {
+                resetForm();
+              }
+            }}
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             disabled={loading}
           >
@@ -452,11 +496,18 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
             </div>
             <div className="flex gap-2">
               <button
-                onClick={handleCreate}
+                onClick={() => handleCreate(false)}
                 disabled={loading || !formName.trim() || !formPrompt.trim()}
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
               >
                 {loading ? 'Создание...' : 'Создать версию'}
+              </button>
+              <button
+                onClick={() => handleCreate(true)}
+                disabled={loading || !formName.trim() || !formPrompt.trim()}
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {loading ? '...' : 'Создать и активировать'}
               </button>
               <button
                 onClick={() => {
@@ -527,9 +578,9 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
                     <button
                       onClick={() => handleActivate(version.id)}
                       disabled={loading}
-                      className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                      className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
                     >
-                      Активировать
+                      Сделать активным
                     </button>
                   )}
                   {!version.is_active && version.marketer_review_status !== 'pending' && !isMarketer && (
@@ -572,11 +623,20 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
                   >
                     Редактировать
                   </button>
+                  {!version.is_active && (
+                    <button
+                      onClick={() => handleActivate(version.id)}
+                      disabled={loading}
+                      className="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      Активировать
+                    </button>
+                  )}
                   <button
-                    onClick={() => loadHistory(version.id)}
+                    onClick={() => (showHistory === version.id ? setShowHistory(null) : loadHistory(version.id))}
                     className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
                   >
-                    История
+                    {showHistory === version.id ? 'Скрыть историю' : 'История'}
                   </button>
                 </div>
               </div>
@@ -720,11 +780,18 @@ export default function SystemPromptPanel({ agentType, isMarketer = false }: Sys
                 Отмена
               </button>
               <button
-                onClick={handleSaveEdit}
+                onClick={() => handleSaveEdit(false)}
                 disabled={isSavingEdit || !editFormName.trim() || !editFormPrompt.trim()}
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
               >
                 {isSavingEdit ? 'Сохранение...' : 'Сохранить'}
+              </button>
+              <button
+                onClick={() => handleSaveEdit(true)}
+                disabled={isSavingEdit || !editFormName.trim() || !editFormPrompt.trim()}
+                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {isSavingEdit ? '...' : 'Сохранить и активировать'}
               </button>
             </div>
           </div>

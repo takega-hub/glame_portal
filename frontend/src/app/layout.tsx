@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import Navigation from '@/components/layout/Navigation'
-import { AuthProvider } from '@/components/auth/AuthProvider'
+import StaleDeploymentReloader from '@/components/app/StaleDeploymentReloader'
+import AppShell from '@/components/app/AppShell'
+import TonConnectProvider from '@/components/app/TonConnectProvider'
 
 export const metadata: Metadata = {
-  title: 'GLAME AI Platform',
-  description: 'AI-платформа для бренда GLAME',
+  title: 'Платформа GLAME ИИ',
+  description: 'ИИ-платформа для бренда GLAME',
 }
 
 export default function RootLayout({
@@ -15,11 +16,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body>
-        <AuthProvider>
-          <Navigation />
-          {children}
-        </AuthProvider>
+      <body className="bg-gray-50">
+        <StaleDeploymentReloader />
+        <TonConnectProvider>
+          <AppShell>{children}</AppShell>
+        </TonConnectProvider>
       </body>
     </html>
   )

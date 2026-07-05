@@ -521,8 +521,8 @@ class InventoryManagementService:
         
         result = await self.db.execute(query)
         rows = result.all()
-        
-        return [
+
+        analysis = [
             {
                 'product_id_1c': a.product_id_1c,
                 'product_id': str(a.product_id) if a.product_id else None,
@@ -547,6 +547,110 @@ class InventoryManagementService:
             }
             for a, store_name in rows
         ]
+        if analysis:
+            return analysis
+
+        # Fallback: the legacy inventory_analytics table can be empty even when
+        # live 1C stock exists in product_stocks (the /api/inventory/dashboard
+        # source of truth). Keep the analytics storefront useful by deriving a
+        # lightweight live view from InventoryControlService instead of returning
+        # total=0/no_data.
+        live = await self._get_live_inventory_analysis_fallback(
+            store_id=store_id,
+            category=category,
+            abc_class=abc_class,
+            xyz_class=xyz_class,
+            critical_stockout=critical_stockout,
+            critical_overstock=critical_overstock,
+            limit=limit,
+        )
+        return live
+
+    async def _get_live_inventory_analysis_fallback(
+        self,
+        store_id: Optional[str] = None,
+        category: Optional[str] = None,
+        abc_class: Optional[str] = None,
+        xyz_class: Optional[str] = None,
+        critical_stockout: bool = False,
+        critical_overstock: bool = False,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        from app.services.inventory_control_service import InventoryControlService
+
+        control = InventoryControlService(self.db)
+        rows = await control.build_inventory_rows(analysis_period_days=90, store_id=store_id)
+        analysis: List[Dict[str, Any]] = []
+        for r in rows:
+            stockout_risk = self._stockout_risk_from_live_row(r)
+            overstock_risk = self._overstock_risk_from_live_row(r)
+            derived_abc = "C"
+            derived_xyz = "Z"
+            if r.revenue > 0:
+                derived_abc = "A" if r.sales_month >= 1 else "B"
+                derived_xyz = "X" if (r.stock_cover is not None and r.stock_cover <= 3) else "Y"
+
+            if category and (r.category or "") != category:
+                continue
+            if abc_class and derived_abc != abc_class:
+                continue
+            if xyz_class and derived_xyz != xyz_class:
+                continue
+            if critical_stockout and stockout_risk <= 0.7:
+                continue
+            if critical_overstock and overstock_risk <= 0.7:
+                continue
+
+            analysis.append(
+                {
+                    'product_id_1c': r.external_id,
+                    'product_id': r.product_id,
+                    'product_name': r.nomenclature,
+                    'product_article': r.article,
+                    'category': r.category,
+                    'brand': r.brand,
+                    'store_id': store_id,
+                    'store_name': store_id,
+                    'current_stock': r.stock_qty,
+                    'avg_stock_30d': r.stock_qty,
+                    'avg_stock_90d': r.stock_qty,
+                    'sales_velocity': r.sales_month / 30.0 if r.sales_month else 0.0,
+                    'avg_daily_sales': r.sales_month / 30.0 if r.sales_month else 0.0,
+                    'turnover_days': r.stock_cover * 30.0 if r.stock_cover is not None else None,
+                    'turnover_rate': (1.0 / r.stock_cover) if r.stock_cover else 0.0,
+                    'stockout_risk': stockout_risk,
+                    'overstock_risk': overstock_risk,
+                    'abc_class': derived_abc,
+                    'xyz_class': derived_xyz,
+                    'service_level': max(0.0, min(1.0, 1.0 - stockout_risk)),
+                    'source': 'live_inventory_control_fallback',
+                }
+            )
+            if len(analysis) >= limit:
+                break
+        return analysis
+
+    @staticmethod
+    def _stockout_risk_from_live_row(row: Any) -> float:
+        if row.stock_qty <= 0:
+            return 1.0
+        if row.status == "critical_stock":
+            return 0.9
+        if row.status == "reorder":
+            return 0.7
+        if row.status == "normal":
+            return 0.2
+        return 0.05
+
+    @staticmethod
+    def _overstock_risk_from_live_row(row: Any) -> float:
+        if row.status == "slow_moving":
+            return 0.9
+        if row.status == "overstock":
+            return 0.7
+        if row.status == "no_sales" and row.stock_qty > 0:
+            return 0.8
+        return 0.05
     
     async def get_health_score(
         self,
@@ -576,11 +680,17 @@ class InventoryManagementService:
         row = result.first()
         
         if not row or row[0] == 0:
-            return {
-                "health_score": 0.0,
-                "status": "no_data",
-                "metrics": {}
-            }
+            live_analysis = await self._get_live_inventory_analysis_fallback(
+                store_id=store_id,
+                limit=10000,
+            )
+            if not live_analysis:
+                return {
+                    "health_score": 0.0,
+                    "status": "no_data",
+                    "metrics": {}
+                }
+            return self._health_score_from_analysis(live_analysis, source="live_inventory_control_fallback")
         
         total_products = int(row[0] or 0)
         avg_stockout_risk = float(row[1] or 0.0)
@@ -589,13 +699,53 @@ class InventoryManagementService:
         critical_stockout = int(row[4] or 0)
         critical_overstock = int(row[5] or 0)
         
-        # Рассчитываем общий health score (0-100)
-        # Чем выше service_level и ниже риски - тем выше score
+        return self._build_health_score_response(
+            total_products=total_products,
+            avg_stockout_risk=avg_stockout_risk,
+            avg_overstock_risk=avg_overstock_risk,
+            avg_service_level=avg_service_level,
+            critical_stockout=critical_stockout,
+            critical_overstock=critical_overstock,
+        )
+
+    def _health_score_from_analysis(self, analysis: List[Dict[str, Any]], source: Optional[str] = None) -> Dict[str, Any]:
+        total_products = len(analysis)
+        stock_total = sum(float(item.get('current_stock') or 0.0) for item in analysis)
+        avg_stockout_risk = sum(float(item.get('stockout_risk') or 0.0) for item in analysis) / total_products
+        avg_overstock_risk = sum(float(item.get('overstock_risk') or 0.0) for item in analysis) / total_products
+        avg_service_level = sum(float(item.get('service_level') or 0.0) for item in analysis) / total_products
+        critical_stockout = sum(1 for item in analysis if float(item.get('stockout_risk') or 0.0) > 0.7)
+        critical_overstock = sum(1 for item in analysis if float(item.get('overstock_risk') or 0.0) > 0.7)
+        response = self._build_health_score_response(
+            total_products=total_products,
+            avg_stockout_risk=avg_stockout_risk,
+            avg_overstock_risk=avg_overstock_risk,
+            avg_service_level=avg_service_level,
+            critical_stockout=critical_stockout,
+            critical_overstock=critical_overstock,
+        )
+        response["metrics"]["stock_total"] = round(stock_total, 3)
+        if source:
+            response["metrics"]["source"] = source
+        return response
+
+    @staticmethod
+    def _build_health_score_response(
+        total_products: int,
+        avg_stockout_risk: float,
+        avg_overstock_risk: float,
+        avg_service_level: float,
+        critical_stockout: int,
+        critical_overstock: int,
+    ) -> Dict[str, Any]:
+        # Рассчитываем общий health score (0-100).
+        # Weights already sum to 100, so do not multiply by 100 again.
         health_score = (
             avg_service_level * 50 +
             (1.0 - avg_stockout_risk) * 30 +
             (1.0 - avg_overstock_risk) * 20
-        ) * 100
+        )
+        health_score = max(0.0, min(100.0, health_score))
         
         # Определяем статус
         if health_score >= 80:

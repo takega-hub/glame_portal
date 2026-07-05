@@ -3,6 +3,13 @@ from sqlalchemy import select, and_
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from app.models.analytics_event import AnalyticsEvent
+from app.models.session import Session as DBSession
+from app.models.user import User
+from app.models.product import Product
+from app.models.look import Look
+from app.models.content_item import ContentItem
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 
 
@@ -25,21 +32,68 @@ class AnalyticsService:
         utm_campaign: Optional[str] = None,
     ):
         """Трекинг события с расширенными полями"""
+        # 1) Гарантируем наличие сессии, иначе FK нарушится
+        existing_session = await self.db.execute(select(DBSession).where(DBSession.id == session_id))
+        if existing_session.scalar_one_or_none() is None:
+            self.db.add(DBSession(id=session_id))
+            # flush, чтобы строка появилась до вставки события
+            await self.db.flush()
+
+        # 2) Валидация опциональных FK: если сущность не найдена — не заполняем поле
+        valid_user_id = None
+        if user_id:
+            res = await self.db.execute(select(User.id).where(User.id == user_id))
+            if res.scalar_one_or_none():
+                valid_user_id = user_id
+
+        valid_product_id = None
+        if product_id:
+            res = await self.db.execute(select(Product.id).where(Product.id == product_id))
+            if res.scalar_one_or_none():
+                valid_product_id = product_id
+
+        valid_look_id = None
+        if look_id:
+            res = await self.db.execute(select(Look.id).where(Look.id == look_id))
+            if res.scalar_one_or_none():
+                valid_look_id = look_id
+
+        valid_content_item_id = None
+        if content_item_id:
+            res = await self.db.execute(select(ContentItem.id).where(ContentItem.id == content_item_id))
+            if res.scalar_one_or_none():
+                valid_content_item_id = content_item_id
+
+        # 3) Создаём событие
         event = AnalyticsEvent(
             session_id=session_id,
             event_type=event_type,
             event_data=event_data or {},
-            user_id=user_id,
-            product_id=product_id,
-            look_id=look_id,
-            content_item_id=content_item_id,
+            user_id=valid_user_id,
+            product_id=valid_product_id,
+            look_id=valid_look_id,
+            content_item_id=valid_content_item_id,
             channel=channel,
             utm_source=utm_source,
             utm_medium=utm_medium,
             utm_campaign=utm_campaign,
         )
         self.db.add(event)
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # В редких случаях гонки (или схемы БД) — пробуем ещё раз с принудительным созданием сессии/очисткой FK
+            await self.db.rollback()
+            existing_session = await self.db.execute(select(DBSession).where(DBSession.id == session_id))
+            if existing_session.scalar_one_or_none() is None:
+                self.db.add(DBSession(id=session_id))
+                await self.db.flush()
+            event.user_id = None
+            event.product_id = None
+            event.look_id = None
+            event.content_item_id = None
+            self.db.add(event)
+            await self.db.commit()
     
     async def get_events(
         self,

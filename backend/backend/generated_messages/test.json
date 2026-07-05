@@ -1,0 +1,18 @@
+{
+  "status": "success",
+  "messages": [
+    {
+      "client_id": "5dc5b59b-2cd5-4bdf-9a16-826d7a0f50f0",
+      "phone": "79162668200",
+      "name": "Елена",
+      "gender": "female",
+      "segment": "C",
+      "reason": "Пригласить на 8 марта",
+      "message": "Проверка связи",
+      "cta": "Ждем вас 8 марта",
+      "store": "Центрум 2"
+    }
+  ],
+  "count": 122,
+  "errors": null
+}

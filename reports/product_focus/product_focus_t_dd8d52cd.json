@@ -1,0 +1,1062 @@
+{
+  "generated_at": "2026-05-30T21:20:34+00:00",
+  "platform_task_id": "82dcbc2c-386e-43dd-881c-7604a855b87b",
+  "kanban_task_id": "t_dd8d52cd",
+  "source_endpoints": [
+    "/api/inventory/dashboard",
+    "/api/inventory/marketing-link",
+    "/api/analytics/inventory/purchase-recommendations",
+    "/api/inventory/clearance",
+    "/api/analytics/products/top-sellers",
+    "/api/analytics/products/slow-movers",
+    "/api/marketing/campaigns"
+  ],
+  "summary": {
+    "sales_revenue_90d": 6187462.190000007,
+    "checks_count_90d": 585,
+    "items_count_90d": 873.0,
+    "avg_check": 10576.858444444457,
+    "sku_count": 634,
+    "total_stock": 5708.0,
+    "avg_stock_cover": 2.05934861875368,
+    "critical_stock_items": 392,
+    "items_to_order": 401,
+    "critical_purchase_items": 392,
+    "purchase_order_amount": 5645394.0,
+    "dead_stock_count": 563,
+    "slow_moving_count": 20,
+    "active_campaigns_count": 0
+  },
+  "decisions": {
+    "promote": [
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=1.00, stock_cover=3.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Bicolor широкий жесткий",
+        "recommended_channel": "Instagram",
+        "sales_month": 1.0,
+        "stock_cover": 3.0,
+        "stock_qty": 3.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=1.00, stock_cover=3.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Кулон Bicolor галстук с регулируемой длиной",
+        "recommended_channel": "Instagram",
+        "sales_month": 1.0,
+        "stock_cover": 3.0,
+        "stock_qty": 3.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=1.50",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Кулон Bicolor с мятым подвесным элементом в биколоре",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 1.5,
+        "stock_qty": 1.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=1.50",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Серьги винтажные акцентные из крупных вытянутых звеньев Raganella Princess",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 1.5,
+        "stock_qty": 1.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=3.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Bicolor с мятыми кольцами",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 3.0,
+        "stock_qty": 2.0
+      }
+    ],
+    "promote_after_restock": [
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Geometry базовый полый",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Geometry звенья",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Geometry с подвесными шарами",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Kalliope двойной с изгибами",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Magna с изгибом минималистичный",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Pearl с мятыми вставками и замком тогл",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Prism of Elegance с крупными графитовыми фианитами в один ряд",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Snowflake",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Travesia",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Wrinkles of Time с резными узорами массивный",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Браслет Wrinkles of Time широкий ребристый",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      },
+      {
+        "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=0.00",
+        "color": "—",
+        "group": "GROWTH_PRODUCTS",
+        "nomenclature": "Брошь Claudio Canzian с закрученными цепями",
+        "recommended_channel": "Instagram",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 0.0,
+        "stock_qty": 0.0
+      }
+    ],
+    "reorder": [
+      {
+        "avg_daily_sales": 0.044444444444444446,
+        "brand": null,
+        "category": "AGafi",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "AG25155-G",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Серьги AGafi (натуральный янтарь (Калининград), гематит)",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.044444444444444446,
+        "brand": null,
+        "category": "Серьги",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "77274-G",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Серьги Pearl жемчужина на швензе с фианитами",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "AGafi",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "AG25128-G",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Браслет - колье AGafi (натуральный речной барочный жемчуг, кварц, аметист, цитрин )",
+        "recommended_date": "2026-02-06T14:19:06.346527+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "AGafi",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "AG25102-G",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Браслет AGafi (черный агат, вулканическая лава)",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "Каффы",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "77210-S",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Каффа Crystal сочетание металла и камней",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "AGafi",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "AG25087-G",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Колье AGafi с черным агатом и лавой",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "AGafi",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "200064/16",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Кольцо Bicolor переплетение двух цветов",
+        "recommended_date": "2026-02-06T14:19:06.346527+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "Кольца",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "11752-B/18",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Кольцо Prism of Elegance с крупным камнем в цвете турмалин и черной россыпью",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "Колье",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "77284-S",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Кулон Crystal с подвесом в форме вытянутого овала и фианитами",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "Колье",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "AGL20020-G",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Кулон Pearl подвес из культивированного жемчуга разной формы",
+        "recommended_date": "2026-02-06T14:19:06.345129+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "AGafi",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "AG25192-G",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Серьги AGafi (стекло)",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "AGafi",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "AG25193-G",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Серьги AGafi (черный агат, лава, гематит)",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "AGafi",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "AG25034-G",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Серьги AGafi с розовым жемчугом и длинной швензой",
+        "recommended_date": "2026-02-06T14:19:06.346527+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "Antura",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "AOT45030",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Серьги Antura с культивированным жемчугом и мятой пластиной",
+        "recommended_date": "2026-02-06T14:19:06.341871+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "Серьги",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "210003",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Серьги Bicolor конго полые в биколоре",
+        "recommended_date": "2026-02-06T14:19:06.345129+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 45.5,
+        "turnover_rate": 2.0,
+        "urgency_level": "critical"
+      },
+      {
+        "avg_daily_sales": 0.022222222222222223,
+        "brand": null,
+        "category": "Серьги",
+        "current_stock": 0,
+        "days_of_stock": 0.0,
+        "product_article": "77269-S",
+        "product_id": null,
+        "product_id_1c": null,
+        "product_name": "Серьги Crystal маленькие конго с камнями",
+        "recommended_date": "2026-02-06T14:19:06.345129+00:00",
+        "recommended_stock": 1,
+        "reorder_point": 1,
+        "reorder_quantity": 1,
+        "store_distribution": null,
+        "turnover_days": 0.0,
+        "turnover_rate": 0.0,
+        "urgency_level": "critical"
+      }
+    ],
+    "sell_off_promo": [
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Браслет \"стиль внутри\" золотой",
+        "reason": "sales_month > 0 AND stock_cover > 6",
+        "recommendation": "PROMO",
+        "sales_month": 1.0,
+        "stock_cover": 50.0,
+        "stock_qty": 50.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Браслет \"стиль внутри\" серебро",
+        "reason": "sales_month > 0 AND stock_cover > 6",
+        "recommendation": "PROMO",
+        "sales_month": 1.6666666666666667,
+        "stock_cover": 29.4,
+        "stock_qty": 49.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Кулон Bicolor галстук с шарами",
+        "reason": "sales_month > 0 AND stock_cover > 6",
+        "recommendation": "PROMO",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 15.0,
+        "stock_qty": 5.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Кулон Bicolor длинная капля на якорной цепи",
+        "reason": "sales_month > 0 AND stock_cover > 6",
+        "recommendation": "PROMO",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 15.0,
+        "stock_qty": 5.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Браслет Bicolor с биколорными пластинами",
+        "reason": "sales_month > 0 AND stock_cover > 6",
+        "recommendation": "PROMO",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 10.5,
+        "stock_qty": 7.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Кольцо Antura с мятым кругом",
+        "reason": "sales_month > 0 AND stock_cover > 6",
+        "recommendation": "PROMO",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 9.0,
+        "stock_qty": 3.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Чокер Bicolor с круглыми мятыми вставками",
+        "reason": "sales_month > 0 AND stock_cover > 6",
+        "recommendation": "PROMO",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 9.0,
+        "stock_qty": 3.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Каффа Geometry с подвесным элементом",
+        "reason": "sales_month > 0 AND stock_cover > 6",
+        "recommendation": "PROMO",
+        "sales_month": 3.6666666666666665,
+        "stock_cover": 7.909090909090909,
+        "stock_qty": 29.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Кольцо Bicolor вогнутое",
+        "reason": "sales_month > 0 AND stock_cover > 6",
+        "recommendation": "PROMO",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 7.5,
+        "stock_qty": 5.0
+      }
+    ],
+    "sell_off_bundle": [
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Браслет Crystal жесткий изогнутый с фианитами",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 6.0,
+        "stock_qty": 4.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Кольцо Antura геометрической формы",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 6.0,
+        "stock_qty": 4.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Кольцо Bicolor с тремя шарами",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.6666666666666666,
+        "stock_cover": 6.0,
+        "stock_qty": 4.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Браслет винтажный акцентный из крупных вытянутых звеньев Raganella Princess",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 6.0,
+        "stock_qty": 2.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Колье винтажное акцентное из крупных вытянутых звеньев Raganella Princess",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 6.0,
+        "stock_qty": 2.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Колье-пояс с четырьмя монетами с золотой цепью и монетой в серебре в биколоре Raganella Princess",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 6.0,
+        "stock_qty": 2.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Кольцо Antura с полусферой из золотого металла",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 6.0,
+        "stock_qty": 2.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Кольцо Bicolor",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 6.0,
+        "stock_qty": 2.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Кулон Wine Dream из дерева на шнурке",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 6.0,
+        "stock_qty": 2.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Чокер Black Mystique ожерелье с черным агатом",
+        "reason": "sales_month > 0 AND stock_cover > 5",
+        "recommendation": "BUNDLE",
+        "sales_month": 0.3333333333333333,
+        "stock_cover": 6.0,
+        "stock_qty": 2.0
+      }
+    ],
+    "relocate_or_deprioritize": [
+      {
+        "color": "Золотой",
+        "is_protected": false,
+        "nomenclature": "Каффа Geometry с подвесным элементом",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 21.0
+      },
+      {
+        "color": "Золотой",
+        "is_protected": false,
+        "nomenclature": "Чокер Prism of Elegance с графитовыми камными сбоку",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 17.0
+      },
+      {
+        "color": "Серебряный",
+        "is_protected": false,
+        "nomenclature": "Чокер Crystal багетные камни сбоку",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 16.0
+      },
+      {
+        "color": "Золотой",
+        "is_protected": false,
+        "nomenclature": "Чокер Crystal багетные камни сбоку",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 15.0
+      },
+      {
+        "color": "Серебряный",
+        "is_protected": false,
+        "nomenclature": "Чокер Prism of Elegance с графитовыми камными сбоку",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 15.0
+      },
+      {
+        "color": "Серебряный",
+        "is_protected": false,
+        "nomenclature": "Чокер Prism of Elegance с камнямии сверху",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 14.0
+      },
+      {
+        "color": "—",
+        "is_protected": false,
+        "nomenclature": "Браслет Crystal с камнями по кругу",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 13.0
+      },
+      {
+        "color": "Серебряный",
+        "is_protected": false,
+        "nomenclature": "Серьги Geometry конго базовые",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 11.0
+      },
+      {
+        "color": "Золотой",
+        "is_protected": false,
+        "nomenclature": "Серьги Geometry конго базовые",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 11.0
+      },
+      {
+        "color": "Золотой",
+        "is_protected": false,
+        "nomenclature": "Браслет Crystal жесткий с багетным камнем по кругу",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 10.0
+      },
+      {
+        "color": "Серебряный",
+        "is_protected": false,
+        "nomenclature": "Серьги Geometry широкие конго диаметр 15 мм",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 10.0
+      },
+      {
+        "color": "Золотой",
+        "is_protected": false,
+        "nomenclature": "Чокер Crystal камни в багетной огранке сверху",
+        "reason": "sales_month = 0",
+        "recommendation": "RELOCATION",
+        "sales_month": 0.0,
+        "stock_cover": null,
+        "stock_qty": 10.0
+      }
+    ],
+    "exclude_from_campaigns": [
+      {
+        "name": "Браслет Geometry базовый полый",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Браслет Geometry звенья",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Браслет Geometry с подвесными шарами",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Браслет Kalliope двойной с изгибами",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Браслет Magna с изгибом минималистичный",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Браслет Pearl с мятыми вставками и замком тогл",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Браслет Prism of Elegance с крупными графитовыми фианитами в один ряд",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Браслет Snowflake",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Браслет Travesia",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Браслет Wrinkles of Time с резными узорами массивный",
+        "reason": "есть спрос/сигнал роста, но остаток 0 — не ставить в рекламный фокус до дозаказа/поступления",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 0.0,
+        "stock_cover": 0.0
+      },
+      {
+        "name": "Пакет UNOde50 мал. бежевый",
+        "reason": "сопутствующие материалы/упаковка — исключить из премиальных продуктовых кампаний, оставить только операционный контроль запасов",
+        "sales_month": 5.333333333333333,
+        "stock_qty": 11.0,
+        "stock_cover": 2.0625
+      },
+      {
+        "name": "NEW Пакет GLAME (silver)",
+        "reason": "сопутствующие материалы/упаковка — исключить из премиальных продуктовых кампаний, оставить только операционный контроль запасов",
+        "sales_month": 139.66666666666666,
+        "stock_qty": 693.0,
+        "stock_cover": 4.9618138424821
+      },
+      {
+        "name": "Пакет UNOde50 бол. бежевый",
+        "reason": "сопутствующие материалы/упаковка — исключить из премиальных продуктовых кампаний, оставить только операционный контроль запасов",
+        "sales_month": 0.3333333333333333,
+        "stock_qty": 2.0,
+        "stock_cover": 6.0
+      },
+      {
+        "name": "Салфетка GLAME",
+        "reason": "сопутствующие материалы/упаковка — исключить из премиальных продуктовых кампаний, оставить только операционный контроль запасов",
+        "sales_month": 80.33333333333333,
+        "stock_qty": 767.0,
+        "stock_cover": 9.547717842323651
+      },
+      {
+        "name": "Мешочек GLAME средний 12*18",
+        "reason": "сопутствующие материалы/упаковка — исключить из премиальных продуктовых кампаний, оставить только операционный контроль запасов",
+        "sales_month": 72.66666666666667,
+        "stock_qty": 550.0,
+        "stock_cover": 7.568807339449541
+      },
+      {
+        "name": "Мешочек GLAME большой 14*20",
+        "reason": "сопутствующие материалы/упаковка — исключить из премиальных продуктовых кампаний, оставить только операционный контроль запасов",
+        "sales_month": 19.333333333333332,
+        "stock_qty": 292.0,
+        "stock_cover": 15.10344827586207
+      },
+      {
+        "name": "Браслет \"стиль внутри\" золотой",
+        "reason": "избыточное покрытие — не использовать как hero-продукт; только промо/распродажа/комплект",
+        "sales_month": 1.0,
+        "stock_qty": 50.0,
+        "stock_cover": 50.0
+      },
+      {
+        "name": "Браслет \"стиль внутри\" серебро",
+        "reason": "избыточное покрытие — не использовать как hero-продукт; только промо/распродажа/комплект",
+        "sales_month": 1.6666666666666667,
+        "stock_qty": 49.0,
+        "stock_cover": 29.4
+      },
+      {
+        "name": "Кулон Bicolor галстук с шарами",
+        "reason": "избыточное покрытие — не использовать как hero-продукт; только промо/распродажа/комплект",
+        "sales_month": 0.3333333333333333,
+        "stock_qty": 5.0,
+        "stock_cover": 15.0
+      },
+      {
+        "name": "Кулон Bicolor длинная капля на якорной цепи",
+        "reason": "избыточное покрытие — не использовать как hero-продукт; только промо/распродажа/комплект",
+        "sales_month": 0.3333333333333333,
+        "stock_qty": 5.0,
+        "stock_cover": 15.0
+      },
+      {
+        "name": "Браслет Bicolor с биколорными пластинами",
+        "reason": "избыточное покрытие — не использовать как hero-продукт; только промо/распродажа/комплект",
+        "sales_month": 0.6666666666666666,
+        "stock_qty": 7.0,
+        "stock_cover": 10.5
+      },
+      {
+        "name": "Кольцо Antura с мятым кругом",
+        "reason": "избыточное покрытие — не использовать как hero-продукт; только промо/распродажа/комплект",
+        "sales_month": 0.3333333333333333,
+        "stock_qty": 3.0,
+        "stock_cover": 9.0
+      }
+    ]
+  },
+  "insights": {
+    "top_brands_by_revenue_90d": [
+      [
+        "UNOde50",
+        889775.95
+      ],
+      [
+        "CRYSTAL",
+        815366.96
+      ],
+      [
+        "GEOMETRY",
+        552963.0200000001
+      ],
+      [
+        "MAGNA",
+        451981.66000000003
+      ],
+      [
+        "Raganella Princess",
+        395528.62
+      ],
+      [
+        "Kalliope",
+        287636.01
+      ],
+      [
+        "PEARL",
+        278180.58
+      ],
+      [
+        "—",
+        226155.38999999998
+      ]
+    ],
+    "top_categories_by_revenue_90d": [
+      [
+        "Серьги",
+        1114882.9400000002
+      ],
+      [
+        "Браслеты",
+        979854.9
+      ],
+      [
+        "Кольца",
+        617892.44
+      ],
+      [
+        "Колье",
+        597882.92
+      ],
+      [
+        "Кулоны",
+        354190.22
+      ],
+      [
+        "Чокеры",
+        213961.99
+      ],
+      [
+        "AGafi",
+        128251.78
+      ],
+      [
+        "Каффы",
+        84645.2
+      ]
+    ],
+    "campaigns_status": "active_campaigns_not_found"
+  },
+  "next_actions": [
+    "Запустить Instagram/editorial фокус только по позициям promote с фактическим stock_qty > 0.",
+    "Сначала дозаказать critical reorder и growth-products со stock_qty=0; до поступления не включать их в рекламу.",
+    "PROMO/BUNDLE позиции выводить через точечные промо, комплекты и CRM, не как премиальный hero-фокус.",
+    "Сопутствующие материалы/упаковку исключить из продуктовых кампаний; контролировать отдельно как операционный запас.",
+    "Перед внешним запуском кампаний согласовать визуальный/брендовый набор с Еленой."
+  ]
+}

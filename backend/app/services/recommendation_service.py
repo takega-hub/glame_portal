@@ -29,6 +29,12 @@ class RecommendationService:
             if isinstance(img, str) and img.strip():
                 return True
         return False
+
+    @staticmethod
+    def _approved_look_condition():
+        # Считаем образ одобренным, если он прошел explicit approval
+        # или имеет финальный статус approved (для старых записей).
+        return or_(Look.approval_status == "approved", Look.status == "approved")
     
     async def recommend_products(
         self,
@@ -105,7 +111,7 @@ class RecommendationService:
         limit: int = 5
     ) -> List[Look]:
         """Подбор образов на основе критериев"""
-        query = select(Look)
+        query = select(Look).where(self._approved_look_condition())
         
         if style:
             query = query.where(Look.style == style)
@@ -330,7 +336,8 @@ class RecommendationService:
         cjm_stage: Optional[str] = None,
         persona: Optional[str] = None,
         limit: int = 10,
-        use_vector_search: bool = True
+        use_vector_search: bool = True,
+        require_images: bool = False,
     ) -> List[Product]:
         """
         Подбор товаров на основе контекста пользователя:
@@ -440,6 +447,9 @@ class RecommendationService:
         # Исключаем купленные товары из рекомендаций (если не запрошено иное)
         if purchased_product_ids:
             products = [p for p in products if p.id not in purchased_product_ids]
+
+        if require_images:
+            products = [p for p in products if self._product_has_images(p)]
         
         return products[:limit]
     
@@ -516,7 +526,7 @@ class RecommendationService:
                 mood = favorite_moods[0][0]  # Берем самое популярное настроение
         
         # Поиск образов
-        looks_query = select(Look)
+        looks_query = select(Look).where(self._approved_look_condition())
         
         if style:
             looks_query = looks_query.where(Look.style == style)
@@ -534,7 +544,7 @@ class RecommendationService:
         # Если недостаточно образов, расширяем поиск
         if len(looks) < limit:
             # Убираем фильтры и ищем любые образы
-            extended_query = select(Look).limit(limit)
+            extended_query = select(Look).where(self._approved_look_condition()).limit(limit)
             extended_result = await self.db.execute(extended_query)
             all_looks = list(extended_result.scalars().all())
             

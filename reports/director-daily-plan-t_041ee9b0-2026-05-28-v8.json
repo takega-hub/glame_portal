@@ -1,0 +1,114 @@
+{
+  "generated_at": "2026-05-28T10:49:25+00:00",
+  "platform_task_id": "f8e38839-c63a-4a23-855d-afb00e3387b1",
+  "platform_status": "pending",
+  "artifact": "/workspace/glame-platform/reports/director-daily-plan-t_041ee9b0-2026-05-28-v8.md",
+  "mode": "read_only_for_this_run",
+  "sources_checked": [
+    "date -Is",
+    "python /workspace/tools/glame_api.py env",
+    "GET /health",
+    "GET /api/agent-interactions/tasks/f8e38839-c63a-4a23-855d-afb00e3387b1",
+    "GET /api/agent-interactions/tasks",
+    "GET /api/director/tasks/kanban",
+    "GET /api/ai-marketer/dashboard",
+    "GET /api/ai-marketer/opportunities",
+    "GET /api/analytics/dashboard?days=30",
+    "GET /api/director/data/today-sales",
+    "GET /api/director/data/sales-period?days=7",
+    "GET /api/director/data/recent-orders?limit=10",
+    "GET /api/director/data/product-summary",
+    "GET /api/director/data/customer-summary",
+    "/workspace/glame-platform/reports/onec_sync_admin_decision_t_87aab376_20260528_1034.md",
+    "/workspace/glame-platform/reports/glame_daily_plan_2026-05-29_t_ae648f3a_refresh_20260528_1034.md",
+    "/workspace/glame-platform/reports/live-data-t_041ee9b0-v8/"
+  ],
+  "live_findings": {
+    "agent_tasks_total": 24,
+    "agent_tasks_by_status": {
+      "pending_approval": 2,
+      "completed": 4,
+      "cancelled": 15,
+      "pending": 2,
+      "failed": 1
+    },
+    "director_board_stats": {
+      "todo": 5,
+      "in_progress": 0,
+      "done": 4,
+      "blocked": 16
+    },
+    "source_daily_plan_task_status": "pending",
+    "duplicate_daily_plan_pending": "53165be0-bf1f-4e04-8913-bca59eb42a16",
+    "onec_admin_review_status": "pending_approval",
+    "latest_1c_monitor_status": "completed",
+    "birthday_task_status": "pending_approval",
+    "birthday_focused_segment_count": 8,
+    "birthday_broad_approval_segment_count": 5791,
+    "today_sales": {
+      "orders": 0,
+      "revenue": 0.0,
+      "source": "orders_fallback"
+    },
+    "last_7_days_sales": {
+      "orders": 38,
+      "revenue": 457435.0,
+      "aov": 12037.76,
+      "last_sale_at": "2026-05-27T18:45:06+00:00",
+      "unique_customers": 22
+    },
+    "digital_30d": {
+      "events": 114,
+      "sessions": 13,
+      "product_clicks": 3,
+      "purchase_events": 0
+    },
+    "catalog": {
+      "active_products": 3357,
+      "top_categories": {
+        "Серьги": 783,
+        "Кольца": 562,
+        "Колье": 503,
+        "AGafi": 420,
+        "Браслеты": 418
+      },
+      "top_brands": {
+        "GEOMETRY": 723,
+        "unknown": 644,
+        "PEARL": 431,
+        "CRYSTAL": 336,
+        "MAGNA": 284
+      }
+    },
+    "customers": {
+      "total": 6216,
+      "with_purchases": 6034,
+      "new_last_30_days": 76,
+      "segments": {
+        "Active": 201,
+        "New": 433,
+        "Regular": 920,
+        "Sleeping": 4647,
+        "VIP": 8,
+        "unknown": 7
+      }
+    },
+    "high_churn_risk_customers": 5489,
+    "reengagement_potential_revenue": 27445000
+  },
+  "guardrails": [
+    "No GLAME API writes performed by this director-plan run",
+    "No platform status changes performed by this director-plan run",
+    "No campaign or customer messaging performed",
+    "No raw customer PII included in report",
+    "Do not mark platform director-plan task Done until director/admin approval or verified platform output exists"
+  ],
+  "director_decisions_needed": [
+    "Approve/edit the v8 manual daily plan",
+    "Pick one canonical daily-plan task and cancel/archive/consolidate the duplicate",
+    "Review/approve/assign 1C admin review c6d56e55 before relying on stale/fallback 1C-derived data",
+    "Approve/edit/reject the birthday CRM audience/message and correct the broad 5,791-customer segment risk before any send",
+    "Confirm whether 1C/inventory reliability outranks CRM/app/catalog QA for 2026-05-29",
+    "Decide whether to prepare a controlled reactivation pilot proposal; no sending without separate approval"
+  ]
+}

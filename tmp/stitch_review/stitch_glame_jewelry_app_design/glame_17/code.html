@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Подтверждение - GLAME</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-highest": "#333537",
+                    "on-primary-fixed-variant": "#444748",
+                    "surface-tint": "#c4c7c8",
+                    "on-tertiary-fixed-variant": "#42474b",
+                    "tertiary-fixed-dim": "#c2c7cb",
+                    "on-surface-variant": "#c4c7c8",
+                    "cold-light-gray": "#C7CBCF",
+                    "on-primary": "#2e3132",
+                    "error": "#ffb4ab",
+                    "on-background": "#e2e2e5",
+                    "inverse-surface": "#e2e2e5",
+                    "primary-fixed-dim": "#c4c7c8",
+                    "tertiary-fixed": "#dee3e7",
+                    "on-tertiary": "#2c3134",
+                    "on-tertiary-fixed": "#171c1f",
+                    "secondary-fixed-dim": "#c6c6c9",
+                    "on-secondary-fixed-variant": "#454749",
+                    "secondary-container": "#454749",
+                    "surface-container-lowest": "#0c0e10",
+                    "background": "#121416",
+                    "on-primary-container": "#626566",
+                    "surface-container-high": "#282a2c",
+                    "outline-variant": "#434749",
+                    "primary-container": "#e1e3e4",
+                    "tertiary-container": "#dee3e7",
+                    "on-secondary": "#2f3133",
+                    "border-gray": "#5C6064",
+                    "surface-container-low": "#1a1c1e",
+                    "surface-container": "#1e2022",
+                    "surface-variant": "#333537",
+                    "outline": "#8e9192",
+                    "on-error": "#690005",
+                    "on-surface": "#e2e2e5",
+                    "on-secondary-fixed": "#1a1c1e",
+                    "on-secondary-container": "#b4b5b7",
+                    "inverse-primary": "#5c5f60",
+                    "tertiary": "#ffffff",
+                    "soft-gray": "#D8DADB",
+                    "secondary": "#c6c6c9",
+                    "surface-dim": "#121416",
+                    "error-container": "#93000a",
+                    "surface": "#121416",
+                    "on-error-container": "#ffdad6",
+                    "primary": "#ffffff",
+                    "primary-fixed": "#e1e3e4",
+                    "on-tertiary-container": "#606569",
+                    "on-primary-fixed": "#191c1d",
+                    "inverse-on-surface": "#2f3133",
+                    "surface-bright": "#38393c",
+                    "secondary-fixed": "#e2e2e5"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0px",
+                    "lg": "0px",
+                    "xl": "0px",
+                    "full": "0px"
+            },
+            "spacing": {
+                    "grid-gutter": "1px",
+                    "top-bar-height": "56px",
+                    "page-padding-h": "28px",
+                    "safe-air-bottom": "24px",
+                    "button-gap": "16px",
+                    "bottom-nav-height": "96px"
+            },
+            "fontFamily": {
+                    "label-sm": ["Hanken Grotesk"],
+                    "headline-lg": ["Hanken Grotesk"],
+                    "label-md": ["Hanken Grotesk"],
+                    "display-lg": ["Hanken Grotesk"],
+                    "body-md": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Hanken Grotesk"],
+                    "body-lg": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                    "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                    "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                    "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                    "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                    "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                    "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Custom styles to enforce 0px radius strictly on inputs and hide number spinners */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        * {
+            border-radius: 0 !important;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen flex flex-col font-sans selection:bg-primary selection:text-on-primary">
+<!-- Minimal Header for Transactional Flow -->
+<header class="h-top-bar-height flex items-center px-page-padding-h w-full fixed top-0 left-0 z-50 bg-background/90 backdrop-blur-sm border-b border-border-gray/30">
+<button aria-label="Назад" class="text-primary hover:opacity-70 transition-opacity flex items-center justify-center w-10 h-10 -ml-2">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'wght' 300;">arrow_back_ios_new</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col px-page-padding-h pt-[120px] pb-safe-air-bottom max-w-md mx-auto w-full">
+<!-- Header Section -->
+<div class="mb-10 animate-fade-in-up">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary mb-4 tracking-tight">
+                Подтверждение
+            </h1>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                Мы отправили код на номер <br/>
+<span class="text-primary font-label-md tracking-wider">+7 (999) ***-**-67</span>
+</p>
+</div>
+<!-- OTP Input Grid -->
+<div class="flex justify-between items-center w-full mb-12 gap-4">
+<input class="w-16 h-16 border border-border-gray bg-surface text-primary font-headline-lg-mobile text-center focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors shadow-none placeholder-transparent" data-otp-input="" maxlength="1" placeholder="0" type="number"/>
+<input class="w-16 h-16 border border-border-gray bg-surface text-primary font-headline-lg-mobile text-center focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors shadow-none placeholder-transparent" data-otp-input="" maxlength="1" placeholder="0" type="number"/>
+<input class="w-16 h-16 border border-border-gray bg-surface text-primary font-headline-lg-mobile text-center focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors shadow-none placeholder-transparent" data-otp-input="" maxlength="1" placeholder="0" type="number"/>
+<input class="w-16 h-16 border border-border-gray bg-surface text-primary font-headline-lg-mobile text-center focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-colors shadow-none placeholder-transparent" data-otp-input="" maxlength="1" placeholder="0" type="number"/>
+</div>
+<!-- Resend Timer -->
+<div class="text-center mb-8 h-6 flex items-center justify-center">
+<p class="font-label-md text-label-md text-on-surface-variant" id="resend-text">
+                Отправить код повторно через <span class="text-primary tracking-widest inline-block w-[40px]" id="timer">00:59</span>
+</p>
+<button class="hidden font-label-md text-label-md text-primary uppercase border-b border-primary pb-0.5 hover:text-on-surface hover:border-on-surface transition-colors" id="resend-action">
+                Отправить код
+            </button>
+</div>
+<!-- Spacer to push button to bottom on tall screens, or keep it flowing naturally -->
+<div class="flex-grow"></div>
+<!-- Primary CTA -->
+<div class="mt-8">
+<button class="w-full h-[56px] bg-primary text-on-primary font-label-md text-label-md uppercase tracking-widest hover:bg-opacity-90 active:scale-[0.98] transition-all duration-200 shadow-none border-none flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100" disabled="" id="submit-btn">
+                ПОДТВЕРДИТЬ
+            </button>
+</div>
+</main>
+<script>
+        // Micro-interactions and Logic
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputs = document.querySelectorAll('[data-otp-input]');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            // OTP Input Logic
+            inputs.forEach((input, index) => {
+                // Focus styling hook
+                input.addEventListener('focus', () => input.select());
+                
+                input.addEventListener('input', (e) => {
+                    // Restrict to single digit
+                    if (input.value.length > 1) {
+                        input.value = input.value.slice(0, 1);
+                    }
+                    
+                    // Auto-advance
+                    if (input.value !== '' && index < inputs.length - 1) {
+                        inputs[index + 1].focus();
+                    }
+                    
+                    checkCompletion();
+                });
+                
+                // Handle backspace
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Backspace' && input.value === '' && index > 0) {
+                        inputs[index - 1].focus();
+                        inputs[index - 1].value = '';
+                    }
+                });
+                
+                // Prevent non-numeric input
+                input.addEventListener('keypress', (e) => {
+                    if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault();
+                    }
+                });
+            });
+            
+            function checkCompletion() {
+                const isComplete = Array.from(inputs).every(input => input.value !== '');
+                submitBtn.disabled = !isComplete;
+            }
+            
+            // Focus first input on load
+            setTimeout(() => inputs[0].focus(), 300);
+
+            // Timer Logic
+            let timeLeft = 59;
+            const timerEl = document.getElementById('timer');
+            const resendTextEl = document.getElementById('resend-text');
+            const resendActionBtn = document.getElementById('resend-action');
+            
+            const countdown = setInterval(() => {
+                timeLeft--;
+                const seconds = timeLeft < 10 ? `0${timeLeft}` : timeLeft;
+                timerEl.textContent = `00:${seconds}`;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    resendTextEl.classList.add('hidden');
+                    resendActionBtn.classList.remove('hidden');
+                }
+            }, 1000);
+            
+            // Resend action mock
+            resendActionBtn.addEventListener('click', () => {
+                // Reset inputs visually
+                inputs.forEach(i => i.value = '');
+                checkCompletion();
+                inputs[0].focus();
+                
+                // Reset timer visuals
+                resendActionBtn.classList.add('hidden');
+                resendTextEl.classList.remove('hidden');
+                timerEl.textContent = '00:59';
+                // Note: In real implementation, restart interval here.
+            });
+        });
+    </script>
+</body></html>

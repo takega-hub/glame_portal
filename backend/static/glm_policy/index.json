@@ -1,0 +1,26 @@
+{
+  "schema": "glame_crypto_policy_index_v1",
+  "updated_at": "2026-07-02",
+  "documents": [
+    {
+      "code": "token_policy",
+      "title": "GLM Token Policy",
+      "url": "/static/glm_policy/token-policy.md"
+    },
+    {
+      "code": "risk_disclosure",
+      "title": "GLM Risk Disclosure",
+      "url": "/static/glm_policy/risk-disclosure.md"
+    },
+    {
+      "code": "bridge_rules",
+      "title": "GLM Bridge Rules",
+      "url": "/static/glm_policy/bridge-rules.md"
+    },
+    {
+      "code": "jetton_metadata",
+      "title": "GLM Jetton Metadata",
+      "url": "/static/glm_policy/jetton-metadata.json"
+    }
+  ]
+}

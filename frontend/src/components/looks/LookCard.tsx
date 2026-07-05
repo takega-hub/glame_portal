@@ -15,6 +15,8 @@ export default function LookCard({ look, showTryOn = true, onTryOnClick }: LookC
   const products = (look as LookWithProducts).products;
   const [approving, setApproving] = useState(false);
   const [approved, setApproved] = useState(look.approval_status === 'approved');
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState(Boolean(look.is_published));
   const [currentImageIndex, setCurrentImageIndex] = useState(look.current_image_index ?? 0);
 
   const handleApprove = async () => {
@@ -28,6 +30,22 @@ export default function LookCard({ look, showTryOn = true, onTryOnClick }: LookC
       console.error('Ошибка при одобрении образа:', error);
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (published) return;
+
+    setPublishing(true);
+    try {
+      await api.publishLookFeedPost(look.id, true);
+      setPublished(true);
+      setApproved(true);
+    } catch (error) {
+      console.error('Ошибка при публикации образа:', error);
+      alert('Не удалось опубликовать образ в ленте');
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -146,6 +164,11 @@ export default function LookCard({ look, showTryOn = true, onTryOnClick }: LookC
             На рассмотрении
           </span>
         )}
+        {published && (
+          <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
+            В ленте
+          </span>
+        )}
       </div>
 
       <h3 className="font-semibold text-lg text-concrete-900 mb-1">{look.name}</h3>
@@ -205,6 +228,16 @@ export default function LookCard({ look, showTryOn = true, onTryOnClick }: LookC
             className="w-full px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition disabled:opacity-50"
           >
             {approving ? 'Одобрение...' : 'Одобрить образ'}
+          </button>
+        )}
+
+        {!published && (
+          <button
+            onClick={handlePublish}
+            disabled={publishing}
+            className="w-full px-4 py-2 bg-black text-white rounded-lg hover:bg-concrete-900 transition disabled:opacity-50"
+          >
+            {publishing ? 'Публикация...' : 'Опубликовать в ленте'}
           </button>
         )}
         

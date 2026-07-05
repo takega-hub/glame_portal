@@ -8,10 +8,15 @@ export interface User {
   id: string;
   email: string | null;
   phone: string | null;
+  full_name?: string | null;
   persona: string | null;
   is_customer: boolean;
   loyalty_points: number | null;
   role: string | null;
+  role_label?: string | null;
+  actual_role?: string | null;
+  is_role_preview?: boolean;
+  allowed_sections?: string[];
 }
 
 export interface AuthTokens {

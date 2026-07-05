@@ -7,11 +7,13 @@ from uuid import UUID
 from datetime import datetime, timedelta
 from app.database.connection import get_db
 from app.models.store import Store
+from app.models.app_setting import AppSetting
 from app.models.store_visit import StoreVisit
 from app.services.ftp_service import FTPService
 from app.services.geolocation_service import GeolocationService
 import os
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +33,84 @@ class StoreResponse(BaseModel):
     name: str
     address: Optional[str] = None
     city: Optional[str] = None
+    external_id: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     is_active: bool
 
     class Config:
         from_attributes = True
+
+@router.get("", response_model=List[StoreResponse])
+async def list_stores(
+    q: Optional[str] = Query(None, description="Фильтр по названию"),
+    city: Optional[str] = Query(None, description="Фильтр по городу"),
+    active: Optional[bool] = Query(None, description="Только активные"),
+    is_active: Optional[bool] = Query(None, description="Alias for active (deprecated)"),
+    pickup_only: bool = Query(False, description="Только магазины, разрешенные для самовывоза"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Получить список магазинов.
+    Поддерживает фильтрацию по названию (q), городу и активности.
+    """
+    stmt = select(Store)
+    
+    # Handle both 'active' and 'is_active' parameters
+    filter_active = active if active is not None else is_active
+    if filter_active is not None:
+        stmt = stmt.where(Store.is_active == filter_active)
+        
+    if city:
+        stmt = stmt.where(Store.city == city)
+        
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(Store.name.ilike(like))
+
+    if pickup_only:
+        raw = (
+            await db.execute(
+                select(AppSetting.value).where(AppSetting.key == "pickup_store_ids")
+            )
+        ).scalar_one_or_none()
+        selected_ids: list[str] = []
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    selected_ids = [str(x).strip() for x in parsed if str(x).strip()]
+            except Exception:
+                selected_ids = []
+        if selected_ids:
+            valid_ids: list[UUID] = []
+            for raw_id in selected_ids:
+                try:
+                    valid_ids.append(UUID(raw_id))
+                except Exception:
+                    continue
+            if valid_ids:
+                stmt = stmt.where(Store.id.in_(valid_ids))
+            else:
+                stmt = stmt.where(False)
+        
+    # Всегда сортируем по названию для удобства в выпадающих списках
+    res = await db.execute(stmt.order_by(Store.name.asc()))
+    rows = res.scalars().all()
+    
+    return [
+        StoreResponse(
+            id=str(s.id),
+            name=s.name,
+            address=s.address,
+            city=s.city,
+            external_id=s.external_id,
+            latitude=s.latitude,
+            longitude=s.longitude,
+            is_active=bool(s.is_active),
+        )
+        for s in rows
+    ]
 
 
 @router.post("/sync-ftp", status_code=202)
@@ -48,9 +122,9 @@ async def sync_ftp(
 ):
     """Ручная синхронизация статистики с FTP"""
     ftp_host = os.getenv("FTP_HOST")
-    ftp_user = os.getenv("FTP_USER")
+    ftp_user = os.getenv("FTP_USER") or os.getenv("FTP_USERNAME")
     ftp_password = os.getenv("FTP_PASSWORD")
-    ftp_dir = os.getenv("FTP_DIR", "/")
+    ftp_dir = os.getenv("FTP_DIR") or os.getenv("FTP_DIRECTORY", "/")
     
     if not all([ftp_host, ftp_user, ftp_password]):
         raise HTTPException(
@@ -269,6 +343,7 @@ async def create_store(store: StoreCreate, db: AsyncSession = Depends(get_db)):
             name=new_store.name,
             address=new_store.address,
             city=new_store.city,
+            external_id=new_store.external_id,
             latitude=new_store.latitude,
             longitude=new_store.longitude,
             is_active=new_store.is_active
@@ -278,38 +353,7 @@ async def create_store(store: StoreCreate, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error creating store: {str(e)}")
 
 
-@router.get("/", response_model=List[StoreResponse])
-async def list_stores(
-    city: Optional[str] = None,
-    is_active: Optional[bool] = None,
-    db: AsyncSession = Depends(get_db)
-):
-    """Список магазинов"""
-    try:
-        query = select(Store)
-        
-        if city:
-            query = query.where(Store.city == city)
-        if is_active is not None:
-            query = query.where(Store.is_active == is_active)
-        
-        result = await db.execute(query)
-        stores = result.scalars().all()
-        
-        return [
-            StoreResponse(
-                id=str(s.id),
-                name=s.name,
-                address=s.address,
-                city=s.city,
-                latitude=s.latitude,
-                longitude=s.longitude,
-                is_active=s.is_active
-            )
-            for s in stores
-        ]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing stores: {str(e)}")
+
 
 
 @router.get("/nearest")

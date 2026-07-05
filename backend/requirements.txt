@@ -14,6 +14,7 @@ python-multipart==0.0.6
 redis==5.0.1
 python-dotenv==1.0.0
 httpx==0.25.2
+tonsdk==1.0.15
 email-validator==2.3.0
 PyPDF2==3.0.1
 pdfplumber==0.11.9

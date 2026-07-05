@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 # Пути
 script_path = Path(__file__).resolve()
-root_path = script_path.parent
+root_path = script_path.parents[2]
 backend_path = root_path / "backend"
 sys.path.insert(0, str(backend_path))
 
@@ -27,9 +27,9 @@ load_dotenv(dotenv_path=env_path, override=True)
 # FTP настройки
 FTP_CONFIG = {
     "host": os.getenv("FTP_HOST", "5.101.179.47"),
-    "username": os.getenv("FTP_USERNAME"),
+    "username": os.getenv("FTP_USERNAME") or os.getenv("FTP_USER"),
     "password": os.getenv("FTP_PASSWORD"),
-    "directory": os.getenv("FTP_DIRECTORY", "/")
+    "directory": os.getenv("FTP_DIRECTORY") or os.getenv("FTP_DIR", "/")
 }
 
 # Соответствие папок FTP и названий магазинов

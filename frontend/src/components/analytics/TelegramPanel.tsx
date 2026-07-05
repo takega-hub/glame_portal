@@ -62,7 +62,7 @@ export function TelegramPanel() {
                 </p>
               </div>
             )}
-            {metrics.length === 0 && <div className="text-gray-600">Нет данных. Нажмите "Синхронизировать"</div>}
+            {metrics.length === 0 && <div className="text-gray-600">Нет данных. Нажмите &quot;Синхронизировать&quot;</div>}
           </div>
         )}
       </CardContent>

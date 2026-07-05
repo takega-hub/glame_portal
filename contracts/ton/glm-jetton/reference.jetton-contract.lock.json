@@ -1,0 +1,11 @@
+{
+  "schema": "glame_ton_reference_lock_v1",
+  "name": "ton-blockchain/jetton-contract",
+  "repo": "https://github.com/ton-blockchain/jetton-contract.git",
+  "branch": "main",
+  "commit": "d55f228edb0eb477cb4845d67e0dacc6489c6b57",
+  "locked_at": "2026-07-02T00:00:00Z",
+  "purpose": "Standard TEP-74 Jetton reference implementation for GLM testnet pilot",
+  "vendor_path": "vendor/ton-blockchain-jetton-contract",
+  "status": "locked_not_vendored"
+}

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/auth/AuthProvider';
 import OpenRouterStatsPanel from './OpenRouterStatsPanel';
+import UnifiedModelSelect from '@/components/models/UnifiedModelSelect';
 
 type ModelOption = {
   id: string;
@@ -13,6 +14,8 @@ type ModelOption = {
   pricingLabel: string;
   contextLabel: string;
 };
+
+type ImageOptimizationStatus = Awaited<ReturnType<typeof api.getImageOptimizationStatus>>;
 
 function formatPricePerM(value?: string | null) {
   if (value == null) return '—';
@@ -33,6 +36,13 @@ function buildModelLabel(model: any): ModelOption {
   return { id, name, label, pricingLabel, contextLabel };
 }
 
+function formatBytes(value?: number | null) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  return `${Math.round(bytes / 1024)} KB`;
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const { logout, user } = useAuth();
@@ -46,6 +56,9 @@ export default function SettingsPage() {
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [customModel, setCustomModel] = useState<string>('');
   const [userTouchedSelection, setUserTouchedSelection] = useState(false);
+  const [currentAiCore, setCurrentAiCore] = useState<'openrouter' | 'hermes' | 'local'>('openrouter');
+  const [aiCoreSource, setAiCoreSource] = useState<string>('');
+  const [selectedAiCore, setSelectedAiCore] = useState<'openrouter' | 'hermes' | 'local'>('openrouter');
 
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
@@ -71,7 +84,27 @@ export default function SettingsPage() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
-  const [basicUsername, setBasicUsername] = useState<string | null>(null);
+  const [imageOptimizationStatus, setImageOptimizationStatus] = useState<ImageOptimizationStatus | null>(null);
+  const [imageOptimizationLoading, setImageOptimizationLoading] = useState(true);
+  const [imageOptimizationBusy, setImageOptimizationBusy] = useState(false);
+  const [imageOptimizationError, setImageOptimizationError] = useState<string | null>(null);
+  const [imageOptimizationSuccess, setImageOptimizationSuccess] = useState<string | null>(null);
+  const [emailSettingsLoading, setEmailSettingsLoading] = useState(true);
+  const [emailSettingsSaving, setEmailSettingsSaving] = useState(false);
+  const [emailSettingsTesting, setEmailSettingsTesting] = useState(false);
+  const [emailSettingsError, setEmailSettingsError] = useState<string | null>(null);
+  const [emailSettingsSuccess, setEmailSettingsSuccess] = useState<string | null>(null);
+  const [emailSource, setEmailSource] = useState<string>('default');
+  const [emailPasswordSet, setEmailPasswordSet] = useState(false);
+  const [emailHost, setEmailHost] = useState('');
+  const [emailPort, setEmailPort] = useState('587');
+  const [emailUsername, setEmailUsername] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
+  const [emailFromEmail, setEmailFromEmail] = useState('');
+  const [emailFromName, setEmailFromName] = useState('GLAME Jewelry');
+  const [emailUseSsl, setEmailUseSsl] = useState(false);
+  const [emailUseStarttls, setEmailUseStarttls] = useState(true);
+  const [emailTestTo, setEmailTestTo] = useState('');
 
   const effectiveSelection = useMemo(() => {
     if (selectedModel === '__custom__') return customModel.trim();
@@ -122,6 +155,17 @@ export default function SettingsPage() {
     }
   };
 
+  const loadAiCoreSettings = async () => {
+    try {
+      const res = await api.getAiCoreSettings();
+      setCurrentAiCore(res.ai_core_runtime);
+      setSelectedAiCore(res.ai_core_runtime);
+      setAiCoreSource(res.source);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Не удалось загрузить настройки ИИ ядра');
+    }
+  };
+
   const loadImageModels = async () => {
     setImageModelsLoading(true);
     setImageModelsError(null);
@@ -157,19 +201,49 @@ export default function SettingsPage() {
     }
   };
 
+  const loadImageOptimizationStatus = async (silent = false) => {
+    if (!silent) setImageOptimizationLoading(true);
+    try {
+      const res = await api.getImageOptimizationStatus();
+      setImageOptimizationStatus(res);
+    } catch (e: any) {
+      setImageOptimizationError(e.response?.data?.detail || e.message || 'Не удалось загрузить статус оптимизации изображений');
+    } finally {
+      if (!silent) setImageOptimizationLoading(false);
+    }
+  };
+
+  const loadEmailServerSettings = async () => {
+    setEmailSettingsLoading(true);
+    setEmailSettingsError(null);
+    try {
+      const res = await api.getEmailServerSettings();
+      setEmailHost(res.host || '');
+      setEmailPort(String(res.port || 587));
+      setEmailUsername(res.username || '');
+      setEmailFromEmail(res.from_email || '');
+      setEmailFromName(res.from_name || 'GLAME Jewelry');
+      setEmailUseSsl(Boolean(res.use_ssl));
+      setEmailUseStarttls(Boolean(res.use_starttls));
+      setEmailPasswordSet(Boolean(res.password_set));
+      setEmailSource(res.source);
+      setEmailPassword('');
+      if (!emailTestTo && res.from_email) setEmailTestTo(res.from_email);
+    } catch (e: any) {
+      setEmailSettingsError(e.response?.data?.detail || e.message || 'Не удалось загрузить настройки почты');
+    } finally {
+      setEmailSettingsLoading(false);
+    }
+  };
+
   useEffect(() => {
     load();
+    loadAiCoreSettings();
     loadModels();
     loadImageModelSettings();
     loadImageModels();
-    api
-      .getBasicInfo()
-      .then((info) => {
-        setBasicUsername(info.basic_username);
-      })
-      .catch(() => {
-        setBasicUsername(null);
-      });
+    loadImageOptimizationStatus();
+    loadEmailServerSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -214,6 +288,14 @@ export default function SettingsPage() {
     setSelectedImageModel(imageModels[0].id);
   }, [imageModels, selectedImageModel, userTouchedImageSelection]);
 
+  useEffect(() => {
+    if (imageOptimizationStatus?.status !== 'running') return;
+    const intervalId = window.setInterval(() => {
+      loadImageOptimizationStatus(true);
+    }, 3000);
+    return () => window.clearInterval(intervalId);
+  }, [imageOptimizationStatus?.status]);
+
   const effectiveImageSelection = useMemo(() => {
     if (selectedImageModel === '__custom__') return customImageModel.trim();
     return selectedImageModel.trim();
@@ -235,6 +317,23 @@ export default function SettingsPage() {
       setSuccess('Сохранено. Новые запросы к LLM будут использовать выбранную модель.');
     } catch (e: any) {
       setError(e.response?.data?.detail || e.message || 'Не удалось сохранить настройки');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onSaveAiCore = async () => {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await api.setAiCoreSettings({ ai_core_runtime: selectedAiCore });
+      setCurrentAiCore(res.ai_core_runtime);
+      setSelectedAiCore(res.ai_core_runtime);
+      setAiCoreSource(res.source);
+      setSuccess('ИИ ядро сохранено. Новые ответы агентов будут использовать выбранный runtime.');
+    } catch (e: any) {
+      setError(e.response?.data?.detail || e.message || 'Не удалось сохранить ИИ ядро');
     } finally {
       setSaving(false);
     }
@@ -286,13 +385,116 @@ export default function SettingsPage() {
     }
   };
 
+  const onRunImageOptimization = async () => {
+    const confirmed = window.confirm(
+      'Запустить оптимизацию изображений? Будут обработаны только файлы больше 150 КБ, чтобы уменьшить их размер без смены ссылок.'
+    );
+    if (!confirmed) return;
+
+    setImageOptimizationBusy(true);
+    setImageOptimizationError(null);
+    setImageOptimizationSuccess(null);
+    try {
+      const res = await api.runImageOptimization();
+      setImageOptimizationStatus(res);
+      setImageOptimizationSuccess(res.message || 'Оптимизация изображений запущена.');
+    } catch (e: any) {
+      setImageOptimizationError(e.response?.data?.detail || e.message || 'Не удалось запустить оптимизацию изображений');
+    } finally {
+      setImageOptimizationBusy(false);
+    }
+  };
+
+  const onSaveEmailSettings = async () => {
+    setEmailSettingsSaving(true);
+    setEmailSettingsError(null);
+    setEmailSettingsSuccess(null);
+    try {
+      const port = Number(emailPort);
+      if (!emailHost.trim() || !emailFromEmail.trim() || !Number.isFinite(port)) {
+        throw new Error('Укажите SMTP host, порт и email отправителя.');
+      }
+      const res = await api.setEmailServerSettings({
+        host: emailHost.trim(),
+        port,
+        username: emailUsername.trim() || undefined,
+        password: emailPassword.trim() || undefined,
+        from_email: emailFromEmail.trim(),
+        from_name: emailFromName.trim() || 'GLAME Jewelry',
+        use_ssl: emailUseSsl,
+        use_starttls: emailUseStarttls,
+      });
+      setEmailSource(res.source);
+      setEmailPasswordSet(res.password_set);
+      setEmailPassword('');
+      setEmailSettingsSuccess('Настройки почтового сервера сохранены.');
+    } catch (e: any) {
+      setEmailSettingsError(e.response?.data?.detail || e.message || 'Не удалось сохранить настройки почты');
+    } finally {
+      setEmailSettingsSaving(false);
+    }
+  };
+
+  const onTestEmailSettings = async () => {
+    setEmailSettingsTesting(true);
+    setEmailSettingsError(null);
+    setEmailSettingsSuccess(null);
+    try {
+      const toEmail = emailTestTo.trim() || emailFromEmail.trim();
+      if (!toEmail) throw new Error('Укажите email для тестового письма.');
+      const res = await api.testEmailServerSettings(toEmail);
+      setEmailSettingsSuccess(res.message || 'Тестовое письмо отправлено.');
+    } catch (e: any) {
+      setEmailSettingsError(e.response?.data?.detail || e.message || 'Не удалось отправить тестовое письмо');
+    } finally {
+      setEmailSettingsTesting(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto p-6">
       <h1 className="text-3xl font-bold text-gray-800 mb-2">Настройки</h1>
-      <p className="text-gray-600 mb-6">Конфигурация моделей OpenRouter для LLM и генерации изображений.</p>
+      <p className="text-gray-600 mb-6">Конфигурация ИИ ядра, моделей LLM и генерации изображений.</p>
 
       {/* Панель статистики OpenRouter */}
       <OpenRouterStatsPanel />
+
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">ИИ ядро агентов</h2>
+        <div className="mb-4">
+          <p className="text-sm text-gray-600">Текущее ядро:</p>
+          <p className="font-mono text-sm text-gray-900">{currentAiCore}</p>
+          <p className="text-xs text-gray-500 mt-1">Источник: {aiCoreSource}</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3 mb-4">
+          {[
+            { id: 'hermes', title: 'Hermes', text: 'Агенты GLAME через Hermes-профили, промпты и навыки.' },
+            { id: 'openrouter', title: 'OpenRouter', text: 'Прямой legacy-вызов выбранной облачной модели.' },
+            { id: 'local', title: 'Локальная LLM', text: 'OpenAI-compatible endpoint LOCAL_LLM_BASE_URL.' },
+          ].map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setSelectedAiCore(option.id as 'openrouter' | 'hermes' | 'local')}
+              className={`text-left border rounded-lg p-4 transition ${
+                selectedAiCore === option.id
+                  ? 'border-gold-500 bg-gold-50 ring-2 ring-gold-100'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              }`}
+            >
+              <div className="font-semibold text-gray-900">{option.title}</div>
+              <div className="text-xs text-gray-500 mt-1">{option.text}</div>
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onSaveAiCore}
+          disabled={saving || selectedAiCore === currentAiCore}
+          className="px-5 py-2.5 bg-gold-500 text-white rounded-lg hover:bg-gold-600 disabled:opacity-50 transition font-semibold"
+        >
+          {saving ? 'Сохранение…' : 'Сохранить ИИ ядро'}
+        </button>
+      </div>
 
       {/* Настройки LLM модели */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -314,47 +516,17 @@ export default function SettingsPage() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Выбор модели</label>
-              {modelsError && (
-                <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  {modelsError}
-                </div>
-              )}
-
-              <div className="mb-2">
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Поиск по названию или id (например: claude, gpt-4o, gemini...)"
-                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
-                />
-              </div>
-
-              <select
+              <UnifiedModelSelect
+                label="Выбор модели"
                 value={selectedModel}
-                onChange={(e) => {
+                onChange={(v) => {
                   setUserTouchedSelection(true);
-                  setSelectedModel(e.target.value);
+                  setSelectedModel(v);
                 }}
-                disabled={modelsLoading && models.length === 0}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
-              >
-                {models.length === 0 && (
-                  <option value="" disabled>
-                    {modelsLoading ? 'Загрузка моделей…' : 'Нет списка моделей (можно ввести вручную)'}
-                  </option>
-                )}
-                {filteredModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-                <option value="__custom__">Другая (ввести вручную)</option>
-              </select>
-              <p className="mt-2 text-xs text-gray-500">
-                Это OpenRouter model id. В скобках показана цена: <span className="font-mono">$prompt/M</span> и{' '}
-                <span className="font-mono">$completion/M</span>.
-              </p>
+                mode="llm"
+                allowCustom
+              />
+              <p className="mt-2 text-xs text-gray-500">Это OpenRouter model id.</p>
             </div>
 
             {selectedModel === '__custom__' && (
@@ -406,51 +578,17 @@ export default function SettingsPage() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Выбор модели для генерации изображений</label>
-              {imageModelsError && (
-                <div className="mb-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  {imageModelsError}
-                </div>
-              )}
-
-              <div className="mb-2">
-                <input
-                  value={imageSearch}
-                  onChange={(e) => setImageSearch(e.target.value)}
-                  placeholder="Поиск по названию или id (например: flux, nano, dall-e...)"
-                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
-                />
-              </div>
-
-              <select
+              <UnifiedModelSelect
+                label="Выбор модели для генерации изображений"
                 value={selectedImageModel}
-                onChange={(e) => {
+                onChange={(v) => {
                   setUserTouchedImageSelection(true);
-                  setSelectedImageModel(e.target.value);
+                  setSelectedImageModel(v);
                 }}
-                disabled={imageModelsLoading && imageModels.length === 0}
-                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
-              >
-                {imageModels.length === 0 && !imageModelsError && (
-                  <option value="" disabled>
-                    {imageModelsLoading ? 'Загрузка моделей…' : 'Нет списка моделей (можно ввести вручную)'}
-                  </option>
-                )}
-                {imageModelsError && (
-                  <option value="" disabled>
-                    Ошибка загрузки моделей
-                  </option>
-                )}
-                {filteredImageModels.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-                <option value="__custom__">Другая (ввести вручную)</option>
-              </select>
-              <p className="mt-2 text-xs text-gray-500">
-                Модели для генерации изображений (Flux, DALL-E, Nano и др.). В скобках показана цена.
-              </p>
+                mode="image"
+                allowCustom
+              />
+              <p className="mt-2 text-xs text-gray-500">Модели для генерации изображений.</p>
             </div>
 
             {selectedImageModel === '__custom__' && (
@@ -488,13 +626,263 @@ export default function SettingsPage() {
         )}
       </div>
 
+      <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Оптимизация изображений</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Админ может вручную запускать оптимизацию существующих файлов изображений. Обрабатываются только файлы больше{' '}
+          {formatBytes(imageOptimizationStatus?.min_original_bytes ?? 150 * 1024)}, ссылки на файлы не меняются.
+        </p>
+
+        {imageOptimizationError && (
+          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            {imageOptimizationError}
+          </div>
+        )}
+        {imageOptimizationSuccess && (
+          <div className="mb-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+            {imageOptimizationSuccess}
+          </div>
+        )}
+
+        {imageOptimizationLoading ? (
+          <p className="text-gray-500">Загрузка статуса…</p>
+        ) : (
+          <>
+            <div className="mb-4 rounded-lg border border-gray-200 p-4">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <span className="text-sm font-medium text-gray-700">Статус:</span>
+                <span
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                    imageOptimizationStatus?.status === 'running'
+                      ? 'bg-amber-100 text-amber-800'
+                      : imageOptimizationStatus?.status === 'completed'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : imageOptimizationStatus?.status === 'failed'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  {imageOptimizationStatus?.status === 'running'
+                    ? 'В процессе'
+                    : imageOptimizationStatus?.status === 'completed'
+                      ? 'Завершено'
+                      : imageOptimizationStatus?.status === 'failed'
+                        ? 'Ошибка'
+                        : 'Ожидание'}
+                </span>
+              </div>
+
+              {imageOptimizationStatus?.message && (
+                <p className="text-sm text-gray-700 mb-3">{imageOptimizationStatus.message}</p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700">
+                <div>Найдено файлов: {imageOptimizationStatus?.scanned_files ?? 0}</div>
+                <div>Крупных файлов: {imageOptimizationStatus?.eligible_files ?? 0}</div>
+                <div>Оптимизировано: {imageOptimizationStatus?.optimized_files ?? 0}</div>
+                <div>Пропущено как мелкие: {imageOptimizationStatus?.skipped_small_files ?? 0}</div>
+                <div>Экономия места: {formatBytes(imageOptimizationStatus?.saved_bytes ?? 0)}</div>
+                <div>Ошибок: {imageOptimizationStatus?.failed_files ?? 0}</div>
+              </div>
+
+              {(imageOptimizationStatus?.started_at || imageOptimizationStatus?.finished_at) && (
+                <div className="mt-3 text-xs text-gray-500 space-y-1">
+                  {imageOptimizationStatus.started_at && <div>Запуск: {new Date(imageOptimizationStatus.started_at).toLocaleString()}</div>}
+                  {imageOptimizationStatus.finished_at && <div>Завершение: {new Date(imageOptimizationStatus.finished_at).toLocaleString()}</div>}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={onRunImageOptimization}
+                disabled={imageOptimizationBusy || imageOptimizationStatus?.status === 'running'}
+                className="px-5 py-2.5 bg-gold-500 text-white rounded-lg hover:bg-gold-600 disabled:opacity-50 transition font-semibold"
+              >
+                {imageOptimizationBusy || imageOptimizationStatus?.status === 'running'
+                  ? 'Оптимизация…'
+                  : 'Оптимизация изображений'}
+              </button>
+              <button
+                onClick={() => {
+                  setImageOptimizationError(null);
+                  setImageOptimizationSuccess(null);
+                  loadImageOptimizationStatus();
+                }}
+                disabled={imageOptimizationBusy}
+                className="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition text-gray-900 font-medium"
+              >
+                Обновить статус
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+        <h2 className="text-xl font-semibold text-gray-800 mb-2">Почтовый сервер</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Эти настройки используются для отправки электронных подарочных сертификатов и сервисных писем.
+        </p>
+
+        {emailSettingsError && (
+          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+            {emailSettingsError}
+          </div>
+        )}
+        {emailSettingsSuccess && (
+          <div className="mb-4 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+            {emailSettingsSuccess}
+          </div>
+        )}
+
+        {emailSettingsLoading ? (
+          <p className="text-gray-500">Загрузка настроек почты…</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">SMTP host</label>
+                <input
+                  value={emailHost}
+                  onChange={(e) => setEmailHost(e.target.value)}
+                  placeholder="smtp.mail.ru"
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Порт</label>
+                <input
+                  value={emailPort}
+                  onChange={(e) => setEmailPort(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="465"
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Логин SMTP</label>
+                <input
+                  value={emailUsername}
+                  onChange={(e) => setEmailUsername(e.target.value)}
+                  placeholder="ai@glamejewelry.ru"
+                  autoComplete="username"
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Пароль SMTP {emailPasswordSet ? '(сохранен)' : ''}
+                </label>
+                <input
+                  value={emailPassword}
+                  onChange={(e) => setEmailPassword(e.target.value)}
+                  type="password"
+                  placeholder={emailPasswordSet ? 'Оставьте пустым, чтобы не менять' : 'Пароль приложения'}
+                  autoComplete="new-password"
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email отправителя</label>
+                <input
+                  value={emailFromEmail}
+                  onChange={(e) => setEmailFromEmail(e.target.value)}
+                  placeholder="ai@glamejewelry.ru"
+                  type="email"
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Имя отправителя</label>
+                <input
+                  value={emailFromName}
+                  onChange={(e) => setEmailFromName(e.target.value)}
+                  placeholder="GLAME Jewelry"
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-4 text-sm text-gray-700">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={emailUseSsl}
+                  onChange={(e) => {
+                    setEmailUseSsl(e.target.checked);
+                    if (e.target.checked) setEmailUseStarttls(false);
+                  }}
+                  className="h-4 w-4 rounded border-gray-300 text-gold-600 focus:ring-gold-500"
+                />
+                SSL
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={emailUseStarttls}
+                  onChange={(e) => {
+                    setEmailUseStarttls(e.target.checked);
+                    if (e.target.checked) setEmailUseSsl(false);
+                  }}
+                  className="h-4 w-4 rounded border-gray-300 text-gold-600 focus:ring-gold-500"
+                />
+                STARTTLS
+              </label>
+              <span className="text-gray-500">Источник: {emailSource}</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
+              <input
+                value={emailTestTo}
+                onChange={(e) => setEmailTestTo(e.target.value)}
+                placeholder="Email для тестового письма"
+                type="email"
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-gold-500"
+              />
+              <button
+                onClick={onTestEmailSettings}
+                disabled={emailSettingsTesting || emailSettingsSaving}
+                className="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition text-gray-900 font-medium"
+              >
+                {emailSettingsTesting ? 'Отправка…' : 'Тест письма'}
+              </button>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={onSaveEmailSettings}
+                disabled={emailSettingsSaving}
+                className="px-5 py-2.5 bg-gold-500 text-white rounded-lg hover:bg-gold-600 disabled:opacity-50 transition font-semibold"
+              >
+                {emailSettingsSaving ? 'Сохранение…' : 'Сохранить почту'}
+              </button>
+              <button
+                type="button"
+                onClick={loadEmailServerSettings}
+                disabled={emailSettingsSaving}
+                className="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition text-gray-900 font-medium"
+              >
+                Обновить
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Смена пароля */}
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         <h2 className="text-xl font-semibold text-gray-800 mb-4">Смена пароля</h2>
-        {(basicUsername || user?.email) && (
+        {user?.email && (
           <p className="mb-3 text-sm text-gray-600">
-            Текущий пользователь (Basic):{' '}
-            <span className="font-semibold text-gray-900">{basicUsername || user?.email}</span>
+            Текущий пользователь:{' '}
+            <span className="font-semibold text-gray-900">{user.email}</span>
           </p>
         )}
         {passwordError && (
@@ -560,11 +948,7 @@ export default function SettingsPage() {
               type="button"
               onClick={() => {
                 logout();
-                if (typeof window !== 'undefined') {
-                  window.location.href = '/api/auth/logout-basic';
-                } else {
-                  router.push('/login');
-                }
+                router.push('/login');
               }}
               className="px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-gray-700 font-medium"
             >

@@ -1,0 +1,40 @@
+HTTP 200 OK
+{
+  "by_brand": {
+    "Antura": 1,
+    "BICOLOR": 73,
+    "BLACK MYSTIQUE": 118,
+    "CRYSTAL": 336,
+    "Claudio Canzian": 27,
+    "GEOMETRY": 723,
+    "Kalliope": 80,
+    "MAGNA": 284,
+    "PEARL": 431,
+    "PRISM OF ELEGANCE": 210,
+    "Raganella Princess": 98,
+    "UNOde50": 165,
+    "WRINKLES OG TIME": 167,
+    "unknown": 644
+  },
+  "by_category": {
+    "AGafi": 420,
+    "Antura": 55,
+    "Eva Rites": 15,
+    "Madreperla": 9,
+    "Men": 58,
+    "SALE": 253,
+    "Браслеты": 418,
+    "Броши": 11,
+    "Каффы": 149,
+    "Колье": 503,
+    "Кольца": 562,
+    "Кулоны": 46,
+    "Подарочная упаковка": 7,
+    "Прочее": 21,
+    "Серьги": 783,
+    "Сопутствующие материалы": 29,
+    "Чокеры": 18
+  },
+  "core_assortment": 0,
+  "total_active_products": 3357
+}

@@ -1,0 +1,15 @@
+{
+  "opportunities": [
+    {
+      "type": "re-engagement",
+      "description": "5489 VIP клиентов не покупали 90+ дней - возможна программа реактивации",
+      "customer_count": 5489,
+      "potential_revenue": 27445000,
+      "recommended_actions": [
+        "Специальные скидки",
+        "Персональные предложения"
+      ]
+    }
+  ],
+  "total": 1
+}

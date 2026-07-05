@@ -1,7 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
+import logging
 from app.services.llm_service import llm_service
 from app.services.vector_service import vector_service
+from app.services.ai_core_runtime import AiCoreRuntime, generate_agent_text, get_ai_core_runtime
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAgent(ABC):
@@ -159,7 +164,7 @@ class BaseAgent(ABC):
             fallback_prompt: Промпт по умолчанию, если в БД ничего не найдено
         """
         from app.models.agent_system_prompt import AgentSystemPrompt
-        from sqlalchemy import select
+        from sqlalchemy import select, desc
         import logging
         logger = logging.getLogger(__name__)
         
@@ -167,7 +172,7 @@ class BaseAgent(ABC):
             query = select(AgentSystemPrompt).where(
                 AgentSystemPrompt.agent_type == agent_type,
                 AgentSystemPrompt.is_active == True
-            )
+            ).order_by(desc(AgentSystemPrompt.version)).limit(1)
             result = await db.execute(query)
             prompt_obj = result.scalar_one_or_none()
             if prompt_obj and prompt_obj.system_prompt:
@@ -185,10 +190,64 @@ class BaseAgent(ABC):
         max_tokens: int = 3000,  # Увеличиваем лимит по умолчанию для более полных ответов
         **kwargs
     ) -> str:
-        """Генерация ответа через LLM"""
+        """Генерация ответа через выбранное AI core.
+
+        openrouter: старый прямой путь через LLMService.
+        hermes: профиль Hermes для конкретного агента.
+        local: OpenAI-compatible локальный endpoint.
+        """
+        runtime, source = await get_ai_core_runtime()
+        if runtime == AiCoreRuntime.HERMES:
+            agent_id = self._resolve_runtime_agent_id()
+            if agent_id:
+                output = await generate_agent_text(
+                    agent_id=agent_id,
+                    prompt=prompt,
+                    system_prompt=system_prompt or "",
+                    max_tokens=max_tokens,
+                    **kwargs,
+                )
+                logger.info(
+                    "AI core hermes used for %s (source=%s)",
+                    agent_id,
+                    source,
+                )
+                return output
+            logger.warning(
+                "AI core hermes selected, but %s has no runtime agent id; falling back to OpenRouter",
+                self.__class__.__name__,
+            )
+
+        if runtime == AiCoreRuntime.LOCAL:
+            return await generate_agent_text(
+                agent_id=self._resolve_runtime_agent_id() or self.__class__.__name__,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                max_tokens=max_tokens,
+                **kwargs,
+            )
+
         return await self.llm.generate(
             prompt=prompt,
             system_prompt=system_prompt,
             max_tokens=max_tokens,
             **kwargs
         )
+
+    def _resolve_runtime_agent_id(self) -> Optional[str]:
+        """Resolve this Python class to a canonical Hermes-capable agent id."""
+
+        explicit = getattr(self, "AGENT_TYPE", None) or getattr(self, "PROMPT_AGENT_TYPE", None)
+        if explicit:
+            return str(explicit)
+
+        by_class = {
+            "DirectorAgent": "director-agent",
+            "CommunicationAgent": "crm-agent",
+            "ContentAgent": "brand-media-agent",
+            "AdvancedContentAgent": "brand-media-agent",
+            "MarketingAgent": "traffic-growth-agent",
+            "MarketingInventoryAgent": "assortment-agent",
+            "AssortmentMatrixAgent": "assortment-agent",
+        }
+        return by_class.get(self.__class__.__name__)

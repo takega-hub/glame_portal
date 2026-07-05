@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="GLAME">
+  <rect width="180" height="180" fill="#111111"/>
+  <circle cx="90" cy="90" r="66" fill="#f7f4ef"/>
+  <path d="M57 95c0-23 16-39 39-39 12 0 22 4 30 11l-11 12c-5-5-11-7-19-7-13 0-22 9-22 23s9 23 23 23c7 0 13-2 18-5V102H96V87h36v34c-9 8-21 13-36 13-23 0-39-16-39-39Z" fill="#111111"/>
+  <path d="M50 145h80" stroke="#111111" stroke-width="7" stroke-linecap="round"/>
+</svg>

@@ -42,13 +42,18 @@ class TelegramService:
     async def _make_request(
         self,
         method: str,
-        params: Optional[Dict[str, Any]] = None
+        params: Optional[Dict[str, Any]] = None,
+        *,
+        post: bool = False,
     ) -> Dict[str, Any]:
         """Базовый метод для запросов к API"""
         url = f"{self.api_url}/{method}"
         
         try:
-            response = await self.client.get(url, params=params or {})
+            if post:
+                response = await self.client.post(url, json=params or {})
+            else:
+                response = await self.client.get(url, params=params or {})
             response.raise_for_status()
             data = response.json()
             
@@ -59,6 +64,24 @@ class TelegramService:
         except Exception as e:
             logger.error(f"Ошибка при запросе к Telegram API: {e}")
             raise
+
+    async def send_message(
+        self,
+        *,
+        chat_id: str | int,
+        text: str,
+        disable_web_page_preview: bool = True,
+    ) -> Dict[str, Any]:
+        """Отправка служебного сообщения в Telegram chat/channel."""
+        return await self._make_request(
+            "sendMessage",
+            params={
+                "chat_id": chat_id,
+                "text": text,
+                "disable_web_page_preview": disable_web_page_preview,
+            },
+            post=True,
+        )
     
     async def get_bot_info(self) -> Dict[str, Any]:
         """Получение информации о боте"""

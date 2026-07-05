@@ -5,13 +5,14 @@ import { api, apiClient, type ContentItemMediaEntry } from '@/lib/api';
 import CalendarView from './CalendarView';
 import * as XLSX from 'xlsx';
 import SystemPromptPanel from './SystemPromptPanel';
+import JewelryPhotoProcessingPanel from '@/components/products/JewelryPhotoProcessingPanel';
 
 const CHANNELS = [
   { value: 'website_main', label: 'Главная страница сайта' },
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'email', label: 'Email' },
+  { value: 'instagram', label: 'Инстаграм' },
+  { value: 'email', label: 'Email-рассылка' },
   { value: 'vk', label: 'ВКонтакте' },
-  { value: 'telegram', label: 'Telegram' },
+  { value: 'telegram', label: 'Телеграм' },
 ];
 
 function formatDateTime(value: string | Date) {
@@ -30,7 +31,7 @@ function formatDateTime(value: string | Date) {
 }
 
 export default function ContentAgent() {
-  const [name, setName] = useState<string>('AI Content Agent план');
+  const [name, setName] = useState<string>('План AI контент-агента');
   const [startDate, setStartDate] = useState<string>(() => {
     const d = new Date();
     const yyyy = d.getFullYear();
@@ -1709,7 +1710,7 @@ export default function ContentAgent() {
     <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Content Agent</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">ИИ Контент-агент</h1>
           <p className="text-gray-700">
             Календарный контент‑план → генерация контента по слотам → экспорт/синк в Яндекс.Календарь.
           </p>
@@ -1733,7 +1734,7 @@ export default function ContentAgent() {
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
             <h3 className="text-blue-800 font-medium mb-2">Подсказка</h3>
             <p className="text-blue-700 text-sm">
-              Здесь вы можете настроить базовые инструкции для AI Content Agent.
+              Здесь вы можете настроить базовые инструкции для ИИ контент-агента.
               Вы можете создавать новые версии, генерировать их из описания и выбирать активную версию,
               которая будет использоваться при генерации контент-планов и постов.
             </p>
@@ -1918,7 +1919,7 @@ export default function ContentAgent() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">С</label>
                 <input
                   type="date"
                   value={startDate}
@@ -1927,7 +1928,7 @@ export default function ContentAgent() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">End</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">По</label>
                 <input
                   type="date"
                   value={endDate}
@@ -1938,7 +1939,7 @@ export default function ContentAgent() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Часовой пояс</label>
               <input
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
@@ -1995,7 +1996,7 @@ export default function ContentAgent() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">frequency_rules (JSON)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Правила частоты (JSON)</label>
               <textarea
                 value={frequencyRulesJson}
                 onChange={(e) => setFrequencyRulesJson(e.target.value)}
@@ -2018,7 +2019,7 @@ export default function ContentAgent() {
             {planId && (
               <div className="text-sm text-gray-900">
                 <div className="mb-2">
-                  <span className="font-medium text-gray-900">Plan ID:</span> <span className="font-mono text-gray-800">{planId}</span>
+                  <span className="font-medium text-gray-900">ID плана:</span> <span className="font-mono text-gray-800">{planId}</span>
                 </div>
                 <button
                   onClick={() => refreshItems()}
@@ -2310,8 +2311,8 @@ export default function ContentAgent() {
                             <td className="py-3 pr-3 text-gray-900">{it.content_type}</td>
                             <td className="py-3 pr-3">
                               <div className="text-gray-900">{it.topic || <span className="text-gray-600">—</span>}</div>
-                              {it.hook && <div className="text-xs text-gray-700 mt-1">Hook: {it.hook}</div>}
-                              {it.cta && <div className="text-xs text-gray-700">CTA: {it.cta}</div>}
+                              {it.hook && <div className="text-xs text-gray-700 mt-1">Хук: {it.hook}</div>}
+                              {it.cta && <div className="text-xs text-gray-700">Призыв: {it.cta}</div>}
                             </td>
                             <td className="py-3 pr-3 text-gray-900">{it.status}</td>
                             <td className="py-3 pr-3">
@@ -2368,7 +2369,7 @@ export default function ContentAgent() {
                                   Без текста на фото
                                 </label>
                                 <label className="inline-flex items-center gap-1 text-gray-700">
-                                  <span>Style:</span>
+                                  <span>Стиль:</span>
                                   <select
                                     value={getStyleIntensity(it.id)}
                                     onChange={(e) =>
@@ -2379,9 +2380,9 @@ export default function ContentAgent() {
                                     }
                                     className="px-2 py-1 border border-gray-300 rounded bg-white text-gray-900 text-xs"
                                   >
-                                    <option value="classic">classic</option>
-                                    <option value="bold">bold</option>
-                                    <option value="edgy">edgy</option>
+                                    <option value="classic">Классический</option>
+                                    <option value="bold">Смелый</option>
+                                    <option value="edgy">Дерзкий</option>
                                   </select>
                                 </label>
                               </div>
@@ -2470,7 +2471,7 @@ export default function ContentAgent() {
                                               </div>
                                             </div>
                                             <div className="leading-tight">
-                                              <div className="text-xs font-semibold text-gray-900">glame</div>
+                                              <div className="text-xs font-semibold text-gray-900">GLAME</div>
                                               <div className="text-[10px] text-gray-500">Промо-публикация</div>
                                             </div>
                                           </div>
@@ -2480,7 +2481,7 @@ export default function ContentAgent() {
                                         <div className="relative">
                                           <img
                                             src={jewelryImageFullUrl(getActiveMedia(it)!.url)}
-                                            alt="Instagram preview"
+                                            alt="Превью Инстаграм"
                                             className="w-full aspect-square object-cover cursor-zoom-in"
                                             onClick={() =>
                                               setJewelryLightboxUrl(jewelryImageFullUrl(getActiveMedia(it)!.url))
@@ -2564,7 +2565,7 @@ export default function ContentAgent() {
                                           >
                                             <img
                                               src={jewelryImageFullUrl(media.url)}
-                                              alt="variant"
+                                              alt="вариант"
                                               className="w-14 h-14 object-cover rounded"
                                             />
                                             {media.is_active && (
@@ -3145,248 +3146,7 @@ export default function ContentAgent() {
         )}
       </div>
 
-      {/* Обработка фото украшений */}
-      <div className="bg-white rounded-lg shadow-md p-6 mt-6" id="jewelry-photo-section">
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Обработка фото украшений</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Загрузите фото украшения (одно или несколько ракурсов). Обработанные изображения — белый фон, студийный вид, PNG 1:1 — можно добавить к карточке товара по артикулу. Можно загрузить несколько ракурсов одного изделия — они будут обработаны в едином стиле.
-        </p>
-
-        {/* История генераций */}
-        <div className="mb-6">
-          <h3 className="text-sm font-semibold text-gray-800 mb-2">История генераций</h3>
-          {jewelryHistoryLoading ? (
-            <p className="text-sm text-gray-500">Загрузка…</p>
-          ) : jewelryHistory.length === 0 ? (
-            <p className="text-sm text-gray-500">Пока нет сохранённых обработанных фото. Обработайте фото ниже — они появятся здесь.</p>
-          ) : (
-            <div className="space-y-4">
-              {jewelryHistory.map((item) => (
-                <div key={item.article} className="border border-gray-200 rounded-lg p-3 bg-gray-50/50">
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <span className="font-medium text-gray-900">Артикул: {item.article}</span>
-                    <span className="text-xs text-gray-500">
-                      {item.updated_at ? new Date(item.updated_at).toLocaleString('ru-RU') : ''}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {item.urls.map((url, i) => (
-                      <div key={url} className="relative group">
-                        <button
-                          type="button"
-                          onClick={() => setJewelryLightboxUrl(jewelryImageFullUrl(url))}
-                          className="block w-20 h-20 rounded border border-gray-200 bg-white overflow-hidden focus:outline-none focus:ring-2 focus:ring-gold-500"
-                          title="Открыть в полном размере"
-                        >
-                          <img
-                            src={jewelryImageFullUrl(url)}
-                            alt={`${item.article} ${i + 1}`}
-                            className="w-full h-full object-contain"
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); deleteJewelryHistoryFile(url); }}
-                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-10"
-                          aria-label="Удалить"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setJewelryArticle(item.article);
-                        document.getElementById('jewelry-photo-section')?.scrollIntoView({ behavior: 'smooth' });
-                      }}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700"
-                    >
-                      Перегенерировать (загрузить новые фото)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyJewelryToProduct(item.article, item.urls)}
-                      disabled={jewelryApplyLoading}
-                      className="px-3 py-1.5 text-sm bg-gold-600 text-white rounded-lg hover:bg-gold-700 disabled:opacity-50"
-                    >
-                      {jewelryApplyLoading ? 'Добавление…' : `Добавить к карточке (${item.urls.length})`}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Артикул изделия *</label>
-            <input
-              type="text"
-              value={jewelryArticle}
-              onChange={(e) => setJewelryArticle(e.target.value)}
-              placeholder="Введите артикул"
-              className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Фото (до 5 шт., до 10 MB каждое)</label>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/jpg"
-              multiple
-              onChange={onJewelryFilesChange}
-              className="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-gold-100 file:text-gold-800"
-            />
-            {jewelryFiles.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {jewelryFiles.map((f, idx) => (
-                  <div key={idx} className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1 text-sm">
-                    <span className="text-gray-800 truncate max-w-[120px]">{f.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeJewelryFile(idx)}
-                      className="text-red-600 hover:text-red-800"
-                      aria-label="Удалить"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {jewelryError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-sm text-red-700">{jewelryError}</p>
-            </div>
-          )}
-
-          {jewelryProcessing && (
-            <div className="rounded-lg border border-gold-200 bg-gold-50/50 p-4">
-              <p className="text-sm font-medium text-gray-900 mb-2">Обработка фото…</p>
-              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                <div
-                  className="h-full bg-gold-500 rounded-full animate-pulse"
-                  style={{ width: '70%' }}
-                />
-              </div>
-              <p className="text-xs text-gray-600 mt-1">Может занять до 1–2 минут. Дождитесь завершения.</p>
-            </div>
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={processJewelryPhotos}
-              disabled={jewelryProcessing || !jewelryArticle.trim() || jewelryFiles.length === 0}
-              className="px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {jewelryProcessing ? 'Обработка фото…' : 'Обработать'}
-            </button>
-            {jewelryProcessing && (
-              <button
-                type="button"
-                onClick={cancelJewelryGeneration}
-                className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50"
-              >
-                Отменить генерацию
-              </button>
-            )}
-          </div>
-
-          {jewelryResultUrls && jewelryResultUrls.length > 0 && (
-            <div className="border-t pt-4 mt-4">
-              <p className="text-sm font-medium text-gray-900 mb-2">Обработанные фото для каталога (одно изделие, разные ракурсы)</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                {jewelryResultUrls.map((url, i) => (
-                  <div key={i} className="rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
-                    <button
-                      type="button"
-                      onClick={() => setJewelryLightboxUrl(jewelryImageFullUrl(url))}
-                      className="w-full aspect-square block focus:outline-none focus:ring-2 focus:ring-gold-500 focus:ring-inset"
-                      title="Открыть в полном размере"
-                    >
-                      <img
-                        src={jewelryImageFullUrl(url)}
-                        alt={`Ракурс ${i + 1}`}
-                        className="w-full h-full object-contain"
-                      />
-                    </button>
-                    <p className="text-xs text-center text-gray-600 py-1">Ракурс {i + 1}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Что доработать при перегенерации (необязательно)</label>
-                <textarea
-                  value={jewelryRevisionDescription}
-                  onChange={(e) => setJewelryRevisionDescription(e.target.value)}
-                  placeholder="Например: сделать фон чище белым, усилить блики, убрать тень"
-                  rows={2}
-                  className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-gold-500 text-sm"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={jewelryReset}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700"
-                >
-                  Отменить
-                </button>
-                <button
-                  type="button"
-                  onClick={jewelryRegenerate}
-                  disabled={jewelryProcessing}
-                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 disabled:opacity-50"
-                >
-                  Перегенерировать
-                </button>
-                <button
-                  type="button"
-                  onClick={() => applyJewelryToProduct()}
-                  disabled={jewelryApplyLoading}
-                  className="px-4 py-2 bg-gold-600 text-white rounded-lg hover:bg-gold-700 disabled:opacity-50"
-                >
-                  {jewelryApplyLoading ? 'Добавление…' : `Добавить к карточке товара (${jewelryResultUrls.length})`}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Просмотр фото украшения в полном разрешении */}
-      {jewelryLightboxUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-          onClick={() => setJewelryLightboxUrl(null)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Фото в полном размере"
-        >
-          <button
-            type="button"
-            onClick={() => setJewelryLightboxUrl(null)}
-            className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-white/90 text-gray-800 flex items-center justify-center text-xl hover:bg-white"
-            aria-label="Закрыть"
-          >
-            ×
-          </button>
-          <img
-            src={jewelryLightboxUrl}
-            alt="Фото в полном размере"
-            className="max-w-[95vw] max-h-[90vh] w-auto h-auto object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
+      <JewelryPhotoProcessingPanel />
 
       {/* Модальное окно редактирования плана */}
       {editingPlanId && (
@@ -3650,4 +3410,3 @@ export default function ContentAgent() {
     </div>
   );
 }
-

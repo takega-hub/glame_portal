@@ -6,9 +6,9 @@ import httpx
 import base64
 import logging
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 import os
 import uuid
@@ -17,6 +17,8 @@ from app.models.sales_record import SalesRecord
 from app.models.sales_metric import SalesMetric
 from app.models.product import Product
 from app.services.onec_sales_service import OneCSalesService
+from app.services.sales_product_link_service import SalesProductLinkService
+from app.services.purchase_product_fields import derive_purchase_brand, derive_purchase_category
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +78,103 @@ class OneCSalesSyncService:
         self.db = db
         self.sales_service = None
     
+    async def _ensure_users_preferred_columns(self):
+        try:
+            existing = await self.db.execute(text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'users'
+                  AND column_name IN (
+                    'preferred_store_external_id',
+                    'preferred_store_name',
+                    'preferred_store_share',
+                    'preferred_store_updated_at'
+                  );
+            """))
+            if len({row[0] for row in existing.all()}) == 4:
+                return
+
+            await self.db.execute(text("SET LOCAL lock_timeout = '2s';"))
+            await self.db.execute(text("""
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS preferred_store_external_id VARCHAR(255) NULL;
+            """))
+            await self.db.execute(text("""
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS preferred_store_name VARCHAR(255) NULL;
+            """))
+            await self.db.execute(text("""
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS preferred_store_share DOUBLE PRECISION NULL;
+            """))
+            await self.db.execute(text("""
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS preferred_store_updated_at TIMESTAMPTZ NULL;
+            """))
+            await self.db.commit()
+        except Exception:
+            # Не падаем на DDL; просто логируем
+            await self.db.rollback()
+            logging.getLogger(__name__).warning("Failed to ensure preferred store columns on users", exc_info=True)
+    
+    async def _refresh_preferred_store_for_period(self, start_date: datetime, end_date: datetime, batch_id: str):
+        """
+        Обновляет users.preferred_store_* по данным sales_records за конкретный пакет или диапазон дат.
+        Выбор критерия: магазин с максимальным количеством покупок.
+        """
+        await self._ensure_users_preferred_columns()
+        try:
+            # Используем sync_batch_id для точного таргетинга текущего запуска; fallback — период
+            sql = """
+            WITH affected AS (
+                SELECT DISTINCT sr.customer_id
+                FROM sales_records sr
+                WHERE sr.sync_batch_id = :batch_id
+                  AND sr.sale_date BETWEEN :start_ts AND :end_ts
+            ),
+            counts AS (
+                SELECT
+                    u.id AS user_uuid,
+                    CASE
+                        WHEN sr.store_id = '8cebda58-a2ab-11f0-96fc-fa163e4cc04e'
+                        THEN '6c3a8322-a2ab-11f0-96fc-fa163e4cc04e'
+                        ELSE sr.store_id
+                    END AS store_id_1c,
+                    COUNT(*) AS cnt
+                FROM sales_records sr
+                JOIN users u ON u.customer_id_1c = sr.customer_id
+                JOIN affected a ON a.customer_id = sr.customer_id
+                WHERE sr.store_id IS NOT NULL
+                GROUP BY u.id, 2
+            ),
+            ranked AS (
+                SELECT user_uuid, store_id_1c, cnt,
+                       ROW_NUMBER() OVER (PARTITION BY user_uuid ORDER BY cnt DESC) AS rn,
+                       SUM(cnt) OVER (PARTITION BY user_uuid) AS total_cnt
+                FROM counts
+            ),
+            best AS (
+                SELECT user_uuid, store_id_1c, cnt, total_cnt
+                FROM ranked
+                WHERE rn = 1
+            )
+            UPDATE users u
+            SET preferred_store_external_id = b.store_id_1c,
+                preferred_store_name = COALESCE(s.name, u.preferred_store_name),
+                preferred_store_share = CASE WHEN b.total_cnt > 0 THEN b.cnt::float / b.total_cnt ELSE NULL END,
+                preferred_store_updated_at = NOW()
+            FROM best b
+            LEFT JOIN stores s ON s.external_id = b.store_id_1c
+            WHERE u.id = b.user_uuid;
+            """
+            await self.db.execute(
+                text(sql),
+                {"batch_id": batch_id, "start_ts": start_date, "end_ts": end_date},
+            )
+            await self.db.commit()
+        except Exception:
+            logging.getLogger(__name__).warning("Failed to refresh preferred store after sync", exc_info=True)
+    
     async def __aenter__(self):
         self.sales_service = OneCSalesService()
         return self
@@ -130,8 +229,12 @@ class OneCSalesSyncService:
         # Получаем данные из 1С
         sales_data = await self.sales_service.fetch_sales_from_api(start_date, end_date)
         orders = sales_data.get("orders", [])
+        source = sales_data.get("source")
         
         logger.info(f"Получено {len(orders)} записей о продажах из 1С")
+
+        if not orders and (datetime.now() - start_date).days < 30:
+            logger.warning(f"Внимание: Не получено данных о продажах за период {start_date.date()} - {end_date.date()}. Возможно, проблема на стороне 1С или используется неверный регистр.")
         
         # Логируем статистику по магазинам и товарам для отладки
         if orders:
@@ -148,6 +251,9 @@ class OneCSalesSyncService:
                 "updated": 0,
                 "skipped": 0
             }
+
+        if source == "Document_ЧекККМ":
+            await self._cleanup_records_for_check_period(start_date, end_date, orders)
         
         # Если инкрементальная синхронизация, проверяем какие записи уже есть
         existing_ids = set()
@@ -170,6 +276,7 @@ class OneCSalesSyncService:
         records_to_insert = []
         records_to_update = []
         skipped = 0
+        link_service = SalesProductLinkService(self.db)
         
         for order in orders:
             # Формируем external_id из данных заказа
@@ -195,6 +302,9 @@ class OneCSalesSyncService:
             
             # Пытаемся получить данные о товаре из базы данных для обогащения
             product_data = None
+            if not product_id_1c:
+                product_id_1c = await link_service.resolve_product_external_id(product_article, product_name)
+
             if product_id_1c:
                 try:
                     from app.models.product import Product
@@ -239,12 +349,20 @@ class OneCSalesSyncService:
                 product_name = product_data.get("name") or product_name
                 product_category = product_data.get("category") or product_category
                 product_article = product_data.get("article") or product_article
+                product_brand = product_data.get("brand") or order.get("product_brand")
+            else:
+                product_brand = order.get("product_brand")
+
+            original_product_category = product_category
+            product_category = derive_purchase_category(product_name, product_category)
+            product_brand = derive_purchase_brand(
+                product_name,
+                product_brand or original_product_category,
+                product_category,
+            )
             
-            # Проверяем, нужно ли исключить этот товар
-            if _should_exclude_product(product_name, product_category, product_article):
-                skipped += 1
-                logger.debug(f"Пропущена продажа товара: {product_name} (категория: {product_category})")
-                continue
+            # Для детальной витрины продаж сохраняем все строки чеков, включая пакеты/упаковку.
+            # Количество товаров без упаковки считается отдельными запросами в analytics.py.
             
             # Проверяем, существует ли уже запись
             if incremental and external_id in existing_ids:
@@ -266,18 +384,18 @@ class OneCSalesSyncService:
                 # Добавляем данные о товаре, если они есть
                 if product_data:
                     update_record.update({
-                        "product_name": product_data.get("name") or order.get("product_name"),
-                        "product_article": product_data.get("article") or order.get("product_article"),
-                        "product_category": product_data.get("category") or order.get("product_category"),
-                        "product_brand": product_data.get("brand") or order.get("product_brand")
+                        "product_name": product_name,
+                        "product_article": product_article,
+                        "product_category": product_category,
+                        "product_brand": product_brand
                     })
                 else:
                     # Используем данные из заказа, если они есть
                     update_record.update({
-                        "product_name": order.get("product_name"),
-                        "product_article": order.get("product_article"),
-                        "product_category": order.get("product_category"),
-                        "product_brand": order.get("product_brand")
+                        "product_name": product_name,
+                        "product_article": product_article,
+                        "product_category": product_category,
+                        "product_brand": product_brand
                     })
                 records_to_update.append(update_record)
             else:
@@ -307,18 +425,18 @@ class OneCSalesSyncService:
                 # Добавляем данные о товаре, если они есть
                 if product_data:
                     insert_record.update({
-                        "product_name": product_data.get("name") or order.get("product_name"),
-                        "product_article": product_data.get("article") or order.get("product_article"),
-                        "product_category": product_data.get("category") or order.get("product_category"),
-                        "product_brand": product_data.get("brand") or order.get("product_brand")
+                        "product_name": product_name,
+                        "product_article": product_article,
+                        "product_category": product_category,
+                        "product_brand": product_brand
                     })
                 else:
                     # Используем данные из заказа, если они есть
                     insert_record.update({
-                        "product_name": order.get("product_name"),
-                        "product_article": order.get("product_article"),
-                        "product_category": order.get("product_category"),
-                        "product_brand": order.get("product_brand")
+                        "product_name": product_name,
+                        "product_article": product_article,
+                        "product_category": product_category,
+                        "product_brand": product_brand
                     })
                 records_to_insert.append(insert_record)
         
@@ -351,6 +469,7 @@ class OneCSalesSyncService:
                         stmt = pg_insert(SalesRecord).values(records_with_id)
                         stmt = stmt.on_conflict_do_update(
                             index_elements=['external_id'],
+                            index_where=SalesRecord.external_id.isnot(None),
                             set_={
                                 'revenue': stmt.excluded.revenue,
                                 'quantity': stmt.excluded.quantity,
@@ -459,6 +578,12 @@ class OneCSalesSyncService:
         # Агрегируем метрики по дням
         await self._aggregate_daily_metrics(start_date, end_date)
         
+        # Обновляем предпочитаемый магазин для затронутых клиентов текущего батча
+        try:
+            await self._refresh_preferred_store_for_period(start_date, end_date, batch_id)
+        except Exception:
+            logger.warning("Не удалось обновить предпочитаемый магазин по результатам синхронизации", exc_info=True)
+        
         # Логируем итоговую статистику по магазинам и товарам
         if inserted > 0 or updated > 0:
             stats_result = await self.db.execute(
@@ -486,6 +611,65 @@ class OneCSalesSyncService:
             "updated": updated,
             "skipped": skipped
         }
+
+    async def _cleanup_records_for_check_period(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        orders: List[Dict[str, Any]],
+    ) -> None:
+        """
+        После перехода аналитики на чеки:
+        - убираем строки отчетов за локальные даты периода, иначе выручка задваивается;
+        - пересобираем документы чеков целиком, чтобы не оставались старые строки с другим LineNumber.
+        """
+        try:
+            local_start = start_date.date()
+            local_end = end_date.date()
+            report_result = await self.db.execute(
+                text(
+                    """
+                    DELETE FROM sales_records
+                    WHERE (sale_date AT TIME ZONE 'Europe/Moscow')::date >= :start_date
+                      AND (sale_date AT TIME ZONE 'Europe/Moscow')::date <= :end_date
+                      AND (
+                        raw_data->>'Recorder_Type' ILIKE '%ОтчетОРозничныхПродажах%'
+                        OR raw_data->>'Документ_Type' ILIKE '%ОтчетОРозничныхПродажах%'
+                      )
+                    """
+                ),
+                {"start_date": local_start, "end_date": local_end},
+            )
+
+            document_ids = sorted({o.get("document_id") for o in orders if o.get("document_id")})
+            check_deleted = 0
+            if document_ids:
+                check_result = await self.db.execute(
+                    text(
+                        """
+                        DELETE FROM sales_records
+                        WHERE document_id = ANY(:document_ids)
+                          AND (
+                            raw_data->>'Recorder_Type' ILIKE '%ЧекККМ%'
+                            OR raw_data->>'Документ_Type' ILIKE '%ЧекККМ%'
+                          )
+                        """
+                    ),
+                    {"document_ids": document_ids},
+                )
+                check_deleted = check_result.rowcount or 0
+
+            report_deleted = report_result.rowcount or 0
+            if report_deleted or check_deleted:
+                logger.info(
+                    "Очищены строки перед чековым синком: отчетов=%s, чеков=%s",
+                    report_deleted,
+                    check_deleted,
+                )
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            logger.warning("Не удалось очистить строки отчетов перед чековым синком", exc_info=True)
     
     def _parse_date(self, date_value: Any) -> Optional[datetime]:
         """Парсинг даты из различных форматов"""
@@ -506,11 +690,15 @@ class OneCSalesSyncService:
                     "%Y-%m-%d"
                 ]:
                     try:
-                        return datetime.strptime(date_value.split('.')[0].replace('Z', ''), fmt)
+                        parsed = datetime.strptime(date_value.split('.')[0].replace('Z', ''), fmt)
+                        return parsed.replace(tzinfo=timezone(timedelta(hours=3)))
                     except:
                         continue
                 # Если ничего не подошло, пробуем ISO формат
-                return datetime.fromisoformat(date_value.replace('Z', '+00:00').split('.')[0])
+                parsed = datetime.fromisoformat(date_value.replace('Z', '+00:00').split('.')[0])
+                if parsed.tzinfo is None:
+                    return parsed.replace(tzinfo=timezone(timedelta(hours=3)))
+                return parsed
             except:
                 logger.warning(f"Не удалось распарсить дату: {date_value}")
                 return None

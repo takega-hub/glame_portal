@@ -16,7 +16,13 @@ class CampaignService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.metrics_service = MetricsService(db)
-        self.marketing_agent = MarketingAgent(db)
+        self._marketing_agent = None
+
+    @property
+    def marketing_agent(self) -> MarketingAgent:
+        if self._marketing_agent is None:
+            self._marketing_agent = MarketingAgent(self.db)
+        return self._marketing_agent
     
     async def create_campaign(
         self,

@@ -1,0 +1,11 @@
+{
+  "raw_paths": {
+    "agent_tasks": "/workspace/glame-platform/reports/api_agent_tasks_20260528_1004.http",
+    "director_kanban": "/workspace/glame-platform/reports/api_director_kanban_20260528_1004.http"
+  },
+  "agent_task_count": 0,
+  "agent_status_counts": {},
+  "by_target_agent": {},
+  "relevant_tasks": [],
+  "director_kanban_columns": []
+}

@@ -9,6 +9,7 @@ from app.database.connection import get_db
 from app.api.auth import get_current_user
 from app.models.user import User
 from app.models.marketing_campaign import MarketingCampaign
+from app.models.agent_interaction import InteractionStatus
 from app.services.campaign_service import CampaignService
 from app.agents.marketing_agent import MarketingAgent
 
@@ -383,7 +384,7 @@ async def auto_start_campaigns(
 @router.post("/campaigns/auto-stop")
 async def auto_stop_campaigns(
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Автоматическая остановка кампаний (фоновый процесс)"""
     try:
@@ -392,3 +393,73 @@ async def auto_stop_campaigns(
         return {"status": "accepted", "message": "Auto-stop task started"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error starting auto-stop task: {str(e)}")
+
+
+class DashboardResponse(BaseModel):
+    pending_approvals: int
+    active_tasks: int
+    completed_today: int
+    tomorrow_plan_ready: bool
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/ai-marketer/dashboard", response_model=DashboardResponse)
+async def get_ai_marketer_dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
+    """API эндпоинт для получения реальных данных дашборда AI Marketing Director (замена заглушки)"""
+    from sqlalchemy import select, func
+    from app.models.agent_interaction import AgentInteractionTask, InteractionStatus
+    
+    # Подсчитываем ожидающие согласования задачи (в статусе pending_approval)
+    pending_query = select(func.count()).select_from(AgentInteractionTask).where(
+        AgentInteractionTask.status == InteractionStatus.PENDING_APPROVAL.value
+    )
+    if current_user:
+        # source_agent is a string agent identifier, while current_user.id is a UUID.
+        # Cast the user id before comparing so PostgreSQL does not try to compare
+        # varchar <> uuid.
+        pending_query = pending_query.where(AgentInteractionTask.source_agent != str(current_user.id))
+    pending_res = await db.execute(pending_query)
+    pending_approvals = pending_res.scalar() or 0
+    
+    # Подсчитываем активные задачи
+    active_query = select(func.count()).select_from(AgentInteractionTask).where(
+        AgentInteractionTask.status.in_([
+            InteractionStatus.PROCESSING.value,
+            InteractionStatus.QUEUED.value
+        ])
+    )
+    active_res = await db.execute(active_query)
+    active_tasks = active_res.scalar() or 0
+    
+    # Подсчитываем завершенные за сегодня задачи
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    completed_query = select(func.count()).select_from(AgentInteractionTask).where(
+        AgentInteractionTask.status == InteractionStatus.COMPLETED.value,
+        AgentInteractionTask.completed_at >= today_start
+    )
+    completed_res = await db.execute(completed_query)
+    completed_today = completed_res.scalar() or 0
+    
+    # Проверяем, готов ли план на завтра
+    # Ищем задачу с планом на завтра, которая помечена как готовая к согласованию
+    tomorrow_plan_ready = False
+    plan_query = select(AgentInteractionTask).where(
+        AgentInteractionTask.task_type == "tomorrow_plan_preparation",
+        AgentInteractionTask.status == InteractionStatus.COMPLETED.value
+    ).order_by(AgentInteractionTask.created_at.desc()).limit(1)
+    plan_res = await db.execute(plan_query)
+    plan_task = plan_res.scalar_one_or_none()
+    if plan_task and (datetime.utcnow() - plan_task.completed_at).total_seconds() < 86400:
+        tomorrow_plan_ready = True
+    
+    return DashboardResponse(
+        pending_approvals=pending_approvals,
+        active_tasks=active_tasks,
+        completed_today=completed_today,
+        tomorrow_plan_ready=tomorrow_plan_ready
+    )

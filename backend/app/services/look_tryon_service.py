@@ -1,14 +1,22 @@
 import os
 import base64
 import httpx
-from typing import Dict, Optional, List
+import json
+import tempfile
+from io import BytesIO
+from typing import Dict, Optional, List, Any
 from uuid import UUID
 from pathlib import Path
 import logging
 from datetime import datetime
+from PIL import Image
 
 from dotenv import load_dotenv, find_dotenv
+from sqlalchemy import select
+from app.database.connection import AsyncSessionLocal
+from app.models.user import User
 from app.services.llm_service import llm_service
+from app.services.photo_analysis_orchestrator import photo_analysis_orchestrator
 
 load_dotenv(find_dotenv(usecwd=True), override=False)
 
@@ -22,7 +30,7 @@ S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY")
 S3_SECRET_KEY = os.getenv("S3_SECRET_KEY")
 
 # Директория для локального хранения изображений
-LOCAL_STORAGE_PATH = Path("uploads/tryon")
+LOCAL_STORAGE_PATH = Path(__file__).resolve().parents[2] / "uploads" / "tryon"
 
 
 class LookTryOnService:
@@ -38,6 +46,13 @@ class LookTryOnService:
             LOCAL_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
     
     async def analyze_photo(self, photo_data: bytes, filename: Optional[str] = None) -> Dict:
+        return await photo_analysis_orchestrator.analyze_photo(
+            photo_data=photo_data,
+            filename=filename,
+            legacy_provider=self._legacy_analyze_photo,
+        )
+
+    async def _legacy_analyze_photo(self, photo_data: bytes, filename: Optional[str] = None) -> Dict:
         """
         Анализ фото пользователя (цветотип, стиль, тип внешности)
         
@@ -53,7 +68,8 @@ class LookTryOnService:
                 - recommendations: рекомендации по стилю
         """
         try:
-            # Конвертируем изображение в base64 для отправки в vision model
+            # Legacy fallback: vision-LLM анализ сохраняется как backup path,
+            # пока production pipeline не вынесен в отдельный ML inference service.
             image_base64 = base64.b64encode(photo_data).decode('utf-8')
             
             # Используем vision model для анализа (если доступен через OpenRouter)
@@ -343,10 +359,8 @@ class LookTryOnService:
             str: URL сохраненного изображения
         """
         try:
-            # Генерируем имя файла
-            if not filename:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"user_{user_id}_{timestamp}.jpg"
+            photo_data = self._normalize_photo_to_jpeg(photo_data)
+            filename = await self._stable_photo_filename(user_id, filename)
             
             if self.storage_type == "s3":
                 url = await self._save_to_s3(photo_data, filename, user_id)
@@ -365,14 +379,48 @@ class LookTryOnService:
         user_id: UUID
     ) -> str:
         """Сохранение локально"""
-        user_dir = LOCAL_STORAGE_PATH / str(user_id)
+        user_folder = await self._user_storage_folder(user_id)
+        user_dir = LOCAL_STORAGE_PATH / user_folder
         user_dir.mkdir(parents=True, exist_ok=True)
+        self._cleanup_user_storage(user_dir)
         
         file_path = user_dir / filename
         file_path.write_bytes(photo_data)
         
         # Возвращаем относительный URL (в реальной реализации нужен абсолютный)
-        return f"/uploads/tryon/{user_id}/{filename}"
+        return f"/uploads/tryon/{user_folder}/{filename}"
+
+    async def save_photo_analysis_artifacts(
+        self,
+        photo_url: str,
+        payload: dict[str, Any],
+    ) -> str | None:
+        if self.storage_type != "local":
+            logger.info("Photo analysis sidecar is skipped for storage_type=%s", self.storage_type)
+            return None
+
+        photo_path = self._local_path_from_url(photo_url)
+        if photo_path is None:
+            logger.warning("Не удалось определить локальный путь для photo_url=%s", photo_url)
+            return None
+
+        analysis_path = photo_path.with_name(f"{photo_path.stem}.analysis.json")
+        analysis_payload = {
+            "schema": "photo-analysis-sidecar/v1",
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "photo_url": photo_url,
+            "photo_filename": photo_path.name,
+            "quality_status": payload.get("quality_status"),
+            "can_continue": payload.get("can_continue"),
+            "retry_hint": payload.get("retry_hint"),
+            "human_readable": payload.get("human_readable", {}),
+            "user_facing": payload.get("user_facing", {}),
+            "analysis": payload.get("analysis", {}),
+            "recommendations": payload.get("recommendations", {}),
+            "recommended_products": payload.get("recommended_products", []),
+        }
+        self._safe_write_json(analysis_path, analysis_payload)
+        return f"/uploads/tryon/{photo_path.parent.name}/{analysis_path.name}"
     
     async def _save_to_s3(
         self,
@@ -391,7 +439,8 @@ class LookTryOnService:
                 aws_secret_access_key=S3_SECRET_KEY
             )
             
-            key = f"tryon/{user_id}/{filename}"
+            user_folder = await self._user_storage_folder(user_id)
+            key = f"tryon/{user_folder}/{filename}"
             s3_client.put_object(
                 Bucket=S3_BUCKET_NAME,
                 Key=key,
@@ -408,6 +457,86 @@ class LookTryOnService:
         except Exception as e:
             logger.error(f"Ошибка при сохранении в S3: {e}")
             raise
+
+    async def _stable_photo_filename(
+        self,
+        user_id: UUID,
+        original_filename: Optional[str],
+    ) -> str:
+        user_folder = await self._user_storage_folder(user_id)
+        return f"{user_folder}.jpg"
+
+    async def _user_storage_folder(self, user_id: UUID) -> str:
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(User).where(User.id == user_id))
+                user = result.scalar_one_or_none()
+        except Exception as exc:
+            logger.warning("Не удалось получить пользователя для папки tryon: %s", exc)
+            user = None
+
+        raw_folder = (
+            getattr(user, "discount_card_number", None)
+            or str(user_id)
+        )
+        normalized = "".join(
+            ch if ch.isalnum() or ch in {"-", "_"} else "_"
+            for ch in str(raw_folder).strip()
+        ).strip("_")
+        return normalized or str(user_id)
+
+    def _local_path_from_url(self, photo_url: str) -> Path | None:
+        prefix = "/uploads/tryon/"
+        if not photo_url.startswith(prefix):
+            return None
+        relative = photo_url[len(prefix):].strip("/")
+        if not relative:
+            return None
+        return LOCAL_STORAGE_PATH / relative
+
+    def _normalize_photo_to_jpeg(self, photo_data: bytes) -> bytes:
+        with Image.open(BytesIO(photo_data)) as img:
+            if img.mode in ("RGBA", "LA") or (
+                img.mode == "P" and "transparency" in img.info
+            ):
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                background.paste(img.convert("RGBA"), mask=img.convert("RGBA").getchannel("A"))
+                converted = background
+            else:
+                converted = img.convert("RGB")
+
+            output = BytesIO()
+            converted.save(output, format="JPEG", quality=92, optimize=True)
+            return output.getvalue()
+
+    def _cleanup_user_storage(self, user_dir: Path) -> None:
+        if not user_dir.exists():
+            return
+        allowed_suffixes = {".jpg", ".jpeg", ".png", ".webp", ".json"}
+        for path in user_dir.iterdir():
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in allowed_suffixes:
+                continue
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                logger.warning("Не удалось удалить старый файл %s: %s", path, exc)
+
+    def _safe_write_json(self, filepath: Path, payload: dict[str, Any]) -> None:
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=str(filepath.parent),
+            delete=False,
+        ) as tmp:
+            json.dump(payload, tmp, ensure_ascii=False, indent=2, default=str)
+            tmp.flush()
+            temp_name = tmp.name
+        Path(temp_name).replace(filepath)
 
 
 # Singleton instance

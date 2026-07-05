@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { communication, GenerateMessageRequest, GenerateMessageResponse, CustomerMessageItem } from '@/lib/api';
 
 interface MessageGeneratorProps {
@@ -27,26 +27,60 @@ export default function MessageGenerator({ clientId, clientName, purchaseHistory
   const [error, setError] = useState<string | null>(null);
 
   // История сообщений
+  const PAGE_SIZE = 50;
   const [messages, setMessages] = useState<CustomerMessageItem[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [totalMessages, setTotalMessages] = useState<number>(0);
+  const [kind, setKind] = useState<'all' | 'broadcast' | 'individual'>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
 
-  const loadMessages = useCallback(async () => {
+  const listParams = useMemo(
+    () => ({
+      kind,
+      date_from: dateFrom || undefined,
+      date_to: dateTo || undefined,
+      sort_by: 'created_at',
+      desc: true,
+    }),
+    [dateFrom, dateTo, kind]
+  );
+
+  const loadFirstPage = useCallback(async () => {
     if (!clientId) return;
     setLoadingMessages(true);
+    setMessages([]);
     try {
-      const data = await communication.getCustomerMessages(clientId);
+      const data = await communication.getCustomerMessages(clientId, PAGE_SIZE, 0, listParams);
+      setTotalMessages(data.total ?? 0);
       setMessages(data.items);
     } catch {
       setMessages([]);
+      setTotalMessages(0);
     } finally {
       setLoadingMessages(false);
     }
-  }, [clientId]);
+  }, [clientId, listParams]);
+
+  const loadMore = useCallback(async () => {
+    if (!clientId) return;
+    if (loadingMore || loadingMessages) return;
+    if (messages.length >= totalMessages) return;
+    setLoadingMore(true);
+    try {
+      const data = await communication.getCustomerMessages(clientId, PAGE_SIZE, messages.length, listParams);
+      setTotalMessages(data.total ?? totalMessages);
+      setMessages((prev) => [...prev, ...data.items]);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [clientId, listParams, loadingMessages, loadingMore, messages.length, totalMessages]);
 
   useEffect(() => {
-    loadMessages();
-  }, [loadMessages]);
+    loadFirstPage();
+  }, [loadFirstPage]);
 
   // Получаем уникальные бренды из истории покупок
   const availableBrands = Array.from(new Set(purchaseHistory.map(p => p.brand).filter(Boolean)));
@@ -55,7 +89,7 @@ export default function MessageGenerator({ clientId, clientName, purchaseHistory
     setActionLoading(msg.id);
     try {
       await communication.deleteCustomerMessage(msg.id);
-      await loadMessages();
+      await loadFirstPage();
     } finally {
       setActionLoading(null);
     }
@@ -65,7 +99,7 @@ export default function MessageGenerator({ clientId, clientName, purchaseHistory
     setActionLoading(msg.id);
     try {
       await communication.markMessageSent(msg.id);
-      await loadMessages();
+      await loadFirstPage();
     } finally {
       setActionLoading(null);
     }
@@ -111,7 +145,7 @@ export default function MessageGenerator({ clientId, clientName, purchaseHistory
       clearInterval(progressInterval);
       setProgress(100);
       setMessage(response);
-      await loadMessages();
+      await loadFirstPage();
 
       // Сбрасываем прогресс через секунду
       setTimeout(() => {
@@ -141,6 +175,49 @@ export default function MessageGenerator({ clientId, clientName, purchaseHistory
         <p className="text-sm text-gray-500 mb-4">
           Ранее сгенерированные сообщения для этого покупателя. Управляйте статусами и контекстом диалога.
         </p>
+        <div className="flex flex-col md:flex-row md:items-end gap-3 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Тип</label>
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as any)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-pink-500 focus:border-pink-500"
+            >
+              <option value="all">Все</option>
+              <option value="broadcast">Рассылки</option>
+              <option value="individual">Персональные</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">С</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-pink-500 focus:border-pink-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">По</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-pink-500 focus:border-pink-500"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={loadFirstPage}
+            disabled={loadingMessages || loadingMore}
+            className="px-4 py-2 bg-gray-50 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-100 disabled:opacity-50 border border-gray-200"
+          >
+            Обновить
+          </button>
+          <div className="text-sm text-gray-500 md:ml-auto">
+            {totalMessages > 0 ? `Показано ${messages.length} из ${totalMessages}` : '—'}
+          </div>
+        </div>
         {loadingMessages ? (
           <div className="flex items-center justify-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-600" />
@@ -148,82 +225,102 @@ export default function MessageGenerator({ clientId, clientName, purchaseHistory
         ) : messages.length === 0 ? (
           <p className="text-gray-500 py-4">Сообщений пока нет. Сгенерируйте первое сообщение ниже.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Событие / бренд</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Текст</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {messages.map((msg) => (
-                  <tr key={msg.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
-                      {new Date(msg.created_at).toLocaleString('ru-RU', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      <span className="font-medium">{EVENT_TYPE_LABELS[msg.event_type || ''] || msg.event_type || '—'}</span>
-                      {(msg.event_brand || msg.event_store) && (
-                        <span className="block text-gray-500 text-xs">
-                          {[msg.event_brand, msg.event_store].filter(Boolean).join(' · ')}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 max-w-md">
-                      <p className="line-clamp-2" title={msg.message}>
-                        {msg.message}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {msg.status === 'sent' && msg.sent_at ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Отправлено {new Date(msg.sent_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                          Новое
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
-                      {actionLoading === msg.id ? (
-                        <span className="text-gray-400">...</span>
-                      ) : (
-                        <>
-                          {msg.status === 'new' && (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Событие / бренд</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Текст</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {messages.map((msg) => (
+                    <tr key={msg.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        {new Date(msg.created_at).toLocaleString('ru-RU', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        <span className="font-medium">{EVENT_TYPE_LABELS[msg.event_type || ''] || msg.event_type || '—'}</span>
+                        {(msg.event_brand || msg.event_store) && (
+                          <span className="block text-gray-500 text-xs">
+                            {[msg.event_brand, msg.event_store].filter(Boolean).join(' · ')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 max-w-md">
+                        <p className="line-clamp-2" title={msg.message}>
+                          {msg.message}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {msg.status === 'sent' && msg.sent_at ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Отправлено{' '}
+                            {new Date(msg.sent_at).toLocaleDateString('ru-RU', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                            Новое
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
+                        {actionLoading === msg.id ? (
+                          <span className="text-gray-400">...</span>
+                        ) : (
+                          <>
+                            {msg.status === 'new' && (
+                              <button
+                                type="button"
+                                onClick={() => handleMarkSent(msg)}
+                                className="text-pink-600 hover:text-pink-800 font-medium mr-3"
+                              >
+                                Отправить
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => handleMarkSent(msg)}
-                              className="text-pink-600 hover:text-pink-800 font-medium mr-3"
+                              onClick={() => handleDelete(msg)}
+                              className="text-red-600 hover:text-red-800 font-medium"
                             >
-                              Отправить
+                              Удалить
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(msg)}
-                            className="text-red-600 hover:text-red-800 font-medium"
-                          >
-                            Удалить
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {messages.length < totalMessages && (
+                <div className="p-4 text-center border-t border-gray-200">
+                  <button
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="text-pink-600 hover:text-pink-700 font-medium disabled:opacity-50"
+                  >
+                    {loadingMore ? 'Загрузка...' : 'Загрузить еще'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 

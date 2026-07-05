@@ -1,0 +1,15 @@
+HTTP 200 OK
+{
+  "orders": [
+    {
+      "created_at": "2026-05-02T20:49:54.781958+00:00",
+      "customer_email": null,
+      "customer_name": "Орешникова Елена",
+      "discount_card": "79162668200",
+      "order_id": "73d1d53f-c080-4fc3-985e-d70bcbe48b4c",
+      "status": "pending",
+      "total_amount": 1208000,
+      "total_amount_rub": 12080.0
+    }
+  ]
+}

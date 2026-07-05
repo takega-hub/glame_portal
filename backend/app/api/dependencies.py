@@ -6,18 +6,64 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.auth import get_current_user
 from app.models.user import User
 from app.database.connection import get_db
+from app.services.admin_access import normalize_role
+
+
+async def _ensure_staff_role(current_user: User, db: AsyncSession) -> str | None:
+    try:
+        try:
+            await db.refresh(current_user)
+        except Exception:
+            pass
+
+        user_role = normalize_role(getattr(current_user, "role", None))
+        is_customer = bool(getattr(current_user, "is_customer", False))
+        email = getattr(current_user, "email", None)
+
+        if is_customer:
+            return user_role
+
+        if email and (not user_role or str(user_role).strip().lower() in {"customer", "user"}):
+            current_user.role = "admin"
+            try:
+                await db.commit()
+                await db.refresh(current_user)
+            except Exception:
+                pass
+            return "admin"
+
+        return user_role
+    except Exception:
+        return normalize_role(getattr(current_user, "role", None))
 
 
 def require_role(role: str):
     """Dependency для проверки роли"""
     async def role_checker(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role != role:
+        if normalize_role(current_user.role) != normalize_role(role):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Требуется роль {role}"
             )
         return current_user
     return role_checker
+
+
+def require_any_role(roles: list[str]):
+    async def roles_checker(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        effective_role = await _ensure_staff_role(current_user, db)
+        normalized_roles = [normalize_role(role) for role in roles]
+        if effective_role not in normalized_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Требуется одна из ролей: {', '.join(roles)}",
+            )
+        return current_user
+
+    return roles_checker
 
 
 def require_customer():
@@ -47,7 +93,7 @@ def require_admin():
                 pass
             
             # Безопасный доступ к роли
-            user_role = getattr(current_user, 'role', None)
+            user_role = normalize_role(getattr(current_user, 'role', None))
             
             # Если роль не установлена, но пользователь имеет email (не покупатель), устанавливаем admin
             if not user_role and current_user.email and not getattr(current_user, 'is_customer', False):
@@ -84,11 +130,31 @@ def require_admin():
 
 def require_marketer():
     """Dependency для проверки, что пользователь - администратор или маркетолог"""
-    async def marketer_checker(current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role not in ["admin", "ai_marketer"]:
+    async def marketer_checker(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        effective_role = await _ensure_staff_role(current_user, db)
+        if effective_role not in ["admin", "marketer"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Требуется роль администратора или AI маркетолога"
+                detail="Требуется роль администратора или маркетолога"
             )
         return current_user
     return marketer_checker
+
+
+def require_content_manager():
+    async def content_checker(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        effective_role = await _ensure_staff_role(current_user, db)
+        if effective_role not in ["admin", "manager"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Требуется роль администратора или управляющего",
+            )
+        return current_user
+
+    return content_checker

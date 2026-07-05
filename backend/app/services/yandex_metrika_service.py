@@ -141,6 +141,34 @@ class YandexMetrikaService:
             "avg_visit_duration": 0.0
         }
     
+    async def get_daily_visits(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
+        dimensions = "ym:s:date"
+        metrics = "ym:s:visits,ym:s:users"
+        data = await self._make_request(
+            metrics=metrics,
+            dimensions=dimensions,
+            start_date=start_date,
+            end_date=end_date,
+            limit=100
+        )
+        rows = []
+        for row in data.get("data", []):
+            d = row["dimensions"][0]["name"]
+            m = row["metrics"]
+            try:
+                day = datetime.strptime(d, "%Y-%m-%d").date().isoformat()
+            except Exception:
+                day = d
+            rows.append({
+                "date": day,
+                "visits": int(m[0]) if len(m) > 0 else 0,
+                "users": int(m[1]) if len(m) > 1 else 0
+            })
+        return rows
     async def get_traffic_sources(
         self,
         start_date: Optional[datetime] = None,

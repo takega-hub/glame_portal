@@ -3,29 +3,21 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
-import WelcomePage from '@/components/welcome/WelcomePage';
-import DesignSwitcher from '@/components/welcome/DesignSwitcher';
+import { getFirstAllowedHref } from '@/config/navigation';
 
 export default function Home() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [loading, isAuthenticated, router]);
+    if (loading) return;
+    if (!isAuthenticated) return void router.replace('/login');
+    router.replace(getFirstAllowedHref(user?.allowed_sections));
+  }, [loading, isAuthenticated, user?.allowed_sections, router]);
 
   if (!isAuthenticated) {
     return null;
   }
 
-  return (
-    <main className="min-h-screen">
-      <div className="absolute top-4 right-4 z-50">
-        <DesignSwitcher />
-      </div>
-      <WelcomePage />
-    </main>
-  );
+  return null;
 }

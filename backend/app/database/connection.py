@@ -64,9 +64,11 @@ else:
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    pool_pre_ping=True,
-    pool_size=5,  # Уменьшаем размер pool для Windows
-    max_overflow=10,
+    pool_pre_ping=False,
+    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
+    pool_size=int(os.getenv("DB_POOL_SIZE", "20")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
 )
 
 # Создаем async session factory

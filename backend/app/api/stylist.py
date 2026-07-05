@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from app.database.connection import get_db, AsyncSessionLocal
 from app.agents.stylist_agent import StylistAgent
 from app.models.session import Session as DBSession
+from app.models.app_store import AppStore
+from app.services.live_stylist_service import get_live_stylist_status
 
 import logging
 
@@ -38,6 +40,20 @@ class RecommendationRequest(BaseModel):
     style: Optional[str] = None
     mood: Optional[str] = None
     city: Optional[str] = None
+
+
+class StylistStoreResponse(BaseModel):
+    id: str
+    city: str
+    title: str
+    address: str
+    working_hours: Optional[str] = None
+    phone: Optional[str] = None
+    comment: Optional[str] = None
+    image_url: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    is_active: bool
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -135,6 +151,48 @@ async def get_recommendations(request: RecommendationRequest, db: AsyncSession =
             for l in looks
         ]
     }
+
+
+@router.get("/stores", response_model=List[StylistStoreResponse])
+async def get_stylist_stores(
+    city: Optional[str] = Query(None, description="Поиск по городу (частичное совпадение)"),
+    active_only: bool = Query(True, description="Только активные магазины"),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Инструмент для стилиста: магазины из контента приложения (app_stores).
+    Используется для корректных ответов о наличии офлайн-магазинов.
+    """
+    stmt = select(AppStore)
+    if active_only:
+        stmt = stmt.where(AppStore.is_active == True)
+    if city and city.strip():
+        stmt = stmt.where(AppStore.city.ilike(f"%{city.strip()}%"))
+    stmt = stmt.order_by(AppStore.sort_order.asc(), AppStore.city.asc(), AppStore.title.asc()).limit(limit)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        StylistStoreResponse(
+            id=str(x.id),
+            city=x.city,
+            title=x.title,
+            address=x.address,
+            working_hours=x.working_hours,
+            phone=x.phone,
+            comment=x.comment,
+            image_url=x.image_url,
+            latitude=x.latitude,
+            longitude=x.longitude,
+            is_active=bool(x.is_active),
+        )
+        for x in rows
+    ]
+
+
+@router.get("/live-status")
+async def get_live_stylist_working_status():
+    """Статус живого стилиста по серверному времени МСК."""
+    return get_live_stylist_status()
 
 
 @router.get("/history/{session_id}")

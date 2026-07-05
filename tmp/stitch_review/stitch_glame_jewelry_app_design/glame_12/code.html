@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GLAME - Navigation Drawer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "inverse-on-surface": "#2f3133",
+                      "secondary-fixed": "#e2e2e5",
+                      "on-primary-fixed-variant": "#444748",
+                      "tertiary-fixed": "#dee3e7",
+                      "on-tertiary-container": "#606569",
+                      "on-primary-fixed": "#191c1d",
+                      "on-primary": "#2e3132",
+                      "surface-container-high": "#282a2c",
+                      "secondary-container": "#454749",
+                      "tertiary": "#ffffff",
+                      "surface-tint": "#c4c7c8",
+                      "on-background": "#e2e2e5",
+                      "inverse-surface": "#e2e2e5",
+                      "on-secondary": "#2f3133",
+                      "secondary": "#c6c6c9",
+                      "on-secondary-fixed-variant": "#454749",
+                      "on-surface-variant": "#c4c7c8",
+                      "border-gray": "#5C6064",
+                      "background": "#121416",
+                      "surface-variant": "#333537",
+                      "surface": "#121416",
+                      "surface-bright": "#38393c",
+                      "outline": "#8e9192",
+                      "outline-variant": "#434749",
+                      "tertiary-fixed-dim": "#c2c7cb",
+                      "on-secondary-container": "#b4b5b7",
+                      "primary-container": "#e1e3e4",
+                      "surface-container": "#1e2022",
+                      "cold-light-gray": "#C7CBCF",
+                      "on-primary-container": "#626566",
+                      "primary": "#ffffff",
+                      "error-container": "#93000a",
+                      "on-tertiary": "#2c3134",
+                      "on-error-container": "#ffdad6",
+                      "error": "#ffb4ab",
+                      "on-tertiary-fixed": "#171c1f",
+                      "soft-gray": "#D8DADB",
+                      "surface-container-lowest": "#0c0e10",
+                      "surface-container-highest": "#333537",
+                      "primary-fixed-dim": "#c4c7c8",
+                      "tertiary-container": "#dee3e7",
+                      "secondary-fixed-dim": "#c6c6c9",
+                      "surface-container-low": "#1a1c1e",
+                      "on-secondary-fixed": "#1a1c1e",
+                      "surface-dim": "#121416",
+                      "on-surface": "#e2e2e5",
+                      "on-error": "#690005",
+                      "primary-fixed": "#e1e3e4",
+                      "inverse-primary": "#5c5f60",
+                      "on-tertiary-fixed-variant": "#42474b"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "page-padding-h": "28px",
+                      "button-gap": "16px",
+                      "safe-air-bottom": "24px",
+                      "grid-gutter": "1px",
+                      "top-bar-height": "56px",
+                      "bottom-nav-height": "96px"
+              },
+              "fontFamily": {
+                      "label-sm": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-lg-mobile": [
+                              "Hanken Grotesk"
+                      ],
+                      "display-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-lg": [
+                              "Hanken Grotesk"
+                      ]
+              },
+              "fontSize": {
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "0em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&display=swap');
+        
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Enforce minimalist architectural constraints */
+        * {
+            border-radius: 0px !important;
+        }
+        
+        .nav-link {
+            transition: color 0.3s ease;
+        }
+        
+        .nav-link:hover {
+            color: theme('colors.primary');
+        }
+        
+        .nav-link.active {
+            color: theme('colors.primary');
+            border-bottom: 1px solid theme('colors.primary');
+            padding-bottom: 4px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="h-screen w-full flex flex-col overflow-hidden bg-background">
+<!-- Navigation Drawer Overlay (Simulated Full-screen) -->
+<div class="fixed inset-0 z-50 flex flex-col bg-surface bg-opacity-95 backdrop-blur-sm h-full w-full max-w-full lg:max-w-md ml-auto border-l border-border-gray">
+<!-- Header / Top Bar -->
+<header class="flex justify-between items-center w-full px-[28px] h-[56px] border-b border-border-gray shrink-0">
+<!-- Invisible spacer for flex balance -->
+<div class="w-[24px]"></div>
+<h1 class="text-headline-lg-mobile font-headline-lg-mobile tracking-tighter text-primary">
+                GLAME
+            </h1>
+<button aria-label="Close menu" class="text-on-surface hover:text-primary transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">close</span>
+</button>
+</header>
+<!-- Menu Content Canvas -->
+<main class="flex-1 overflow-y-auto px-[28px] py-8 flex flex-col justify-between scrollbar-hide">
+<!-- Primary Navigation List -->
+<nav class="flex flex-col space-y-6">
+<!-- Using generic intent to find active state. "Главная" (Home) is logical for a base drawer view if no specific page is defined -->
+<a class="nav-link active font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Главная</a>
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Украшения</a>
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Мой стиль</a>
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Подбор</a>
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Профиль</a>
+<div class="h-4"></div> <!-- Structural spacer -->
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Новинки</a>
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Коллекции</a>
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Бренды</a>
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Пространства</a>
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Сервис</a>
+<a class="nav-link text-on-surface-variant font-headline-lg-mobile text-headline-lg-mobile w-max" href="#">Сертификат</a>
+</nav>
+<!-- Secondary Actions (Bottom) -->
+<div class="mt-12 pt-8 border-t border-border-gray flex flex-col pb-safe-air-bottom">
+<a class="nav-link text-secondary font-body-lg text-body-lg flex items-center space-x-3 w-max group" href="#">
+<span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 0;">logout</span>
+<span>Вход / Выход</span>
+</a>
+</div>
+</main>
+</div>
+<!-- Background placeholder to show transparency of the drawer -->
+<div class="absolute inset-0 -z-10 bg-surface-container opacity-50 flex items-center justify-center">
+<p class="text-on-surface-variant font-body-md text-body-md">Background Content Area</p>
+</div>
+</body></html>

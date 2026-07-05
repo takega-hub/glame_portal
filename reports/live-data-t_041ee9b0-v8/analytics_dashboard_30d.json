@@ -1,0 +1,52 @@
+HTTP 200 OK
+{
+  "aov": {
+    "aov": 0.0,
+    "order_count": 0,
+    "period": {
+      "end": "2026-05-28T10:49:24.159436",
+      "start": "2026-04-28T10:49:24.159436"
+    },
+    "total_revenue": 0.0
+  },
+  "conversion": {
+    "conversion_rates": {
+      "look_to_purchase": 0.0,
+      "product_to_purchase": 0.0
+    },
+    "events": {
+      "chat_message": 0,
+      "look_view": 1,
+      "product_click": 3,
+      "purchase": 0
+    },
+    "period": {
+      "end": "2026-05-28T10:49:24.159436",
+      "start": "2026-04-28T10:49:24.159436"
+    }
+  },
+  "engagement": {
+    "avg_events_per_session": 8.76923076923077,
+    "avg_session_duration_seconds": 63295.8491449,
+    "period": {
+      "end": "2026-05-28T10:49:24.159436",
+      "start": "2026-04-28T10:49:24.159436"
+    },
+    "total_events": 114,
+    "total_sessions": 13,
+    "unique_products_viewed": 1
+  },
+  "events_by_type": {
+    "look_view": 1,
+    "page_view": 85,
+    "product_click": 3,
+    "ui_click": 24,
+    "yandex_metrika_sync": 1
+  },
+  "period": {
+    "days": 30,
+    "end": "2026-05-28T10:49:24.159436",
+    "start": "2026-04-28T10:49:24.159436"
+  },
+  "total_events": 114
+}

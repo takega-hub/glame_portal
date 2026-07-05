@@ -14,12 +14,15 @@ class InteractionStatus(str, enum.Enum):
     PENDING = "pending"  # Ожидает обработки
     VALIDATING = "validating"  # Проходит валидацию
     VALIDATED = "validated"  # Прошел валидацию
-    REJECTED = "rejected"  # Отклонен (не прошел валидацию)
+    PENDING_APPROVAL = "pending_approval"  # Ожидает согласования (человеческого аппрува)
+    APPROVED = "approved"  # Одобрен
+    REJECTED = "rejected"  # Отклонен (не прошел валидацию или аппрув)
     QUEUED = "queued"  # В очереди на выполнение
     PROCESSING = "processing"  # В процессе выполнения
     COMPLETED = "completed"  # Выполнен успешно
     FAILED = "failed"  # Ошибка выполнения
     CANCELLED = "cancelled"  # Отменен
+    DELETED = "deleted"
 
 
 class TaskPriority(int, enum.Enum):

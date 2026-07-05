@@ -1,0 +1,4569 @@
+{
+  "collected_at": "2026-05-28T09:14:52.188219+00:00",
+  "base_url": "http://172.17.0.1:18000",
+  "task_id": "19a200b8-0628-4f2e-87cd-1ab123e2dfd9",
+  "results": {
+    "/health": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "status": "healthy"
+      }
+    },
+    "/api/agent-interactions/tasks/19a200b8-0628-4f2e-87cd-1ab123e2dfd9": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "id": "19a200b8-0628-4f2e-87cd-1ab123e2dfd9",
+        "source_agent": "cron-scheduler",
+        "target_agent": "analytics-agent",
+        "task_type": "daily_marketing_analysis",
+        "task_context": {
+          "cron_title": "Ежедневный маркетинговый анализ",
+          "manual_run": false,
+          "cron_job_id": "marketing_daily_analysis",
+          "created_from": "admin_cron",
+          "cron_category": "analytics",
+          "schedule_type": "daily"
+        },
+        "input_data": {
+          "title": "Ежедневный маркетинговый анализ",
+          "parameters": {
+            "period": "today",
+            "approval_required": false
+          },
+          "description": "AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.",
+          "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+        },
+        "target_metrics": {},
+        "requirements": {
+          "show_sources": true,
+          "use_real_data_only": true,
+          "no_mass_send_without_admin_approval": true
+        },
+        "constraints": {},
+        "status": "pending",
+        "priority": 3,
+        "validation_result": null,
+        "validation_errors": [],
+        "output_data": null,
+        "output_metadata": {},
+        "error_message": null,
+        "created_at": "2026-05-27T18:00:49.655612+00:00",
+        "scheduled_at": "2026-05-27T18:00:49.681377+00:00",
+        "started_at": null,
+        "completed_at": null,
+        "deadline_at": null
+      }
+    },
+    "/api/agent-interactions/tasks/19a200b8-0628-4f2e-87cd-1ab123e2dfd9/logs": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": [
+        {
+          "id": "373e5de3-d4b0-47cb-a3b3-03906b978ca8",
+          "task_id": "19a200b8-0628-4f2e-87cd-1ab123e2dfd9",
+          "agent_name": "cron-scheduler",
+          "event_type": "cron_job_triggered",
+          "message": "CRON запустил регламент: Ежедневный маркетинговый анализ",
+          "event_data": {
+            "job_id": "marketing_daily_analysis",
+            "manual": false,
+            "target_agent": "analytics-agent"
+          },
+          "created_at": "2026-05-27T18:00:49.655612+00:00"
+        }
+      ]
+    },
+    "/api/agent-interactions/tasks/19a200b8-0628-4f2e-87cd-1ab123e2dfd9/audit": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "task": {
+          "id": "19a200b8-0628-4f2e-87cd-1ab123e2dfd9",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "daily_marketing_analysis",
+          "task_context": {
+            "cron_title": "Ежедневный маркетинговый анализ",
+            "manual_run": false,
+            "cron_job_id": "marketing_daily_analysis",
+            "created_from": "admin_cron",
+            "cron_category": "analytics",
+            "schedule_type": "daily"
+          },
+          "input_data": {
+            "title": "Ежедневный маркетинговый анализ",
+            "parameters": {
+              "period": "today",
+              "approval_required": false
+            },
+            "description": "AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "priority": 3,
+          "status": "pending",
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "error_details": null,
+          "content_plan_id": null,
+          "content_item_id": null,
+          "scheduled_at": "2026-05-27T18:00:49.681377+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null,
+          "timeout_seconds": 300,
+          "retry_count": 0,
+          "max_retries": 3,
+          "created_at": "2026-05-27T18:00:49.655612+00:00",
+          "updated_at": null
+        },
+        "logs": [
+          {
+            "id": "373e5de3-d4b0-47cb-a3b3-03906b978ca8",
+            "task_id": "19a200b8-0628-4f2e-87cd-1ab123e2dfd9",
+            "agent_name": "cron-scheduler",
+            "event_type": "cron_job_triggered",
+            "event_data": {
+              "job_id": "marketing_daily_analysis",
+              "manual": false,
+              "target_agent": "analytics-agent"
+            },
+            "message": "CRON запустил регламент: Ежедневный маркетинговый анализ",
+            "execution_context": {},
+            "created_at": "2026-05-27T18:00:49.655612+00:00"
+          }
+        ],
+        "content_handoffs": [],
+        "audit_summary": {
+          "total_events": 1,
+          "total_handoffs": 0,
+          "duration_seconds": null,
+          "status_changes": []
+        }
+      }
+    },
+    "/api/agent-interactions/tasks?target_agent=analytics-agent&limit=50": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": [
+        {
+          "id": "44e7f15e-bc88-459e-a340-a64f47a49b69",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-28T08:54:14.061830+00:00",
+          "scheduled_at": "2026-05-28T08:54:14.103815+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "826999c2-69ed-4f59-a4d7-361bb4fffea1",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-28T07:54:06.293743+00:00",
+          "scheduled_at": "2026-05-28T07:54:06.312185+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "192a6bfd-6fec-4ad1-a835-5e0bf241e156",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-28T06:54:04.776876+00:00",
+          "scheduled_at": "2026-05-28T06:54:04.803409+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "316affe2-5acd-43fc-b8c8-e24e9507860e",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-28T05:54:03.440938+00:00",
+          "scheduled_at": "2026-05-28T05:54:03.469196+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "1d816402-cd50-43dd-b804-87ada2b13d1b",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-28T04:54:02.296108+00:00",
+          "scheduled_at": "2026-05-28T04:54:02.323374+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "95211832-8b05-4a26-ac76-83991df7a19b",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-28T03:54:00.964092+00:00",
+          "scheduled_at": "2026-05-28T03:54:00.986039+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "5b069572-9ac3-47c8-9535-6042c184f5c3",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-28T02:53:59.861110+00:00",
+          "scheduled_at": "2026-05-28T02:53:59.883145+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "6a7d5276-d2a9-4c9a-911b-72af89d12f1b",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-28T01:53:58.712123+00:00",
+          "scheduled_at": "2026-05-28T01:53:58.738205+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "d95ba2b2-182a-4af0-a4c3-6c83f2570e2b",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-28T00:53:57.610679+00:00",
+          "scheduled_at": "2026-05-28T00:53:57.633269+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "c20b5c8e-df8a-4ce7-baf3-a9f0ac976925",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-27T23:53:56.467143+00:00",
+          "scheduled_at": "2026-05-27T23:53:56.490314+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "377dff0d-15f5-474b-adb4-00b97ad16887",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-27T22:53:55.359341+00:00",
+          "scheduled_at": "2026-05-27T22:53:55.381939+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "e4d17c46-eef9-4acc-adad-d125dc92362c",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-27T21:53:54.263878+00:00",
+          "scheduled_at": "2026-05-27T21:53:54.287172+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "aa55a016-4d1a-4ae4-b130-16f54cef426c",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-27T20:53:53.039979+00:00",
+          "scheduled_at": "2026-05-27T20:53:53.068229+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "ebbbc2ff-afdf-49d0-82fb-d9079c4228cc",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-27T19:53:51.870401+00:00",
+          "scheduled_at": "2026-05-27T19:53:51.895422+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "050568d6-c7b9-44ca-bca5-07f5acebe387",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "cron_title": "Контроль синхронизации 1С",
+            "manual_run": false,
+            "cron_job_id": "onec_data_sync_monitor",
+            "created_from": "admin_cron",
+            "cron_category": "data",
+            "schedule_type": "hourly"
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "cancelled",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-27T18:53:50.591742+00:00",
+          "scheduled_at": "2026-05-27T18:53:50.613930+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "19a200b8-0628-4f2e-87cd-1ab123e2dfd9",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "daily_marketing_analysis",
+          "task_context": {
+            "cron_title": "Ежедневный маркетинговый анализ",
+            "manual_run": false,
+            "cron_job_id": "marketing_daily_analysis",
+            "created_from": "admin_cron",
+            "cron_category": "analytics",
+            "schedule_type": "daily"
+          },
+          "input_data": {
+            "title": "Ежедневный маркетинговый анализ",
+            "parameters": {
+              "period": "today",
+              "approval_required": false
+            },
+            "description": "AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "pending",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-27T18:00:49.655612+00:00",
+          "scheduled_at": "2026-05-27T18:00:49.681377+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "7f977911-d43b-4f2a-8c74-94d99fbf3856",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "data_freshness_review",
+          "task_context": {
+            "hermes_last_monitor_result": {
+              "source": "hermes-kanban:t_7c72b6ab",
+              "findings": {
+                "api_health": "healthy",
+                "customers_total": 6216,
+                "sales_7d_orders": 35,
+                "sales_7d_revenue": 428065.0,
+                "sales_latest_date": "2026-05-27",
+                "customers_total_ltv": 66007132.58,
+                "product_sync_status": "completed",
+                "product_sync_started_at": "2026-05-27T15:54:33.024209+00:00",
+                "inventory_analytics_total": 0,
+                "admin_1c_sync_status_error": "HTTP 500: Boolean value of this clause is not defined",
+                "inventory_analytics_health": "no_data",
+                "inventory_dashboard_sku_count": 634,
+                "inventory_dashboard_total_stock": 5708.0
+              },
+              "checked_at": "2026-05-28T09:11:00+00:00",
+              "platform_task_id": "7f977911-d43b-4f2a-8c74-94d99fbf3856",
+              "requires_followup": true,
+              "director_task_create_response": {
+                "plan": [
+                  {
+                    "task": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков",
+                    "agent": "unknown",
+                    "priority": "medium"
+                  }
+                ],
+                "title": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков",
+                "status": "completed",
+                "task_id": "e6284d00-42f5-41c7-a50e-d89a5013f6e6",
+                "memory_id": "9f042771-adcb-4f18-ab90-1a3775525d56"
+              }
+            },
+            "hermes_last_monitor_summary": "Мониторинг 1С выполнен Hermes по live API 2026-05-28T09:11Z. Продажи читаются: последние 1С-данные за 2026-05-27, 7 дней = 35 чеков / 428 065 ₽; сегодняшний offline-срез пока 0, что нормально для утренней проверки. Покупатели читаются: 6 216 клиентов, LTV 66 007 132.58 ₽. Остатки частично читаются: product sync completed, stock total 5 708 по inventory dashboard; но /api/admin/1c/sync/status возвращает HTTP 500 'Boolean value of this clause is not defined', analytics inventory health-score=no_data, analysis total=0. Создана директорская задача на разбор статуса/витрин аналитики остатков."
+          },
+          "input_data": {
+            "title": "Контроль синхронизации 1С",
+            "parameters": {
+              "sources": [
+                "1c_sales",
+                "1c_stock",
+                "1c_customers"
+              ],
+              "interval_minutes": 60
+            },
+            "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+            "expected_result": "Одна регулярная карточка фиксирует результаты запусков; отдельные задачи создаются только для конкретных найденных проблем."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "completed",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-27T17:53:49.477889+00:00",
+          "scheduled_at": "2026-05-27T17:53:49.498391+00:00",
+          "started_at": null,
+          "completed_at": null,
+          "deadline_at": null
+        },
+        {
+          "id": "cc69d9ff-06f6-4473-82b2-1a098482d5f6",
+          "source_agent": "cron-scheduler",
+          "target_agent": "analytics-agent",
+          "task_type": "daily_marketing_analysis",
+          "task_context": {
+            "cron_title": "Ежедневный маркетинговый анализ",
+            "manual_run": false,
+            "cron_job_id": "marketing_daily_analysis",
+            "created_from": "admin_cron",
+            "cron_category": "analytics",
+            "schedule_type": "daily"
+          },
+          "input_data": {
+            "title": "Ежедневный маркетинговый анализ",
+            "parameters": {
+              "period": "today",
+              "approval_required": false
+            },
+            "description": "AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.",
+            "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+          },
+          "target_metrics": {},
+          "requirements": {
+            "show_sources": true,
+            "use_real_data_only": true,
+            "no_mass_send_without_admin_approval": true
+          },
+          "constraints": {},
+          "status": "failed",
+          "priority": 3,
+          "validation_result": null,
+          "validation_errors": [],
+          "output_data": null,
+          "output_metadata": {},
+          "error_message": null,
+          "created_at": "2026-05-26T18:00:07.606379+00:00",
+          "scheduled_at": "2026-05-26T18:00:07.627224+00:00",
+          "started_at": "2026-05-28T09:14:26.073822+00:00",
+          "completed_at": null,
+          "deadline_at": null
+        }
+      ]
+    },
+    "/api/director/tasks/kanban?limit=200": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "columns": [
+          {
+            "id": "todo",
+            "title": "Нужно сделать",
+            "cards": [
+              {
+                "id": "e6284d00-42f5-41c7-a50e-d89a5013f6e6",
+                "user_id": "768cfa57-db4c-4efc-95d5-ebd1b138aebb",
+                "title": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков",
+                "description": "Мониторинг 1С выполнен Hermes по live API 2026-05-28T09:11Z. Продажи читаются: последние 1С-данные за 2026-05-27, 7 дней = 35 чеков / 428 065 ₽; сегодняшний offline-срез пока 0, что нормально для утренней проверки. Покупатели читаются: 6 216 клиентов, LTV 66 007 132.58 ₽. Остатки частично читаются: product sync completed, stock total 5 708 по inventory dashboard; но /api/admin/1c/sync/status возвращает HTTP 500 'Boolean value of this clause is not defined', analytics inventory health-score=no_data, analysis total=0. Создана директорская задача на разбор статуса/витрин аналитики остатков.\n\nПроверить backend /api/admin/1c/sync/status и пайплайн заполнения /api/analytics/inventory/health-score + /analysis: сейчас dashboard/report видят остатки, но analytics-слой возвращает no_data/0.",
+                "task_type": "assignment",
+                "target_agent": null,
+                "priority": "P1",
+                "status": "pending",
+                "deadline_at": null,
+                "created_at": "2026-05-28T09:13:26.500965+00:00",
+                "completed_at": null,
+                "assigned_to": null,
+                "execution_notes": "[{\"agent\": \"unknown\", \"task\": \"Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков\", \"priority\": \"medium\"}]",
+                "result_summary": "Задача 'Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков' запланирована. Определено 1 подзадач.",
+                "detailed_result": null,
+                "vector_id": null,
+                "extra_data": {
+                  "plan": [
+                    {
+                      "task": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков",
+                      "agent": "unknown",
+                      "priority": "medium"
+                    }
+                  ],
+                  "href": null
+                },
+                "related_message_id": null,
+                "source": "director_task"
+              },
+              {
+                "id": "f44f5bf0-50a9-4aa4-b450-a4d3d42102f9",
+                "source": "agent_interaction",
+                "title": "Проверка клиентов с ДР",
+                "description": "AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование.",
+                "task_type": "crm_birthday_check",
+                "target_agent": "crm-agent",
+                "priority": "P2",
+                "status": "pending",
+                "deadline_at": null,
+                "created_at": "2026-05-28T09:00:14.224661+00:00",
+                "completed_at": null,
+                "assigned_to": "crm-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Проверка клиентов с ДР",
+                    "parameters": {
+                      "days_ahead": 7,
+                      "create_segment": true,
+                      "approval_required": true
+                    },
+                    "description": "AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Проверка клиентов с ДР",
+                    "manual_run": false,
+                    "cron_job_id": "birthday_customers_check",
+                    "created_from": "admin_cron",
+                    "cron_category": "crm",
+                    "schedule_type": "daily"
+                  },
+                  "href": "/ai-marketer/tasks/f44f5bf0-50a9-4aa4-b450-a4d3d42102f9"
+                }
+              },
+              {
+                "id": "53165be0-bf1f-4e04-8913-bca59eb42a16",
+                "source": "agent_interaction",
+                "title": "Ежедневный план на завтра",
+                "description": "Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.",
+                "task_type": "tomorrow_plan_preparation",
+                "target_agent": "director-agent",
+                "priority": "P2",
+                "status": "pending",
+                "deadline_at": null,
+                "created_at": "2026-05-27T19:00:50.763034+00:00",
+                "completed_at": null,
+                "assigned_to": "director-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Ежедневный план на завтра",
+                    "parameters": {
+                      "report_scope": "tasks_and_next_day_plan",
+                      "approval_required": true
+                    },
+                    "description": "Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Ежедневный план на завтра",
+                    "manual_run": false,
+                    "cron_job_id": "daily_plan_approval",
+                    "created_from": "admin_cron",
+                    "cron_category": "director",
+                    "schedule_type": "daily"
+                  },
+                  "href": "/ai-marketer/tasks/53165be0-bf1f-4e04-8913-bca59eb42a16"
+                }
+              },
+              {
+                "id": "19a200b8-0628-4f2e-87cd-1ab123e2dfd9",
+                "source": "agent_interaction",
+                "title": "Ежедневный маркетинговый анализ",
+                "description": "AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.",
+                "task_type": "daily_marketing_analysis",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "pending",
+                "deadline_at": null,
+                "created_at": "2026-05-27T18:00:49.655612+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Ежедневный маркетинговый анализ",
+                    "parameters": {
+                      "period": "today",
+                      "approval_required": false
+                    },
+                    "description": "AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Ежедневный маркетинговый анализ",
+                    "manual_run": false,
+                    "cron_job_id": "marketing_daily_analysis",
+                    "created_from": "admin_cron",
+                    "cron_category": "analytics",
+                    "schedule_type": "daily"
+                  },
+                  "href": "/ai-marketer/tasks/19a200b8-0628-4f2e-87cd-1ab123e2dfd9"
+                }
+              },
+              {
+                "id": "f8e38839-c63a-4a23-855d-afb00e3387b1",
+                "source": "agent_interaction",
+                "title": "Ежедневный план на завтра",
+                "description": "Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.",
+                "task_type": "tomorrow_plan_preparation",
+                "target_agent": "director-agent",
+                "priority": "P2",
+                "status": "pending",
+                "deadline_at": null,
+                "created_at": "2026-05-26T19:00:08.577567+00:00",
+                "completed_at": null,
+                "assigned_to": "director-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Ежедневный план на завтра",
+                    "parameters": {
+                      "report_scope": "tasks_and_next_day_plan",
+                      "approval_required": true
+                    },
+                    "description": "Директор собирает состояние задач, данные по агентам и готовит план на завтра на согласование.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Ежедневный план на завтра",
+                    "manual_run": false,
+                    "cron_job_id": "daily_plan_approval",
+                    "created_from": "admin_cron",
+                    "cron_category": "director",
+                    "schedule_type": "daily"
+                  },
+                  "href": "/ai-marketer/tasks/f8e38839-c63a-4a23-855d-afb00e3387b1"
+                }
+              }
+            ]
+          },
+          {
+            "id": "in_progress",
+            "title": "В работе",
+            "cards": []
+          },
+          {
+            "id": "done",
+            "title": "Готово",
+            "cards": [
+              {
+                "id": "7f977911-d43b-4f2a-8c74-94d99fbf3856",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "completed",
+                "deadline_at": null,
+                "created_at": "2026-05-27T17:53:49.477889+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Одна регулярная карточка фиксирует результаты запусков; отдельные задачи создаются только для конкретных найденных проблем."
+                  },
+                  "task_context": {
+                    "hermes_last_monitor_result": {
+                      "source": "hermes-kanban:t_7c72b6ab",
+                      "findings": {
+                        "api_health": "healthy",
+                        "customers_total": 6216,
+                        "sales_7d_orders": 35,
+                        "sales_7d_revenue": 428065.0,
+                        "sales_latest_date": "2026-05-27",
+                        "customers_total_ltv": 66007132.58,
+                        "product_sync_status": "completed",
+                        "product_sync_started_at": "2026-05-27T15:54:33.024209+00:00",
+                        "inventory_analytics_total": 0,
+                        "admin_1c_sync_status_error": "HTTP 500: Boolean value of this clause is not defined",
+                        "inventory_analytics_health": "no_data",
+                        "inventory_dashboard_sku_count": 634,
+                        "inventory_dashboard_total_stock": 5708.0
+                      },
+                      "checked_at": "2026-05-28T09:11:00+00:00",
+                      "platform_task_id": "7f977911-d43b-4f2a-8c74-94d99fbf3856",
+                      "requires_followup": true,
+                      "director_task_create_response": {
+                        "plan": [
+                          {
+                            "task": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков",
+                            "agent": "unknown",
+                            "priority": "medium"
+                          }
+                        ],
+                        "title": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков",
+                        "status": "completed",
+                        "task_id": "e6284d00-42f5-41c7-a50e-d89a5013f6e6",
+                        "memory_id": "9f042771-adcb-4f18-ab90-1a3775525d56"
+                      }
+                    },
+                    "hermes_last_monitor_summary": "Мониторинг 1С выполнен Hermes по live API 2026-05-28T09:11Z. Продажи читаются: последние 1С-данные за 2026-05-27, 7 дней = 35 чеков / 428 065 ₽; сегодняшний offline-срез пока 0, что нормально для утренней проверки. Покупатели читаются: 6 216 клиентов, LTV 66 007 132.58 ₽. Остатки частично читаются: product sync completed, stock total 5 708 по inventory dashboard; но /api/admin/1c/sync/status возвращает HTTP 500 'Boolean value of this clause is not defined', analytics inventory health-score=no_data, analysis total=0. Создана директорская задача на разбор статуса/витрин аналитики остатков."
+                  },
+                  "href": "/ai-marketer/tasks/7f977911-d43b-4f2a-8c74-94d99fbf3856"
+                }
+              },
+              {
+                "id": "6116f32b-e417-4e1d-bbee-30b631431a5e",
+                "source": "agent_interaction",
+                "title": "Сегмент для рассылки бренд | магазин",
+                "description": "AI Marketing Director передает конкретную CRM-подзадачу.\n\nИсходный запрос администратора: какие 120 покупателей? ты задачу мою читаешь?\n\nСуть задачи: подготовить редактируемый сегмент аудитории для рассылки по новому поступлению. Не спрашивай, какие данные есть: используй доступные CRM-поля, историю покупок, loyalty, магазин/город, бренд и товарные признаки.\n\nКритерии, которые нужно применить как стартовую логику: покупатели с высокой вероятностью покупки; VIP, активные и регулярные клиенты; интерес к UNOde50, серебру или крупным/statement-формам; привязка к Симферополю и/или ТРК Центрум; исключить нерелевантную массовую базу. Результат должен быть сохранен как сегмент в БД, доступный для ручного редактирования.\n\nОтветь как AI CRM: 1) какие данные использованы; 2) какие правила сегмента применены; 3) размер сегмента; 4) риски; 5) что администратор должен согласовать перед передачей в рассылку.",
+                "task_type": "crm_segmentation_and_messaging",
+                "target_agent": "crm-agent",
+                "priority": "P0",
+                "status": "completed",
+                "deadline_at": null,
+                "created_at": "2026-05-26T09:16:53.723752+00:00",
+                "completed_at": "2026-05-26T10:24:48.799434+00:00",
+                "assigned_to": "crm-agent",
+                "execution_notes": "crm",
+                "result_summary": null,
+                "detailed_result": {
+                  "segment_id": "0f890c13-7acb-4946-a07d-aeb49a6d0316",
+                  "agent_reply": "## Анализ выбранного сегмента\n- Сегмент: Европа\n- ID сегмента: `bde57d6d-707a-4564-9941-c10ebb129249`\n- Фактический размер по правилам БД: 65 покупателей\n- В работе используется только этот выбранный сегмент; другие сегменты и ранее созданные дубли не применялись.\n- Для предпросмотра используйте кнопку «Предпросмотр сегмента» в интерфейсе задачи.\n\n**Отчёт для AI Marketing Director**  \n**Сегмент:** «Европа»  \n**ID:** `bde57d6d-707a-4564-9941-c10ebb129249`  \n**Дата обновления:** 2026-05-26  \n\n---\n\n### 1. Использованные данные  \n- **Правила сегмента** (сохранены в БД):  \n  - AND:  \n    - `city` содержит «Симферополь»  \n    - (OR: `brand` содержит «UNO» / «Kalliope» / «Antura» / «Rapanella» / «Claudio» / «Madreperla»)  \n- **Уточнение (segment_refinement):** список из 120 ID клиентов (`simferopol_loyal_base_top_120`) — применён как дополнительный фильтр (target_applied: true).  \n- **Результат пересечения правил + уточнения:** 65 уникальных клиентов.  \n\n---\n\n### 2. Почему 65, а не 120  \n- Изначально ожидалось 120 лояльных клиентов Симферополя.  \n- Ограничение по брендам (только перечисленные марки) и городу (Симферополь) сократило выборку.  \n- Из 120 ID под все условия подошли только 65.  \n- Сегмент создан **вручную администратором** (locked), правила и размер зафиксированы.  \n\n---\n\n### 3. Текущее состояние сегмента  \n| Параметр | Значение |\n|----------|----------|\n| Название | Европа |\n| Размер | 65 клиентов |\n| Путь редактирования | `/admin/customers/segments` |\n| Статус блокировки | locked (только ручное изменение) |\n| Канал рассылки | не указан (требуется решение) |\n\n---\n\n### 4. Риски  \n- **Недостаточный охват:** 65 человек — узкая аудитория, возможна низкая конверсия.  \n- **Привязка к конкретным брендам:** исключены клиенты, которые покупали другие бренды, но могли бы быть заинтересованы в UNOde50.  \n- **Актуальность контактов:** не проверялись разрешения на коммуникацию (SMS/WhatsApp/email).  \n- **Отсутствие сегментации по активности:** в сегмент могли попасть неактивные клиенты (нет фильтра по дате последней покупки).  \n\n---\n\n### 5. Рекомендации для согласования с директором  \nПеред передачей в рассылку необходимо:  \n1. **Выбрать канал:** WhatsApp, email или push (с учётом доступных контактов).  \n2. **Проверить дубли/неактивные номера** через CRM.  \n3. **Решить:** оставить сегмент как есть (65 человек) или расширить (добавить ещё ~55 клиентов из топ-120, убрав ограничение по брендам).  \n4. **Утвердить текст сообщения** — премиальный, без скидок, с фокусом на новое поступление UNOde50.  \n5. **Запланировать дату отправки** (предлагается ближайший будний день, 28–29 мая).  \n\n---\n\n### 6. Действия администратора  \n- ✅ Сегмент создан вручную.  \n- ❓ Ожидается подтверждение директора по:  \n  - каналу;  \n  - финальному размеру;  \n  - тексту сообщения.  \n\nПосле согласования AI CRM сформирует проект рассылки и запустит по утверждённому сценарию.",
+                  "segment_name": "AI CRM | UNOde50 | Симферополь | рассылка | 2605 0917 · 0f890c",
+                  "segment_rules": {
+                    "logic": "AND",
+                    "filters": [
+                      {
+                        "field": "id",
+                        "value": [
+                          "0fe8bc01-aaba-4c5e-8aef-5fa2f666d96d",
+                          "df739f13-50ff-4183-8af4-b908bdc97ce1",
+                          "c3a345b0-62ba-4e25-ac43-a638906ec894",
+                          "14e95929-98b4-4637-addb-296017ef1a70",
+                          "3e48c878-a5f6-4f5b-83ea-edc5bf3028c1",
+                          "2a987503-1b07-4d85-9306-b5d8ba7884ae",
+                          "99c70447-4e86-47a5-bd6a-087fd7e9f9b1",
+                          "cc5a7ef1-50eb-4a2e-8620-45ec138c60a5",
+                          "d16ce156-a728-48a0-a50a-16f3804b1225",
+                          "db3112e4-a39f-4b64-8e05-958a599d7807",
+                          "7d0b1180-a898-46f8-94b9-d9a26030adad",
+                          "9c0d5306-0e41-43e4-91c2-c44ba0eec82d",
+                          "488d6df0-8dab-4379-815e-58f1f5c842c4",
+                          "eb861e43-1a6e-424e-8a9d-4c495660cd3a",
+                          "ba1c542c-b81a-4f69-a03a-a1ca960cd35e",
+                          "c251a7bb-ad46-44ce-af97-b7b8edff5e8c",
+                          "a93bf29d-62c1-4faa-9299-2ea2f48ca74a",
+                          "1541dbec-0be1-47fe-8473-dc6617664f6f",
+                          "95bc4c41-f11f-47fb-b7e7-5f3083ed8180",
+                          "bc8ad8f6-b5d0-4beb-949f-357170fb2cda",
+                          "a2b5d76d-297a-4223-b539-caeafd2d5159",
+                          "1262fe90-a73a-4056-bbc2-7af90e5c72ce",
+                          "76bf27da-aa0e-4f7f-8476-0d0fdfce8ba3",
+                          "64c779ce-80a5-4f27-918b-7c7c0da69798",
+                          "a098fdff-810a-4e80-9896-11a705637687",
+                          "3712efe7-9534-485b-9115-d4234a1092ba",
+                          "d20e260b-4b6f-4fdb-a413-d7d7b40fd0fa",
+                          "1afd3393-11d9-444f-91c9-0feec11f3368",
+                          "244dc1bf-5e41-42b1-befe-ace89bd7354c",
+                          "3044d54d-18aa-46d6-8cac-23d77cee1bbd",
+                          "c8b9c9e1-5dc9-4393-8032-cd0dc08f6e68",
+                          "2be68841-7139-4e3d-b301-05927a006844",
+                          "6404780c-0d87-40a5-a0ed-6eebd3477c34",
+                          "fadc373c-fe96-46f4-afdf-0d869ca4ffea",
+                          "689cb3cf-70a4-45e8-80c3-5017db7a826f",
+                          "9a639b33-a9f9-4393-a05e-c293a3ab9c42",
+                          "8b0a9e8b-3962-4a26-a23e-774f47f4356b",
+                          "00b6d2ee-d6b9-4ea4-acd3-9a6c3dde60bc",
+                          "cd86d990-1254-4031-958c-5f2b9305601c",
+                          "4ecab369-a09a-438e-89bf-fa7be18c7677",
+                          "40db357d-d9c7-4f8b-8f1d-f9feaaffd27f",
+                          "f3f482f7-7500-4d73-a534-acd202f22296",
+                          "99c3312c-9244-486e-a1bb-da77fe59ff7a",
+                          "4521c83a-204d-402b-9087-9df9f60b6f0f",
+                          "053b4ce4-1b93-410e-8ceb-6f72b9805e66",
+                          "680ca59e-bb70-49d0-9343-35dada843d5d",
+                          "262c70b9-44b3-4a98-be4a-8b446c0a7203",
+                          "d5295776-9e3e-47a7-86fc-a294d175c821",
+                          "9efe9bab-b2d6-42cc-ac3c-a8a9f122cf18",
+                          "7de16583-b87b-4093-b82c-53e67d98b958",
+                          "06c69408-1780-4fe7-95b4-d27db3321455",
+                          "5f7d2a39-a9c0-4b93-9707-a1736df46c71",
+                          "51fbd6f7-fbb8-4809-b714-ad6484e11d39",
+                          "e23d1c03-4ce9-4007-8dc7-82235225b316",
+                          "0b856656-3ce8-49a7-ae6f-da34f30b20ce",
+                          "b7d00fb6-e93c-49be-86c4-5568db6d9708",
+                          "40c51de4-d039-4594-bbc9-b3a4313a2c28",
+                          "81b767fe-aa7a-49ad-895e-9e1c06eef23f",
+                          "a07ae114-3943-402b-a76b-37d35235c6ea",
+                          "29c40f24-e0c4-4089-ac8f-62856ee9a276",
+                          "1bc9f39e-5c67-48b5-a6d4-bc3f238dff81",
+                          "2ab1308c-4c13-441a-b98b-e74cbdd3cd61",
+                          "66ef5425-045e-4a64-b33d-0091e8bb8467",
+                          "bca47b84-a802-48a4-a9b0-856e27fb28af",
+                          "8a4566dd-045f-43f4-aba2-4fd675c94970",
+                          "29dd8494-9bb9-4224-b3a6-8225e2f9748b",
+                          "8f51eb8f-5a7e-4206-b311-ac6689bced46",
+                          "8fc713a8-e521-4264-a15c-01ff8e1e545b",
+                          "2fc2fe99-a996-4792-8128-ad0df4c2a920",
+                          "2acaf57b-f6f1-4d1b-bd14-caf75d028d74",
+                          "aaaf0d29-e33a-4726-bc7a-f0a0dfd1bd0b",
+                          "3bc0b07a-9a5d-41c7-9e73-8a64afec313d",
+                          "35e79a25-35bf-4bbf-914b-9f2c8af681d7",
+                          "10356de9-07a7-4fc8-88d0-c20dd4e19231",
+                          "dd44ba7a-e67a-48df-be8e-c22cfc916f54",
+                          "395d7619-8802-487f-9f7d-535bb72fdabe",
+                          "55c13058-4a52-46c3-b047-0abea236771e",
+                          "a2af9027-ff64-485b-9564-05c3305559f5",
+                          "a49026bf-c328-452f-a9f6-3c35e897e639",
+                          "ac85ec6a-7083-462d-b662-982ff3132c86",
+                          "dd47fac5-5b7e-4cdd-b890-31703e5bdbf7",
+                          "d6d453e6-4669-4040-80f5-95d218e9e8c0",
+                          "45722252-b08b-4dfb-8fc5-653ed8cccc57",
+                          "30722688-adbf-4a32-b8a1-020717ee318d",
+                          "a3259ec0-471e-45bb-855e-54d52381bff2",
+                          "5c62c67c-f16a-46b5-abd3-4c5ed409c64e",
+                          "8b9b990e-cc0e-4063-ab8f-c29d33a95a5c",
+                          "43574b30-232c-46c2-98d3-a6771e603932",
+                          "f027b254-2b93-40fe-bc27-c8fcd55d484d",
+                          "0248ce78-d84b-4e97-be51-9601eb3efb4e",
+                          "2c6ea3c9-3094-4bce-9c0e-e809740fc289",
+                          "6fccb98b-26b6-4952-9882-77382057ffa9",
+                          "79d0744d-7365-4fb3-afd8-3209da7d16b7",
+                          "2a2ea970-fbe8-4500-aa3d-bba5c6de2e10",
+                          "bcce6c46-cbc6-4dea-a6be-34b3fa29883d",
+                          "43996773-1ee3-4498-a939-876d6c2daf92",
+                          "1ce3538b-b222-4d30-9cb2-04c2f84308d1",
+                          "5dbb0ea4-9923-4b72-8a76-637b5ba44c52",
+                          "05b5f8b0-9955-46e7-b461-5457ea841956",
+                          "4269b064-0c3c-4940-9729-15ed96df1324",
+                          "6fbcdfc1-7c15-43d9-ba32-5f30a4c0e987",
+                          "c8a11a4a-fd5b-4534-a544-32e960b54a30",
+                          "bed72fba-49bc-4276-9e9f-285337330a36",
+                          "e9e01db8-3fa7-4bd5-ab29-f93146bdca90",
+                          "bd6ff941-7325-46a3-b689-bc7e3bf3092f",
+                          "1f856ade-45c6-4197-b55b-4e10e4767546",
+                          "03515215-b586-4d2f-ab04-2bfbef7a1e8e",
+                          "4e2dbaf5-f1dc-41c2-a84b-729fcd331621",
+                          "3c227435-ff87-4c71-95a5-f6aa21fb2e00",
+                          "79b7d754-fcb7-40d5-955b-e0ad4b27df88",
+                          "70d2a020-5fa3-4d77-8564-dbd1199d00a7",
+                          "6c35b1aa-7a15-46db-9807-de25ed4025f2",
+                          "f93587f0-f2c2-4ecd-9b8c-d8859cdade4f",
+                          "39e4eb9b-ef5d-4a77-9340-db2c55e30c13",
+                          "d67773e7-f2d2-4017-95e6-0ae000587a75",
+                          "e946cb0c-d6b4-40b7-b9b6-cb5e7cc23d52",
+                          "7ee6bcd6-9bb7-43f0-9366-fb45cd9c20b3",
+                          "26ac0224-2844-47bd-a7f0-862b237ce7ca",
+                          "88520e17-d390-4aaa-93f5-0f01f4cc8748",
+                          "2ba34468-07fa-4254-b55b-196fc3d22986"
+                        ],
+                        "operator": "in"
+                      }
+                    ]
+                  },
+                  "result_summary": "Агент ответил, но готовность результата не выражена явно. Задача поставлена на проверку директором.",
+                  "needs_user_attention": true,
+                  "segment_customer_count": 120
+                },
+                "extra_data": {
+                  "board": "crm",
+                  "source_agent": "director-agent",
+                  "input_data": {
+                    "title": "Сегмент для рассылки бренд | магазин",
+                    "description": "AI Marketing Director передает конкретную CRM-подзадачу.\n\nИсходный запрос администратора: какие 120 покупателей? ты задачу мою читаешь?\n\nСуть задачи: подготовить редактируемый сегмент аудитории для рассылки по новому поступлению. Не спрашивай, какие данные есть: используй доступные CRM-поля, историю покупок, loyalty, магазин/город, бренд и товарные признаки.\n\nКритерии, которые нужно применить как стартовую логику: покупатели с высокой вероятностью покупки; VIP, активные и регулярные клиенты; интерес к UNOde50, серебру или крупным/statement-формам; привязка к Симферополю и/или ТРК Центрум; исключить нерелевантную массовую базу. Результат должен быть сохранен как сегмент в БД, доступный для ручного редактирования.\n\nОтветь как AI CRM: 1) какие данные использованы; 2) какие правила сегмента применены; 3) размер сегмента; 4) риски; 5) что администратор должен согласовать перед передачей в рассылку.",
+                    "expected_result": "Редактируемый сегмент покупателей, критерии отбора, риски, каналы коммуникации и статус согласования для директора."
+                  },
+                  "task_context": {
+                    "board": "crm",
+                    "title": "Сегмент для рассылки бренд | магазин",
+                    "segment_id": "bde57d6d-707a-4564-9941-c10ebb129249",
+                    "segment_meta": {
+                      "city": "Симферополь",
+                      "name": "AI CRM | UNOde50 | Симферополь | рассылка | 2605 0917",
+                      "brand": "UNOde50",
+                      "channel": null,
+                      "edit_path": "/admin/customers/segments"
+                    },
+                    "segment_name": "Европа",
+                    "segment_rules": {
+                      "logic": "AND",
+                      "filters": [
+                        {
+                          "field": "city",
+                          "value": "Симферополь",
+                          "operator": "contains"
+                        },
+                        {
+                          "field": "brand",
+                          "value": "UNO",
+                          "operator": "contains",
+                          "connector": "AND"
+                        },
+                        {
+                          "field": "brand",
+                          "value": "Kalliope",
+                          "operator": "contains",
+                          "connector": "OR"
+                        },
+                        {
+                          "field": "brand",
+                          "value": "Antura",
+                          "operator": "contains",
+                          "connector": "OR"
+                        },
+                        {
+                          "field": "brand",
+                          "value": "Rapanella",
+                          "operator": "contains",
+                          "connector": "OR"
+                        },
+                        {
+                          "field": "brand",
+                          "value": "Claudio",
+                          "operator": "contains",
+                          "connector": "OR"
+                        },
+                        {
+                          "field": "brand",
+                          "value": "Madreperla",
+                          "operator": "contains",
+                          "connector": "OR"
+                        }
+                      ]
+                    },
+                    "workflow_intent": "crm_campaign",
+                    "segment_edit_path": "/admin/customers/segments",
+                    "created_by_director": true,
+                    "passport_updated_at": "2026-05-26T09:17:35.527331",
+                    "original_user_request": "какие 120 покупателей? ты задачу мою читаешь?",
+                    "segment_customer_count": 43,
+                    "selected_segment_locked": true
+                  },
+                  "href": "/ai-marketer/tasks/6116f32b-e417-4e1d-bbee-30b631431a5e"
+                }
+              }
+            ]
+          },
+          {
+            "id": "blocked",
+            "title": "Блокеры / отменено",
+            "cards": [
+              {
+                "id": "44e7f15e-bc88-459e-a340-a64f47a49b69",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-28T08:54:14.061830+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/44e7f15e-bc88-459e-a340-a64f47a49b69"
+                }
+              },
+              {
+                "id": "826999c2-69ed-4f59-a4d7-361bb4fffea1",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-28T07:54:06.293743+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/826999c2-69ed-4f59-a4d7-361bb4fffea1"
+                }
+              },
+              {
+                "id": "192a6bfd-6fec-4ad1-a835-5e0bf241e156",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-28T06:54:04.776876+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/192a6bfd-6fec-4ad1-a835-5e0bf241e156"
+                }
+              },
+              {
+                "id": "316affe2-5acd-43fc-b8c8-e24e9507860e",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-28T05:54:03.440938+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/316affe2-5acd-43fc-b8c8-e24e9507860e"
+                }
+              },
+              {
+                "id": "1d816402-cd50-43dd-b804-87ada2b13d1b",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-28T04:54:02.296108+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/1d816402-cd50-43dd-b804-87ada2b13d1b"
+                }
+              },
+              {
+                "id": "95211832-8b05-4a26-ac76-83991df7a19b",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-28T03:54:00.964092+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/95211832-8b05-4a26-ac76-83991df7a19b"
+                }
+              },
+              {
+                "id": "5b069572-9ac3-47c8-9535-6042c184f5c3",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-28T02:53:59.861110+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/5b069572-9ac3-47c8-9535-6042c184f5c3"
+                }
+              },
+              {
+                "id": "6a7d5276-d2a9-4c9a-911b-72af89d12f1b",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-28T01:53:58.712123+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/6a7d5276-d2a9-4c9a-911b-72af89d12f1b"
+                }
+              },
+              {
+                "id": "d95ba2b2-182a-4af0-a4c3-6c83f2570e2b",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-28T00:53:57.610679+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/d95ba2b2-182a-4af0-a4c3-6c83f2570e2b"
+                }
+              },
+              {
+                "id": "c20b5c8e-df8a-4ce7-baf3-a9f0ac976925",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-27T23:53:56.467143+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/c20b5c8e-df8a-4ce7-baf3-a9f0ac976925"
+                }
+              },
+              {
+                "id": "377dff0d-15f5-474b-adb4-00b97ad16887",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-27T22:53:55.359341+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/377dff0d-15f5-474b-adb4-00b97ad16887"
+                }
+              },
+              {
+                "id": "e4d17c46-eef9-4acc-adad-d125dc92362c",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-27T21:53:54.263878+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/e4d17c46-eef9-4acc-adad-d125dc92362c"
+                }
+              },
+              {
+                "id": "aa55a016-4d1a-4ae4-b130-16f54cef426c",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-27T20:53:53.039979+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/aa55a016-4d1a-4ae4-b130-16f54cef426c"
+                }
+              },
+              {
+                "id": "ebbbc2ff-afdf-49d0-82fb-d9079c4228cc",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-27T19:53:51.870401+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/ebbbc2ff-afdf-49d0-82fb-d9079c4228cc"
+                }
+              },
+              {
+                "id": "050568d6-c7b9-44ca-bca5-07f5acebe387",
+                "source": "agent_interaction",
+                "title": "Контроль синхронизации 1С",
+                "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                "task_type": "data_freshness_review",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "cancelled",
+                "deadline_at": null,
+                "created_at": "2026-05-27T18:53:50.591742+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Контроль синхронизации 1С",
+                    "parameters": {
+                      "sources": [
+                        "1c_sales",
+                        "1c_stock",
+                        "1c_customers"
+                      ],
+                      "interval_minutes": 60
+                    },
+                    "description": "Проверяет свежесть данных 1С: продажи, чеки, остатки, покупатели. При проблемах создает задачу директору.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Контроль синхронизации 1С",
+                    "manual_run": false,
+                    "cron_job_id": "onec_data_sync_monitor",
+                    "created_from": "admin_cron",
+                    "cron_category": "data",
+                    "schedule_type": "hourly"
+                  },
+                  "href": "/ai-marketer/tasks/050568d6-c7b9-44ca-bca5-07f5acebe387"
+                }
+              },
+              {
+                "id": "cc69d9ff-06f6-4473-82b2-1a098482d5f6",
+                "source": "agent_interaction",
+                "title": "Ежедневный маркетинговый анализ",
+                "description": "AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.",
+                "task_type": "daily_marketing_analysis",
+                "target_agent": "analytics-agent",
+                "priority": "P2",
+                "status": "failed",
+                "deadline_at": null,
+                "created_at": "2026-05-26T18:00:07.606379+00:00",
+                "completed_at": null,
+                "assigned_to": "analytics-agent",
+                "execution_notes": null,
+                "result_summary": null,
+                "detailed_result": null,
+                "extra_data": {
+                  "board": null,
+                  "source_agent": "cron-scheduler",
+                  "input_data": {
+                    "title": "Ежедневный маркетинговый анализ",
+                    "parameters": {
+                      "period": "today",
+                      "approval_required": false
+                    },
+                    "description": "AI Analytics собирает продажи, чеки, посещения магазинов, сайт/приложение/Instagram при наличии источников.",
+                    "expected_result": "Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется."
+                  },
+                  "task_context": {
+                    "cron_title": "Ежедневный маркетинговый анализ",
+                    "manual_run": false,
+                    "cron_job_id": "marketing_daily_analysis",
+                    "created_from": "admin_cron",
+                    "cron_category": "analytics",
+                    "schedule_type": "daily"
+                  },
+                  "href": "/ai-marketer/tasks/cc69d9ff-06f6-4473-82b2-1a098482d5f6"
+                }
+              }
+            ]
+          }
+        ],
+        "total": 23,
+        "stats": {
+          "todo": 5,
+          "in_progress": 0,
+          "done": 2,
+          "blocked": 16
+        }
+      }
+    },
+    "/api/ai-marketer/dashboard": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "segments_overview": {
+          "segments": [
+            {
+              "segment_id": "80641db3-af54-4c3e-bd9c-10d41820d47f",
+              "name": "Лояльные покупатели",
+              "description": "Клиенты с высоким уровнем лояльности (баллы) и недавними покупками.",
+              "customer_count": 595,
+              "average_ltv": 21668.530235294118,
+              "average_purchases": 2.015126050420168,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "46a238ed-e612-40f4-baf9-fe9dfe3a984a",
+              "name": "Экономные покупатели",
+              "description": "Клиенты с низким средним чеком, но потенциально высокой частотой покупок.",
+              "customer_count": 836,
+              "average_ltv": 17304.531674641148,
+              "average_purchases": 1.7404306220095693,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "04029f0f-ed83-49ae-8b40-88b8ca958b5d",
+              "name": "Потенциально ценные",
+              "description": "Клиенты с высоким средним чеком, но пока низкой частотой покупок.",
+              "customer_count": 836,
+              "average_ltv": 17304.531674641148,
+              "average_purchases": 1.7404306220095693,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "3549c723-6630-4691-a8d0-781d3e3b874e",
+              "name": "Больше 2000 бонусов",
+              "description": "",
+              "customer_count": 16,
+              "average_ltv": 157290.29125,
+              "average_purchases": 12.375,
+              "color": ""
+            },
+            {
+              "segment_id": "04a076d3-9912-4f7e-ba09-ad090efcc6a3",
+              "name": "Больше 50 000",
+              "description": "",
+              "customer_count": 92,
+              "average_ltv": 94650.68130434783,
+              "average_purchases": 4.760869565217392,
+              "color": ""
+            },
+            {
+              "segment_id": "a30aba8b-2b59-4a9f-9157-2d876793378f",
+              "name": "Активные",
+              "description": "Активные покупатели",
+              "customer_count": 434,
+              "average_ltv": 31868.234677419354,
+              "average_purchases": 3.327188940092166,
+              "color": "#4CAF50"
+            },
+            {
+              "segment_id": "0491cf60-8c05-4652-ad4b-525d91def071",
+              "name": "Спящие",
+              "description": "Клиенты, которые давно не покупали",
+              "customer_count": 855,
+              "average_ltv": 23460.585345029238,
+              "average_purchases": 2.3146198830409355,
+              "color": "#9E9E9E"
+            },
+            {
+              "segment_id": "0e092584-0063-4e64-aec0-02a6e5eb3614",
+              "name": "Новые клиенты",
+              "description": "Недавно совершили первую покупку, но ещё не проявили лояльность. Критический сегмент для удержания.",
+              "customer_count": 418,
+              "average_ltv": 24807.09688995215,
+              "average_purchases": 2.882775119617225,
+              "color": "#FF9800"
+            },
+            {
+              "segment_id": "889adb4b-6e49-448a-a2bc-e570c6be9137",
+              "name": "Активные покупатели",
+              "description": "Регулярно совершают покупки, преимущественно в категории серег, с умеренным средним чеком.",
+              "customer_count": 486,
+              "average_ltv": 29395.83306584362,
+              "average_purchases": 3.117283950617284,
+              "color": "#4CAF50"
+            },
+            {
+              "segment_id": "f6ef168f-5920-43f9-ab79-ed01ec27056a",
+              "name": "UNO",
+              "description": "",
+              "customer_count": 21,
+              "average_ltv": 122727.05142857143,
+              "average_purchases": 12.380952380952381,
+              "color": ""
+            },
+            {
+              "segment_id": "65c231b7-dbdb-433a-b8cb-c0ed477c23fb",
+              "name": "Лояльные к бренду",
+              "description": "Активные покупатели, демонстрирующие явное предпочтение конкретным брендам в своих покупках.",
+              "customer_count": 555,
+              "average_ltv": 28473.065333333332,
+              "average_purchases": 3.0144144144144143,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "84739bd1-069f-476c-9a2b-05cc5dd0d14b",
+              "name": "Частые Покупатели",
+              "description": "Часто покупают, но с небольшим средним чеком",
+              "customer_count": 428,
+              "average_ltv": 32104.558691588783,
+              "average_purchases": 3.3434579439252334,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "27ec0d44-654a-4956-828f-3651d0e2380f",
+              "name": "Новые Клиенты",
+              "description": "Совершили первую покупку недавно, потенциал для развития",
+              "customer_count": 493,
+              "average_ltv": 29009.259371196753,
+              "average_purchases": 3.075050709939148,
+              "color": "#FF9800"
+            },
+            {
+              "segment_id": "991d1783-75cf-47cf-a642-44110a5b17f0",
+              "name": "Частые покупатели с низким чеком",
+              "description": "Регулярно покупают недорогие изделия (часто серьги), но формируют стабильный поток заказов.",
+              "customer_count": 466,
+              "average_ltv": 31015.127575107297,
+              "average_purchases": 3.274678111587983,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "22135dff-994a-42b0-9f61-08e8231c1316",
+              "name": "Активные Покупатели",
+              "description": "Регулярно совершающие покупки клиенты со средней и высокой частотой",
+              "customer_count": 477,
+              "average_ltv": 29874.530125786165,
+              "average_purchases": 3.159329140461216,
+              "color": "#4CAF50"
+            },
+            {
+              "segment_id": "51e369a9-1606-494b-8d55-e867e0bd3caa",
+              "name": "Спящие Клиенты",
+              "description": "Неактивные покупатели с давними или единичными покупками",
+              "customer_count": 1867,
+              "average_ltv": 17129.354054633102,
+              "average_purchases": 1.572576325656133,
+              "color": "#9E9E9E"
+            },
+            {
+              "segment_id": "82844b47-576a-4508-a8fe-85dff0980b34",
+              "name": "Любители Конкретных Категорий",
+              "description": "Клиенты с четко выраженными предпочтениями к определенным категориям",
+              "customer_count": 555,
+              "average_ltv": 28473.065333333332,
+              "average_purchases": 3.0144144144144143,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "0f2ac50b-f32a-4277-8ef9-2a5e1a255e0c",
+              "name": "VIP 50000-70000 руб.",
+              "description": "Автосегмент для массовой генерации по плану",
+              "customer_count": 0,
+              "average_ltv": 0,
+              "average_purchases": 0,
+              "color": ""
+            },
+            {
+              "segment_id": "287daac1-41aa-4cc7-82c9-f54ffd5d2b73",
+              "name": "Raganella",
+              "description": "",
+              "customer_count": 11,
+              "average_ltv": 36392.59818181818,
+              "average_purchases": 3.5454545454545454,
+              "color": ""
+            },
+            {
+              "segment_id": "f22add44-fa09-4165-83d1-3b44f3517eda",
+              "name": "Клиенты Меганом",
+              "description": "",
+              "customer_count": 0,
+              "average_ltv": 0,
+              "average_purchases": 0,
+              "color": ""
+            },
+            {
+              "segment_id": "d2a59b95-e0b8-4fd2-b4a2-dbb8fc67bfda",
+              "name": "Мужчины",
+              "description": "мужчины",
+              "customer_count": 0,
+              "average_ltv": 0,
+              "average_purchases": 0,
+              "color": ""
+            },
+            {
+              "segment_id": "d17cb11d-32e4-4db9-aa9c-8dc8030294ff",
+              "name": "Европа+",
+              "description": "За минусом UNO и Raganella. Похожие на эти сегменты",
+              "customer_count": 20,
+              "average_ltv": 48815.046500000004,
+              "average_purchases": 3.4,
+              "color": ""
+            }
+          ],
+          "total_segments": 22
+        },
+        "churn_risk": {
+          "total_customers": 6216,
+          "high_risk": 5489,
+          "medium_risk": 303,
+          "low_risk": 424
+        },
+        "top_customers": [
+          {
+            "user_id": "0fe8bc01-aaba-4c5e-8aef-5fa2f666d96d",
+            "phone": "79787566405",
+            "full_name": "Михайлова Дугма",
+            "total_spent": 1049050.0,
+            "total_purchases": 85,
+            "loyalty_points": 45715,
+            "customer_segment": "VIP",
+            "last_purchase_date": "2026-04-30T21:06:18+00:00"
+          },
+          {
+            "user_id": "ea319e7b-a10f-473f-8460-ea18eba6764c",
+            "phone": "79787760018",
+            "full_name": "Карлова Наталья",
+            "total_spent": 426073.14,
+            "total_purchases": 6,
+            "loyalty_points": 12875,
+            "customer_segment": "Active",
+            "last_purchase_date": "2026-01-09T13:25:58+00:00"
+          },
+          {
+            "user_id": "69fb9ffc-f21e-4502-bf93-66c6615cda24",
+            "phone": "79124610847",
+            "full_name": "Ямпольская Елена",
+            "total_spent": 329674.0,
+            "total_purchases": 1,
+            "loyalty_points": 1669,
+            "customer_segment": "Regular",
+            "last_purchase_date": "2025-02-27T00:00:00+00:00"
+          },
+          {
+            "user_id": "14e95929-98b4-4637-addb-296017ef1a70",
+            "phone": "79788398435",
+            "full_name": "Кальчева Татьяна",
+            "total_spent": 310054.02,
+            "total_purchases": 21,
+            "loyalty_points": 5320,
+            "customer_segment": "VIP",
+            "last_purchase_date": "2026-01-03T19:36:46+00:00"
+          },
+          {
+            "user_id": "b874f015-8c5d-4207-b2cb-dce275146b94",
+            "phone": "79789123089",
+            "full_name": "Кузнецова Екатерина",
+            "total_spent": 216703.0,
+            "total_purchases": 1,
+            "loyalty_points": 872,
+            "customer_segment": "Regular",
+            "last_purchase_date": "2024-07-31T00:00:00+00:00"
+          },
+          {
+            "user_id": "98bdf08d-18bd-483b-b1f9-eddcc6ad536f",
+            "phone": "79490492264",
+            "full_name": "Зубцова Наталья",
+            "total_spent": 214318.48,
+            "total_purchases": 4,
+            "loyalty_points": 5100,
+            "customer_segment": "Active",
+            "last_purchase_date": "2026-01-09T15:33:56+00:00"
+          },
+          {
+            "user_id": "d5c025f9-fc00-4194-b30c-591fa752de2c",
+            "phone": "79788549177",
+            "full_name": "Шрамко Ирина",
+            "total_spent": 198289.0,
+            "total_purchases": 27,
+            "loyalty_points": 2421,
+            "customer_segment": "Regular",
+            "last_purchase_date": "2026-03-15T17:12:08+00:00"
+          },
+          {
+            "user_id": "060e66b3-3581-4e62-9d57-c32aa5847fbf",
+            "phone": "79787377429",
+            "full_name": "Бегларян Александра",
+            "total_spent": 195005.0,
+            "total_purchases": 8,
+            "loyalty_points": 5236,
+            "customer_segment": "Active",
+            "last_purchase_date": "2025-12-26T12:53:39+00:00"
+          },
+          {
+            "user_id": "74cabc42-e14c-4cfe-9167-609175df352d",
+            "phone": "79788249869",
+            "full_name": "Кувалина Ирина",
+            "total_spent": 191842.0,
+            "total_purchases": 1,
+            "loyalty_points": 325,
+            "customer_segment": "Regular",
+            "last_purchase_date": "2023-11-30T00:00:00+00:00"
+          },
+          {
+            "user_id": "d6818b02-59d5-4713-94fb-78ba0c9c7dcf",
+            "phone": "79786898060",
+            "full_name": "Изейдинова Эмине",
+            "total_spent": 191550.4,
+            "total_purchases": 2,
+            "loyalty_points": 223,
+            "customer_segment": "Active",
+            "last_purchase_date": "2025-11-15T15:03:56+00:00"
+          }
+        ]
+      }
+    },
+    "/api/marketing/ai-marketer/dashboard": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "pending_approvals": 0,
+        "active_tasks": 0,
+        "completed_today": 0,
+        "tomorrow_plan_ready": false
+      }
+    },
+    "/api/ai-marketer/opportunities": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "opportunities": [
+          {
+            "type": "re-engagement",
+            "description": "5489 VIP клиентов не покупали 90+ дней - возможна программа реактивации",
+            "customer_count": 5489,
+            "potential_revenue": 27445000,
+            "recommended_actions": [
+              "Специальные скидки",
+              "Персональные предложения"
+            ]
+          }
+        ],
+        "total": 1
+      }
+    },
+    "/api/ai-marketer/segments/analysis": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "segments": [
+          {
+            "segment_id": "80641db3-af54-4c3e-bd9c-10d41820d47f",
+            "name": "Лояльные покупатели",
+            "description": "Клиенты с высоким уровнем лояльности (баллы) и недавними покупками.",
+            "size": 595,
+            "average_ltv": 21668.530235294118,
+            "average_purchases": 2.015126050420168,
+            "insights": [
+              "Размер сегмента: 595",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "46a238ed-e612-40f4-baf9-fe9dfe3a984a",
+            "name": "Экономные покупатели",
+            "description": "Клиенты с низким средним чеком, но потенциально высокой частотой покупок.",
+            "size": 836,
+            "average_ltv": 17304.531674641148,
+            "average_purchases": 1.7404306220095693,
+            "insights": [
+              "Размер сегмента: 836",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "04029f0f-ed83-49ae-8b40-88b8ca958b5d",
+            "name": "Потенциально ценные",
+            "description": "Клиенты с высоким средним чеком, но пока низкой частотой покупок.",
+            "size": 836,
+            "average_ltv": 17304.531674641148,
+            "average_purchases": 1.7404306220095693,
+            "insights": [
+              "Размер сегмента: 836",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "3549c723-6630-4691-a8d0-781d3e3b874e",
+            "name": "Больше 2000 бонусов",
+            "description": null,
+            "size": 16,
+            "average_ltv": 157290.29125,
+            "average_purchases": 12.375,
+            "insights": [
+              "Размер сегмента: 16",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "04a076d3-9912-4f7e-ba09-ad090efcc6a3",
+            "name": "Больше 50 000",
+            "description": null,
+            "size": 92,
+            "average_ltv": 94650.68130434783,
+            "average_purchases": 4.760869565217392,
+            "insights": [
+              "Размер сегмента: 92",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "a30aba8b-2b59-4a9f-9157-2d876793378f",
+            "name": "Активные",
+            "description": "Активные покупатели",
+            "size": 434,
+            "average_ltv": 31868.234677419354,
+            "average_purchases": 3.327188940092166,
+            "insights": [
+              "Размер сегмента: 434",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "0491cf60-8c05-4652-ad4b-525d91def071",
+            "name": "Спящие",
+            "description": "Клиенты, которые давно не покупали",
+            "size": 855,
+            "average_ltv": 23460.585345029238,
+            "average_purchases": 2.314619883040936,
+            "insights": [
+              "Размер сегмента: 855",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "0e092584-0063-4e64-aec0-02a6e5eb3614",
+            "name": "Новые клиенты",
+            "description": "Недавно совершили первую покупку, но ещё не проявили лояльность. Критический сегмент для удержания.",
+            "size": 418,
+            "average_ltv": 24807.09688995215,
+            "average_purchases": 2.882775119617225,
+            "insights": [
+              "Размер сегмента: 418",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "889adb4b-6e49-448a-a2bc-e570c6be9137",
+            "name": "Активные покупатели",
+            "description": "Регулярно совершают покупки, преимущественно в категории серег, с умеренным средним чеком.",
+            "size": 486,
+            "average_ltv": 29395.83306584362,
+            "average_purchases": 3.117283950617284,
+            "insights": [
+              "Размер сегмента: 486",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "f6ef168f-5920-43f9-ab79-ed01ec27056a",
+            "name": "UNO",
+            "description": null,
+            "size": 21,
+            "average_ltv": 122727.05142857143,
+            "average_purchases": 12.380952380952381,
+            "insights": [
+              "Размер сегмента: 21",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "65c231b7-dbdb-433a-b8cb-c0ed477c23fb",
+            "name": "Лояльные к бренду",
+            "description": "Активные покупатели, демонстрирующие явное предпочтение конкретным брендам в своих покупках.",
+            "size": 555,
+            "average_ltv": 28473.065333333332,
+            "average_purchases": 3.0144144144144143,
+            "insights": [
+              "Размер сегмента: 555",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "84739bd1-069f-476c-9a2b-05cc5dd0d14b",
+            "name": "Частые Покупатели",
+            "description": "Часто покупают, но с небольшим средним чеком",
+            "size": 428,
+            "average_ltv": 32104.558691588783,
+            "average_purchases": 3.3434579439252334,
+            "insights": [
+              "Размер сегмента: 428",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "27ec0d44-654a-4956-828f-3651d0e2380f",
+            "name": "Новые Клиенты",
+            "description": "Совершили первую покупку недавно, потенциал для развития",
+            "size": 493,
+            "average_ltv": 29009.259371196753,
+            "average_purchases": 3.075050709939148,
+            "insights": [
+              "Размер сегмента: 493",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "991d1783-75cf-47cf-a642-44110a5b17f0",
+            "name": "Частые покупатели с низким чеком",
+            "description": "Регулярно покупают недорогие изделия (часто серьги), но формируют стабильный поток заказов.",
+            "size": 466,
+            "average_ltv": 31015.127575107297,
+            "average_purchases": 3.2746781115879826,
+            "insights": [
+              "Размер сегмента: 466",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "22135dff-994a-42b0-9f61-08e8231c1316",
+            "name": "Активные Покупатели",
+            "description": "Регулярно совершающие покупки клиенты со средней и высокой частотой",
+            "size": 477,
+            "average_ltv": 29874.530125786165,
+            "average_purchases": 3.159329140461216,
+            "insights": [
+              "Размер сегмента: 477",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "51e369a9-1606-494b-8d55-e867e0bd3caa",
+            "name": "Спящие Клиенты",
+            "description": "Неактивные покупатели с давними или единичными покупками",
+            "size": 1867,
+            "average_ltv": 17129.354054633102,
+            "average_purchases": 1.5725763256561327,
+            "insights": [
+              "Размер сегмента: 1867",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "82844b47-576a-4508-a8fe-85dff0980b34",
+            "name": "Любители Конкретных Категорий",
+            "description": "Клиенты с четко выраженными предпочтениями к определенным категориям",
+            "size": 555,
+            "average_ltv": 28473.065333333332,
+            "average_purchases": 3.0144144144144143,
+            "insights": [
+              "Размер сегмента: 555",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "0f2ac50b-f32a-4277-8ef9-2a5e1a255e0c",
+            "name": "VIP 50000-70000 руб.",
+            "description": "Автосегмент для массовой генерации по плану",
+            "size": 66,
+            "average_ltv": 0,
+            "average_purchases": 0,
+            "insights": [
+              "Размер сегмента: 66",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "287daac1-41aa-4cc7-82c9-f54ffd5d2b73",
+            "name": "Raganella",
+            "description": null,
+            "size": 11,
+            "average_ltv": 36392.59818181818,
+            "average_purchases": 3.5454545454545454,
+            "insights": [
+              "Размер сегмента: 11",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "f22add44-fa09-4165-83d1-3b44f3517eda",
+            "name": "Клиенты Меганом",
+            "description": null,
+            "size": 60,
+            "average_ltv": 0,
+            "average_purchases": 0,
+            "insights": [
+              "Размер сегмента: 60",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "d2a59b95-e0b8-4fd2-b4a2-dbb8fc67bfda",
+            "name": "Мужчины",
+            "description": "мужчины",
+            "size": 62,
+            "average_ltv": 0,
+            "average_purchases": 0,
+            "insights": [
+              "Размер сегмента: 62",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          },
+          {
+            "segment_id": "d17cb11d-32e4-4db9-aa9c-8dc8030294ff",
+            "name": "Европа+",
+            "description": "За минусом UNO и Raganella. Похожие на эти сегменты",
+            "size": 20,
+            "average_ltv": 48815.046500000004,
+            "average_purchases": 3.4,
+            "insights": [
+              "Размер сегмента: 20",
+              "Откройте карточку сегмента для редактирования фильтров и выгрузки списка."
+            ]
+          }
+        ]
+      }
+    },
+    "/api/admin/customers/analytics/overview": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "total_customers": 6216,
+        "total_revenue": 66007132.58,
+        "rfm_analysis": {
+          "total_customers": 6216,
+          "rfm_distribution": {
+            "r_scores": {
+              "1": 5395,
+              "2": 271,
+              "3": 162,
+              "4": 112,
+              "5": 80
+            },
+            "f_scores": {
+              "1": 5555,
+              "2": 401,
+              "3": 56,
+              "4": 5,
+              "5": 3
+            },
+            "m_scores": {
+              "1": 4139,
+              "2": 1111,
+              "3": 634,
+              "4": 109,
+              "5": 27
+            },
+            "total_scores": {
+              "3": 3934,
+              "4": 952,
+              "5": 539,
+              "6": 199,
+              "7": 187,
+              "8": 104,
+              "9": 61,
+              "10": 24,
+              "11": 12,
+              "12": 5,
+              "13": 0,
+              "14": 1,
+              "15": 2
+            }
+          },
+          "average_rfm": {
+            "r_score": 1.2012548262548262,
+            "f_score": 1.0868725868725868,
+            "m_score": 1.4527027027027026
+          }
+        },
+        "ltv_metrics": {
+          "total_customers": 6216,
+          "total_ltv": 66007132.58,
+          "average_ltv": 10618.908072715572
+        },
+        "segments_stats": {
+          "segments": [
+            {
+              "segment_id": "80641db3-af54-4c3e-bd9c-10d41820d47f",
+              "name": "Лояльные покупатели",
+              "description": "Клиенты с высоким уровнем лояльности (баллы) и недавними покупками.",
+              "customer_count": 595,
+              "average_ltv": 21668.530235294118,
+              "average_purchases": 2.015126050420168,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "46a238ed-e612-40f4-baf9-fe9dfe3a984a",
+              "name": "Экономные покупатели",
+              "description": "Клиенты с низким средним чеком, но потенциально высокой частотой покупок.",
+              "customer_count": 836,
+              "average_ltv": 17304.531674641148,
+              "average_purchases": 1.7404306220095693,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "04029f0f-ed83-49ae-8b40-88b8ca958b5d",
+              "name": "Потенциально ценные",
+              "description": "Клиенты с высоким средним чеком, но пока низкой частотой покупок.",
+              "customer_count": 836,
+              "average_ltv": 17304.531674641148,
+              "average_purchases": 1.7404306220095693,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "3549c723-6630-4691-a8d0-781d3e3b874e",
+              "name": "Больше 2000 бонусов",
+              "description": "",
+              "customer_count": 16,
+              "average_ltv": 157290.29125,
+              "average_purchases": 12.375,
+              "color": ""
+            },
+            {
+              "segment_id": "04a076d3-9912-4f7e-ba09-ad090efcc6a3",
+              "name": "Больше 50 000",
+              "description": "",
+              "customer_count": 92,
+              "average_ltv": 94650.68130434783,
+              "average_purchases": 4.760869565217392,
+              "color": ""
+            },
+            {
+              "segment_id": "a30aba8b-2b59-4a9f-9157-2d876793378f",
+              "name": "Активные",
+              "description": "Активные покупатели",
+              "customer_count": 434,
+              "average_ltv": 31868.234677419354,
+              "average_purchases": 3.327188940092166,
+              "color": "#4CAF50"
+            },
+            {
+              "segment_id": "0491cf60-8c05-4652-ad4b-525d91def071",
+              "name": "Спящие",
+              "description": "Клиенты, которые давно не покупали",
+              "customer_count": 855,
+              "average_ltv": 23460.585345029238,
+              "average_purchases": 2.3146198830409355,
+              "color": "#9E9E9E"
+            },
+            {
+              "segment_id": "0e092584-0063-4e64-aec0-02a6e5eb3614",
+              "name": "Новые клиенты",
+              "description": "Недавно совершили первую покупку, но ещё не проявили лояльность. Критический сегмент для удержания.",
+              "customer_count": 418,
+              "average_ltv": 24807.09688995215,
+              "average_purchases": 2.882775119617225,
+              "color": "#FF9800"
+            },
+            {
+              "segment_id": "889adb4b-6e49-448a-a2bc-e570c6be9137",
+              "name": "Активные покупатели",
+              "description": "Регулярно совершают покупки, преимущественно в категории серег, с умеренным средним чеком.",
+              "customer_count": 486,
+              "average_ltv": 29395.83306584362,
+              "average_purchases": 3.117283950617284,
+              "color": "#4CAF50"
+            },
+            {
+              "segment_id": "f6ef168f-5920-43f9-ab79-ed01ec27056a",
+              "name": "UNO",
+              "description": "",
+              "customer_count": 21,
+              "average_ltv": 122727.05142857143,
+              "average_purchases": 12.380952380952381,
+              "color": ""
+            },
+            {
+              "segment_id": "65c231b7-dbdb-433a-b8cb-c0ed477c23fb",
+              "name": "Лояльные к бренду",
+              "description": "Активные покупатели, демонстрирующие явное предпочтение конкретным брендам в своих покупках.",
+              "customer_count": 555,
+              "average_ltv": 28473.065333333332,
+              "average_purchases": 3.0144144144144143,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "84739bd1-069f-476c-9a2b-05cc5dd0d14b",
+              "name": "Частые Покупатели",
+              "description": "Часто покупают, но с небольшим средним чеком",
+              "customer_count": 428,
+              "average_ltv": 32104.558691588783,
+              "average_purchases": 3.3434579439252334,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "27ec0d44-654a-4956-828f-3651d0e2380f",
+              "name": "Новые Клиенты",
+              "description": "Совершили первую покупку недавно, потенциал для развития",
+              "customer_count": 493,
+              "average_ltv": 29009.259371196753,
+              "average_purchases": 3.075050709939148,
+              "color": "#FF9800"
+            },
+            {
+              "segment_id": "991d1783-75cf-47cf-a642-44110a5b17f0",
+              "name": "Частые покупатели с низким чеком",
+              "description": "Регулярно покупают недорогие изделия (часто серьги), но формируют стабильный поток заказов.",
+              "customer_count": 466,
+              "average_ltv": 31015.127575107297,
+              "average_purchases": 3.274678111587983,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "22135dff-994a-42b0-9f61-08e8231c1316",
+              "name": "Активные Покупатели",
+              "description": "Регулярно совершающие покупки клиенты со средней и высокой частотой",
+              "customer_count": 477,
+              "average_ltv": 29874.530125786165,
+              "average_purchases": 3.159329140461216,
+              "color": "#4CAF50"
+            },
+            {
+              "segment_id": "51e369a9-1606-494b-8d55-e867e0bd3caa",
+              "name": "Спящие Клиенты",
+              "description": "Неактивные покупатели с давними или единичными покупками",
+              "customer_count": 1867,
+              "average_ltv": 17129.354054633102,
+              "average_purchases": 1.572576325656133,
+              "color": "#9E9E9E"
+            },
+            {
+              "segment_id": "82844b47-576a-4508-a8fe-85dff0980b34",
+              "name": "Любители Конкретных Категорий",
+              "description": "Клиенты с четко выраженными предпочтениями к определенным категориям",
+              "customer_count": 555,
+              "average_ltv": 28473.065333333332,
+              "average_purchases": 3.0144144144144143,
+              "color": "#757575"
+            },
+            {
+              "segment_id": "0f2ac50b-f32a-4277-8ef9-2a5e1a255e0c",
+              "name": "VIP 50000-70000 руб.",
+              "description": "Автосегмент для массовой генерации по плану",
+              "customer_count": 0,
+              "average_ltv": 0,
+              "average_purchases": 0,
+              "color": ""
+            },
+            {
+              "segment_id": "287daac1-41aa-4cc7-82c9-f54ffd5d2b73",
+              "name": "Raganella",
+              "description": "",
+              "customer_count": 11,
+              "average_ltv": 36392.59818181818,
+              "average_purchases": 3.5454545454545454,
+              "color": ""
+            },
+            {
+              "segment_id": "f22add44-fa09-4165-83d1-3b44f3517eda",
+              "name": "Клиенты Меганом",
+              "description": "",
+              "customer_count": 0,
+              "average_ltv": 0,
+              "average_purchases": 0,
+              "color": ""
+            },
+            {
+              "segment_id": "d2a59b95-e0b8-4fd2-b4a2-dbb8fc67bfda",
+              "name": "Мужчины",
+              "description": "мужчины",
+              "customer_count": 0,
+              "average_ltv": 0,
+              "average_purchases": 0,
+              "color": ""
+            },
+            {
+              "segment_id": "d17cb11d-32e4-4db9-aa9c-8dc8030294ff",
+              "name": "Европа+",
+              "description": "За минусом UNO и Raganella. Похожие на эти сегменты",
+              "customer_count": 20,
+              "average_ltv": 48815.046500000004,
+              "average_purchases": 3.4,
+              "color": ""
+            }
+          ],
+          "total_segments": 22
+        }
+      }
+    },
+    "/api/admin/customers/segments/list": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": [
+        {
+          "id": "80641db3-af54-4c3e-bd9c-10d41820d47f",
+          "name": "Лояльные покупатели",
+          "description": "Клиенты с высоким уровнем лояльности (баллы) и недавними покупками.",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 180
+              },
+              {
+                "field": "rfm_score_sum",
+                "operator": ">=",
+                "value": 5
+              }
+            ]
+          },
+          "customer_count": 598,
+          "color": "#757575",
+          "is_auto_generated": true
+        },
+        {
+          "id": "46a238ed-e612-40f4-baf9-fe9dfe3a984a",
+          "name": "Экономные покупатели",
+          "description": "Клиенты с низким средним чеком, но потенциально высокой частотой покупок.",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 180
+              }
+            ]
+          },
+          "customer_count": 598,
+          "color": "#757575",
+          "is_auto_generated": true
+        },
+        {
+          "id": "04029f0f-ed83-49ae-8b40-88b8ca958b5d",
+          "name": "Потенциально ценные",
+          "description": "Клиенты с высоким средним чеком, но пока низкой частотой покупок.",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 180
+              }
+            ]
+          },
+          "customer_count": 598,
+          "color": "#757575",
+          "is_auto_generated": true
+        },
+        {
+          "id": "3549c723-6630-4691-a8d0-781d3e3b874e",
+          "name": "Больше 2000 бонусов",
+          "description": null,
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "loyalty_points",
+                "operator": ">=",
+                "value": 2000
+              },
+              {
+                "field": "city",
+                "operator": "contains",
+                "value": "Симф"
+              }
+            ]
+          },
+          "customer_count": 16,
+          "color": null,
+          "is_auto_generated": false
+        },
+        {
+          "id": "04a076d3-9912-4f7e-ba09-ad090efcc6a3",
+          "name": "Больше 50 000",
+          "description": null,
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_spent",
+                "operator": ">=",
+                "value": 50000
+              },
+              {
+                "field": "city",
+                "operator": "contains",
+                "value": "Симф"
+              }
+            ]
+          },
+          "customer_count": 92,
+          "color": null,
+          "is_auto_generated": false
+        },
+        {
+          "id": "a30aba8b-2b59-4a9f-9157-2d876793378f",
+          "name": "Активные",
+          "description": "Активные покупатели",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 5
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 90
+              }
+            ]
+          },
+          "customer_count": 29,
+          "color": "#4CAF50",
+          "is_auto_generated": true
+        },
+        {
+          "id": "0491cf60-8c05-4652-ad4b-525d91def071",
+          "name": "Спящие",
+          "description": "Клиенты, которые давно не покупали",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 1
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 180
+              }
+            ]
+          },
+          "customer_count": 593,
+          "color": "#9E9E9E",
+          "is_auto_generated": true
+        },
+        {
+          "id": "0e092584-0063-4e64-aec0-02a6e5eb3614",
+          "name": "Новые клиенты",
+          "description": "Недавно совершили первую покупку, но ещё не проявили лояльность. Критический сегмент для удержания.",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 60
+              }
+            ]
+          },
+          "customer_count": 14,
+          "color": "#FF9800",
+          "is_auto_generated": true
+        },
+        {
+          "id": "889adb4b-6e49-448a-a2bc-e570c6be9137",
+          "name": "Активные покупатели",
+          "description": "Регулярно совершают покупки, преимущественно в категории серег, с умеренным средним чеком.",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 3
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 90
+              }
+            ]
+          },
+          "customer_count": 36,
+          "color": "#4CAF50",
+          "is_auto_generated": true
+        },
+        {
+          "id": "f6ef168f-5920-43f9-ab79-ed01ec27056a",
+          "name": "UNO",
+          "description": null,
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "city",
+                "operator": "contains",
+                "value": "Симферополь"
+              },
+              {
+                "connector": "AND",
+                "field": "brand",
+                "operator": "contains",
+                "value": "UNO"
+              }
+            ]
+          },
+          "customer_count": 21,
+          "color": null,
+          "is_auto_generated": false
+        },
+        {
+          "id": "65c231b7-dbdb-433a-b8cb-c0ed477c23fb",
+          "name": "Лояльные к бренду",
+          "description": "Активные покупатели, демонстрирующие явное предпочтение конкретным брендам в своих покупках.",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 3
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 120
+              }
+            ]
+          },
+          "customer_count": 76,
+          "color": "#757575",
+          "is_auto_generated": true
+        },
+        {
+          "id": "84739bd1-069f-476c-9a2b-05cc5dd0d14b",
+          "name": "Частые Покупатели",
+          "description": "Часто покупают, но с небольшим средним чеком",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 5
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 90
+              }
+            ]
+          },
+          "customer_count": 29,
+          "color": "#757575",
+          "is_auto_generated": true
+        },
+        {
+          "id": "27ec0d44-654a-4956-828f-3651d0e2380f",
+          "name": "Новые Клиенты",
+          "description": "Совершили первую покупку недавно, потенциал для развития",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 90
+              }
+            ]
+          },
+          "customer_count": 53,
+          "color": "#FF9800",
+          "is_auto_generated": true
+        },
+        {
+          "id": "991d1783-75cf-47cf-a642-44110a5b17f0",
+          "name": "Частые покупатели с низким чеком",
+          "description": "Регулярно покупают недорогие изделия (часто серьги), но формируют стабильный поток заказов.",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 5
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 100
+              }
+            ]
+          },
+          "customer_count": 37,
+          "color": "#757575",
+          "is_auto_generated": true
+        },
+        {
+          "id": "22135dff-994a-42b0-9f61-08e8231c1316",
+          "name": "Активные Покупатели",
+          "description": "Регулярно совершающие покупки клиенты со средней и высокой частотой",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 3
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 60
+              },
+              {
+                "field": "rfm_score_sum",
+                "operator": ">=",
+                "value": 8
+              }
+            ]
+          },
+          "customer_count": 14,
+          "color": "#4CAF50",
+          "is_auto_generated": true
+        },
+        {
+          "id": "51e369a9-1606-494b-8d55-e867e0bd3caa",
+          "name": "Спящие Клиенты",
+          "description": "Неактивные покупатели с давними или единичными покупками",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 180
+              }
+            ]
+          },
+          "customer_count": 598,
+          "color": "#9E9E9E",
+          "is_auto_generated": true
+        },
+        {
+          "id": "82844b47-576a-4508-a8fe-85dff0980b34",
+          "name": "Любители Конкретных Категорий",
+          "description": "Клиенты с четко выраженными предпочтениями к определенным категориям",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 3
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": "within_last_days",
+                "value": 120
+              }
+            ]
+          },
+          "customer_count": 76,
+          "color": "#757575",
+          "is_auto_generated": true
+        },
+        {
+          "id": "0f2ac50b-f32a-4277-8ef9-2a5e1a255e0c",
+          "name": "VIP 50000-70000 руб.",
+          "description": "Автосегмент для массовой генерации по плану",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "total_spent",
+                "operator": ">=",
+                "value": 50000
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": ">=",
+                "value": "2024-01-01"
+              },
+              {
+                "field": "total_spent",
+                "operator": "<",
+                "value": 70000
+              }
+            ]
+          },
+          "customer_count": 60,
+          "color": null,
+          "is_auto_generated": false
+        },
+        {
+          "id": "287daac1-41aa-4cc7-82c9-f54ffd5d2b73",
+          "name": "Raganella",
+          "description": null,
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "city",
+                "operator": "contains",
+                "value": "Симферополь"
+              },
+              {
+                "connector": "AND",
+                "field": "brand",
+                "operator": "contains",
+                "value": "Raganella"
+              },
+              {
+                "connector": "AND",
+                "field": "exclude_segment",
+                "operator": "equals",
+                "value": "f6ef168f-5920-43f9-ab79-ed01ec27056a"
+              }
+            ]
+          },
+          "customer_count": 11,
+          "color": null,
+          "is_auto_generated": false
+        },
+        {
+          "id": "f22add44-fa09-4165-83d1-3b44f3517eda",
+          "name": "Клиенты Меганом",
+          "description": null,
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "only_store",
+                "operator": "equals",
+                "value": "8cebda58-a2ab-11f0-96fc-fa163e4cc04e"
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": ">=",
+                "value": "2024-12-01"
+              },
+              {
+                "field": "total_purchases",
+                "operator": ">=",
+                "value": 3
+              },
+              {
+                "field": "total_spent",
+                "operator": ">=",
+                "value": 10000
+              }
+            ]
+          },
+          "customer_count": 60,
+          "color": null,
+          "is_auto_generated": false
+        },
+        {
+          "id": "d2a59b95-e0b8-4fd2-b4a2-dbb8fc67bfda",
+          "name": "Мужчины",
+          "description": "мужчины",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "last_purchase_date",
+                "operator": ">=",
+                "value": "2024-12-01"
+              },
+              {
+                "field": "total_purchases",
+                "operator": ">",
+                "value": 1
+              },
+              {
+                "field": "gender",
+                "operator": "equals",
+                "value": "male"
+              },
+              {
+                "field": "last_purchase_date",
+                "operator": "<=",
+                "value": "2026-03-01"
+              }
+            ]
+          },
+          "customer_count": 10,
+          "color": null,
+          "is_auto_generated": false
+        },
+        {
+          "id": "d17cb11d-32e4-4db9-aa9c-8dc8030294ff",
+          "name": "Европа+",
+          "description": "За минусом UNO и Raganella. Похожие на эти сегменты",
+          "rules": {
+            "logic": "AND",
+            "filters": [
+              {
+                "field": "brand",
+                "operator": "contains",
+                "value": "Kalliope"
+              },
+              {
+                "connector": "OR",
+                "field": "brand",
+                "operator": "contains",
+                "value": "Claudio"
+              },
+              {
+                "connector": "OR",
+                "field": "brand",
+                "operator": "contains",
+                "value": "Madreperla"
+              },
+              {
+                "connector": "OR",
+                "field": "brand",
+                "operator": "contains",
+                "value": "Antura"
+              },
+              {
+                "connector": "AND",
+                "field": "city",
+                "operator": "contains",
+                "value": "Симферополь"
+              },
+              {
+                "connector": "AND",
+                "field": "exclude_segment",
+                "operator": "equals",
+                "value": "f6ef168f-5920-43f9-ab79-ed01ec27056a"
+              },
+              {
+                "connector": "AND",
+                "field": "exclude_segment",
+                "operator": "equals",
+                "value": "287daac1-41aa-4cc7-82c9-f54ffd5d2b73"
+              }
+            ]
+          },
+          "customer_count": 20,
+          "color": null,
+          "is_auto_generated": false
+        }
+      ]
+    },
+    "/api/analytics/dashboard?days=30": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "period": {
+          "start": "2026-04-28T09:14:48.821497",
+          "end": "2026-05-28T09:14:48.821497",
+          "days": 30
+        },
+        "conversion": {
+          "period": {
+            "start": "2026-04-28T09:14:48.821497",
+            "end": "2026-05-28T09:14:48.821497"
+          },
+          "events": {
+            "chat_message": 0,
+            "product_click": 3,
+            "look_view": 1,
+            "purchase": 0
+          },
+          "conversion_rates": {
+            "product_to_purchase": 0.0,
+            "look_to_purchase": 0.0
+          }
+        },
+        "aov": {
+          "period": {
+            "start": "2026-04-28T09:14:48.821497",
+            "end": "2026-05-28T09:14:48.821497"
+          },
+          "total_revenue": 0.0,
+          "order_count": 0,
+          "aov": 0.0
+        },
+        "engagement": {
+          "period": {
+            "start": "2026-04-28T09:14:48.821497",
+            "end": "2026-05-28T09:14:48.821497"
+          },
+          "total_sessions": 13,
+          "total_events": 114,
+          "avg_session_duration_seconds": 63295.8491449,
+          "avg_events_per_session": 8.76923076923077,
+          "unique_products_viewed": 1
+        },
+        "events_by_type": {
+          "page_view": 85,
+          "product_click": 3,
+          "look_view": 1,
+          "ui_click": 24,
+          "yandex_metrika_sync": 1
+        },
+        "total_events": 114
+      }
+    },
+    "/api/analytics/1c-sales/daily?period=today&auto_sync=false": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "status": "success",
+        "period": {
+          "start": "2026-05-27T21:00:00+00:00",
+          "end": "2026-05-28T09:14:48.854639+00:00"
+        },
+        "daily_data": [
+          {
+            "date": "2026-05-28",
+            "revenue": 0,
+            "orders": 0,
+            "items_sold": 0
+          }
+        ]
+      }
+    },
+    "/api/analytics/1c-sales/daily?period=yesterday&auto_sync=false": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "status": "success",
+        "period": {
+          "start": "2026-05-26T21:00:00+00:00",
+          "end": "2026-05-27T20:59:59+00:00"
+        },
+        "daily_data": [
+          {
+            "date": "2026-05-27",
+            "revenue": 37569.0,
+            "orders": 5,
+            "items_sold": 23.0
+          }
+        ]
+      }
+    },
+    "/api/analytics/1c-sales/metrics?period=week&auto_sync=false": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "status": "success",
+        "period": {
+          "start": "2026-05-24T21:00:00+00:00",
+          "end": "2026-05-28T09:14:51.505275+00:00"
+        },
+        "total": 3,
+        "aggregated": {
+          "total_revenue": 142049.0,
+          "total_orders": 14,
+          "total_items": 21,
+          "average_order_value": 10146.357142857143,
+          "total_visitors": 277,
+          "revenue_per_visitor": 512.8122743682311
+        },
+        "by_store": {
+          "3daee4e4-a2ab-11f0-96fc-fa163e4cc04e": {
+            "store_name": "Ялта, Набережная 18",
+            "revenue": 53726.0,
+            "orders": 6,
+            "items_sold": 28
+          },
+          "6c3a8322-a2ab-11f0-96fc-fa163e4cc04e": {
+            "store_name": "ТРК Центрум",
+            "revenue": 88323.00000000001,
+            "orders": 8,
+            "items_sold": 42
+          }
+        },
+        "by_channel": {
+          "offline": {
+            "revenue": 142049.0,
+            "orders": 14,
+            "items_sold": 0
+          }
+        },
+        "visitors_by_store": {
+          "CENTRUM": {
+            "visitor_count": 116,
+            "store_name": "CENTRUM"
+          },
+          "YALTA": {
+            "visitor_count": 161,
+            "store_name": "YALTA"
+          }
+        },
+        "metrics": [
+          {
+            "id": "22ca354c-529e-46fe-b136-e68e653107f9",
+            "date": "2026-05-27T00:00:00+00:00",
+            "revenue": 37569.000000000015,
+            "order_count": 5,
+            "average_order_value": 7513.800000000003,
+            "items_sold": 23
+          },
+          {
+            "id": "bb889a09-980a-4105-b32c-1f1b797cd52c",
+            "date": "2026-05-26T00:00:00+00:00",
+            "revenue": 35483.0,
+            "order_count": 3,
+            "average_order_value": 11827.666666666666,
+            "items_sold": 12
+          },
+          {
+            "id": "474f7ccc-bcb2-431b-b64e-f6482a9afd95",
+            "date": "2026-05-25T00:00:00+00:00",
+            "revenue": 68997.0,
+            "order_count": 6,
+            "average_order_value": 11499.5,
+            "items_sold": 35
+          }
+        ]
+      }
+    },
+    "/api/analytics/products/top-sellers?period=30d&limit=10": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "period": {
+          "start": "2026-04-27T21:00:00+00:00",
+          "end": "2026-05-28T09:14:51.529376+00:00"
+        },
+        "filters": {
+          "category": null,
+          "brand": null,
+          "product_type": null,
+          "channel": null,
+          "store_id": null
+        },
+        "sort_by": "revenue",
+        "products": [
+          {
+            "product_id_1c": "203f8ba4-ba46-11f0-836e-fa163e4cc04e",
+            "product_id": "203f8ba4-ba46-11f0-836e-fa163e4cc04e",
+            "product_name": "Серьги Kalliope акцентные с прозрачной ювелирной смолой зеленого цвета",
+            "product_article": "KL02202055/1-G",
+            "category": "Серьги",
+            "brand": "Kalliope",
+            "product_type": null,
+            "total_revenue": 102164.0,
+            "total_quantity": 6.0,
+            "total_orders": 3,
+            "avg_price": 17027.333333333332,
+            "avg_margin_percent": null
+          },
+          {
+            "product_id_1c": "c089cdf4-ba6e-11f0-836e-fa163e4cc04e",
+            "product_id": "c089cdf4-ba6e-11f0-836e-fa163e4cc04e",
+            "product_name": "Кулон на цепи с крупной жемчужиной Raganella Princess",
+            "product_article": "RP01856-S",
+            "category": "Кулоны",
+            "brand": "Raganella Princess",
+            "product_type": null,
+            "total_revenue": 74522.95999999999,
+            "total_quantity": 4.0,
+            "total_orders": 2,
+            "avg_price": 18630.739999999998,
+            "avg_margin_percent": null
+          },
+          {
+            "product_id_1c": "1c2256dc-ba46-11f0-836e-fa163e4cc04e",
+            "product_id": "1c2256dc-ba46-11f0-836e-fa163e4cc04e",
+            "product_name": "Серьги Kalliope мятые",
+            "product_article": "KL02202040-G",
+            "category": "Серьги",
+            "brand": "Kalliope",
+            "product_type": null,
+            "total_revenue": 51874.119999999995,
+            "total_quantity": 6.0,
+            "total_orders": 3,
+            "avg_price": 8645.686666666666,
+            "avg_margin_percent": null
+          },
+          {
+            "product_id_1c": "976a5698-c55c-11f0-86bb-fa163e4cc04e",
+            "product_id": "976a5698-c55c-11f0-86bb-fa163e4cc04e",
+            "product_name": "Ожерелье Cupido",
+            "product_article": "U10084-G",
+            "category": "Кулоны",
+            "brand": "UNOde50",
+            "product_type": null,
+            "total_revenue": 49980.0,
+            "total_quantity": 2.0,
+            "total_orders": 1,
+            "avg_price": 24990.0,
+            "avg_margin_percent": null
+          },
+          {
+            "product_id_1c": "1ab93dce-ba46-11f0-836e-fa163e4cc04e",
+            "product_id": "1ab93dce-ba46-11f0-836e-fa163e4cc04e",
+            "product_name": "Кольцо Kalliope мятое",
+            "product_article": "KL02201039-G",
+            "category": "Кольца",
+            "brand": "Kalliope",
+            "product_type": null,
+            "total_revenue": 47418.06,
+            "total_quantity": 6.0,
+            "total_orders": 3,
+            "avg_price": 7903.009999999999,
+            "avg_margin_percent": null
+          },
+          {
+            "product_id_1c": "ca9c9c90-ba6e-11f0-836e-fa163e4cc04e",
+            "product_id": "ca9c9c90-ba6e-11f0-836e-fa163e4cc04e",
+            "product_name": "Чокер многослойный с камнем в коньячном цвете Raganella Princess",
+            "product_article": "RP00677-G",
+            "category": "Чокеры",
+            "brand": "Raganella Princess",
+            "product_type": null,
+            "total_revenue": 46325.38,
+            "total_quantity": 2.0,
+            "total_orders": 1,
+            "avg_price": 23162.69,
+            "avg_margin_percent": null
+          },
+          {
+            "product_id_1c": "75acb42e-ba71-11f0-836e-fa163e4cc04e",
+            "product_id": "75acb42e-ba71-11f0-836e-fa163e4cc04e",
+            "product_name": "Кулон Magna лариат с мятыми элементами",
+            "product_article": "71161-G",
+            "category": "Кулоны",
+            "brand": "MAGNA",
+            "product_type": null,
+            "total_revenue": 44940.0,
+            "total_quantity": 6.0,
+            "total_orders": 3,
+            "avg_price": 7490.0,
+            "avg_margin_percent": null
+          },
+          {
+            "product_id_1c": "c56550a0-ba6e-11f0-836e-fa163e4cc04e",
+            "product_id": "c56550a0-ba6e-11f0-836e-fa163e4cc04e",
+            "product_name": "Чокер с круглым камнем коньячного цвета Raganella Princess",
+            "product_article": "RP01848-G",
+            "category": "Чокеры",
+            "brand": "Raganella Princess",
+            "product_type": null,
+            "total_revenue": 44353.26,
+            "total_quantity": 2.0,
+            "total_orders": 1,
+            "avg_price": 22176.63,
+            "avg_margin_percent": null
+          },
+          {
+            "product_id_1c": "f969cc6a-ba72-11f0-836e-fa163e4cc04e",
+            "product_id": "f969cc6a-ba72-11f0-836e-fa163e4cc04e",
+            "product_name": "Кольцо Pearl разъемное с жемчужиной",
+            "product_article": "80086-G",
+            "category": "Кольца",
+            "brand": "PEARL",
+            "product_type": null,
+            "total_revenue": 43920.0,
+            "total_quantity": 8.0,
+            "total_orders": 4,
+            "avg_price": 5490.0,
+            "avg_margin_percent": null
+          },
+          {
+            "product_id_1c": "cd01e8fa-ba6e-11f0-836e-fa163e4cc04e",
+            "product_id": "cd01e8fa-ba6e-11f0-836e-fa163e4cc04e",
+            "product_name": "Колье удлиненное с двумя монетами Raganella Princess",
+            "product_article": "RP01860-G",
+            "category": "Колье",
+            "brand": "Raganella Princess",
+            "product_type": null,
+            "total_revenue": 41986.72,
+            "total_quantity": 2.0,
+            "total_orders": 1,
+            "avg_price": 20993.36,
+            "avg_margin_percent": null
+          }
+        ],
+        "total": 10
+      }
+    },
+    "/api/analytics/products/by-category?period=30d&limit=10": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "period": {
+          "start": "2026-04-27T21:00:00+00:00",
+          "end": "2026-05-28T09:14:51.555128+00:00"
+        },
+        "filters": {
+          "channel": null,
+          "store_id": null
+        },
+        "categories": [
+          {
+            "category": "Серьги",
+            "total_revenue": 606389.5400000003,
+            "total_quantity": 85.0,
+            "total_orders": 74,
+            "products_count": 63
+          },
+          {
+            "category": "Кольца",
+            "total_revenue": 385672.88999999996,
+            "total_quantity": 55.0,
+            "total_orders": 51,
+            "products_count": 43
+          },
+          {
+            "category": "Браслеты",
+            "total_revenue": 346252.1600000001,
+            "total_quantity": 48.0,
+            "total_orders": 42,
+            "products_count": 34
+          },
+          {
+            "category": "Кулоны",
+            "total_revenue": 252849.28,
+            "total_quantity": 31.0,
+            "total_orders": 30,
+            "products_count": 21
+          },
+          {
+            "category": "Колье",
+            "total_revenue": 230884.79,
+            "total_quantity": 15.0,
+            "total_orders": 12,
+            "products_count": 14
+          },
+          {
+            "category": "Чокеры",
+            "total_revenue": 201033.42,
+            "total_quantity": 20.0,
+            "total_orders": 18,
+            "products_count": 15
+          },
+          {
+            "category": "Каффы",
+            "total_revenue": 49797.34,
+            "total_quantity": 14.0,
+            "total_orders": 13,
+            "products_count": 9
+          },
+          {
+            "category": "Броши",
+            "total_revenue": 49479.35,
+            "total_quantity": 3.0,
+            "total_orders": 3,
+            "products_count": 3
+          },
+          {
+            "category": "SALE",
+            "total_revenue": 17561.0,
+            "total_quantity": 5.0,
+            "total_orders": 2,
+            "products_count": 4
+          },
+          {
+            "category": "Сопутствующие материалы",
+            "total_revenue": 8594.199999999986,
+            "total_quantity": 554.0,
+            "total_orders": 157,
+            "products_count": 15
+          },
+          {
+            "category": "AGafi",
+            "total_revenue": 6445.0,
+            "total_quantity": 2.0,
+            "total_orders": 2,
+            "products_count": 2
+          }
+        ],
+        "total": 11
+      }
+    },
+    "/api/analytics/products/by-brand?period=30d&limit=10": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "period": {
+          "start": "2026-04-27T21:00:00+00:00",
+          "end": "2026-05-28T09:14:51.565148+00:00"
+        },
+        "filters": {
+          "channel": null,
+          "store_id": null
+        },
+        "brands": [
+          {
+            "brand": "Raganella Princess",
+            "total_revenue": 394004.20000000007,
+            "total_quantity": 25.0,
+            "total_orders": 11,
+            "products_count": 19
+          },
+          {
+            "brand": "PEARL",
+            "total_revenue": 245353.69,
+            "total_quantity": 46.0,
+            "total_orders": 36,
+            "products_count": 26
+          },
+          {
+            "brand": "Kalliope",
+            "total_revenue": 237082.78,
+            "total_quantity": 34.0,
+            "total_orders": 15,
+            "products_count": 18
+          },
+          {
+            "brand": "UNOde50",
+            "total_revenue": 213305.31,
+            "total_quantity": 17.0,
+            "total_orders": 9,
+            "products_count": 13
+          },
+          {
+            "brand": "GEOMETRY",
+            "total_revenue": 162071.04,
+            "total_quantity": 31.0,
+            "total_orders": 26,
+            "products_count": 24
+          },
+          {
+            "brand": "CRYSTAL",
+            "total_revenue": 143879.05000000002,
+            "total_quantity": 27.0,
+            "total_orders": 20,
+            "products_count": 17
+          },
+          {
+            "brand": "MAGNA",
+            "total_revenue": 135850.88999999998,
+            "total_quantity": 24.0,
+            "total_orders": 22,
+            "products_count": 17
+          },
+          {
+            "brand": "Claudio Canzian",
+            "total_revenue": 93741.35,
+            "total_quantity": 9.0,
+            "total_orders": 5,
+            "products_count": 8
+          },
+          {
+            "brand": "Bicolor",
+            "total_revenue": 91150.0,
+            "total_quantity": 15.0,
+            "total_orders": 12,
+            "products_count": 12
+          },
+          {
+            "brand": "AGafi",
+            "total_revenue": 83533.2,
+            "total_quantity": 8.0,
+            "total_orders": 7,
+            "products_count": 8
+          },
+          {
+            "brand": "Antura",
+            "total_revenue": 69460.0,
+            "total_quantity": 4.0,
+            "total_orders": 3,
+            "products_count": 4
+          },
+          {
+            "brand": "Prism of Elegance",
+            "total_revenue": 48546.0,
+            "total_quantity": 8.0,
+            "total_orders": 7,
+            "products_count": 7
+          },
+          {
+            "brand": "WRINKLES OG TIME",
+            "total_revenue": 44899.8,
+            "total_quantity": 10.0,
+            "total_orders": 9,
+            "products_count": 8
+          },
+          {
+            "brand": "Men",
+            "total_revenue": 26380.12,
+            "total_quantity": 2.0,
+            "total_orders": 2,
+            "products_count": 2
+          },
+          {
+            "brand": "Momenti",
+            "total_revenue": 17203.0,
+            "total_quantity": 6.0,
+            "total_orders": 5,
+            "products_count": 6
+          },
+          {
+            "brand": "Madreperla",
+            "total_revenue": 16086.15,
+            "total_quantity": 2.0,
+            "total_orders": 2,
+            "products_count": 2
+          },
+          {
+            "brand": "BLACK MYSTIQUE",
+            "total_revenue": 10753.0,
+            "total_quantity": 2.0,
+            "total_orders": 2,
+            "products_count": 2
+          },
+          {
+            "brand": "GLAME",
+            "total_revenue": 8535.4,
+            "total_quantity": 495.0,
+            "total_orders": 149,
+            "products_count": 8
+          }
+        ],
+        "total": 18
+      }
+    },
+    "/api/analytics/channels/performance?period=30d": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "comparison": [
+          {
+            "channel": "offline",
+            "total_revenue": 2199323.5000000014,
+            "total_quantity": 838.0,
+            "total_orders": 800,
+            "unique_customers": 88,
+            "unique_products": 221,
+            "avg_price": 2909.0505500440936,
+            "avg_order_value": 2749.154375000002,
+            "revenue_share": 100.0,
+            "quantity_share": 100.0,
+            "orders_share": 100.0,
+            "revenue_without_discount": 2167651.0,
+            "discount_amount": -31672.500000001397,
+            "discount_percent": -1.4611438834019588
+          }
+        ],
+        "trends": {
+          "trends": [
+            {
+              "period": "2026-04-27T00:00:00+00:00",
+              "channels": {
+                "offline": {
+                  "total_revenue": 384183.00000000006,
+                  "total_quantity": 184.0,
+                  "total_orders": 204,
+                  "unique_customers": 20
+                }
+              }
+            },
+            {
+              "period": "2026-05-04T00:00:00+00:00",
+              "channels": {
+                "offline": {
+                  "total_revenue": 970990.0000000001,
+                  "total_quantity": 340.0,
+                  "total_orders": 295,
+                  "unique_customers": 34
+                }
+              }
+            },
+            {
+              "period": "2026-05-11T00:00:00+00:00",
+              "channels": {
+                "offline": {
+                  "total_revenue": 275962.5,
+                  "total_quantity": 92.0,
+                  "total_orders": 90,
+                  "unique_customers": 12
+                }
+              }
+            },
+            {
+              "period": "2026-05-18T00:00:00+00:00",
+              "channels": {
+                "offline": {
+                  "total_revenue": 426138.99999999994,
+                  "total_quantity": 152.0,
+                  "total_orders": 146,
+                  "unique_customers": 18
+                }
+              }
+            },
+            {
+              "period": "2026-05-25T00:00:00+00:00",
+              "channels": {
+                "offline": {
+                  "total_revenue": 142049.0,
+                  "total_quantity": 70.0,
+                  "total_orders": 65,
+                  "unique_customers": 10
+                }
+              }
+            }
+          ],
+          "channels": [
+            "offline"
+          ],
+          "period_type": "week",
+          "period": {
+            "start": "2026-04-27T21:00:00+00:00",
+            "end": "2026-05-28T09:14:51.574820+00:00"
+          }
+        },
+        "growth": {
+          "offline": {
+            "growth_percent": -63.02569348461541,
+            "first_period_revenue": 384183.00000000006,
+            "last_period_revenue": 142049.0
+          }
+        },
+        "period": {
+          "start": "2026-04-27T21:00:00+00:00",
+          "end": "2026-05-28T09:14:51.574820+00:00"
+        }
+      }
+    },
+    "/api/analytics/website-visits/daily?days=7": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "status": "success",
+        "period": {
+          "start": "2026-05-21T09:14:51.592307+00:00",
+          "end": "2026-05-28T09:14:51.592307+00:00",
+          "days": 8
+        },
+        "daily_data": [
+          {
+            "date": "2026-05-26",
+            "visits": 24,
+            "users": 21
+          },
+          {
+            "date": "2026-05-27",
+            "visits": 14,
+            "users": 12
+          },
+          {
+            "date": "2026-05-21",
+            "visits": 12,
+            "users": 10
+          },
+          {
+            "date": "2026-05-22",
+            "visits": 10,
+            "users": 10
+          },
+          {
+            "date": "2026-05-23",
+            "visits": 10,
+            "users": 9
+          },
+          {
+            "date": "2026-05-24",
+            "visits": 9,
+            "users": 8
+          },
+          {
+            "date": "2026-05-25",
+            "visits": 8,
+            "users": 7
+          }
+        ]
+      }
+    },
+    "/api/analytics/store-visits/daily?days=7": {
+      "ok": true,
+      "status": 200,
+      "reason": "OK",
+      "data": {
+        "status": "success",
+        "period": {
+          "start": "2026-05-21",
+          "end": "2026-05-28",
+          "days": 8
+        },
+        "comparison_period": {
+          "start": "2026-05-13",
+          "end": "2026-05-20"
+        },
+        "summary": {
+          "current_total": 550,
+          "previous_total": 743,
+          "change": -193,
+          "change_percent": -25.98
+        },
+        "daily_data": [
+          {
+            "date": "2026-05-21",
+            "visitors": 77,
+            "sales": 0,
+            "revenue": 0.0,
+            "stores": [
+              {
+                "name": "CENTRUM",
+                "visitors": 33,
+                "sales": 0,
+                "revenue": 0.0
+              },
+              {
+                "name": "YALTA",
+                "visitors": 44,
+                "sales": 0,
+                "revenue": 0.0
+              }
+            ]
+          },
+          {
+            "date": "2026-05-22",
+            "visitors": 80,
+            "sales": 0,
+            "revenue": 0.0,
+            "stores": [
+              {
+                "name": "CENTRUM",
+                "visitors": 33,
+                "sales": 0,
+                "revenue": 0.0
+              },
+              {
+                "name": "YALTA",
+                "visitors": 47,
+                "sales": 0,
+                "revenue": 0.0
+              }
+            ]
+          },
+          {
+            "date": "2026-05-23",
+            "visitors": 116,
+            "sales": 0,
+            "revenue": 0.0,
+            "stores": [
+              {
+                "name": "CENTRUM",
+                "visitors": 50,
+                "sales": 0,
+                "revenue": 0.0
+              },
+              {
+                "name": "YALTA",
+                "visitors": 66,
+                "sales": 0,
+                "revenue": 0.0
+              }
+            ]
+          },
+          {
+            "date": "2026-05-24",
+            "visitors": 117,
+            "sales": 0,
+            "revenue": 0.0,
+            "stores": [
+              {
+                "name": "CENTRUM",
+                "visitors": 55,
+                "sales": 0,
+                "revenue": 0.0
+              },
+              {
+                "name": "YALTA",
+                "visitors": 62,
+                "sales": 0,
+                "revenue": 0.0
+              }
+            ]
+          },
+          {
+            "date": "2026-05-25",
+            "visitors": 83,
+            "sales": 0,
+            "revenue": 0.0,
+            "stores": [
+              {
+                "name": "CENTRUM",
+                "visitors": 26,
+                "sales": 0,
+                "revenue": 0.0
+              },
+              {
+                "name": "YALTA",
+                "visitors": 57,
+                "sales": 0,
+                "revenue": 0.0
+              }
+            ]
+          },
+          {
+            "date": "2026-05-26",
+            "visitors": 77,
+            "sales": 0,
+            "revenue": 0.0,
+            "stores": [
+              {
+                "name": "CENTRUM",
+                "visitors": 35,
+                "sales": 0,
+                "revenue": 0.0
+              },
+              {
+                "name": "YALTA",
+                "visitors": 42,
+                "sales": 0,
+                "revenue": 0.0
+              }
+            ]
+          },
+          {
+            "date": "2026-05-27",
+            "visitors": 0,
+            "sales": 0,
+            "revenue": 0.0,
+            "stores": [
+              {
+                "name": "CENTRUM",
+                "visitors": 0,
+                "sales": 0,
+                "revenue": 0.0
+              },
+              {
+                "name": "YALTA",
+                "visitors": 0,
+                "sales": 0,
+                "revenue": 0.0
+              }
+            ]
+          }
+        ],
+        "stores": [
+          "CENTRUM",
+          "YALTA"
+        ]
+      }
+    }
+  }
+}

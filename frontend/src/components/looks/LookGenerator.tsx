@@ -6,7 +6,7 @@ import { LookWithProducts } from '@/types';
 import LookCard from './LookCard';
 
 interface LookGeneratorProps {
-  onLookGenerated?: (look: LookWithProducts) => void;
+  onLookGenerated?: (look?: LookWithProducts) => void;
   selectedDigitalModel?: string;
 }
 
@@ -45,15 +45,18 @@ export default function LookGenerator({ onLookGenerated, selectedDigitalModel }:
       }
     } catch (e: any) {
       let errorMessage = 'Ошибка при генерации образа';
+      let shouldRefreshLooks = false;
       
       // Обработка таймаутов
       if (e?.code === 'ECONNABORTED' || e?.message?.includes('timeout') || e?.message?.includes('время')) {
         errorMessage = 'Генерация образа занимает больше времени, чем ожидалось. Пожалуйста, подождите - образ может быть создан в фоновом режиме. Проверьте список образов через несколько минут.';
+        shouldRefreshLooks = true;
       } else if (e?.response?.status === 500) {
         // Ошибка сервера - может быть таймаут на сервере
         const detail = e?.response?.data?.detail || '';
         if (detail.includes('timeout') || detail.includes('Timeout') || detail.includes('время')) {
           errorMessage = 'Генерация образа занимает больше времени, чем ожидалось. Пожалуйста, подождите - образ может быть создан в фоновом режиме. Проверьте список образов через несколько минут.';
+          shouldRefreshLooks = true;
         } else if (e?.response?.data?.detail) {
           errorMessage = typeof e.response.data.detail === 'string' 
             ? e.response.data.detail 
@@ -68,6 +71,9 @@ export default function LookGenerator({ onLookGenerated, selectedDigitalModel }:
       }
       
       setError(errorMessage);
+      if (shouldRefreshLooks && onLookGenerated) {
+        onLookGenerated();
+      }
       console.error('Ошибка при генерации образа:', e);
     } finally {
       setLoading(false);

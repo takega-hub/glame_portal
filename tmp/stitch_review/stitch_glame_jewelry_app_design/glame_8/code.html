@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Стилист GLAME</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Hanken Grotesk (Clinica Pro substitute) -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "soft-gray": "#D8DADB",
+                    "surface-variant": "#333537",
+                    "secondary-fixed": "#e2e2e5",
+                    "inverse-primary": "#5c5f60",
+                    "tertiary-fixed-dim": "#c2c7cb",
+                    "on-primary": "#2e3132",
+                    "on-primary-fixed": "#191c1d",
+                    "surface-container": "#1e2022",
+                    "primary-fixed": "#e1e3e4",
+                    "cold-light-gray": "#C7CBCF",
+                    "surface-dim": "#121416",
+                    "error": "#ffb4ab",
+                    "surface-container-high": "#282a2c",
+                    "tertiary": "#ffffff",
+                    "on-tertiary-fixed": "#171c1f",
+                    "background": "#121416",
+                    "on-secondary": "#2f3133",
+                    "tertiary-container": "#dee3e7",
+                    "primary-container": "#e1e3e4",
+                    "outline-variant": "#434749",
+                    "on-background": "#e2e2e5",
+                    "error-container": "#93000a",
+                    "surface-tint": "#c4c7c8",
+                    "inverse-on-surface": "#2f3133",
+                    "surface-container-low": "#1a1c1e",
+                    "surface-container-highest": "#333537",
+                    "secondary": "#c6c6c9",
+                    "on-tertiary-container": "#606569",
+                    "outline": "#8e9192",
+                    "on-secondary-fixed": "#1a1c1e",
+                    "surface-bright": "#38393c",
+                    "on-tertiary-fixed-variant": "#42474b",
+                    "surface": "#121416",
+                    "border-gray": "#5C6064",
+                    "secondary-container": "#454749",
+                    "on-secondary-fixed-variant": "#454749",
+                    "inverse-surface": "#e2e2e5",
+                    "tertiary-fixed": "#dee3e7",
+                    "primary-fixed-dim": "#c4c7c8",
+                    "primary": "#ffffff",
+                    "secondary-fixed-dim": "#c6c6c9",
+                    "on-primary-container": "#626566",
+                    "on-secondary-container": "#b4b5b7",
+                    "on-error-container": "#ffdad6",
+                    "on-surface": "#e2e2e5",
+                    "on-primary-fixed-variant": "#444748",
+                    "on-error": "#690005",
+                    "on-surface-variant": "#c4c7c8",
+                    "on-tertiary": "#2c3134",
+                    "surface-container-lowest": "#0c0e10"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0px",
+                    "lg": "0px",
+                    "xl": "0px",
+                    "full": "0px"
+            },
+            "spacing": {
+                    "top-bar-height": "56px",
+                    "button-gap": "16px",
+                    "page-padding-h": "28px",
+                    "grid-gutter": "1px",
+                    "bottom-nav-height": "96px",
+                    "safe-air-bottom": "24px"
+            },
+            "fontFamily": {
+                    "label-sm": [
+                            "Hanken Grotesk"
+                    ],
+                    "display-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "headline-lg-mobile": [
+                            "Hanken Grotesk"
+                    ],
+                    "headline-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-md": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "label-md": [
+                            "Hanken Grotesk"
+                    ]
+            },
+            "fontSize": {
+                    "label-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "0em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #121416; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #5C6064; 
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #C7CBCF; 
+        }
+        
+        /* Hide scrollbar for clean chat view but keep functionality */
+        .hide-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md min-h-screen flex flex-col selection:bg-surface-variant selection:text-primary overflow-hidden">
+<!-- Top AppBar (From JSON) -->
+<header class="fixed top-0 w-full h-[56px] bg-surface border-b border-border-gray flex items-center justify-between px-page-padding-h z-50">
+<button aria-label="Back" class="text-primary hover:opacity-70 transition-opacity active:scale-95 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back_ios</span>
+</button>
+<div class="flex flex-col items-center justify-center">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary tracking-widest text-center">Стилист GLAME</h1>
+<div class="flex items-center gap-2 mt-0.5">
+<div class="w-2 h-2 rounded-full bg-soft-gray"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">На связи сейчас · до 20:00 по МСК</span>
+</div>
+</div>
+<button aria-label="Options" class="text-primary hover:opacity-70 transition-opacity active:scale-95 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">more_horiz</span>
+</button>
+</header>
+<!-- Chat Canvas -->
+<main class="flex-1 mt-[56px] flex flex-col relative h-[calc(100vh-56px)] bg-surface">
+<!-- Subtle architectural background texture (CSS gradient) -->
+<div class="absolute inset-0 pointer-events-none opacity-20" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.03) 10px, rgba(255,255,255,0.03) 20px);"></div>
+<!-- Message History -->
+<div class="flex-1 overflow-y-auto px-page-padding-h py-6 hide-scrollbar flex flex-col gap-6 relative z-10">
+<!-- Date Separator -->
+<div class="flex justify-center w-full">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase bg-surface-container px-4 py-1 border border-border-gray">Сегодня</span>
+</div>
+<!-- Stylist Message -->
+<div class="flex flex-col items-start max-w-[85%]">
+<div class="flex items-end gap-3">
+<div class="w-8 h-8 bg-surface-variant border border-border-gray flex items-center justify-center flex-shrink-0">
+<span class="font-label-md text-label-md text-primary">G</span>
+</div>
+<div class="bg-surface-container-high border border-border-gray p-4 text-primary font-body-md rounded-none">
+                        Здравствуйте! Я помогу подобрать украшения. Какие изделия вам понравились?
+                    </div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1 ml-11">14:02</span>
+</div>
+<!-- User Message (Simulated previous context) -->
+<div class="flex flex-col items-end self-end max-w-[85%]">
+<div class="bg-surface-variant border border-border-gray p-4 text-primary font-body-md rounded-none text-right">
+                    Ищу кольцо с бриллиантом.
+                </div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1">14:05</span>
+</div>
+<!-- Stylist Message with Attachment -->
+<div class="flex flex-col items-start max-w-[85%]">
+<div class="flex items-end gap-3">
+<div class="w-8 h-8 bg-surface-variant border border-border-gray flex items-center justify-center flex-shrink-0">
+<span class="font-label-md text-label-md text-primary">G</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="bg-surface-container-high border border-border-gray p-4 text-primary font-body-md rounded-none">
+                            Отличный выбор. Посмотрите на эту модель из новой коллекции.
+                        </div>
+<!-- Product Card Attachment -->
+<div class="bg-surface border border-border-gray w-full max-w-[280px] group cursor-pointer hover:bg-surface-container transition-colors">
+<div class="relative w-full aspect-square border-b border-border-gray overflow-hidden">
+<img alt="Product Image" class="w-full h-full object-cover grayscale opacity-80 group-hover:opacity-100 transition-opacity duration-300" data-alt="A close-up studio shot of a luxurious diamond ring resting on a polished, dark concrete surface. The lighting is cold, precise, and highly contrasting, emphasizing the brilliant facets of the diamond and the brushed white gold band. The background is a stark, minimal black void. The overall aesthetic is premium, structural, and sharply focused." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCu9i9i0BJbM_O7yXCAgPS9ihn4grt9Qs_AbHsW7a2RLQuNFZnJ0VmiskS6w7MOfastUy4rZefC4WfyekmDkgfhnifeeK1wMDAr7dSQ1MoqZhz_0Qb8PRg5gwAmTP3WM_tJbGGQmiPM9KaokrmjwvLIVLTcH_ZsSRMY46R8K-6rIsZzNx7ugL2SpdO-wGwJ0yDxXwauFkNQXvxgQsca31Ylbge219yR6NDA79xas2QZxK4mFrk311t4OUd2IWTIiYNGzaUsp1IP4Pg"/>
+<div class="absolute top-2 right-2 bg-surface border border-border-gray p-1">
+<span class="material-symbols-outlined text-primary text-sm" style="font-variation-settings: 'FILL' 0;">favorite_border</span>
+</div>
+</div>
+<div class="p-4">
+<h3 class="font-label-md text-label-md text-primary tracking-widest uppercase mb-1">Кольцо Eternity</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Белое золото, бриллианты</p>
+<p class="font-label-md text-label-md text-primary mt-3">от 450 000 ₽</p>
+</div>
+</div>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-1 ml-11">14:08</span>
+</div>
+<!-- Spacer for scrolling above composer -->
+<div class="h-8"></div>
+</div>
+<!-- Input Area (Composer & Tags) -->
+<div class="bg-surface border-t border-border-gray flex flex-col z-20 pb-safe-air-bottom">
+<!-- Quick Tags (Scrollable horizontally) -->
+<div class="w-full overflow-x-auto hide-scrollbar border-b border-border-gray">
+<div class="flex gap-2 p-4 px-page-padding-h w-max">
+<button class="bg-transparent border border-border-gray px-4 py-2 font-label-sm text-label-sm text-primary uppercase hover:bg-surface-variant transition-colors whitespace-nowrap">Для себя</button>
+<button class="bg-transparent border border-border-gray px-4 py-2 font-label-sm text-label-sm text-primary uppercase hover:bg-surface-variant transition-colors whitespace-nowrap">В подарок</button>
+<button class="bg-transparent border border-border-gray px-4 py-2 font-label-sm text-label-sm text-primary uppercase hover:bg-surface-variant transition-colors whitespace-nowrap">Хочу примерить</button>
+</div>
+</div>
+<!-- Message Composer -->
+<div class="p-4 px-page-padding-h flex items-end gap-3">
+<button aria-label="Add photo" class="w-12 h-12 flex-shrink-0 flex items-center justify-center border border-border-gray bg-surface-variant text-primary hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">add</span>
+</button>
+<div class="flex-1 border border-border-gray bg-surface-container relative">
+<textarea class="w-full bg-transparent border-none text-primary font-body-md focus:ring-0 resize-none py-3 px-4 max-h-32 hide-scrollbar placeholder:text-on-surface-variant" oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 128) + 'px'" placeholder="Написать сообщение..." rows="1"></textarea>
+</div>
+<button aria-label="Send message" class="w-12 h-12 flex-shrink-0 flex items-center justify-center bg-primary text-background border border-primary hover:bg-soft-gray transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">send</span>
+</button>
+</div>
+</div>
+</main>
+</body></html>

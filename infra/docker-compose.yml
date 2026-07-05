@@ -7,8 +7,7 @@ services:
       POSTGRES_PASSWORD: glame_password
       POSTGRES_DB: glame_db
     ports:
-      # Используем 5433 на хосте, чтобы не конфликтовать с локальным PostgreSQL (Windows service)
-      - "5433:5432"
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,12 +21,12 @@ services:
     image: qdrant/qdrant:latest
     container_name: glame_qdrant
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "${QDRANT_HOST_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD", "bash", "-lc", "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /readyz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,7 +35,7 @@ services:
     image: redis:7-alpine
     container_name: glame_redis
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -45,7 +44,60 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: ../backend
+    container_name: glame_backend
+    env_file:
+      - ../backend/.env
+    environment:
+      DATABASE_URL: postgresql://glame_user:glame_password@postgres:5432/glame_db
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379
+      ML_INFERENCE_URL: http://ml_inference:8010
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ml_inference:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_HOST_PORT:-8000}:8000"
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_static:/app/static
+      - backend_generated_messages:/app/backend/generated_messages
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  ml_inference:
+    build:
+      context: ../ml-service
+    container_name: glame_ml_inference
+    ports:
+      - "${ML_INFERENCE_HOST_PORT:-8010}:8010"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
 volumes:
+  backend_generated_messages:
+    name: ${BACKEND_GENERATED_MESSAGES_VOLUME_NAME:-infra_backend_generated_messages}
+  backend_static:
+    name: ${BACKEND_STATIC_VOLUME_NAME:-infra_backend_static}
+  backend_uploads:
+    name: ${BACKEND_UPLOADS_VOLUME_NAME:-infra_backend_uploads}
   postgres_data:
+    name: ${POSTGRES_VOLUME_NAME:-infra_postgres_data}
   qdrant_data:
+    name: ${QDRANT_VOLUME_NAME:-infra_qdrant_data}
   redis_data:
+    name: ${REDIS_VOLUME_NAME:-infra_redis_data}

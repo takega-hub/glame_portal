@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc
+from sqlalchemy import select, and_, desc, update
 from datetime import datetime, timezone
 import json
 import logging
@@ -47,7 +47,7 @@ class AdvancedContentAgent(ContentAgent):
                     AgentSystemPrompt.agent_type == self.AGENT_TYPE,
                     AgentSystemPrompt.is_active == True
                 )
-            )
+            ).order_by(desc(AgentSystemPrompt.version)).limit(1)
         )
         return result.scalar_one_or_none()
     
@@ -72,7 +72,7 @@ class AdvancedContentAgent(ContentAgent):
         result = await self.db.execute(
             select(AgentSystemPrompt).where(
                 AgentSystemPrompt.agent_type == self.AGENT_TYPE
-            ).order_by(desc(AgentSystemPrompt.version))
+            ).order_by(desc(AgentSystemPrompt.version)).limit(1)
         )
         latest = result.scalar_one_or_none()
         next_version = (latest.version + 1) if latest else 1
@@ -113,18 +113,13 @@ class AdvancedContentAgent(ContentAgent):
         activated_by: Optional[str] = None
     ) -> AgentSystemPrompt:
         """Активация версии системного промпта"""
-        # Деактивируем все текущие активные
-        await self.db.execute(
+        result = await self.db.execute(
             select(AgentSystemPrompt).where(
                 and_(
+                    AgentSystemPrompt.id == prompt_id,
                     AgentSystemPrompt.agent_type == self.AGENT_TYPE,
-                    AgentSystemPrompt.is_active == True
                 )
             )
-        )
-        
-        result = await self.db.execute(
-            select(AgentSystemPrompt).where(AgentSystemPrompt.id == prompt_id)
         )
         prompt = result.scalar_one_or_none()
         
@@ -133,6 +128,19 @@ class AdvancedContentAgent(ContentAgent):
         
         # Сохраняем предыдущее состояние
         previous_value = {"is_active": prompt.is_active}
+
+        # Деактивируем все текущие активные версии этого агента.
+        await self.db.execute(
+            update(AgentSystemPrompt)
+            .where(
+                and_(
+                    AgentSystemPrompt.agent_type == self.AGENT_TYPE,
+                    AgentSystemPrompt.id != prompt.id,
+                    AgentSystemPrompt.is_active == True,
+                )
+            )
+            .values(is_active=False, updated_at=datetime.now(timezone.utc))
+        )
         
         # Активируем
         prompt.is_active = True

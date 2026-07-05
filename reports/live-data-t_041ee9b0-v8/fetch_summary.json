@@ -1,0 +1,53 @@
+{
+  "fetched_at": "2026-05-28T10:48:37.684571+00:00",
+  "summary": [
+    {
+      "endpoint": "/health",
+      "file": "reports/live-data-t_041ee9b0-v8/health.json",
+      "exit_code": 0,
+      "stdout_bytes": 38,
+      "stderr_bytes": 0,
+      "stderr_head": ""
+    },
+    {
+      "endpoint": "/api/agent-interactions/tasks/f8e38839-c63a-4a23-855d-afb00e3387b1",
+      "file": "reports/live-data-t_041ee9b0-v8/task_source.json",
+      "exit_code": 0,
+      "stdout_bytes": 1823,
+      "stderr_bytes": 0,
+      "stderr_head": ""
+    },
+    {
+      "endpoint": "/api/agent-interactions/tasks",
+      "file": "reports/live-data-t_041ee9b0-v8/agent_tasks.json",
+      "exit_code": 0,
+      "stdout_bytes": 66536,
+      "stderr_bytes": 0,
+      "stderr_head": ""
+    },
+    {
+      "endpoint": "/api/director/tasks/kanban",
+      "file": "reports/live-data-t_041ee9b0-v8/director_kanban.json",
+      "exit_code": 0,
+      "stdout_bytes": 81487,
+      "stderr_bytes": 0,
+      "stderr_head": ""
+    },
+    {
+      "endpoint": "/api/ai-marketer/dashboard",
+      "file": "reports/live-data-t_041ee9b0-v8/ai_marketer_dashboard.json",
+      "exit_code": 0,
+      "stdout_bytes": 11908,
+      "stderr_bytes": 0,
+      "stderr_head": ""
+    },
+    {
+      "endpoint": "/api/ai-marketer/opportunities",
+      "file": "reports/live-data-t_041ee9b0-v8/ai_marketer_opportunities.json",
+      "exit_code": 0,
+      "stdout_bytes": 365,
+      "stderr_bytes": 0,
+      "stderr_head": ""
+    }
+  ]
+}

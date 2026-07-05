@@ -1,0 +1,76 @@
+{
+  "screen": {
+    "width": 430,
+    "height": 932,
+    "scaleNote": "логический макет iPhone, 1x"
+  },
+  "safeArea": {
+    "top": 59,
+    "bottom": 34
+  },
+  "topBar": {
+    "type": "transparent overlay",
+    "topOffset": 71,
+    "logoCenterX": 215,
+    "logoBaselineZoneY": 82,
+    "searchCenter": [
+      374,
+      82
+    ],
+    "left": "empty"
+  },
+  "content": {
+    "left": 28,
+    "right": 28,
+    "textZone": {
+      "x": 28,
+      "y": 440,
+      "w": 340,
+      "h": 140
+    },
+    "ctaZone": {
+      "x": 28,
+      "y": 602,
+      "w": 300,
+      "h": 132
+    },
+    "slideIndicator": {
+      "x": 28,
+      "y": 768
+    }
+  },
+  "cta": {
+    "primary": {
+      "x": 28,
+      "y": 602,
+      "w": 300,
+      "h": 58,
+      "radius": 0,
+      "border": 0,
+      "fill": "white"
+    },
+    "gap": 16,
+    "secondary": {
+      "x": 28,
+      "y": 676,
+      "w": 300,
+      "h": 58,
+      "radius": 0,
+      "border": 1,
+      "fill": "transparent"
+    },
+    "font": "Clinica Pro Regular, 20 px",
+    "secondaryToIndicatorGap": 34
+  },
+  "bottomNav": {
+    "visibleHeight": 96,
+    "safeBottom": 34,
+    "totalReserve": 130,
+    "navTop": 802,
+    "navBottom": 898,
+    "homeIndicatorZone": [
+      898,
+      932
+    ]
+  }
+}

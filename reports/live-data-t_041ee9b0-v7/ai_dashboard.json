@@ -1,0 +1,331 @@
+{
+  "segments_overview": {
+    "segments": [
+      {
+        "segment_id": "4ec9ee9c-494c-42c4-b752-1c3d928cee91",
+        "name": "AI CRM | ДР 2026-05-28 +7 дней",
+        "description": "Клиенты GLAME с днем рождения в ближайшие 7 дней, подготовлено AI CRM для согласования. Массовая отправка не запускалась.",
+        "customer_count": 8,
+        "average_ltv": 9208.75,
+        "average_purchases": 1.625,
+        "color": "#F59E0B"
+      },
+      {
+        "segment_id": "80641db3-af54-4c3e-bd9c-10d41820d47f",
+        "name": "Лояльные покупатели",
+        "description": "Клиенты с высоким уровнем лояльности (баллы) и недавними покупками.",
+        "customer_count": 595,
+        "average_ltv": 21668.530235294118,
+        "average_purchases": 2.015126050420168,
+        "color": "#757575"
+      },
+      {
+        "segment_id": "46a238ed-e612-40f4-baf9-fe9dfe3a984a",
+        "name": "Экономные покупатели",
+        "description": "Клиенты с низким средним чеком, но потенциально высокой частотой покупок.",
+        "customer_count": 836,
+        "average_ltv": 17304.531674641148,
+        "average_purchases": 1.7404306220095693,
+        "color": "#757575"
+      },
+      {
+        "segment_id": "04029f0f-ed83-49ae-8b40-88b8ca958b5d",
+        "name": "Потенциально ценные",
+        "description": "Клиенты с высоким средним чеком, но пока низкой частотой покупок.",
+        "customer_count": 836,
+        "average_ltv": 17304.531674641148,
+        "average_purchases": 1.7404306220095693,
+        "color": "#757575"
+      },
+      {
+        "segment_id": "3549c723-6630-4691-a8d0-781d3e3b874e",
+        "name": "Больше 2000 бонусов",
+        "description": "",
+        "customer_count": 16,
+        "average_ltv": 157290.29125,
+        "average_purchases": 12.375,
+        "color": ""
+      },
+      {
+        "segment_id": "04a076d3-9912-4f7e-ba09-ad090efcc6a3",
+        "name": "Больше 50 000",
+        "description": "",
+        "customer_count": 92,
+        "average_ltv": 94650.68130434783,
+        "average_purchases": 4.760869565217392,
+        "color": ""
+      },
+      {
+        "segment_id": "a30aba8b-2b59-4a9f-9157-2d876793378f",
+        "name": "Активные",
+        "description": "Активные покупатели",
+        "customer_count": 434,
+        "average_ltv": 31868.234677419354,
+        "average_purchases": 3.327188940092166,
+        "color": "#4CAF50"
+      },
+      {
+        "segment_id": "0491cf60-8c05-4652-ad4b-525d91def071",
+        "name": "Спящие",
+        "description": "Клиенты, которые давно не покупали",
+        "customer_count": 855,
+        "average_ltv": 23460.585345029238,
+        "average_purchases": 2.3146198830409355,
+        "color": "#9E9E9E"
+      },
+      {
+        "segment_id": "0e092584-0063-4e64-aec0-02a6e5eb3614",
+        "name": "Новые клиенты",
+        "description": "Недавно совершили первую покупку, но ещё не проявили лояльность. Критический сегмент для удержания.",
+        "customer_count": 418,
+        "average_ltv": 24807.09688995215,
+        "average_purchases": 2.882775119617225,
+        "color": "#FF9800"
+      },
+      {
+        "segment_id": "889adb4b-6e49-448a-a2bc-e570c6be9137",
+        "name": "Активные покупатели",
+        "description": "Регулярно совершают покупки, преимущественно в категории серег, с умеренным средним чеком.",
+        "customer_count": 486,
+        "average_ltv": 29395.83306584362,
+        "average_purchases": 3.117283950617284,
+        "color": "#4CAF50"
+      },
+      {
+        "segment_id": "f6ef168f-5920-43f9-ab79-ed01ec27056a",
+        "name": "UNO",
+        "description": "",
+        "customer_count": 21,
+        "average_ltv": 122727.05142857143,
+        "average_purchases": 12.380952380952381,
+        "color": ""
+      },
+      {
+        "segment_id": "65c231b7-dbdb-433a-b8cb-c0ed477c23fb",
+        "name": "Лояльные к бренду",
+        "description": "Активные покупатели, демонстрирующие явное предпочтение конкретным брендам в своих покупках.",
+        "customer_count": 555,
+        "average_ltv": 28473.065333333332,
+        "average_purchases": 3.0144144144144143,
+        "color": "#757575"
+      },
+      {
+        "segment_id": "84739bd1-069f-476c-9a2b-05cc5dd0d14b",
+        "name": "Частые Покупатели",
+        "description": "Часто покупают, но с небольшим средним чеком",
+        "customer_count": 428,
+        "average_ltv": 32104.558691588783,
+        "average_purchases": 3.3434579439252334,
+        "color": "#757575"
+      },
+      {
+        "segment_id": "27ec0d44-654a-4956-828f-3651d0e2380f",
+        "name": "Новые Клиенты",
+        "description": "Совершили первую покупку недавно, потенциал для развития",
+        "customer_count": 493,
+        "average_ltv": 29009.259371196753,
+        "average_purchases": 3.075050709939148,
+        "color": "#FF9800"
+      },
+      {
+        "segment_id": "991d1783-75cf-47cf-a642-44110a5b17f0",
+        "name": "Частые покупатели с низким чеком",
+        "description": "Регулярно покупают недорогие изделия (часто серьги), но формируют стабильный поток заказов.",
+        "customer_count": 466,
+        "average_ltv": 31015.127575107297,
+        "average_purchases": 3.274678111587983,
+        "color": "#757575"
+      },
+      {
+        "segment_id": "22135dff-994a-42b0-9f61-08e8231c1316",
+        "name": "Активные Покупатели",
+        "description": "Регулярно совершающие покупки клиенты со средней и высокой частотой",
+        "customer_count": 477,
+        "average_ltv": 29874.530125786165,
+        "average_purchases": 3.159329140461216,
+        "color": "#4CAF50"
+      },
+      {
+        "segment_id": "51e369a9-1606-494b-8d55-e867e0bd3caa",
+        "name": "Спящие Клиенты",
+        "description": "Неактивные покупатели с давними или единичными покупками",
+        "customer_count": 1867,
+        "average_ltv": 17129.354054633102,
+        "average_purchases": 1.572576325656133,
+        "color": "#9E9E9E"
+      },
+      {
+        "segment_id": "82844b47-576a-4508-a8fe-85dff0980b34",
+        "name": "Любители Конкретных Категорий",
+        "description": "Клиенты с четко выраженными предпочтениями к определенным категориям",
+        "customer_count": 555,
+        "average_ltv": 28473.065333333332,
+        "average_purchases": 3.0144144144144143,
+        "color": "#757575"
+      },
+      {
+        "segment_id": "0f2ac50b-f32a-4277-8ef9-2a5e1a255e0c",
+        "name": "VIP 50000-70000 руб.",
+        "description": "Автосегмент для массовой генерации по плану",
+        "customer_count": 0,
+        "average_ltv": 0,
+        "average_purchases": 0,
+        "color": ""
+      },
+      {
+        "segment_id": "287daac1-41aa-4cc7-82c9-f54ffd5d2b73",
+        "name": "Raganella",
+        "description": "",
+        "customer_count": 11,
+        "average_ltv": 36392.59818181818,
+        "average_purchases": 3.5454545454545454,
+        "color": ""
+      },
+      {
+        "segment_id": "f22add44-fa09-4165-83d1-3b44f3517eda",
+        "name": "Клиенты Меганом",
+        "description": "",
+        "customer_count": 0,
+        "average_ltv": 0,
+        "average_purchases": 0,
+        "color": ""
+      },
+      {
+        "segment_id": "d2a59b95-e0b8-4fd2-b4a2-dbb8fc67bfda",
+        "name": "Мужчины",
+        "description": "мужчины",
+        "customer_count": 0,
+        "average_ltv": 0,
+        "average_purchases": 0,
+        "color": ""
+      },
+      {
+        "segment_id": "d17cb11d-32e4-4db9-aa9c-8dc8030294ff",
+        "name": "Европа+",
+        "description": "За минусом UNO и Raganella. Похожие на эти сегменты",
+        "customer_count": 20,
+        "average_ltv": 48815.046500000004,
+        "average_purchases": 3.4,
+        "color": ""
+      },
+      {
+        "segment_id": "db1e2214-4580-42fb-92bf-2e47aa558e31",
+        "name": "AI CRM | сегмент на согласование | 2805 0923 · db1e22",
+        "description": "AI CRM: сегмент создан по поручению AI Marketing Director и доступен для редактирования в «Покупатели → Сегменты покупателей». Критерии: критерии извлечены из задачи директора. Исходная задача: Проверка клиентов с ДР AI CRM ищет клиентов с ближайшим днем рождения и готовит сегмент/сценарий на согласование. Подготовить результат по регламенту, зафиксировать выводы и передать директору/админу на согласование, если требуется. {\"show_sources\": true, \"use_real_data_only\": true, \"no_mass_send_without_admin_approval\": true}",
+        "customer_count": 5791,
+        "average_ltv": 11398.22700397168,
+        "average_purchases": 1.2351925401485062,
+        "color": ""
+      }
+    ],
+    "total_segments": 24
+  },
+  "churn_risk": {
+    "total_customers": 6216,
+    "high_risk": 5489,
+    "medium_risk": 303,
+    "low_risk": 424
+  },
+  "top_customers": [
+    {
+      "user_id": "0fe8bc01-aaba-4c5e-8aef-5fa2f666d96d",
+      "phone": "79787566405",
+      "full_name": "Михайлова Дугма",
+      "total_spent": 1049050.0,
+      "total_purchases": 85,
+      "loyalty_points": 45715,
+      "customer_segment": "VIP",
+      "last_purchase_date": "2026-04-30T21:06:18+00:00"
+    },
+    {
+      "user_id": "ea319e7b-a10f-473f-8460-ea18eba6764c",
+      "phone": "79787760018",
+      "full_name": "Карлова Наталья",
+      "total_spent": 426073.14,
+      "total_purchases": 6,
+      "loyalty_points": 12875,
+      "customer_segment": "Active",
+      "last_purchase_date": "2026-01-09T13:25:58+00:00"
+    },
+    {
+      "user_id": "69fb9ffc-f21e-4502-bf93-66c6615cda24",
+      "phone": "79124610847",
+      "full_name": "Ямпольская Елена",
+      "total_spent": 329674.0,
+      "total_purchases": 1,
+      "loyalty_points": 1669,
+      "customer_segment": "Regular",
+      "last_purchase_date": "2025-02-27T00:00:00+00:00"
+    },
+    {
+      "user_id": "14e95929-98b4-4637-addb-296017ef1a70",
+      "phone": "79788398435",
+      "full_name": "Кальчева Татьяна",
+      "total_spent": 310054.02,
+      "total_purchases": 21,
+      "loyalty_points": 5320,
+      "customer_segment": "VIP",
+      "last_purchase_date": "2026-01-03T19:36:46+00:00"
+    },
+    {
+      "user_id": "b874f015-8c5d-4207-b2cb-dce275146b94",
+      "phone": "79789123089",
+      "full_name": "Кузнецова Екатерина",
+      "total_spent": 216703.0,
+      "total_purchases": 1,
+      "loyalty_points": 872,
+      "customer_segment": "Regular",
+      "last_purchase_date": "2024-07-31T00:00:00+00:00"
+    },
+    {
+      "user_id": "98bdf08d-18bd-483b-b1f9-eddcc6ad536f",
+      "phone": "79490492264",
+      "full_name": "Зубцова Наталья",
+      "total_spent": 214318.48,
+      "total_purchases": 4,
+      "loyalty_points": 5100,
+      "customer_segment": "Active",
+      "last_purchase_date": "2026-01-09T15:33:56+00:00"
+    },
+    {
+      "user_id": "d5c025f9-fc00-4194-b30c-591fa752de2c",
+      "phone": "79788549177",
+      "full_name": "Шрамко Ирина",
+      "total_spent": 198289.0,
+      "total_purchases": 27,
+      "loyalty_points": 2421,
+      "customer_segment": "Regular",
+      "last_purchase_date": "2026-03-15T17:12:08+00:00"
+    },
+    {
+      "user_id": "060e66b3-3581-4e62-9d57-c32aa5847fbf",
+      "phone": "79787377429",
+      "full_name": "Бегларян Александра",
+      "total_spent": 195005.0,
+      "total_purchases": 8,
+      "loyalty_points": 5236,
+      "customer_segment": "Active",
+      "last_purchase_date": "2025-12-26T12:53:39+00:00"
+    },
+    {
+      "user_id": "74cabc42-e14c-4cfe-9167-609175df352d",
+      "phone": "79788249869",
+      "full_name": "Кувалина Ирина",
+      "total_spent": 191842.0,
+      "total_purchases": 1,
+      "loyalty_points": 325,
+      "customer_segment": "Regular",
+      "last_purchase_date": "2023-11-30T00:00:00+00:00"
+    },
+    {
+      "user_id": "d6818b02-59d5-4713-94fb-78ba0c9c7dcf",
+      "phone": "79786898060",
+      "full_name": "Изейдинова Эмине",
+      "total_spent": 191550.4,
+      "total_purchases": 2,
+      "loyalty_points": 223,
+      "customer_segment": "Active",
+      "last_purchase_date": "2025-11-15T15:03:56+00:00"
+    }
+  ]
+}

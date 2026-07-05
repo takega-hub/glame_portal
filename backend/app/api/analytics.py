@@ -4,8 +4,9 @@ from sqlalchemy import select, func, and_, or_, desc
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 from uuid import UUID
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 import logging
+import httpx
 from app.database.connection import get_db
 from app.services.analytics_service import AnalyticsService
 from app.services.metrics_service import MetricsService
@@ -29,9 +30,34 @@ from app.services.demand_forecasting_service import DemandForecastingService
 from app.services.onec_stock_service import OneCStockService
 from app.services.stock_transfer_service import StockTransferService
 from app.models.sales_record import SalesRecord
+from app.models.analytics_event import AnalyticsEvent
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Простое кэширование часто запрашиваемых комбинаций фильтров
+# Ключ: строка, Значение: (timestamp, payload)
+_CACHE: dict[str, tuple[float, dict]] = {}
+_CACHE_TTL_SECONDS = 600
+
+def _cache_get(key: str) -> Optional[dict]:
+    entry = _CACHE.get(key)
+    if not entry:
+        return None
+    ts, payload = entry
+    if (datetime.now().timestamp() - ts) > _CACHE_TTL_SECONDS:
+        _CACHE.pop(key, None)
+        return None
+    return payload
+
+def _cache_set(key: str, payload: dict) -> None:
+    _CACHE[key] = (datetime.now().timestamp(), payload)
+
+
+def _cache_clear_sales() -> None:
+    for key in list(_CACHE.keys()):
+        if key.startswith("daily-sources:") or key.startswith("sales_sources:"):
+            _CACHE.pop(key, None)
 
 
 def get_period_dates(period: str) -> tuple:
@@ -44,43 +70,45 @@ def get_period_dates(period: str) -> tuple:
     Returns:
         (start_date, end_date)
     """
-    now = datetime.now()
+    from zoneinfo import ZoneInfo
+    msk = ZoneInfo("Europe/Moscow")
+    now = datetime.now(msk)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     
     if period == "today":
-        return (today_start, now)
+        return (today_start.astimezone(timezone.utc), now.astimezone(timezone.utc))
     
     elif period == "yesterday":
         yesterday_start = today_start - timedelta(days=1)
         yesterday_end = today_start - timedelta(seconds=1)
-        return (yesterday_start, yesterday_end)
+        return (yesterday_start.astimezone(timezone.utc), yesterday_end.astimezone(timezone.utc))
     
     elif period == "week":
         # Текущая неделя (понедельник - сегодня)
         days_since_monday = now.weekday()
         week_start = today_start - timedelta(days=days_since_monday)
-        return (week_start, now)
+        return (week_start.astimezone(timezone.utc), now.astimezone(timezone.utc))
     
     elif period == "month":
         # Текущий месяц
         month_start = today_start.replace(day=1)
-        return (month_start, now)
+        return (month_start.astimezone(timezone.utc), now.astimezone(timezone.utc))
     
     elif period == "quarter":
         # Текущий квартал
         current_quarter = (now.month - 1) // 3
         quarter_start_month = current_quarter * 3 + 1
         quarter_start = today_start.replace(month=quarter_start_month, day=1)
-        return (quarter_start, now)
+        return (quarter_start.astimezone(timezone.utc), now.astimezone(timezone.utc))
     
     elif period == "year":
         # Текущий год
         year_start = today_start.replace(month=1, day=1)
-        return (year_start, now)
+        return (year_start.astimezone(timezone.utc), now.astimezone(timezone.utc))
     
     else:
         # По умолчанию - последние 30 дней
-        return (today_start - timedelta(days=30), now)
+        return ((today_start - timedelta(days=30)).astimezone(timezone.utc), now.astimezone(timezone.utc))
 
 
 class TrackEventRequest(BaseModel):
@@ -120,6 +148,198 @@ async def track_event(request: TrackEventRequest, db: AsyncSession = Depends(get
         raise HTTPException(status_code=400, detail=f"Invalid UUID format: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error tracking event: {str(e)}")
+# =========================
+# Источники и дневная разбивка по источникам
+# =========================
+
+
+@router.get("/sources")
+async def list_sales_sources(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Возвращает доступные источники продаж:
+    - stores: список магазинов {id, external_id, name}
+    - channels: список каналов продаж (строки)
+    Результат кэшируется на короткое время.
+    """
+    cache_key = "sales_sources:v1"
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
+
+    from app.models.store import Store
+    try:
+        stores_result = await db.execute(select(Store.id, Store.external_id, Store.name).order_by(Store.name.asc()))
+        stores = [
+            {"id": str(row.id), "external_id": row.external_id, "name": row.name}
+            for row in stores_result.all()
+            if row.name
+        ]
+        channels_result = await db.execute(
+            select(func.distinct(SalesRecord.channel)).where(SalesRecord.channel.isnot(None)).order_by(SalesRecord.channel.asc())
+        )
+        channels = [row[0] for row in channels_result.all() if row[0]]
+
+        payload = {"status": "success", "stores": stores, "channels": channels}
+        _cache_set(cache_key, payload)
+        return payload
+    except Exception as e:
+        logger.error(f"Ошибка получения источников: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/1c-sales/daily-sources")
+async def get_daily_sales_by_sources(
+    period: Optional[str] = Query(None, description="Период: today, yesterday, week, month, quarter, year"),
+    start_date: Optional[str] = Query(None, description="Начальная дата (ISO)"),
+    end_date: Optional[str] = Query(None, description="Конечная дата (ISO)"),
+    days: int = Query(30, ge=1, le=365, description="Число дней назад (если не указан период)"),
+    dimension: str = Query("store", description="Разрез: store | channel"),
+    sources: Optional[str] = Query(None, description="Список источников через запятую (store external_id или channel)"),
+    auto_sync: bool = Query(True, description="Автоматически синхронизировать если данных нет"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Дневная выручка с разбивкой по источникам (store или channel).
+    - dimension=store: группировка по SalesRecord.store_id (1C ключ склада)
+    - dimension=channel: группировка по SalesRecord.channel
+    - sources: необязательный фильтр (CSV), если dimension=store — используйте external_id магазина
+
+    Ответ:
+    {
+      status: 'success',
+      period: { start, end },
+      legend: [{ id, name }],
+      daily: [{ date: 'YYYY-MM-DD', sources: { '<id>': revenue } }]
+    }
+    """
+    # Определяем период
+    if period:
+        start, end = get_period_dates(period)
+    elif start_date and end_date:
+        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+    else:
+        end = datetime.now()
+        start = end - timedelta(days=days)
+
+    dim = (dimension or "store").lower()
+    if dim not in ("store", "channel"):
+        raise HTTPException(status_code=400, detail="dimension must be 'store' or 'channel'")
+
+    sources_list: Optional[List[str]] = None
+    if sources:
+        sources_list = [s.strip() for s in sources.split(",") if s.strip()]
+
+    if auto_sync:
+        try:
+            is_missing = await _check_missing_sales_data(db, start, end, None)
+            if is_missing:
+                from app.database.connection import AsyncSessionLocal
+                async with AsyncSessionLocal() as sync_db:
+                    try:
+                        async with OneCSalesSyncService(sync_db) as sync_service:
+                            await sync_service.sync_period(
+                                start_date=start,
+                                end_date=end,
+                                incremental=True,
+                            )
+                        await sync_db.commit()
+                        _cache_clear_sales()
+                    except Exception as sync_error:
+                        await sync_db.rollback()
+                        raise sync_error
+        except Exception as e:
+            logger.warning(f"Ошибка автосинхронизации daily-sources: {e}", exc_info=True)
+
+    # Кэш
+    key = f"daily-sources:v1:{start.isoformat()}:{end.isoformat()}:{dim}:{','.join(sources_list or [])}"
+    cached = _cache_get(key)
+    if cached and not auto_sync:
+        return cached
+
+    # Запрос
+    try:
+        where_base = and_(
+            SalesRecord.sale_date >= start,
+            SalesRecord.sale_date <= end
+        )
+        local_sale_day = func.date(func.timezone('Europe/Moscow', SalesRecord.sale_date))
+        if dim == "store":
+            # Фильтр по списку external_id
+            if sources_list:
+                where_base = and_(where_base, SalesRecord.store_id.in_(sources_list))
+            result = await db.execute(
+                select(
+                    local_sale_day.label("d"),
+                    SalesRecord.store_id.label("source_id"),
+                    func.sum(SalesRecord.revenue).label("revenue"),
+                )
+                .where(and_(where_base, SalesRecord.store_id.isnot(None)))
+                .group_by(local_sale_day, SalesRecord.store_id)
+                .order_by(local_sale_day.asc())
+            )
+            rows = result.all()
+
+            # Получаем названия магазинов
+            from app.models.store import Store
+            stores_map_result = await db.execute(select(Store.external_id, Store.name))
+            store_names = {row[0]: row[1] for row in stores_map_result.all() if row[0]}
+            legend = []
+            for source_id in sorted({r.source_id for r in rows if r.source_id}):
+                legend.append({"id": source_id, "name": store_names.get(source_id, source_id)})
+        else:
+            if sources_list:
+                where_base = and_(where_base, SalesRecord.channel.in_(sources_list))
+            result = await db.execute(
+                select(
+                    local_sale_day.label("d"),
+                    SalesRecord.channel.label("source_id"),
+                    func.sum(SalesRecord.revenue).label("revenue"),
+                )
+                .where(and_(where_base, SalesRecord.channel.isnot(None)))
+                .group_by(local_sale_day, SalesRecord.channel)
+                .order_by(local_sale_day.asc())
+            )
+            rows = result.all()
+            legend = []
+            for source_id in sorted({r.source_id for r in rows if r.source_id}):
+                legend.append({"id": source_id, "name": source_id})
+
+        # Пивотируем в формат [{date, sources:{id: revenue}}]
+        daily_map: dict[str, dict[str, float]] = {}
+        for r in rows:
+            if not r.source_id:
+                continue
+            date_key = r.d.isoformat() if hasattr(r.d, "isoformat") else str(r.d)
+            if date_key not in daily_map:
+                daily_map[date_key] = {}
+            daily_map[date_key][r.source_id] = float(r.revenue or 0.0)
+
+        # Полный диапазон по датам
+        from zoneinfo import ZoneInfo
+        msk_tz = ZoneInfo("Europe/Moscow")
+        current = start.astimezone(msk_tz).date() if start.tzinfo else start.date()
+        end_date_obj = end.astimezone(msk_tz).date() if end.tzinfo else end.date()
+        daily = []
+        while current <= end_date_obj:
+            k = current.isoformat()
+            daily.append({"date": k, "sources": daily_map.get(k, {})})
+            current += timedelta(days=1)
+
+        payload = {
+            "status": "success",
+            "period": {"start": start.isoformat(), "end": end.isoformat()},
+            "dimension": dim,
+            "legend": legend,
+            "daily": daily,
+        }
+        _cache_set(key, payload)
+        return payload
+    except Exception as e:
+        logger.error(f"Ошибка получения daily-sources: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/events")
@@ -150,6 +370,259 @@ async def get_events(
         raise HTTPException(status_code=400, detail=f"Invalid date or UUID format: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting events: {str(e)}")
+
+
+def _parse_app_analytics_period(
+    period: Optional[str],
+    start_date: Optional[str],
+    end_date: Optional[str],
+    days: int,
+) -> tuple[datetime, datetime]:
+    """Parse analytics app endpoint period filters consistently with other analytics routes."""
+    if period:
+        return get_period_dates(period)
+    if start_date and end_date:
+        return (
+            datetime.fromisoformat(start_date.replace('Z', '+00:00')),
+            datetime.fromisoformat(end_date.replace('Z', '+00:00')),
+        )
+    end = datetime.now(timezone.utc)
+    return (end - timedelta(days=days), end)
+
+
+def _event_screen(event: AnalyticsEvent) -> str:
+    data = event.event_data or {}
+    screen = data.get("screen") or data.get("page_url") or data.get("route") or data.get("page")
+    return str(screen or "Не указан")
+
+
+def _event_entity_name(event: AnalyticsEvent, fallback_id: str) -> str:
+    data = event.event_data or {}
+    return str(
+        data.get("name")
+        or data.get("title")
+        or data.get("product_name")
+        or data.get("look_name")
+        or fallback_id
+    )
+
+
+def _app_funnel_steps(events_by_type: Dict[str, int]) -> List[Dict[str, Any]]:
+    screen_views = (
+        events_by_type.get("app_open", 0)
+        + events_by_type.get("session_start", 0)
+        + events_by_type.get("screen_view", 0)
+        + events_by_type.get("page_view", 0)
+        + events_by_type.get("catalog_view", 0)
+    )
+    product_interest = (
+        events_by_type.get("product_impression", 0)
+        + events_by_type.get("product_click", 0)
+        + events_by_type.get("product_view", 0)
+    )
+    look_interest = (
+        events_by_type.get("look_view", 0)
+        + events_by_type.get("look_product_click", 0)
+        + events_by_type.get("look_save", 0)
+    )
+    checkout = events_by_type.get("checkout_start", 0) + events_by_type.get("cart_view", 0)
+    purchases = events_by_type.get("purchase_success", 0)
+    base = max(1, screen_views)
+    raw_steps = [
+        ("screen_views", "Открыли / смотрели экраны", screen_views),
+        ("product_interest", "Интерес к товарам", product_interest),
+        ("look_interest", "Просмотры образов", look_interest),
+        ("checkout", "Корзина / checkout", checkout),
+        ("purchase", "Покупки", purchases),
+    ]
+    return [
+        {"key": key, "label": label, "value": value, "percent": round((value / base) * 100)}
+        for key, label, value in raw_steps
+    ]
+
+
+async def _load_app_events(
+    db: AsyncSession,
+    start: datetime,
+    end: datetime,
+    channel: str = "mobile_app",
+    max_events: int = 100000,
+) -> List[AnalyticsEvent]:
+    query = (
+        select(AnalyticsEvent)
+        .where(
+            AnalyticsEvent.channel == channel,
+            AnalyticsEvent.timestamp >= start,
+            AnalyticsEvent.timestamp <= end,
+        )
+        .order_by(AnalyticsEvent.timestamp.desc())
+        .limit(max_events)
+    )
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+def _aggregate_app_events(events: List[AnalyticsEvent]) -> Dict[str, Any]:
+    events_by_type: Dict[str, int] = {}
+    screen_counts: Dict[str, int] = {}
+    product_counts: Dict[str, Dict[str, Any]] = {}
+    look_counts: Dict[str, Dict[str, Any]] = {}
+    search_counts: Dict[str, Dict[str, Any]] = {}
+    sessions = set()
+    users = set()
+
+    for event in events:
+        event_type = event.event_type or "unknown"
+        events_by_type[event_type] = events_by_type.get(event_type, 0) + 1
+        if event.session_id:
+            sessions.add(str(event.session_id))
+        if event.user_id:
+            users.add(str(event.user_id))
+
+        screen = _event_screen(event)
+        screen_counts[screen] = screen_counts.get(screen, 0) + 1
+
+        if event.product_id:
+            product_id = str(event.product_id)
+            current = product_counts.get(product_id) or {"id": product_id, "name": _event_entity_name(event, product_id), "count": 0, "event_counts": {}}
+            current["count"] += 1
+            current["event_counts"][event_type] = current["event_counts"].get(event_type, 0) + 1
+            product_counts[product_id] = current
+
+        if event.look_id:
+            look_id = str(event.look_id)
+            current = look_counts.get(look_id) or {"id": look_id, "name": _event_entity_name(event, look_id), "count": 0, "event_counts": {}}
+            current["count"] += 1
+            current["event_counts"][event_type] = current["event_counts"].get(event_type, 0) + 1
+            look_counts[look_id] = current
+
+        data = event.event_data or {}
+        if event_type in {"search_submit", "search_no_results"} or data.get("query") or data.get("search_query"):
+            query_text = str(data.get("query") or data.get("search_query") or "").strip() or "Не указан"
+            current = search_counts.get(query_text) or {"query": query_text, "count": 0, "no_results": 0}
+            current["count"] += 1
+            if event_type == "search_no_results" or data.get("no_results") is True:
+                current["no_results"] += 1
+            search_counts[query_text] = current
+
+    return {
+        "total_events": len(events),
+        "active_sessions": len(sessions),
+        "active_users": len(users),
+        "events_by_type": events_by_type,
+        "top_screens": [
+            {"screen": screen, "count": count}
+            for screen, count in sorted(screen_counts.items(), key=lambda item: item[1], reverse=True)
+        ],
+        "top_products": sorted(product_counts.values(), key=lambda item: item["count"], reverse=True),
+        "top_looks": sorted(look_counts.values(), key=lambda item: item["count"], reverse=True),
+        "top_searches": sorted(search_counts.values(), key=lambda item: item["count"], reverse=True),
+        "funnel": _app_funnel_steps(events_by_type),
+    }
+
+
+@router.get("/app/overview")
+async def get_app_analytics_overview(
+    period: Optional[str] = Query(None, description="Период: today, yesterday, week, month, quarter, year"),
+    start_date: Optional[str] = Query(None, description="Начальная дата (ISO)"),
+    end_date: Optional[str] = Query(None, description="Конечная дата (ISO)"),
+    days: int = Query(30, ge=1, le=365),
+    channel: str = Query("mobile_app"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregated client-app analytics without returning raw event rows."""
+    try:
+        start, end = _parse_app_analytics_period(period, start_date, end_date, days)
+        events = await _load_app_events(db, start, end, channel)
+        aggregate = _aggregate_app_events(events)
+        events_by_type = aggregate["events_by_type"]
+        return {
+            "status": "success",
+            "period": {"start": start.isoformat(), "end": end.isoformat()},
+            "channel": channel,
+            "total_events": aggregate["total_events"],
+            "active_sessions": aggregate["active_sessions"],
+            "active_users": aggregate["active_users"],
+            "events_by_type": events_by_type,
+            "screen_views": events_by_type.get("screen_view", 0) + events_by_type.get("page_view", 0),
+            "product_interactions": events_by_type.get("product_click", 0) + events_by_type.get("product_view", 0) + events_by_type.get("product_impression", 0),
+            "look_interactions": events_by_type.get("look_view", 0) + events_by_type.get("look_product_click", 0) + events_by_type.get("look_save", 0),
+            "purchases": events_by_type.get("purchase_success", 0),
+            "errors": events_by_type.get("api_error", 0) + events_by_type.get("app_error", 0) + events_by_type.get("image_load_error", 0),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        logger.error(f"Ошибка app overview analytics: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/app/funnel")
+async def get_app_analytics_funnel(
+    period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    days: int = Query(30, ge=1, le=365),
+    channel: str = Query("mobile_app"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Client-app funnel aggregated from event taxonomy."""
+    try:
+        start, end = _parse_app_analytics_period(period, start_date, end_date, days)
+        events = await _load_app_events(db, start, end, channel)
+        aggregate = _aggregate_app_events(events)
+        return {"status": "success", "period": {"start": start.isoformat(), "end": end.isoformat()}, "channel": channel, "steps": aggregate["funnel"]}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        logger.error(f"Ошибка app funnel analytics: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/app/screens")
+async def get_app_analytics_screens(
+    period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    days: int = Query(30, ge=1, le=365),
+    channel: str = Query("mobile_app"),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Top client-app screens/routes for the period."""
+    try:
+        start, end = _parse_app_analytics_period(period, start_date, end_date, days)
+        events = await _load_app_events(db, start, end, channel)
+        aggregate = _aggregate_app_events(events)
+        return {"status": "success", "period": {"start": start.isoformat(), "end": end.isoformat()}, "channel": channel, "screens": aggregate["top_screens"][:limit]}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        logger.error(f"Ошибка app screens analytics: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/app/products")
+async def get_app_analytics_products(
+    period: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    days: int = Query(30, ge=1, le=365),
+    channel: str = Query("mobile_app"),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Top products by client-app interest events."""
+    try:
+        start, end = _parse_app_analytics_period(period, start_date, end_date, days)
+        events = await _load_app_events(db, start, end, channel)
+        aggregate = _aggregate_app_events(events)
+        return {"status": "success", "period": {"start": start.isoformat(), "end": end.isoformat()}, "channel": channel, "products": aggregate["top_products"][:limit]}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        logger.error(f"Ошибка app products analytics: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/session/{session_id}")
@@ -749,7 +1222,7 @@ def _run_store_visits_sync() -> tuple[bool, str]:
     from pathlib import Path
 
     project_root = Path(__file__).parent.parent.parent.parent
-    script_path = project_root / "sync_ftp_stores.py"
+    script_path = project_root / "scripts" / "data" / "sync_ftp_stores.py"
     if not script_path.exists():
         return False, f"Скрипт синхронизации не найден: {script_path}"
 
@@ -930,7 +1403,10 @@ async def get_ftp_sync_status(
 
 @router.get("/store-visits/daily")
 async def get_store_visits_daily(
-    days: int = Query(30, ge=1, le=90, description="Количество дней"),
+    days: int = Query(30, ge=1, le=365, description="Количество дней"),
+    period: Optional[str] = Query(None, description="Период: today, yesterday, week, month, quarter, year"),
+    start_date: Optional[str] = Query(None, description="Начальная дата (ISO)"),
+    end_date: Optional[str] = Query(None, description="Конечная дата (ISO)"),
     store_id: Optional[str] = Query(None, description="ID магазина (опционально)"),
     db: AsyncSession = Depends(get_db)
 ):
@@ -949,11 +1425,22 @@ async def get_store_visits_daily(
     from sqlalchemy import func, and_
     
     try:
-        end_date = datetime.now().date()
-        start_date = end_date - timedelta(days=days)
+        # Определяем период
+        now_dt = datetime.now()
+        if period:
+            start_dt, end_dt = get_period_dates(period)
+        elif start_date and end_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        else:
+            end_dt = now_dt
+            start_dt = end_dt - timedelta(days=days)
+        end_date = end_dt.date()
+        start_date = start_dt.date()
         
         # Для сравнения берем предыдущий период
-        comparison_start = start_date - timedelta(days=days)
+        period_days = (end_date - start_date).days + 1
+        comparison_start = start_date - timedelta(days=period_days)
         comparison_end = start_date - timedelta(days=1)
         
         # Базовый запрос
@@ -1047,7 +1534,7 @@ async def get_store_visits_daily(
             "period": {
                 "start": start_date.isoformat(),
                 "end": end_date.isoformat(),
-                "days": days
+                "days": period_days
             },
             "comparison_period": {
                 "start": comparison_start.isoformat(),
@@ -1065,6 +1552,50 @@ async def get_store_visits_daily(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка получения статистики: {str(e)}")
+
+
+@router.get("/website-visits/daily")
+async def get_website_visits_daily(
+    period: Optional[str] = Query(None, description="Период: today, yesterday, week, month, quarter, year"),
+    start_date: Optional[str] = Query(None, description="Начальная дата (ISO format)"),
+    end_date: Optional[str] = Query(None, description="Конечная дата (ISO format)"),
+    days: int = Query(30, ge=1, le=365, description="Количество дней (если не указан период)"),
+):
+    try:
+        now_utc = datetime.now(timezone.utc)
+        if period:
+            start_date_dt, end_date_dt = get_period_dates(period)
+        elif start_date and end_date:
+            start_date_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            end_date_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        else:
+            end_date_dt = now_utc
+            start_date_dt = end_date_dt - timedelta(days=days)
+
+        if start_date_dt.tzinfo is None:
+            start_date_dt = start_date_dt.replace(tzinfo=timezone.utc)
+        else:
+            start_date_dt = start_date_dt.astimezone(timezone.utc)
+
+        if end_date_dt.tzinfo is None:
+            end_date_dt = end_date_dt.replace(tzinfo=timezone.utc)
+        else:
+            end_date_dt = end_date_dt.astimezone(timezone.utc)
+
+        period_days = (end_date_dt - start_date_dt).days + 1
+        async with YandexMetrikaService() as ym_service:
+            rows = await ym_service.get_daily_visits(start_date_dt, end_date_dt)
+        return {
+            "status": "success",
+            "period": {
+                "start": start_date_dt.isoformat(),
+                "end": end_date_dt.isoformat(),
+                "days": period_days
+            },
+            "daily_data": rows
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка получения метрик сайта: {str(e)}")
 
 
 # =========================
@@ -1377,6 +1908,7 @@ async def sync_1c_sales(
                 end_date=end,
                 incremental=incremental
             )
+            _cache_clear_sales()
 
             logger.info(f"Синхронизация продаж завершена: {result}")
 
@@ -1396,6 +1928,46 @@ async def sync_1c_sales(
                 ),
                 **result
             }
+    except httpx.HTTPStatusError as e:
+        await db.rollback()
+        status_code = e.response.status_code
+        response_text = (e.response.text or "").strip()[:500]
+        onec_url = str(e.request.url)
+        if status_code in {401, 403}:
+            logger.error(
+                "Ошибка доступа к 1С OData при синхронизации продаж: %s %s. Ответ: %s",
+                status_code,
+                onec_url,
+                response_text,
+            )
+            detail = {
+                "message": "1С Fresh запретила доступ к OData-регистру продаж.",
+                "onec_status": status_code,
+                "onec_url": onec_url,
+                "endpoint": "ONEC_SALES_ENDPOINT",
+                "hint": (
+                    "Проверьте ONEC_API_TOKEN/права пользователя OData и доступ к "
+                    "AccumulationRegister_Продажи_RecordType. Для 403 обычно нужны права "
+                    "на чтение регистра продаж или другой доступный endpoint продаж."
+                ),
+                "onec_response": response_text,
+            }
+            raise HTTPException(status_code=502, detail=detail)
+        logger.error(
+            "Ошибка 1С OData при синхронизации продаж: %s %s",
+            status_code,
+            onec_url,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "1С Fresh вернула ошибку при синхронизации продаж.",
+                "onec_status": status_code,
+                "onec_url": onec_url,
+                "onec_response": response_text,
+            },
+        )
     except Exception as e:
         await db.rollback()
         logger.error(f"Ошибка синхронизации продаж: {e}", exc_info=True)
@@ -1571,6 +2143,16 @@ async def _check_missing_sales_data(
         True если данных нет (нужна синхронизация), False если данные есть
     """
     from app.models.sales_record import SalesRecord
+
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    else:
+        start = start.astimezone(timezone.utc)
+
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    else:
+        end = end.astimezone(timezone.utc)
     
     query = select(func.count(SalesRecord.id)).where(
         and_(
@@ -1612,6 +2194,10 @@ async def get_1c_sales_daily(
     from app.models.sales_record import SalesRecord
     from app.models.store import Store
     from collections import defaultdict
+
+    from zoneinfo import ZoneInfo
+    msk_tz = ZoneInfo("Europe/Moscow")
+    now_utc = datetime.now(timezone.utc)
     
     # Определяем период
     if period:
@@ -1620,8 +2206,20 @@ async def get_1c_sales_daily(
         start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
         end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
     else:
-        end = datetime.now()
+        end = now_utc
         start = end - timedelta(days=days)
+
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    else:
+        start = start.astimezone(timezone.utc)
+
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    else:
+        end = end.astimezone(timezone.utc)
+
+    is_today = include_today_online and end.date() == now_utc.date()
     
     # Если указан store_id, получаем его 1C ключ (external_id) из таблицы stores
     store_1c_key = None
@@ -1646,8 +2244,8 @@ async def get_1c_sales_daily(
     if auto_sync:
         # Для проверки используем период без сегодня (если сегодня включен, он будет получен онлайн)
         check_end = end
-        if include_today_online and end.date() == datetime.now().date():
-            check_end = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(seconds=1)
+        if is_today:
+            check_end = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(seconds=1)
         
         is_missing = await _check_missing_sales_data(db, start, check_end, store_1c_key)
         if is_missing:
@@ -1664,6 +2262,7 @@ async def get_1c_sales_daily(
                                 incremental=True
                             )
                         await sync_db.commit()
+                        _cache_clear_sales()
                         logger.info("Синхронизация завершена")
                     except Exception as sync_error:
                         await sync_db.rollback()
@@ -1674,13 +2273,14 @@ async def get_1c_sales_daily(
     
     # Получаем данные из детальных записей SalesRecord (исключая сегодня, если нужны онлайн данные)
     query_end = end
-    if include_today_online and end.date() == datetime.now().date():
+    if is_today:
         # Исключаем сегодня из запроса к БД, получим онлайн
-        query_end = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(seconds=1)
+        query_end = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(seconds=1)
     
     # Запрос к SalesRecord с группировкой по дням
+    local_sale_day = func.date(func.timezone('Europe/Moscow', SalesRecord.sale_date))
     query = select(
-        func.date(SalesRecord.sale_date).label('sale_date'),
+        local_sale_day.label('sale_date'),
         func.sum(SalesRecord.revenue).label('revenue'),
         func.count(func.distinct(SalesRecord.document_id)).label('orders'),
         func.sum(SalesRecord.quantity).label('items_sold')
@@ -1696,7 +2296,7 @@ async def get_1c_sales_daily(
     if store_1c_key:
         query = query.where(SalesRecord.store_id == store_1c_key)
     
-    query = query.group_by(func.date(SalesRecord.sale_date)).order_by(func.date(SalesRecord.sale_date).asc())
+    query = query.group_by(local_sale_day).order_by(local_sale_day.asc())
     
     result = await db.execute(query)
     sales_rows = result.all()
@@ -1711,7 +2311,7 @@ async def get_1c_sales_daily(
         daily_sales[date_key]["items_sold"] += float(row.items_sold or 0.0)
     
     # Если нужны онлайн данные за сегодня
-    if include_today_online and end.date() == datetime.now().date():
+    if is_today:
         try:
             async with OneCSalesSyncService(db) as sync_service:
                 today_data = await sync_service.sync_today_online()
@@ -1725,7 +2325,7 @@ async def get_1c_sales_daily(
                     ]
                 
                 # Группируем по дням
-                today_key = datetime.now().date().isoformat()
+                today_key = now_utc.astimezone(msk_tz).date().isoformat()
                 today_revenue = sum(order.get("revenue", 0.0) for order in today_orders)
                 today_orders_count = len(set(order.get("external_id") or order.get("id") for order in today_orders))
                 today_items = sum(order.get("items_count", 0.0) for order in today_orders)
@@ -1740,8 +2340,8 @@ async def get_1c_sales_daily(
     
     # Формируем массив данных для графика
     daily_data = []
-    current_date = start.date()
-    end_date_obj = end.date()
+    current_date = start.astimezone(msk_tz).date()
+    end_date_obj = end.astimezone(msk_tz).date()
     
     while current_date <= end_date_obj:
         date_key = current_date.isoformat()
@@ -1835,10 +2435,9 @@ async def get_1c_sales_metrics(
         end = datetime.now()
         start = end - timedelta(days=days)
     
-    # Для длительных периодов и прошлых периодов (месяц, квартал, год, вчера) используем SalesRecord для точности
-    # Для "today" также используем SalesRecord, чтобы получить актуальные данные
-    # Для "yesterday" используем SalesRecord, так как данные должны быть уже синхронизированы
-    use_detailed_records = period in ["month", "quarter", "year", "yesterday", "today"] or (start_date and end_date)
+    # Метрики для страницы аналитики должны строиться из фактических чеков,
+    # чтобы неделя/день не зависели от устаревших агрегатов SalesMetric.
+    use_detailed_records = True
     
     # Проверяем наличие данных и синхронизируем при необходимости
     if auto_sync:
@@ -1857,6 +2456,7 @@ async def get_1c_sales_metrics(
                                 incremental=True
                             )
                         await sync_db.commit()
+                        _cache_clear_sales()
                         logger.info("Синхронизация завершена")
                     except Exception as sync_error:
                         await sync_db.rollback()
@@ -2362,7 +2962,9 @@ async def get_1c_sales_details(
             SalesRecord.revenue,
             SalesRecord.store_id,
             SalesRecord.channel,
-            SalesRecord.external_id
+            SalesRecord.external_id,
+            SalesRecord.document_id,
+            SalesRecord.raw_data,
         ).where(
             and_(
                 SalesRecord.sale_date >= start,
@@ -2393,9 +2995,36 @@ async def get_1c_sales_details(
         result = await db.execute(query)
         rows = result.all()
         
-        # Формируем список продаж
+        def _extract_first(raw_data: Optional[dict], keys: List[str]) -> Optional[str]:
+            if not isinstance(raw_data, dict):
+                return None
+            for key in keys:
+                value = raw_data.get(key)
+                if value is not None and str(value).strip() and str(value).strip() != '00000000-0000-0000-0000-000000000000':
+                    return str(value).strip()
+            return None
+
+        # Формируем список продаж. Seller fields can arrive from different 1C
+        # attributes depending on the receipt/register shape; expose them from
+        # raw_data instead of pretending the sale is matched when the field is
+        # absent.
         sales_details = []
+        unmatched_seller_count = 0
         for row in rows:
+            raw_data = row[12] if len(row) > 12 else None
+            seller_external_id = _extract_first(raw_data, [
+                'Продавец_Key', 'Сотрудник_Key', 'Кассир_Key',
+                'Ответственный_Key', 'Менеджер_Key', 'seller_external_id',
+            ])
+            seller_name = _extract_first(raw_data, [
+                'Продавец', 'Сотрудник', 'Кассир', 'Ответственный',
+                'Менеджер', 'seller_name',
+            ])
+            seller_id = seller_external_id or seller_name
+            seller_unmatched = not bool(seller_id)
+            if seller_unmatched:
+                unmatched_seller_count += 1
+
             sales_details.append({
                 'id': str(row[0]),
                 'sale_date': row[1].isoformat() if row[1] else None,
@@ -2408,7 +3037,14 @@ async def get_1c_sales_details(
                 'store_id': row[8],
                 'store_name': store_names.get(row[8], row[8]) if row[8] else None,
                 'channel': row[9] or 'offline',
-                'external_id': row[10]
+                'external_id': row[10],
+                'document_id': row[11],
+                'check_id': row[11] or row[10],
+                'seller_id': seller_id,
+                'seller_external_id': seller_external_id,
+                'seller_name': seller_name,
+                'seller_match_status': 'unmatched' if seller_unmatched else 'matched',
+                'seller_unmatched': seller_unmatched,
             })
         
         # Получаем общее количество записей (для пагинации)
@@ -2434,6 +3070,20 @@ async def get_1c_sales_details(
         
         count_result = await db.execute(count_query)
         total_count = count_result.scalar() or 0
+        sample_total = len(sales_details)
+        unmatched_share = (unmatched_seller_count / sample_total) if sample_total else 0
+        data_warnings = []
+        if unmatched_seller_count:
+            data_warnings.append({
+                "code": "seller_data_unmatched",
+                "message": (
+                    "В части строк продаж нет seller_id/seller_name. "
+                    "Дашборд показывает их отдельно как не сопоставленные и не делает персональные выводы по этим строкам."
+                ),
+                "sample_unmatched": unmatched_seller_count,
+                "sample_total": sample_total,
+                "sample_share": round(unmatched_share, 4),
+            })
         
         return {
             "status": "success",
@@ -2445,7 +3095,14 @@ async def get_1c_sales_details(
             "total": total_count,
             "limit": limit,
             "offset": offset,
-            "has_more": (offset + limit) < total_count
+            "has_more": (offset + limit) < total_count,
+            "seller_match_summary": {
+                "sample_total": sample_total,
+                "sample_matched": sample_total - unmatched_seller_count,
+                "sample_unmatched": unmatched_seller_count,
+                "sample_unmatched_share": round(unmatched_share, 4),
+            },
+            "data_warnings": data_warnings,
         }
     except Exception as e:
         logger.error(f"Ошибка получения детальных продаж: {e}", exc_info=True)
@@ -2615,34 +3272,56 @@ async def get_customer_profile(
 # =========================
 
 @router.get("/unified")
-async def get_unified_analytics(days: int = Query(30), db: AsyncSession = Depends(get_db)):
-    """Получение объединенной аналитики из всех источников"""
+async def get_unified_analytics(
+    period: Optional[str] = Query(None, description="Период: today, yesterday, week, month, quarter, year"),
+    start_date: Optional[str] = Query(None, description="Начальная дата (ISO format)"),
+    end_date: Optional[str] = Query(None, description="Конечная дата (ISO format)"),
+    days: int = Query(30, ge=1, le=365, description="Количество дней назад (если не указан период)"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Получение объединенной аналитики из всех источников за указанный период"""
     from app.models.social_media_metric import SocialMediaMetric
     from app.models.sales_metric import SalesMetric
     from app.models.store_visit import StoreVisit
     from sqlalchemy import select, func
     
     try:
-        since = datetime.now() - timedelta(days=days)
-        end = datetime.now()
+        # Определяем период
+        if period:
+            since, end = get_period_dates(period)
+        elif start_date and end_date:
+            since = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        else:
+            end = datetime.now()
+            since = end - timedelta(days=days)
         
         # Соцсети
         social_result = await db.execute(
-            select(SocialMediaMetric).where(SocialMediaMetric.date >= since)
+            select(SocialMediaMetric).where(
+                SocialMediaMetric.date >= since,
+                SocialMediaMetric.date <= end
+            )
         )
         social_metrics = social_result.scalars().all()
         
         # Продажи
         sales_result = await db.execute(
             select(func.sum(SalesMetric.revenue), func.sum(SalesMetric.order_count))
-            .where(SalesMetric.date >= since)
+            .where(
+                SalesMetric.date >= since,
+                SalesMetric.date <= end
+            )
         )
         sales_total = sales_result.first()
         
         # Посещения магазинов
         stores_result = await db.execute(
             select(func.sum(StoreVisit.visitor_count), func.sum(StoreVisit.sales_count))
-            .where(StoreVisit.date >= since)
+            .where(
+                StoreVisit.date >= since,
+                StoreVisit.date <= end
+            )
         )
         stores_total = stores_result.first()
         

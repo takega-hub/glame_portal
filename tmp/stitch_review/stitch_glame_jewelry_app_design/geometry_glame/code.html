@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GLAME - Geometry Brand Detail</title>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-on-surface": "#2f3133",
+                        "secondary-fixed": "#e2e2e5",
+                        "on-primary-fixed-variant": "#444748",
+                        "tertiary-fixed": "#dee3e7",
+                        "on-tertiary-container": "#606569",
+                        "on-primary-fixed": "#191c1d",
+                        "on-primary": "#2e3132",
+                        "surface-container-high": "#282a2c",
+                        "secondary-container": "#454749",
+                        "tertiary": "#ffffff",
+                        "surface-tint": "#c4c7c8",
+                        "on-background": "#e2e2e5",
+                        "inverse-surface": "#e2e2e5",
+                        "on-secondary": "#2f3133",
+                        "secondary": "#c6c6c9",
+                        "on-secondary-fixed-variant": "#454749",
+                        "on-surface-variant": "#c4c7c8",
+                        "border-gray": "#5C6064",
+                        "background": "#121416",
+                        "surface-variant": "#333537",
+                        "surface": "#121416",
+                        "surface-bright": "#38393c",
+                        "outline": "#8e9192",
+                        "outline-variant": "#434749",
+                        "tertiary-fixed-dim": "#c2c7cb",
+                        "on-secondary-container": "#b4b5b7",
+                        "primary-container": "#e1e3e4",
+                        "surface-container": "#1e2022",
+                        "cold-light-gray": "#C7CBCF",
+                        "on-primary-container": "#626566",
+                        "primary": "#ffffff",
+                        "error-container": "#93000a",
+                        "on-tertiary": "#2c3134",
+                        "on-error-container": "#ffdad6",
+                        "error": "#ffb4ab",
+                        "on-tertiary-fixed": "#171c1f",
+                        "soft-gray": "#D8DADB",
+                        "surface-container-lowest": "#0c0e10",
+                        "surface-container-highest": "#333537",
+                        "primary-fixed-dim": "#c4c7c8",
+                        "tertiary-container": "#dee3e7",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "surface-container-low": "#1a1c1e",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "surface-dim": "#121416",
+                        "on-surface": "#e2e2e5",
+                        "on-error": "#690005",
+                        "primary-fixed": "#e1e3e4",
+                        "inverse-primary": "#5c5f60",
+                        "on-tertiary-fixed-variant": "#42474b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "0px"
+                    },
+                    "spacing": {
+                        "page-padding-h": "28px",
+                        "button-gap": "16px",
+                        "safe-air-bottom": "24px",
+                        "grid-gutter": "1px",
+                        "top-bar-height": "56px",
+                        "bottom-nav-height": "96px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md antialiased pb-[120px]">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 right-0 z-40 bg-background/90 backdrop-blur-md border-b border-border-gray h-top-bar-height flex justify-between items-center w-full px-page-padding-h">
+<button class="text-primary hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">arrow_back</span>
+</button>
+<div class="text-headline-lg-mobile font-headline-lg-mobile tracking-tighter text-primary">GLAME</div>
+<button class="text-primary hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">search</span>
+</button>
+</header>
+<main class="pt-top-bar-height flex flex-col">
+<!-- Hero Section -->
+<section class="bg-surface-container-high border-b border-border-gray px-page-padding-h py-12 flex flex-col justify-center min-h-[309px]">
+<h1 class="text-display-lg font-display-lg text-primary uppercase mb-4">Geometry</h1>
+<p class="text-headline-lg-mobile font-headline-lg-mobile text-on-surface-variant mb-8 tracking-wide">
+                точность вместо случайности
+            </p>
+<p class="text-body-lg font-body-lg text-secondary max-w-md">
+                Чистая линия, спокойная форма и украшения, в которых нет ничего случайного.
+            </p>
+</section>
+<!-- Categories Filter -->
+<nav class="border-b border-border-gray bg-surface sticky top-top-bar-height z-30">
+<ul class="flex overflow-x-auto hide-scrollbar px-page-padding-h py-4 gap-4 items-center">
+<li>
+<button class="h-10 px-6 border border-primary bg-primary text-background text-label-sm font-label-sm uppercase whitespace-nowrap hover:bg-transparent hover:text-primary transition-colors">All</button>
+</li>
+<li>
+<button class="h-10 px-6 border border-border-gray bg-transparent text-primary text-label-sm font-label-sm uppercase whitespace-nowrap hover:border-primary transition-colors">Rings</button>
+</li>
+<li>
+<button class="h-10 px-6 border border-border-gray bg-transparent text-primary text-label-sm font-label-sm uppercase whitespace-nowrap hover:border-primary transition-colors">Earrings</button>
+</li>
+<li>
+<button class="h-10 px-6 border border-border-gray bg-transparent text-primary text-label-sm font-label-sm uppercase whitespace-nowrap hover:border-primary transition-colors">Cuffs</button>
+</li>
+<li>
+<button class="h-10 px-6 border border-border-gray bg-transparent text-primary text-label-sm font-label-sm uppercase whitespace-nowrap hover:border-primary transition-colors">Necklaces</button>
+</li>
+</ul>
+</nav>
+<!-- Product Grid -->
+<section class="bg-border-gray grid grid-cols-2 gap-grid-gutter border-b border-border-gray">
+<!-- Product 1 -->
+<article class="bg-surface flex flex-col relative group cursor-pointer">
+<div class="aspect-[4/5] bg-surface-container-low relative overflow-hidden">
+<img alt="Silver ear cuff on dark architectural background" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out grayscale hover:grayscale-0" data-alt="A highly detailed close-up shot of a minimalist silver ear cuff jewelry piece resting on a raw, textured dark grey concrete surface. The lighting is cold, dramatic, and directional, creating stark shadows that emphasize the geometric precision of the metal. The mood is luxurious, industrial, and clinical, perfectly aligning with a premium architectural aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAy4de5_IpmzBxqoz-0rEzkU9bbRhr1FWN9sJX1oF266WtxHiaJrWsdLeEQdKhdZUZlmhB5z6rFH_yLvpITVB6jC5U88owVPGolHq6H9uBET1SWorP-RYj1_O8BVuGyvIxtyEiMbQjw6WlQgh7qOIDo7yDCIKRXQ1-E2-SFVYVPVWTkVDsLeYZUOCj_1ytvRK-WuLi8d00-AOa6GL_NRD-YCdiGPv4HjTSaJjksAXI17PHwfmHKP9BhFEEDTCA5aiVgfpubYovd6f4"/>
+<button class="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors z-10">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 200;">favorite</span>
+</button>
+</div>
+<div class="p-4 flex flex-col flex-grow justify-between">
+<div>
+<h3 class="text-label-md font-label-md text-primary uppercase mb-1">Cuff Structure</h3>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Silver 925</p>
+</div>
+<p class="text-body-md font-body-md text-primary mt-4">15 000 ₽</p>
+</div>
+</article>
+<!-- Product 2 -->
+<article class="bg-surface flex flex-col relative group cursor-pointer">
+<div class="aspect-[4/5] bg-surface-container-low relative overflow-hidden">
+<img alt="Geometric silver ring on dark background" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out grayscale hover:grayscale-0" data-alt="A sleek, perfectly circular silver ring presented against a vast, deep black glass background. A single cool white spotlight illuminates the ring from above, reflecting off its polished surface to highlight its flawless, unadorned geometry. The aesthetic is extremely minimalist, cold, and precise, evoking a sense of high-end structural engineering." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAKApMZ2WWJ0t5A6yULkhsN_4xaEwkftGpLxVLKwwkl1tOscSOiAza2r_eVkv-O67kxehGSjM06YpqRTnkCfH3FkPfN5FKRkWeIh7BM3F0JjscNnhaDKRTy06xMtb30nWU07m3SUxCpLuYHfZt0zxPZg0nhl4RkUSU3NjyArV3GCWcP8JZotfEcvX4vOxhlHv45KCUWNVbGdPlj739WqlODd9liwQ9b6PtUt1AAofr3NNULAqkYTsi0VZL7fI62kU8Ooy8kO1T7lHY"/>
+<button class="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors z-10">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 200;">favorite</span>
+</button>
+</div>
+<div class="p-4 flex flex-col flex-grow justify-between">
+<div>
+<h3 class="text-label-md font-label-md text-primary uppercase mb-1">Ring Absolute</h3>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Silver 925</p>
+</div>
+<p class="text-body-md font-body-md text-primary mt-4">22 000 ₽</p>
+</div>
+</article>
+<!-- Product 3 -->
+<article class="bg-surface flex flex-col relative group cursor-pointer">
+<div class="aspect-[4/5] bg-surface-container-low relative overflow-hidden">
+<img alt="Linear silver earrings on steel background" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out grayscale hover:grayscale-0" data-alt="A pair of exceptionally long, thin, straight silver drop earrings lying perfectly parallel on a sheet of brushed stainless steel. The scene is lit with diffused, cool daylight, emphasizing the sharp, linear quality of the jewelry and the subtle grain of the metal background. The composition is rigorous and grid-like, adhering strictly to a cold minimalist style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCL-nBW-EMapywRPM0OI4BIWoqd_Qwb-iCuNS8H9V6ia8024jY9aPNKndd6WN5juq8RGyoAuF9wsYfnQrHwBDyNDjTsOpH3c1XF8MXa4qrwW6OS1c9pGFFXI7KsiieuVcfOtbAhLXFa25aRMVT_ih4wyP-1xSDZFURAT5DeYyhhMpsf79SlDp5_n3TrIU_3FHsjl1vKHcysZ7CtnvM2BTv11_y5Zqy8jQ6ToGFc9onvHuYRGxUFTonO7uL6qNXgsJiQkhMeuqwQSu0"/>
+<button class="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors z-10">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 200;">favorite</span>
+</button>
+</div>
+<div class="p-4 flex flex-col flex-grow justify-between">
+<div>
+<h3 class="text-label-md font-label-md text-primary uppercase mb-1">Earrings Line</h3>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Silver 925</p>
+</div>
+<p class="text-body-md font-body-md text-primary mt-4">18 000 ₽</p>
+</div>
+</article>
+<!-- Product 4 -->
+<article class="bg-surface flex flex-col relative group cursor-pointer">
+<div class="aspect-[4/5] bg-surface-container-low relative overflow-hidden">
+<img alt="Minimalist silver necklace" class="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500 ease-out grayscale hover:grayscale-0" data-alt="A macro shot of a delicate silver chain necklace ending in a single, solid geometric sphere pendant. The jewelry is suspended in mid-air against a stark, pure white background. High-contrast lighting creates sharp definition around the sphere, emphasizing its perfect volume. The overall atmosphere is clinical, pristine, and devoid of any warmth or ornamentation." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdYDM9tvTqxrPwMUjwc1sm3qWcXA_LZ61ZbNMUaxvL3zM5AeJkSRLVdc2MxABMow2lljUyOb0nnsub-DgFUHR7qa7hddRARw0S-J6Pc2CeyxXidJM0OXZOEdduqQcIoiJzfrB1lha0aEvgPr4bnIsVRHOLZwY7e7NBldYKTS7r4M-ng3xy_cpj06zb8qIF-TTvfUl7KOI3gvFkBN_CbVxhe-RQXERo8WAQSmnHnmTJmvlwwFVQee_-55pYiALUoAUr2o-SKPtIRLg"/>
+<button class="absolute top-4 right-4 text-on-surface-variant hover:text-primary transition-colors z-10">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 200;">favorite</span>
+</button>
+</div>
+<div class="p-4 flex flex-col flex-grow justify-between">
+<div>
+<h3 class="text-label-md font-label-md text-primary uppercase mb-1">Necklace Point</h3>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Silver 925</p>
+</div>
+<p class="text-body-md font-body-md text-primary mt-4">25 000 ₽</p>
+</div>
+</article>
+</section>
+<!-- Action Panel beneath grid -->
+<div class="w-full border-b border-border-gray flex items-center justify-between p-page-padding-h hover:bg-surface-container transition-colors cursor-pointer">
+<span class="text-label-md font-label-md text-primary uppercase">Load More</span>
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'wght' 300;">arrow_downward</span>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface dark:bg-surface border-t border-border-gray fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-[28px] h-[96px] pb-safe-air-bottom">
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">grid_view</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary dark:text-primary scale-110 active:scale-90 transition-transform duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 400, 'FILL' 1;">layers</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">auto_awesome</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">favorite</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">person</span>
+</button>
+</nav>
+</body></html>

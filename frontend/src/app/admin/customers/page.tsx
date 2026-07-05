@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { apiClient } from '@/lib/api';
+import { apiClient, adminCustomers } from '@/lib/api';
 import Link from 'next/link';
-import BatchMessageGenerator from '@/components/customers/BatchMessageGenerator';
 
 interface Customer {
   id: string;
@@ -13,12 +12,32 @@ interface Customer {
   email: string | null;
   full_name: string | null;
   city: string | null;
+  birth_date: string | null;
   gender: string | null;
   customer_segment: string | null;
   loyalty_points: number;
   total_purchases: number;
   total_spent: number;
   last_purchase_date: string | null;
+}
+
+interface BirthdayCrmCard {
+  customer_id: string;
+  full_name: string | null;
+  phone: string | null;
+  birth_date: string | null;
+  next_birthday: string | null;
+  days_until_birthday: number | null;
+  crm_segment: string;
+  real_receipts_count: number;
+  real_total_spent: number;
+  average_receipt: number;
+  high_quality_checks: number;
+  excluded_accessory_amount: number;
+  recommended_bonus: { title: string; description: string; requires_approval: boolean };
+  draft_message: string;
+  auto_send: boolean;
+  status: string;
 }
 
 function AdminCustomersContent() {
@@ -28,7 +47,7 @@ function AdminCustomersContent() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [search, setSearch] = useState('');
-  const [segmentFilter, setSegmentFilter] = useState('');
+  const [segmentIdFilter, setSegmentIdFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [pageSize] = useState(50); // Количество записей на странице
@@ -37,23 +56,28 @@ function AdminCustomersContent() {
   const segmentsLoadedRef = useRef(false); // Флаг для предотвращения повторной загрузки
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncStep, setSyncStep] = useState<string>('');
   const [syncLogs, setSyncLogs] = useState<Array<{timestamp: string, message: string}>>([]);
   const [syncTaskId, setSyncTaskId] = useState<string | null>(null);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [backgroundSyncActive, setBackgroundSyncActive] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [birthdayCards, setBirthdayCards] = useState<BirthdayCrmCard[]>([]);
+  const [birthdayLoading, setBirthdayLoading] = useState(false);
 
   // Определяем loadCustomers до использования в useEffect
   const loadCustomers = useCallback(async () => {
     try {
       setLoadingData(true);
+      setErrorMsg(null);
       const offset = (currentPage - 1) * pageSize;
       const params: any = { 
         limit: pageSize,
         offset: offset
       };
-      if (segmentFilter) params.segment = segmentFilter;
+      if (segmentIdFilter) params.segment_id = segmentIdFilter;
       if (search && search.trim()) params.search = search.trim();
       
       const response = await apiClient.get<{customers: Customer[], total: number, limit: number, offset: number}>('/api/admin/customers', { params });
@@ -61,10 +85,11 @@ function AdminCustomersContent() {
       setTotalCustomers(response.data.total);
     } catch (error) {
       console.error('Error loading customers:', error);
+      setErrorMsg('Ошибка загрузки покупателей. Попробуйте позже.');
     } finally {
       setLoadingData(false);
     }
-  }, [currentPage, pageSize, segmentFilter, search]);
+  }, [currentPage, pageSize, segmentIdFilter, search]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -72,6 +97,20 @@ function AdminCustomersContent() {
       setStats(response.data);
     } catch (error) {
       console.error('Error loading stats:', error);
+    }
+  }, []);
+
+  const loadBirthdayCrm = useCallback(async () => {
+    try {
+      setBirthdayLoading(true);
+      const response = await apiClient.get<{cards: BirthdayCrmCard[]}>('/api/admin/customers/birthday-crm', {
+        params: { days_ahead: 3, limit: 100 },
+      });
+      setBirthdayCards(response.data.cards || []);
+    } catch (error) {
+      console.error('Error loading birthday CRM:', error);
+    } finally {
+      setBirthdayLoading(false);
     }
   }, []);
 
@@ -90,17 +129,24 @@ function AdminCustomersContent() {
     }
   }, []);
 
-  // Читаем параметр segment из URL при загрузке страницы
+  // Читаем параметр segment_id из URL при загрузке страницы
   useEffect(() => {
-    const segmentFromUrl = searchParams?.get('segment');
-    if (segmentFromUrl) {
-      setSegmentFilter(segmentFromUrl);
+    const segmentIdFromUrl = searchParams?.get('segment_id');
+    const segmentNameFromUrl = searchParams?.get('segment'); // legacy support
+    
+    if (segmentIdFromUrl) {
+      setSegmentIdFilter(segmentIdFromUrl);
+    } else if (segmentNameFromUrl && segments.length > 0) {
+      // Try to find ID by name if segments are loaded
+      const found = segments.find(s => s.name === segmentNameFromUrl);
+      if (found) setSegmentIdFilter(found.id);
     }
-  }, [searchParams]);
+  }, [searchParams, segments]);
 
   useEffect(() => {
     if (loading) return;
     loadStats();
+    loadBirthdayCrm();
     if (!segmentsLoadedRef.current) {
       loadSegments();
     }
@@ -111,16 +157,16 @@ function AdminCustomersContent() {
   useEffect(() => {
     if (loading) return;
     setCurrentPage(1);
-  }, [search, segmentFilter, loading]);
+  }, [search, segmentIdFilter, loading]);
 
   // Загружаем данные при изменении страницы, фильтров или поиска
   useEffect(() => {
     if (loading) return;
     const timer = setTimeout(() => {
       loadCustomers();
-    }, search || segmentFilter ? 500 : 0);
+    }, search || segmentIdFilter ? 500 : 0);
     return () => clearTimeout(timer);
-  }, [currentPage, search, segmentFilter, loadCustomers, loading]);
+  }, [currentPage, search, segmentIdFilter, loadCustomers, loading]);
 
   const pollTaskStatus = async (taskId: string) => {
     const maxAttempts = 3600; // Максимум 1 час (каждые 2 секунды)
@@ -259,6 +305,24 @@ function AdminCustomersContent() {
       setShowSyncModal(false);
     }
   };
+  
+  const handleExportXlsx = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const query = new URLSearchParams();
+      if (segmentIdFilter) query.set('segment_id', segmentIdFilter);
+      if (search && search.trim()) query.set('search', search.trim());
+      const qs = query.toString();
+      const url = `/api/admin/customers/export${qs ? `?${qs}` : ''}`;
+      window.open(url, '_blank');
+    } catch (e) {
+      console.error('Export XLSX error:', e);
+      setErrorMsg('Не удалось выгрузить XLSX. Попробуйте позже.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading || loadingData) {
     return (
@@ -283,6 +347,18 @@ function AdminCustomersContent() {
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Управление покупателями</h1>
             <div className="flex gap-3">
+              <button
+                onClick={handleExportXlsx}
+                disabled={exporting || syncing}
+                className={`px-4 py-2 rounded-md font-medium ${
+                  exporting || syncing
+                    ? 'bg-gray-400 text-white cursor-not-allowed'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                }`}
+                title="Выгрузить список покупателей в XLSX (без истории покупок)"
+              >
+                {exporting ? 'Выгрузка...' : '📤 Выгрузить xlsx'}
+              </button>
               <button
                 onClick={handleUpdateSegments}
                 disabled={syncing}
@@ -363,9 +439,72 @@ function AdminCustomersContent() {
           </div>
         )}
 
-        {/* Генерация сообщений */}
-        <div className="mb-6">
-          <BatchMessageGenerator />
+        {/* Birthday CRM */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8 border border-pink-100">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Birthday CRM: ближайшие 3 дня</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Карточки формируются по реальным чекам: сопутствующие материалы исключены, чеки клиента в течение 1 часа объединяются. Отправка клиентам не выполняется — это черновики для менеджера.
+              </p>
+            </div>
+            <button
+              onClick={loadBirthdayCrm}
+              disabled={birthdayLoading}
+              className="px-3 py-2 text-sm rounded-md border border-pink-200 text-pink-700 hover:bg-pink-50 disabled:opacity-50"
+            >
+              {birthdayLoading ? 'Обновление...' : 'Обновить'}
+            </button>
+          </div>
+          {birthdayCards.length === 0 ? (
+            <div className="text-sm text-gray-500 bg-gray-50 rounded-md px-4 py-3">
+              {birthdayLoading ? 'Загружаем карточки...' : 'Нет клиентов с днем рождения в ближайшие 3 дня.'}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {birthdayCards.map((card) => (
+                <div key={card.customer_id} className="rounded-lg border border-pink-100 bg-pink-50/40 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <Link href={`/admin/customers/${card.customer_id}`} className="font-semibold text-gray-900 hover:text-pink-700">
+                        {card.full_name || card.phone || 'Клиент'}
+                      </Link>
+                      <div className="text-xs text-gray-500 mt-1">
+                        ДР: {card.next_birthday ? new Date(card.next_birthday).toLocaleDateString('ru-RU') : '—'} · через {card.days_until_birthday} дн.
+                      </div>
+                    </div>
+                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-white text-pink-700 border border-pink-200">
+                      {card.crm_segment}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mt-4 text-xs">
+                    <div className="bg-white rounded p-2">
+                      <div className="text-gray-500">Реальные чеки</div>
+                      <div className="font-semibold text-gray-900">{card.real_receipts_count}</div>
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <div className="text-gray-500">Сумма</div>
+                      <div className="font-semibold text-gray-900">{(card.real_total_spent / 100).toLocaleString('ru-RU')} ₽</div>
+                    </div>
+                    <div className="bg-white rounded p-2">
+                      <div className="text-gray-500">Средний чек</div>
+                      <div className="font-semibold text-gray-900">{(card.average_receipt / 100).toLocaleString('ru-RU')} ₽</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 text-sm">
+                    <div className="font-medium text-gray-900">{card.recommended_bonus.title}</div>
+                    <div className="text-gray-600">{card.recommended_bonus.description}</div>
+                  </div>
+                  <div className="mt-3 rounded-md bg-white p-3 text-sm text-gray-700 whitespace-pre-wrap">
+                    {card.draft_message}
+                  </div>
+                  <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1">
+                    Статус: черновик, автоотправка выключена. Бонус требует ручного подтверждения.
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Фильтры */}
@@ -388,13 +527,13 @@ function AdminCustomersContent() {
                 Сегмент
               </label>
               <select
-                value={segmentFilter}
-                onChange={(e) => setSegmentFilter(e.target.value)}
+                value={segmentIdFilter}
+                onChange={(e) => setSegmentIdFilter(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-pink-500 focus:border-pink-500"
               >
                 <option value="">Все сегменты</option>
                 {segments.map((segment) => (
-                  <option key={segment.id} value={segment.name}>
+                  <option key={segment.id} value={segment.id}>
                     {segment.name}
                   </option>
                 ))}
@@ -413,6 +552,11 @@ function AdminCustomersContent() {
 
         {/* Таблица покупателей */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
+          {errorMsg && (
+            <div className="px-6 py-3 bg-red-50 text-red-700 border-b border-red-200">
+              {errorMsg}
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -422,6 +566,9 @@ function AdminCustomersContent() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Город
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    Дата рождения
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Пол
@@ -447,6 +594,16 @@ function AdminCustomersContent() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
+                {loadingData && customers.length === 0 && (
+                  <tr>
+                    <td colSpan={10} className="px-6 py-8 text-center">
+                      <div className="inline-flex items-center gap-2 text-gray-500">
+                        <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-pink-600"></span>
+                        Загрузка списка покупателей...
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {customers.map((customer) => (
                   <tr key={customer.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -462,6 +619,13 @@ function AdminCustomersContent() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
                         {customer.city || '—'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {customer.birth_date
+                          ? customer.birth_date.split('-').reverse().join('.')
+                          : '—'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -537,7 +701,7 @@ function AdminCustomersContent() {
                 </p>
               </div>
               <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Пагинация">
                   <button
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}

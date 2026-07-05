@@ -1,0 +1,1160 @@
+{
+  "dashboard": {
+    "clearance": {
+      "bundle_count": 11,
+      "dead_stock_count": 563,
+      "promo_count": 20,
+      "relocation_count": 563,
+      "slow_moving_count": 20,
+      "write_off_count": 0
+    },
+    "purchases": {
+      "critical_items": 392,
+      "items_to_order": 401,
+      "total_order_amount": 5645394.0,
+      "total_order_qty": 1004.0
+    },
+    "sales": {
+      "avg_check": 10576.858444444457,
+      "avg_sales_per_shift": null,
+      "check_length": null,
+      "checks_count": 585,
+      "items_count": 873.0,
+      "plan_fact_conversion": null,
+      "plan_fact_deviation": null,
+      "revenue": 6187462.190000007,
+      "revenue_per_visitor": null,
+      "shifts_count": null,
+      "traffic": null
+    },
+    "stock": {
+      "avg_stock_cover": 2.05934861875368,
+      "critical_count": 392,
+      "sku_count": 634,
+      "slow_moving_count": 20,
+      "total_stock": 5708.0
+    },
+    "updated_at": null
+  },
+  "marketing_total": 205,
+  "marketing_groups": {
+    "GROWTH_PRODUCTS": 80,
+    "INVENTORY_RELIEF": 14,
+    "PROMO_PRODUCTS": 20,
+    "PROTECT_PRODUCTS": 91
+  },
+  "order_total": 403,
+  "order_statuses": {
+    "reorder": 7,
+    "critical_stock": 394,
+    "normal": 2
+  },
+  "clearance_total": 594,
+  "clearance_recommendations": {
+    "BUNDLE": 11,
+    "PROMO": 20,
+    "RELOCATION": 563
+  },
+  "promote": [
+    {
+      "basis": "GROWTH_PRODUCTS: sales_month=1.00, stock_cover=3.00",
+      "color": "—",
+      "group": "GROWTH_PRODUCTS",
+      "nomenclature": "Браслет Bicolor широкий жесткий",
+      "recommended_channel": "Instagram",
+      "sales_month": 1.0,
+      "stock_cover": 3.0,
+      "stock_qty": 3.0
+    },
+    {
+      "basis": "GROWTH_PRODUCTS: sales_month=1.00, stock_cover=3.00",
+      "color": "—",
+      "group": "GROWTH_PRODUCTS",
+      "nomenclature": "Кулон Bicolor галстук с регулируемой длиной",
+      "recommended_channel": "Instagram",
+      "sales_month": 1.0,
+      "stock_cover": 3.0,
+      "stock_qty": 3.0
+    },
+    {
+      "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=3.00",
+      "color": "—",
+      "group": "GROWTH_PRODUCTS",
+      "nomenclature": "Браслет Bicolor с мятыми кольцами",
+      "recommended_channel": "Instagram",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 3.0,
+      "stock_qty": 2.0
+    },
+    {
+      "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=1.50",
+      "color": "—",
+      "group": "GROWTH_PRODUCTS",
+      "nomenclature": "Кулон Bicolor с мятым подвесным элементом в биколоре",
+      "recommended_channel": "Instagram",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 1.5,
+      "stock_qty": 1.0
+    },
+    {
+      "basis": "GROWTH_PRODUCTS: sales_month=0.67, stock_cover=1.50",
+      "color": "—",
+      "group": "GROWTH_PRODUCTS",
+      "nomenclature": "Серьги винтажные акцентные из крупных вытянутых звеньев Raganella Princess",
+      "recommended_channel": "Instagram",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 1.5,
+      "stock_qty": 1.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=3.67, stock_cover=7.91",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Каффа Geometry с подвесным элементом",
+      "recommended_channel": "Promotions",
+      "sales_month": 3.6666666666666665,
+      "stock_cover": 7.909090909090909,
+      "stock_qty": 29.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=1.67, stock_cover=29.40",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Браслет \"стиль внутри\" серебро",
+      "recommended_channel": "Promotions",
+      "sales_month": 1.6666666666666667,
+      "stock_cover": 29.4,
+      "stock_qty": 49.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=1.00, stock_cover=50.00",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Браслет \"стиль внутри\" золотой",
+      "recommended_channel": "Promotions",
+      "sales_month": 1.0,
+      "stock_cover": 50.0,
+      "stock_qty": 50.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=0.67, stock_cover=10.50",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Браслет Bicolor с биколорными пластинами",
+      "recommended_channel": "Promotions",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 10.5,
+      "stock_qty": 7.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=0.67, stock_cover=7.50",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Кольцо Bicolor вогнутое",
+      "recommended_channel": "Promotions",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 7.5,
+      "stock_qty": 5.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=0.33, stock_cover=15.00",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Кулон Bicolor галстук с шарами",
+      "recommended_channel": "Promotions",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 15.0,
+      "stock_qty": 5.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=0.33, stock_cover=15.00",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Кулон Bicolor длинная капля на якорной цепи",
+      "recommended_channel": "Promotions",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 15.0,
+      "stock_qty": 5.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=0.33, stock_cover=9.00",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Кольцо Antura с мятым кругом",
+      "recommended_channel": "Promotions",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 9.0,
+      "stock_qty": 3.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=0.33, stock_cover=9.00",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Чокер Bicolor с круглыми мятыми вставками",
+      "recommended_channel": "Promotions",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 9.0,
+      "stock_qty": 3.0
+    },
+    {
+      "basis": "INVENTORY_RELIEF: sales_month=0.67, stock_cover=6.00",
+      "color": "—",
+      "group": "INVENTORY_RELIEF",
+      "nomenclature": "Браслет Crystal жесткий изогнутый с фианитами",
+      "recommended_channel": "Email / SMS",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 6.0,
+      "stock_qty": 4.0
+    },
+    {
+      "basis": "INVENTORY_RELIEF: sales_month=0.67, stock_cover=6.00",
+      "color": "—",
+      "group": "INVENTORY_RELIEF",
+      "nomenclature": "Кольцо Antura геометрической формы",
+      "recommended_channel": "Email / SMS",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 6.0,
+      "stock_qty": 4.0
+    }
+  ],
+  "reorder": [
+    {
+      "color": "—",
+      "nomenclature": "Браслет Crystal с камнями по кругу",
+      "optimal_stock": 14.0,
+      "order_amount": 61460.0,
+      "order_qty": 14.0,
+      "sales_month": 4.666666666666667,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Браслет Crystal жесткий с багетным камнем по кругу",
+      "optimal_stock": 13.0,
+      "order_amount": 60970.0,
+      "order_qty": 13.0,
+      "sales_month": 4.333333333333333,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Серьги Magna конго базовые мятые",
+      "optimal_stock": 11.0,
+      "order_amount": 51590.0,
+      "order_qty": 11.0,
+      "sales_month": 3.6666666666666665,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Серьги Magna мятой фактуры вытянутые",
+      "optimal_stock": 9.0,
+      "order_amount": 51210.0,
+      "order_qty": 9.0,
+      "sales_month": 3.0,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Чокер Crystal багетные камни сбоку",
+      "optimal_stock": 8.0,
+      "order_amount": 47920.0,
+      "order_qty": 8.0,
+      "sales_month": 2.6666666666666665,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Серьги Magna в форме звена",
+      "optimal_stock": 8.0,
+      "order_amount": 37520.0,
+      "order_qty": 8.0,
+      "sales_month": 2.6666666666666665,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Серьги Pearl в форме мятого овала с жемчужиной",
+      "optimal_stock": 8.0,
+      "order_amount": 34320.0,
+      "order_qty": 8.0,
+      "sales_month": 2.6666666666666665,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Кулон Magna лариат с мятыми элементами",
+      "optimal_stock": 7.0,
+      "order_amount": 52430.0,
+      "order_qty": 7.0,
+      "sales_month": 2.3333333333333335,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Чокер Crystal камни в багетной огранке сверху",
+      "optimal_stock": 7.0,
+      "order_amount": 48230.0,
+      "order_qty": 7.0,
+      "sales_month": 2.3333333333333335,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Кулон Geometry капля с бегунком",
+      "optimal_stock": 7.0,
+      "order_amount": 39830.0,
+      "order_qty": 7.0,
+      "sales_month": 2.3333333333333335,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Кулон Magna с мятым элементом на бегунке",
+      "optimal_stock": 7.0,
+      "order_amount": 39830.0,
+      "order_qty": 7.0,
+      "sales_month": 2.3333333333333335,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Кольцо Geometry овал",
+      "optimal_stock": 7.0,
+      "order_amount": 38430.0,
+      "order_qty": 7.0,
+      "sales_month": 2.3333333333333335,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Чокер Сrystal с камнямии сверху",
+      "optimal_stock": 7.0,
+      "order_amount": 37030.0,
+      "order_qty": 7.0,
+      "sales_month": 2.3333333333333335,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Серьги Geometry конго базовые",
+      "optimal_stock": 7.0,
+      "order_amount": 32130.0,
+      "order_qty": 7.0,
+      "sales_month": 2.3333333333333335,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Браслет Geometry кафф изогнутый",
+      "optimal_stock": 6.0,
+      "order_amount": 43140.0,
+      "order_qty": 6.0,
+      "sales_month": 2.0,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Серьги Crystal изогнутые линии с камнями",
+      "optimal_stock": 6.0,
+      "order_amount": 43140.0,
+      "order_qty": 6.0,
+      "sales_month": 2.0,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Серьги Pearl три крупные жемчужины",
+      "optimal_stock": 6.0,
+      "order_amount": 41340.0,
+      "order_qty": 6.0,
+      "sales_month": 2.0,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Кольцо Pearl разъемное с жемчужиной",
+      "optimal_stock": 6.0,
+      "order_amount": 31140.0,
+      "order_qty": 6.0,
+      "sales_month": 2.0,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Чокер Сrystal с камнями сбоку",
+      "optimal_stock": 6.0,
+      "order_amount": 31140.0,
+      "order_qty": 6.0,
+      "sales_month": 2.0,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Чокер Pearl с жемчугом и мятым шариком",
+      "optimal_stock": 5.0,
+      "order_amount": 39450.0,
+      "order_qty": 5.0,
+      "sales_month": 1.6666666666666667,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Браслет Crystal жесткий с росыпью камней",
+      "optimal_stock": 5.0,
+      "order_amount": 34450.0,
+      "order_qty": 5.0,
+      "sales_month": 1.6666666666666667,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Кольцо Wrinkles of Time квадратное рефленое",
+      "optimal_stock": 5.0,
+      "order_amount": 29450.0,
+      "order_qty": 5.0,
+      "sales_month": 1.6666666666666667,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Серьги Geometry в форме ромба",
+      "optimal_stock": 5.0,
+      "order_amount": 24450.0,
+      "order_qty": 5.0,
+      "sales_month": 1.6666666666666667,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Кулон Pearl с круглой жемчужиной на цепи",
+      "optimal_stock": 5.0,
+      "order_amount": 21450.0,
+      "order_qty": 5.0,
+      "sales_month": 1.6666666666666667,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    },
+    {
+      "color": "—",
+      "nomenclature": "Каффа Crystal с фианитами и шарами двухсторонняя",
+      "optimal_stock": 5.0,
+      "order_amount": 17950.0,
+      "order_qty": 5.0,
+      "sales_month": 1.6666666666666667,
+      "status": "critical_stock",
+      "stock_qty": 0.0
+    }
+  ],
+  "clearance": [
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Браслет \"стиль внутри\" золотой",
+      "reason": "sales_month > 0 AND stock_cover > 6",
+      "recommendation": "PROMO",
+      "sales_month": 1.0,
+      "stock_cover": 50.0,
+      "stock_qty": 50.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Браслет \"стиль внутри\" серебро",
+      "reason": "sales_month > 0 AND stock_cover > 6",
+      "recommendation": "PROMO",
+      "sales_month": 1.6666666666666667,
+      "stock_cover": 29.4,
+      "stock_qty": 49.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Кулон Bicolor галстук с шарами",
+      "reason": "sales_month > 0 AND stock_cover > 6",
+      "recommendation": "PROMO",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 15.0,
+      "stock_qty": 5.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Кулон Bicolor длинная капля на якорной цепи",
+      "reason": "sales_month > 0 AND stock_cover > 6",
+      "recommendation": "PROMO",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 15.0,
+      "stock_qty": 5.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Браслет Bicolor с биколорными пластинами",
+      "reason": "sales_month > 0 AND stock_cover > 6",
+      "recommendation": "PROMO",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 10.5,
+      "stock_qty": 7.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Кольцо Antura с мятым кругом",
+      "reason": "sales_month > 0 AND stock_cover > 6",
+      "recommendation": "PROMO",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 9.0,
+      "stock_qty": 3.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Чокер Bicolor с круглыми мятыми вставками",
+      "reason": "sales_month > 0 AND stock_cover > 6",
+      "recommendation": "PROMO",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 9.0,
+      "stock_qty": 3.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Каффа Geometry с подвесным элементом",
+      "reason": "sales_month > 0 AND stock_cover > 6",
+      "recommendation": "PROMO",
+      "sales_month": 3.6666666666666665,
+      "stock_cover": 7.909090909090909,
+      "stock_qty": 29.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Кольцо Bicolor вогнутое",
+      "reason": "sales_month > 0 AND stock_cover > 6",
+      "recommendation": "PROMO",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 7.5,
+      "stock_qty": 5.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Браслет Crystal жесткий изогнутый с фианитами",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 6.0,
+      "stock_qty": 4.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Кольцо Antura геометрической формы",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 6.0,
+      "stock_qty": 4.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Кольцо Bicolor с тремя шарами",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.6666666666666666,
+      "stock_cover": 6.0,
+      "stock_qty": 4.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Браслет винтажный акцентный из крупных вытянутых звеньев Raganella Princess",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 6.0,
+      "stock_qty": 2.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Колье винтажное акцентное из крупных вытянутых звеньев Raganella Princess",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 6.0,
+      "stock_qty": 2.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Колье-пояс с четырьмя монетами с золотой цепью и монетой в серебре в биколоре Raganella Princess",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 6.0,
+      "stock_qty": 2.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Кольцо Antura с полусферой из золотого металла",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 6.0,
+      "stock_qty": 2.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Кольцо Bicolor",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 6.0,
+      "stock_qty": 2.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Кулон Wine Dream из дерева на шнурке",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 6.0,
+      "stock_qty": 2.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Чокер Black Mystique ожерелье с черным агатом",
+      "reason": "sales_month > 0 AND stock_cover > 5",
+      "recommendation": "BUNDLE",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 6.0,
+      "stock_qty": 2.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Холдер для украшений GLAME",
+      "reason": "sales_month = 0",
+      "recommendation": "RELOCATION",
+      "sales_month": 0.0,
+      "stock_cover": null,
+      "stock_qty": 34.0
+    },
+    {
+      "color": "—",
+      "is_protected": false,
+      "nomenclature": "Карточка по уходу UNOde50",
+      "reason": "sales_month = 0",
+      "recommendation": "RELOCATION",
+      "sales_month": 0.0,
+      "stock_cover": null,
+      "stock_qty": 31.0
+    },
+    {
+      "color": "Золотой",
+      "is_protected": false,
+      "nomenclature": "Каффа Geometry с подвесным элементом",
+      "reason": "sales_month = 0",
+      "recommendation": "RELOCATION",
+      "sales_month": 0.0,
+      "stock_cover": null,
+      "stock_qty": 21.0
+    },
+    {
+      "color": "Золотой",
+      "is_protected": false,
+      "nomenclature": "Чокер Prism of Elegance с графитовыми камными сбоку",
+      "reason": "sales_month = 0",
+      "recommendation": "RELOCATION",
+      "sales_month": 0.0,
+      "stock_cover": null,
+      "stock_qty": 17.0
+    }
+  ],
+  "exclude_zero": [
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=4.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Браслет Crystal с камнями по кругу",
+      "recommended_channel": null,
+      "sales_month": 4.666666666666667,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=4.33, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Браслет Crystal жесткий с багетным камнем по кругу",
+      "recommended_channel": null,
+      "sales_month": 4.333333333333333,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=3.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Magna конго базовые мятые",
+      "recommended_channel": null,
+      "sales_month": 3.6666666666666665,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=3.00, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Magna мятой фактуры вытянутые",
+      "recommended_channel": null,
+      "sales_month": 3.0,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Magna в форме звена",
+      "recommended_channel": null,
+      "sales_month": 2.6666666666666665,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Pearl в форме мятого овала с жемчужиной",
+      "recommended_channel": null,
+      "sales_month": 2.6666666666666665,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Чокер Crystal багетные камни сбоку",
+      "recommended_channel": null,
+      "sales_month": 2.6666666666666665,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.33, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Кольцо Geometry овал",
+      "recommended_channel": null,
+      "sales_month": 2.3333333333333335,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.33, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Кулон Geometry капля с бегунком",
+      "recommended_channel": null,
+      "sales_month": 2.3333333333333335,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.33, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Кулон Magna лариат с мятыми элементами",
+      "recommended_channel": null,
+      "sales_month": 2.3333333333333335,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.33, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Кулон Magna с мятым элементом на бегунке",
+      "recommended_channel": null,
+      "sales_month": 2.3333333333333335,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.33, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Geometry конго базовые",
+      "recommended_channel": null,
+      "sales_month": 2.3333333333333335,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.33, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Чокер Crystal камни в багетной огранке сверху",
+      "recommended_channel": null,
+      "sales_month": 2.3333333333333335,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.33, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Чокер Сrystal с камнямии сверху",
+      "recommended_channel": null,
+      "sales_month": 2.3333333333333335,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.00, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Браслет Geometry кафф изогнутый",
+      "recommended_channel": null,
+      "sales_month": 2.0,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.00, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Кольцо Pearl разъемное с жемчужиной",
+      "recommended_channel": null,
+      "sales_month": 2.0,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.00, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Crystal изогнутые линии с камнями",
+      "recommended_channel": null,
+      "sales_month": 2.0,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.00, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Pearl три крупные жемчужины",
+      "recommended_channel": null,
+      "sales_month": 2.0,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.00, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Чокер Сrystal с камнями сбоку",
+      "recommended_channel": null,
+      "sales_month": 2.0,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Браслет Crystal жесткий с росыпью камней",
+      "recommended_channel": null,
+      "sales_month": 1.6666666666666667,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Каффа Crystal с фианитами и шарами двухсторонняя",
+      "recommended_channel": null,
+      "sales_month": 1.6666666666666667,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Каффа Magna мятая",
+      "recommended_channel": null,
+      "sales_month": 1.6666666666666667,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Каффа Magna мятая тонкая",
+      "recommended_channel": null,
+      "sales_month": 1.6666666666666667,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Кольцо Wrinkles of Time квадратное рефленое",
+      "recommended_channel": null,
+      "sales_month": 1.6666666666666667,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.67, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Кулон Pearl с круглой жемчужиной на цепи",
+      "recommended_channel": null,
+      "sales_month": 1.6666666666666667,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    }
+  ],
+  "protect_low": [
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=2.00, stock_cover=1.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Pearl в форме полусферы с окантовкой из металла",
+      "recommended_channel": null,
+      "sales_month": 2.0,
+      "stock_cover": 1.0,
+      "stock_qty": 2.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.00, stock_cover=1.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Браслет Bicolor базовый жесткий две линии",
+      "recommended_channel": null,
+      "sales_month": 1.0,
+      "stock_cover": 1.0,
+      "stock_qty": 1.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.33, stock_cover=1.50",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Браслет Bicolor с шариками",
+      "recommended_channel": null,
+      "sales_month": 1.3333333333333333,
+      "stock_cover": 1.5,
+      "stock_qty": 2.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.33, stock_cover=1.50",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Bicolor с шарами",
+      "recommended_channel": null,
+      "sales_month": 1.3333333333333333,
+      "stock_cover": 1.5,
+      "stock_qty": 2.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.00, stock_cover=2.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Серьги Antura квадратной геометрической формы",
+      "recommended_channel": null,
+      "sales_month": 1.0,
+      "stock_cover": 2.0,
+      "stock_qty": 2.0
+    }
+  ],
+  "packaging_operational": [
+    {
+      "basis": "GROWTH_PRODUCTS: sales_month=5.33, stock_cover=2.06",
+      "color": "—",
+      "group": "GROWTH_PRODUCTS",
+      "nomenclature": "Пакет UNOde50 мал. бежевый",
+      "recommended_channel": "Instagram",
+      "sales_month": 5.333333333333333,
+      "stock_cover": 2.0625,
+      "stock_qty": 11.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=80.33, stock_cover=9.55",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Салфетка GLAME",
+      "recommended_channel": "Promotions",
+      "sales_month": 80.33333333333333,
+      "stock_cover": 9.547717842323651,
+      "stock_qty": 767.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=72.67, stock_cover=7.57",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Мешочек GLAME средний 12*18",
+      "recommended_channel": "Promotions",
+      "sales_month": 72.66666666666667,
+      "stock_cover": 7.568807339449541,
+      "stock_qty": 550.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=19.33, stock_cover=15.10",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Мешочек GLAME большой 14*20",
+      "recommended_channel": "Promotions",
+      "sales_month": 19.333333333333332,
+      "stock_cover": 15.10344827586207,
+      "stock_qty": 292.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=8.33, stock_cover=83.52",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Малый мешочек из органзы",
+      "recommended_channel": "Promotions",
+      "sales_month": 8.333333333333334,
+      "stock_cover": 83.52,
+      "stock_qty": 696.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=3.00, stock_cover=138.67",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Мешочек большой из органзы",
+      "recommended_channel": "Promotions",
+      "sales_month": 3.0,
+      "stock_cover": 138.66666666666666,
+      "stock_qty": 416.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=2.00, stock_cover=7.50",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Мешочек большой Claudio Canzian",
+      "recommended_channel": "Promotions",
+      "sales_month": 2.0,
+      "stock_cover": 7.5,
+      "stock_qty": 15.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=1.33, stock_cover=26.25",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Упаковка средняя черного цвета GLAME",
+      "recommended_channel": "Promotions",
+      "sales_month": 1.3333333333333333,
+      "stock_cover": 26.25,
+      "stock_qty": 35.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=1.00, stock_cover=53.00",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Упаковка большая черного цвета GLAME",
+      "recommended_channel": "Promotions",
+      "sales_month": 1.0,
+      "stock_cover": 53.0,
+      "stock_qty": 53.0
+    },
+    {
+      "basis": "PROMO_PRODUCTS: sales_month=0.33, stock_cover=201.00",
+      "color": "—",
+      "group": "PROMO_PRODUCTS",
+      "nomenclature": "Упаковка малая черного цвета GLAME",
+      "recommended_channel": "Promotions",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 201.0,
+      "stock_qty": 67.0
+    },
+    {
+      "basis": "INVENTORY_RELIEF: sales_month=139.67, stock_cover=4.96",
+      "color": "—",
+      "group": "INVENTORY_RELIEF",
+      "nomenclature": "NEW Пакет GLAME (silver)",
+      "recommended_channel": "Email / SMS",
+      "sales_month": 139.66666666666666,
+      "stock_cover": 4.9618138424821,
+      "stock_qty": 693.0
+    },
+    {
+      "basis": "INVENTORY_RELIEF: sales_month=0.33, stock_cover=6.00",
+      "color": "—",
+      "group": "INVENTORY_RELIEF",
+      "nomenclature": "Пакет UNOde50 бол. бежевый",
+      "recommended_channel": "Email / SMS",
+      "sales_month": 0.3333333333333333,
+      "stock_cover": 6.0,
+      "stock_qty": 2.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=136.33, stock_cover=1.33",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Мешочек GLAME маленький 10*12",
+      "recommended_channel": null,
+      "sales_month": 136.33333333333334,
+      "stock_cover": 1.334963325183374,
+      "stock_qty": 182.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.67, stock_cover=0.60",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Мешочек малый Claudio Canzian",
+      "recommended_channel": null,
+      "sales_month": 1.6666666666666667,
+      "stock_cover": 0.6,
+      "stock_qty": 1.0
+    },
+    {
+      "basis": "PROTECT_PRODUCTS: sales_month=1.33, stock_cover=0.00",
+      "color": "—",
+      "group": "PROTECT_PRODUCTS",
+      "nomenclature": "Мешочек малый UNOde50",
+      "recommended_channel": null,
+      "sales_month": 1.3333333333333333,
+      "stock_cover": 0.0,
+      "stock_qty": 0.0
+    }
+  ]
+}

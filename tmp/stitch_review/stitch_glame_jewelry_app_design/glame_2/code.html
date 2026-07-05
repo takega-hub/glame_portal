@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GLAME - Образы</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error": "#ffb4ab",
+                      "surface-dim": "#121416",
+                      "cold-light-gray": "#C7CBCF",
+                      "primary-fixed": "#e1e3e4",
+                      "surface-container": "#1e2022",
+                      "on-primary-fixed": "#191c1d",
+                      "on-primary": "#2e3132",
+                      "tertiary-fixed-dim": "#c2c7cb",
+                      "inverse-primary": "#5c5f60",
+                      "surface-variant": "#333537",
+                      "secondary-fixed": "#e2e2e5",
+                      "soft-gray": "#D8DADB",
+                      "border-gray": "#5C6064",
+                      "surface": "#121416",
+                      "surface-bright": "#38393c",
+                      "on-tertiary-fixed-variant": "#42474b",
+                      "on-secondary-fixed": "#1a1c1e",
+                      "outline": "#8e9192",
+                      "on-tertiary-container": "#606569",
+                      "secondary": "#c6c6c9",
+                      "surface-container-low": "#1a1c1e",
+                      "surface-container-highest": "#333537",
+                      "surface-tint": "#c4c7c8",
+                      "inverse-on-surface": "#2f3133",
+                      "error-container": "#93000a",
+                      "on-background": "#e2e2e5",
+                      "primary-container": "#e1e3e4",
+                      "outline-variant": "#434749",
+                      "tertiary-container": "#dee3e7",
+                      "on-secondary": "#2f3133",
+                      "background": "#121416",
+                      "tertiary": "#ffffff",
+                      "on-tertiary-fixed": "#171c1f",
+                      "surface-container-high": "#282a2c",
+                      "primary": "#ffffff",
+                      "primary-fixed-dim": "#c4c7c8",
+                      "tertiary-fixed": "#dee3e7",
+                      "inverse-surface": "#e2e2e5",
+                      "on-secondary-fixed-variant": "#454749",
+                      "secondary-container": "#454749",
+                      "surface-container-lowest": "#0c0e10",
+                      "on-tertiary": "#2c3134",
+                      "on-surface-variant": "#c4c7c8",
+                      "on-primary-fixed-variant": "#444748",
+                      "on-error": "#690005",
+                      "on-surface": "#e2e2e5",
+                      "on-error-container": "#ffdad6",
+                      "on-secondary-container": "#b4b5b7",
+                      "secondary-fixed-dim": "#c6c6c9",
+                      "on-primary-container": "#626566"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0px",
+                      "lg": "0px",
+                      "xl": "0px",
+                      "full": "0px"
+              },
+              "spacing": {
+                      "button-gap": "16px",
+                      "page-padding-h": "28px",
+                      "grid-gutter": "1px",
+                      "bottom-nav-height": "96px",
+                      "top-bar-height": "56px",
+                      "safe-air-bottom": "24px"
+              },
+              "fontFamily": {
+                      "headline-lg-mobile": ["Hanken Grotesk"],
+                      "headline-lg": ["Hanken Grotesk"],
+                      "body-md": ["Hanken Grotesk"],
+                      "label-sm": ["Hanken Grotesk"],
+                      "display-lg": ["Hanken Grotesk"],
+                      "body-lg": ["Hanken Grotesk"],
+                      "label-md": ["Hanken Grotesk"]
+              },
+              "fontSize": {
+                      "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                      "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                      "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                      "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                      "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                      "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                      "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        body {
+            background-color: #121416;
+            color: #e2e2e5;
+            -webkit-font-smoothing: antialiased;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface dark:bg-surface text-on-surface dark:text-on-surface pb-[96px] md:pb-0">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 bg-transparent dark:bg-transparent border-b border-border-gray md:hidden flex justify-between items-center w-full px-[28px] h-[56px] backdrop-blur-md">
+<div class="w-6"></div> <!-- Spacer for center alignment -->
+<h1 class="text-headline-lg-mobile font-headline-lg-mobile tracking-tighter text-primary dark:text-primary uppercase">GLAME</h1>
+<button class="hover:opacity-80 transition-opacity active:scale-95 duration-200">
+<span class="material-symbols-outlined text-primary dark:text-primary" data-icon="search">search</span>
+</button>
+</header>
+<!-- Web Top Nav (Hidden on Mobile) -->
+<nav class="hidden md:flex fixed top-0 left-0 w-full z-50 bg-surface dark:bg-surface border-b border-border-gray px-[28px] h-[72px] justify-between items-center">
+<h1 class="text-headline-lg font-headline-lg tracking-tighter text-primary dark:text-primary uppercase">GLAME</h1>
+<div class="flex gap-8 items-center">
+<a class="text-secondary dark:text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">ГЛАВНАЯ</a>
+<a class="text-secondary dark:text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">КАТАЛОГ</a>
+<a class="text-primary dark:text-primary text-label-md font-label-md border-b border-primary pb-1" href="#">ОБРАЗЫ</a>
+<a class="text-secondary dark:text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">ИЗБРАННОЕ</a>
+<a class="text-secondary dark:text-secondary hover:text-primary transition-colors text-label-md font-label-md" href="#">ПРОФИЛЬ</a>
+</div>
+<button class="hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-primary dark:text-primary" data-icon="search">search</span>
+</button>
+</nav>
+<!-- Main Canvas -->
+<main class="pt-[56px] md:pt-[72px] min-h-screen">
+<!-- Filters Header -->
+<div class="sticky top-[56px] md:top-[72px] z-40 bg-surface/90 backdrop-blur-md border-b border-border-gray">
+<div class="px-page-padding-h py-4 overflow-x-auto hide-scrollbar">
+<div class="flex gap-4 w-max">
+<button class="px-6 py-2 border border-primary text-primary text-label-md font-label-md uppercase tracking-wider hover:bg-surface-variant transition-colors">
+                        Все
+                    </button>
+<button class="px-6 py-2 border border-border-gray text-secondary text-label-md font-label-md uppercase tracking-wider hover:border-primary hover:text-primary transition-colors">
+                        На каждый день
+                    </button>
+<button class="px-6 py-2 border border-border-gray text-secondary text-label-md font-label-md uppercase tracking-wider hover:border-primary hover:text-primary transition-colors">
+                        Вечер
+                    </button>
+<button class="px-6 py-2 border border-border-gray text-secondary text-label-md font-label-md uppercase tracking-wider hover:border-primary hover:text-primary transition-colors">
+                        На отдых
+                    </button>
+<button class="px-6 py-2 border border-border-gray text-secondary text-label-md font-label-md uppercase tracking-wider hover:border-primary hover:text-primary transition-colors">
+                        Свадьба
+                    </button>
+</div>
+</div>
+</div>
+<!-- Editorial Feed -->
+<div class="flex flex-col gap-px bg-border-gray">
+<!-- Look 1 -->
+<article class="bg-surface grid grid-cols-1 md:grid-cols-2 group">
+<div class="aspect-[4/5] md:aspect-auto relative overflow-hidden bg-surface-container">
+<img alt="Editorial jewelry look" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A striking high-fashion editorial portrait of a model wearing minimalist silver jewelry, standing against a raw concrete architectural wall. The lighting is cold and structural, highlighting the metallic sheen of the jewelry and the texture of the concrete. The overall aesthetic is stark, premium, and strictly monochromatic with deep blacks, cold grays, and bright white highlights, embodying a luxury brutalist design language." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1cNLHNO1WVRns3MvTSWr4jHaInn68vHCHJV61bk43c4wyPq_pmT6W9HUeU7EW5INjLMOAEMuuTboSLQL5vVG5ZEf2Y_QZen3V9kTwPHS2z28ybRNZTRLC9YXy1KolXIlXMuteL4J2RqzlUVrAWA2b59wglheYJZlTbLOMzF4s2upsJYhV9mHozpv_kCRzaUeT-uDYmNGceQuU-2GeHhXZl93Cdhma3hX5cbMZrTflE9m8VwazrmrhjFigj52tFstN7IXHrutyCeE"/>
+</div>
+<div class="flex flex-col justify-between p-page-padding-h md:p-12 border-t md:border-t-0 md:border-l border-border-gray">
+<div>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="text-label-sm font-label-sm text-secondary uppercase tracking-widest border border-border-gray px-2 py-1">#GEOMETRY</span>
+<span class="text-label-sm font-label-sm text-secondary uppercase tracking-widest border border-border-gray px-2 py-1">#SILVER</span>
+</div>
+<h2 class="text-headline-lg-mobile md:text-display-lg font-headline-lg-mobile md:font-display-lg text-primary mb-4 uppercase">Urban Cold</h2>
+<p class="text-body-md font-body-md text-secondary mb-8 max-w-md">
+                            Строгие геометричные формы серебра в сочетании с архитектурным кроем. Образ для тех, кто ценит форму больше, чем декор. Идеальная интеграция в индустриальный ландшафт.
+                        </p>
+</div>
+<button class="w-full md:w-max min-w-[300px] h-[56px] border border-primary text-primary text-label-md font-label-md uppercase tracking-wider hover:bg-primary hover:text-surface transition-colors flex items-center justify-between px-6">
+<span>Смотреть образ</span>
+<span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</article>
+<!-- Look 2 -->
+<article class="bg-surface grid grid-cols-1 md:grid-cols-2 group">
+<div class="md:order-2 aspect-[4/5] md:aspect-auto relative overflow-hidden bg-surface-container">
+<img alt="Evening jewelry look" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A dramatic close-up of a model's neck and jawline showcasing an intricate layered silver necklace, set against a vast, empty dark glass building backdrop at night. The lighting is harsh and directional, creating sharp architectural shadows and bright reflections on the polished metal. The color palette is restricted to cold silvers, deep charcoal, and midnight black, emphasizing a high-end, sophisticated evening aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBWTOnjhNVEgCFWzkx10d0PCy9ZdtSf9fUUMLtkh0P_ss0_0uaIDOlNnpi-yUoGXCqajbEqAHKTvzblAOvaFYlj5YZ8thoQsmD1vP4kkqn37JJzhjijfqGhV2r0jxYsf3I_zToo1hEGK2POzc0sT3QZKTHZL8TL5Ud5cUPAb5BWqSe6yciDEBkj2oCczbBO8bjYLZW87r6OeqI1ulN8k5vudRpSE8A68yOP8Us4yxDOpPiqHsWKKmVJfzicr3uFO5sPfltYNNfMKXg"/>
+</div>
+<div class="md:order-1 flex flex-col justify-between p-page-padding-h md:p-12 border-t md:border-t-0 md:border-r border-border-gray">
+<div>
+<div class="flex flex-wrap gap-2 mb-6">
+<span class="text-label-sm font-label-sm text-secondary uppercase tracking-widest border border-border-gray px-2 py-1">#EVENING</span>
+<span class="text-label-sm font-label-sm text-secondary uppercase tracking-widest border border-border-gray px-2 py-1">#LAYERING</span>
+</div>
+<h2 class="text-headline-lg-mobile md:text-display-lg font-headline-lg-mobile md:font-display-lg text-primary mb-4 uppercase">Glass &amp; Steel</h2>
+<p class="text-body-md font-body-md text-secondary mb-8 max-w-md">
+                            Многослойность холодных металлов, отражающая огни ночного города. Вечерний сет, построенный на контрасте гладких поверхностей и сложных плетений.
+                        </p>
+</div>
+<button class="w-full md:w-max min-w-[300px] h-[56px] border border-primary text-primary text-label-md font-label-md uppercase tracking-wider hover:bg-primary hover:text-surface transition-colors flex items-center justify-between px-6">
+<span>Смотреть образ</span>
+<span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</article>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 bg-surface dark:bg-surface border-t border-border-gray flex justify-around items-center px-[28px] h-[96px] pb-safe-air-bottom">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="grid_view">grid_view</span>
+<span class="text-label-sm font-label-sm">Каталог</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary scale-110" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="layers" data-weight="fill" style="font-variation-settings: 'FILL' 1;">layers</span>
+<span class="text-label-sm font-label-sm">Образы</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="auto_awesome">auto_awesome</span>
+<span class="text-label-sm font-label-sm">GLAME</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="favorite">favorite</span>
+<span class="text-label-sm font-label-sm">Избранное</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="text-label-sm font-label-sm">Профиль</span>
+</a>
+</nav>
+</body></html>

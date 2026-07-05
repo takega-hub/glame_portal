@@ -1,0 +1,67 @@
+{
+  "schema": "glame_ton_jetton_testnet_v1",
+  "network": "testnet",
+  "token": {
+    "name": "GLAME Coin",
+    "symbol": "GLM",
+    "decimals": 9,
+    "description": "GLAME club utility unit for CryptoGLAME testnet claim pilot.",
+    "image": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v1.png",
+    "metadata_url": "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json"
+  },
+  "policy": {
+    "no_investment_promise": true,
+    "no_buyback_promise": true,
+    "mainnet_requires_legal_approval": true,
+    "mainnet_requires_security_review": true,
+    "claims_require_verified_ton_wallet": true
+  },
+  "contracts": {
+    "implementation": "standard_tep74_jetton",
+    "jetton_master_address": "EQAyYQYj96groHTRfNTmEMRTNeK9CAo1L3e1n8Hamnup-cc0",
+    "jetton_wallet_code_hash": "ba2918c8947e9b25af9ac1b883357754173e5812f807a3d6e642a14709595395",
+    "admin_address": "0QDZEwYBMl-73VYhOY3mSzhxg8GRmZ0EjOovVhq9IDMXupJq",
+    "treasury_address": "0QDZEwYBMl-73VYhOY3mSzhxg8GRmZ0EjOovVhq9IDMXupJq"
+  },
+  "deployment": {
+    "status": "testnet_deployed",
+    "deployed_at": "2026-07-02T13:11:12.827Z",
+    "deploy_tx_hash": "WjOKZpqirwRjpMsAPujtkaXHmMGnq0JRYFU6m9yEADA=",
+    "deployer": "0QDZEwYBMl-73VYhOY3mSzhxg8GRmZ0EjOovVhq9IDMXupJq"
+  },
+  "verification": {
+    "wallet_library_status": "matches_current_source",
+    "wallet_library_checked_at": "2026-07-02T13:12:30Z",
+    "wallet_library_hash": "8d28ea421b77e805fea52acf335296499f03aec8e9fd21ddb5f2564aa65c48de",
+    "minter_code_hash": "f83d05490af7c9cc58019488c7b253c9492d49c25d12d09383e52e81537e343a",
+    "wallet_code_hash": "ba2918c8947e9b25af9ac1b883357754173e5812f807a3d6e642a14709595395"
+  },
+  "pilot_mints": [
+    {
+      "status": "confirmed",
+      "kind": "treasury_test_mint",
+      "amount_glm_requested": 10,
+      "amount_base_units_minted": "10",
+      "destination_address": "0QDZEwYBMl-73VYhOY3mSzhxg8GRmZ0EjOovVhq9IDMXupJq",
+      "jetton_wallet_address": "EQCHGRg109gGrNObCItqsd1vv0ABz2ZDcQEcOQ_CMCxPcQid",
+      "tx_hash": "Lqrd361sN8WJ5FMlmPti4L5qyqQrgXstn0Jo56AbjyE=",
+      "confirmed_balance_glm": "0.00000001",
+      "decimals_scale_issue": true,
+      "confirmed_at": "2026-07-02T13:26:24Z"
+    },
+    {
+      "status": "confirmed",
+      "kind": "points_to_ton_bridge_claim",
+      "claim_id": "78d490dc-3410-4f4c-9631-163a82184dbd",
+      "amount_glm_requested": 500,
+      "amount_base_units_minted": "500000000000",
+      "destination_address": "0:eb330157b6d58a6486ff0d21283787772889acc146dd1c38a8c2c52bff8de994",
+      "jetton_wallet_address": "kQAjOvmxiQPI7yQwLVr0Y-3GsJvlQfNgE7WKInAld3Ez0soR",
+      "tx_hash": "D170br4eQHRlDYFJpbrg+QDyyYy2vkVMkrHJgfgauSk=",
+      "trace_id": "8+hbykSA3qHirTN6nwk4pi2HtdPlbvgXb1mWjd0l6EU=",
+      "confirmed_balance_glm": "500",
+      "decimals_scale_issue": false,
+      "confirmed_at": "2026-07-02T14:19:23Z"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, JSON, Integer, Boolean, Index
+from sqlalchemy import Column, String, DateTime, Date, JSON, Integer, Boolean, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
@@ -26,11 +26,16 @@ class User(Base):
     
     # Поля для покупателей (синхронизация с 1С)
     phone = Column(String(20), unique=True, nullable=True, index=True)  # номер телефона = логин
+    sms_otp_code = Column(String(4), nullable=True)
+    sms_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
+    sms_otp_attempts = Column(Integer, default=0, nullable=False)
+    sms_otp_last_sent_at = Column(DateTime(timezone=True), nullable=True)
     discount_card_number = Column(String(50), unique=True, nullable=True, index=True)  # номер дисконтной карты из 1С
     customer_id_1c = Column(String(255), nullable=True, index=True)  # ID контрагента в 1С
     discount_card_id_1c = Column(String(255), nullable=True)  # ID дисконтной карты в 1С
     full_name = Column(String(255), nullable=True)  # полное имя покупателя
     city = Column(String(100), nullable=True)  # город покупателя
+    birth_date = Column(Date, nullable=True, index=True)  # дата рождения из 1С
     gender = Column(String(10), nullable=True)  # пол покупателя: "male", "female" или None
     role = Column(String(50), nullable=True, default="customer")  # customer, admin, ai_marketer, content_manager
     
@@ -46,6 +51,15 @@ class User(Base):
     rfm_score = Column(JSON, nullable=True)  # RFM оценки {recency, frequency, monetary, r_score, f_score, m_score}
     purchase_preferences = Column(JSON, nullable=True)  # предпочтения по категориям и брендам
     
+    # Предпочитаемый магазин (вычисляется по истории продаж)
+    preferred_store_external_id = Column(String(255), nullable=True)  # ID магазина из 1С
+    preferred_store_name = Column(String(255), nullable=True)  # Название магазина
+    preferred_store_share = Column(Integer, nullable=True)  # Доля покупок в этом магазине (0-100 или float 0-1)
+    preferred_store_updated_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Второй предпочитаемый магазин
+    secondary_store_name = Column(String(255), nullable=True)
+    
     # Флаги
     is_customer = Column(Boolean, default=False, nullable=False)  # является ли покупателем (синхронизирован из 1С)
     synced_at = Column(DateTime(timezone=True), nullable=True)  # дата последней синхронизации с 1С
@@ -60,4 +74,5 @@ class User(Base):
         Index('ix_users_customer_id_1c', 'customer_id_1c'),
         Index('ix_users_is_customer', 'is_customer'),
         Index('ix_users_role', 'role'),
+        Index('ix_users_birth_date', 'birth_date'),
     )

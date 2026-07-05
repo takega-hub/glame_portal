@@ -1,0 +1,17 @@
+{
+  "name": "GLAME Coin",
+  "symbol": "GLM",
+  "decimals": "9",
+  "description": "GLAME club utility unit for CryptoGLAME testnet claim pilot.",
+  "image": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v1.png",
+  "websites": [
+    "https://partner.glamejewelry.ru/referral"
+  ],
+  "social": [],
+  "policy": {
+    "token_policy": "https://partner.glamejewelry.ru/static/glm_policy/token-policy.md",
+    "risk_disclosure": "https://partner.glamejewelry.ru/static/glm_policy/risk-disclosure.md",
+    "bridge_rules": "https://partner.glamejewelry.ru/static/glm_policy/bridge-rules.md",
+    "audit_journal": "https://partner.glamejewelry.ru/api/referrals/glm-audit-hashes/public"
+  }
+}

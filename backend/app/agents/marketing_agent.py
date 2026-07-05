@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 class MarketingAgent(BaseAgent):
     """AI Marketing Agent для анализа кампаний и оптимизации маркетинга"""
+    PROMPT_AGENT_TYPE = "traffic-growth-agent"
     
     BRAND_SYSTEM_PROMPT = """Ты - маркетинговый аналитик бренда GLAME, пространства авторских украшений и аксессуаров.
 
@@ -27,6 +28,33 @@ class MarketingAgent(BaseAgent):
         self.db = db
         self.metrics_service = MetricsService(db)
         self.analytics_service = AnalyticsService(db)
+    
+    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Основная точка входа, требуемая BaseAgent.
+
+        Agent task endpoints instantiate MarketingAgent before choosing the
+        concrete analytics branch. Without this method the class remains
+        abstract and `/api/agent-interactions/tasks/{id}/process` fails before
+        it can execute any task-specific logic.
+        """
+        input_data = input_data or {}
+        task_type = str(input_data.get("task_type") or input_data.get("type") or "").strip()
+
+        if input_data.get("campaign_id") or task_type == "campaign_performance":
+            return await self.analyze_campaign_performance(
+                campaign_id=input_data.get("campaign_id"),
+                start_date=input_data.get("start_date"),
+                end_date=input_data.get("end_date"),
+                channel=input_data.get("channel"),
+            )
+
+        goal = str(input_data.get("goal") or input_data.get("description") or "Проанализировать маркетинговые данные GLAME").strip()
+        return await self.suggest_campaign_strategy(
+            goal=goal,
+            target_audience=input_data.get("target_audience"),
+            budget=input_data.get("budget"),
+            timeframe=input_data.get("timeframe"),
+        )
     
     async def analyze_campaign_performance(
         self,
@@ -77,7 +105,7 @@ class MarketingAgent(BaseAgent):
         
         try:
             # Получаем системный промпт из БД
-            system_prompt = await self.get_active_system_prompt(self.db, "marketer", self.BRAND_SYSTEM_PROMPT)
+            system_prompt = await self.get_active_system_prompt(self.db, self.PROMPT_AGENT_TYPE, self.BRAND_SYSTEM_PROMPT)
             
             analysis = await self.generate_response(
                 prompt=prompt,
@@ -154,7 +182,7 @@ class MarketingAgent(BaseAgent):
         
         try:
             # Получаем системный промпт из БД
-            system_prompt = await self.get_active_system_prompt(self.db, "marketer", self.BRAND_SYSTEM_PROMPT)
+            system_prompt = await self.get_active_system_prompt(self.db, self.PROMPT_AGENT_TYPE, self.BRAND_SYSTEM_PROMPT)
             
             strategy = await self.generate_response(
                 prompt=prompt,
@@ -212,7 +240,7 @@ ID плана: {plan_id}
         
         try:
             # Получаем системный промпт из БД
-            system_prompt = await self.get_active_system_prompt(self.db, "marketer", self.BRAND_SYSTEM_PROMPT)
+            system_prompt = await self.get_active_system_prompt(self.db, self.PROMPT_AGENT_TYPE, self.BRAND_SYSTEM_PROMPT)
             
             optimization = await self.generate_response(
                 prompt=prompt,
@@ -304,7 +332,7 @@ ID плана: {plan_id}
         
         try:
             # Получаем системный промпт из БД
-            system_prompt = await self.get_active_system_prompt(self.db, "marketer", self.BRAND_SYSTEM_PROMPT)
+            system_prompt = await self.get_active_system_prompt(self.db, self.PROMPT_AGENT_TYPE, self.BRAND_SYSTEM_PROMPT)
             
             prediction = await self.generate_response(
                 prompt=prompt,

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Look Builder</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error": "#ffb4ab",
+                      "surface-dim": "#121416",
+                      "cold-light-gray": "#C7CBCF",
+                      "primary-fixed": "#e1e3e4",
+                      "surface-container": "#1e2022",
+                      "on-primary-fixed": "#191c1d",
+                      "on-primary": "#2e3132",
+                      "tertiary-fixed-dim": "#c2c7cb",
+                      "inverse-primary": "#5c5f60",
+                      "surface-variant": "#333537",
+                      "secondary-fixed": "#e2e2e5",
+                      "soft-gray": "#D8DADB",
+                      "border-gray": "#5C6064",
+                      "surface": "#121416",
+                      "surface-bright": "#38393c",
+                      "on-tertiary-fixed-variant": "#42474b",
+                      "on-secondary-fixed": "#1a1c1e",
+                      "outline": "#8e9192",
+                      "on-tertiary-container": "#606569",
+                      "secondary": "#c6c6c9",
+                      "surface-container-low": "#1a1c1e",
+                      "surface-container-highest": "#333537",
+                      "surface-tint": "#c4c7c8",
+                      "inverse-on-surface": "#2f3133",
+                      "error-container": "#93000a",
+                      "on-background": "#e2e2e5",
+                      "primary-container": "#e1e3e4",
+                      "outline-variant": "#434749",
+                      "tertiary-container": "#dee3e7",
+                      "on-secondary": "#2f3133",
+                      "background": "#121416",
+                      "tertiary": "#ffffff",
+                      "on-tertiary-fixed": "#171c1f",
+                      "surface-container-high": "#282a2c",
+                      "primary": "#ffffff",
+                      "primary-fixed-dim": "#c4c7c8",
+                      "tertiary-fixed": "#dee3e7",
+                      "inverse-surface": "#e2e2e5",
+                      "on-secondary-fixed-variant": "#454749",
+                      "secondary-container": "#454749",
+                      "surface-container-lowest": "#0c0e10",
+                      "on-tertiary": "#2c3134",
+                      "on-surface-variant": "#c4c7c8",
+                      "on-primary-fixed-variant": "#444748",
+                      "on-error": "#690005",
+                      "on-surface": "#e2e2e5",
+                      "on-error-container": "#ffdad6",
+                      "on-secondary-container": "#b4b5b7",
+                      "secondary-fixed-dim": "#c6c6c9",
+                      "on-primary-container": "#626566"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0px",
+                      "lg": "0px",
+                      "xl": "0px",
+                      "full": "0px"
+              },
+              "spacing": {
+                      "button-gap": "16px",
+                      "page-padding-h": "28px",
+                      "grid-gutter": "1px",
+                      "bottom-nav-height": "96px",
+                      "top-bar-height": "56px",
+                      "safe-air-bottom": "24px"
+              },
+              "fontFamily": {
+                      "headline-lg-mobile": [
+                              "Hanken Grotesk"
+                      ],
+                      "headline-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-md": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-sm": [
+                              "Hanken Grotesk"
+                      ],
+                      "display-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "body-lg": [
+                              "Hanken Grotesk"
+                      ],
+                      "label-md": [
+                              "Hanken Grotesk"
+                      ]
+              },
+              "fontSize": {
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "0em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+        .icon-fill {
+          font-variation-settings:
+          'FILL' 1,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md antialiased min-h-screen pb-bottom-nav-height pt-top-bar-height flex flex-col">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full h-[56px] flex items-center justify-between px-page-padding-h bg-transparent dark:bg-transparent border-b border-border-gray z-50">
+<button class="text-primary dark:text-primary hover:opacity-70 transition-opacity active:scale-95 transition-transform flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<div class="font-headline-lg-mobile text-headline-lg-mobile tracking-widest text-primary">
+            GLAME
+        </div>
+<button class="text-primary dark:text-primary hover:opacity-70 transition-opacity active:scale-95 transition-transform flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="shopping_bag">shopping_bag</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col w-full md:max-w-screen-md lg:max-w-screen-lg mx-auto pb-safe-air-bottom">
+<!-- Header Area -->
+<section class="px-page-padding-h py-8 border-b border-border-gray">
+<h1 class="font-headline-lg text-headline-lg text-primary mb-2">Сборка образа</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Создайте свой уникальный сет.</p>
+</section>
+<!-- Builder Workspace -->
+<section class="flex flex-col lg:flex-row w-full flex-grow">
+<!-- Visual Representation Panel (Left/Top) -->
+<div class="w-full lg:w-1/2 p-page-padding-h border-b lg:border-b-0 lg:border-r border-border-gray bg-surface-container flex flex-col justify-center items-center min-h-[400px] relative">
+<!-- Abstract visual representation of the set -->
+<div class="relative w-64 h-64 md:w-80 md:h-80 border border-border-gray flex items-center justify-center bg-surface">
+<span class="material-symbols-outlined text-border-gray text-6xl opacity-30" data-icon="checkroom">checkroom</span>
+<!-- Placeholder blocks for items (Empty State) -->
+<div class="absolute top-4 left-4 w-16 h-16 border border-border-gray border-dashed flex items-center justify-center">
+<span class="material-symbols-outlined text-border-gray text-xl" data-icon="add">add</span>
+</div>
+<div class="absolute bottom-4 right-4 w-20 h-20 border border-border-gray border-dashed flex items-center justify-center">
+<span class="material-symbols-outlined text-border-gray text-xl" data-icon="add">add</span>
+</div>
+</div>
+<p class="mt-6 font-label-md text-label-md text-on-surface-variant tracking-widest uppercase">Холст</p>
+</div>
+<!-- Configuration Panel (Right/Bottom) -->
+<div class="w-full lg:w-1/2 flex flex-col">
+<!-- Цель (Purpose) Section -->
+<div class="p-page-padding-h border-b border-border-gray">
+<h2 class="font-label-md text-label-md text-primary uppercase tracking-widest mb-4">Цель</h2>
+<div class="flex flex-wrap gap-2">
+<button class="px-4 py-2 border border-primary text-primary font-body-md text-body-md hover:bg-surface-variant transition-colors bg-surface-variant">
+                            Подарок
+                        </button>
+<button class="px-4 py-2 border border-border-gray text-on-surface-variant font-body-md text-body-md hover:border-primary hover:text-primary transition-colors">
+                            Вечер
+                        </button>
+<button class="px-4 py-2 border border-border-gray text-on-surface-variant font-body-md text-body-md hover:border-primary hover:text-primary transition-colors">
+                            На каждый день
+                        </button>
+</div>
+</div>
+<!-- Ваша основа (Foundation) Section -->
+<div class="p-page-padding-h border-b border-border-gray flex-grow">
+<h2 class="font-label-md text-label-md text-primary uppercase tracking-widest mb-4 flex justify-between items-center">
+                        Ваша основа
+                        <span class="text-on-surface-variant font-body-md text-body-md lowercase">0/1</span>
+</h2>
+<!-- Item Grid -->
+<div class="grid grid-cols-2 md:grid-cols-3 gap-grid-gutter bg-border-gray border border-border-gray">
+<!-- Item Tile -->
+<div class="bg-surface p-4 aspect-square flex flex-col justify-between hover:bg-surface-variant cursor-pointer transition-colors relative group">
+<div class="w-full h-2/3 bg-surface-container mb-2 relative">
+<img alt="Item" class="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity" data-alt="A minimalist photograph of a sleek, geometric silver ring resting on a stark, cold concrete surface. The lighting is harsh and architectural, creating deep, sharp shadows that emphasize the jewelry's structural design. The overall aesthetic is cold, premium, and strictly monochromatic with metallic accents, perfectly aligning with a high-end digital catalog style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCzznuBamYM3mcCDtXcv2L31bGry_wYHTyMTg-a9qwSJp2e9If9srCcUEigWkWnOnbQVyKe6ScerPF6IqKFOF9YWL1txHVwtB5ueTbcM9oaihyqZ4WC_tgtnivyomMUKGa4MotMGmzlBP3oC2X-f9Iy0zcNe44tvo_Mow4_4MxwxZQZ9B45sK99fvxQz2G-QeevjW6mXYIXLZr0q3FGIEtjBnwjuiarx6ThtRoUbYA_2ftUtNldMYnStpyMb2ar13kVCv8N3bUIIFY"/>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant truncate">Кольцо 'Архитект'</p>
+<p class="font-body-md text-body-md text-primary mt-1">12 000 ₽</p>
+</div>
+<div class="absolute top-2 right-2 hidden group-hover:block">
+<button class="w-8 h-8 border border-border-gray bg-surface flex items-center justify-center text-primary hover:border-primary">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+</button>
+</div>
+</div>
+<!-- Item Tile -->
+<div class="bg-surface p-4 aspect-square flex flex-col justify-between hover:bg-surface-variant cursor-pointer transition-colors relative group">
+<div class="w-full h-2/3 bg-surface-container mb-2 relative">
+<img alt="Item" class="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity" data-alt="A high-fashion product shot of a thin, industrial-style titanium bracelet displayed against a dark brushed metal background. The composition is rigid and asymmetrical, highlighting the stark lines and lack of ornamentation. The lighting is cool and diffused, creating a premium, almost technical atmosphere typical of modern minimalist luxury." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDcWP8LJ-zhzBGc3vd-_DN6uZyEtJFma8-5Y_-ioSgy5mjCy4iyoUPD0Q6yZAuSCYu_gF1Bb7D2yr3x8NeXkq-5h3230jMKNQcyY9w6oZg9OAerJI-JDDUNxzFlg4Vei2Lyd3uizeUeW0Z3-0pug9zz2nNE1A8gn0sQSMpq1WueJ4deV2AU6t4AWe-Qj8sTUJE6sI1edYqGpQUr3hVFmL1C8pGQnakrMovbm4JhcHRO_wlwLmx1LVnS7wo6bykzZdAFlaHHIsMhm94"/>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant truncate">Браслет 'Линия'</p>
+<p class="font-body-md text-body-md text-primary mt-1">18 500 ₽</p>
+</div>
+<div class="absolute top-2 right-2 hidden group-hover:block">
+<button class="w-8 h-8 border border-border-gray bg-surface flex items-center justify-center text-primary hover:border-primary">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+</button>
+</div>
+</div>
+<!-- Item Tile (Empty State for visual balance) -->
+<div class="bg-surface p-4 aspect-square flex flex-col items-center justify-center hover:bg-surface-variant cursor-pointer transition-colors border border-dashed border-border-gray m-2">
+<span class="material-symbols-outlined text-on-surface-variant text-3xl mb-2" data-icon="search">search</span>
+<p class="font-label-sm text-label-sm text-on-surface-variant text-center">Больше вариантов</p>
+</div>
+</div>
+</div>
+<!-- Акценты (Accents) Section -->
+<div class="p-page-padding-h border-b border-border-gray">
+<h2 class="font-label-md text-label-md text-primary uppercase tracking-widest mb-4 flex justify-between items-center">
+                        Акценты
+                        <span class="text-on-surface-variant font-body-md text-body-md lowercase">0/3</span>
+</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4">Выберите основу, чтобы подобрать акценты.</p>
+<!-- Disabled State Layout -->
+<div class="flex gap-4 opacity-50 pointer-events-none overflow-x-auto pb-4">
+<div class="min-w-[120px] aspect-square border border-border-gray flex items-center justify-center">
+<span class="material-symbols-outlined text-border-gray" data-icon="lock">lock</span>
+</div>
+<div class="min-w-[120px] aspect-square border border-border-gray flex items-center justify-center">
+<span class="material-symbols-outlined text-border-gray" data-icon="lock">lock</span>
+</div>
+</div>
+</div>
+<!-- Action Area -->
+<div class="p-page-padding-h mt-auto pb-8 lg:pb-page-padding-h">
+<button class="w-full h-[56px] bg-primary text-surface-dim font-label-md text-label-md uppercase tracking-widest border border-primary hover:bg-transparent hover:text-primary transition-colors flex items-center justify-center">
+                        Сохранить в Мой стиль
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-page-padding-h pb-safe-air-bottom bg-surface dark:bg-surface border-t border-border-gray h-[96px] md:hidden">
+<button class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest flex-1 h-full">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-label-sm text-label-sm uppercase">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest flex-1 h-full">
+<span class="material-symbols-outlined mb-1" data-icon="diamond">diamond</span>
+<span class="font-label-sm text-label-sm uppercase">Jewelry</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary border-t-2 border-primary pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest flex-1 h-full">
+<span class="material-symbols-outlined mb-1 icon-fill" data-icon="auto_awesome">auto_awesome</span>
+<span class="font-label-sm text-label-sm uppercase">My Style</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest flex-1 h-full">
+<span class="material-symbols-outlined mb-1" data-icon="auto_fix_high">auto_fix_high</span>
+<span class="font-label-sm text-label-sm uppercase">Selection</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest flex-1 h-full">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-label-sm text-label-sm uppercase">Profile</span>
+</button>
+</nav>
+</body></html>

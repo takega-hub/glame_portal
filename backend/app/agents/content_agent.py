@@ -184,10 +184,12 @@ Timezone: {timezone}
 - Для каждого item добавь в spec.media_task структурированное задание на фото (type=photo, goal, style, assets_needed, model_profile, status).
 """
 
+        system_prompt = await self.get_active_system_prompt(self.db, "content-agent", self.BRAND_SYSTEM_PROMPT)
+
         structured = await self.llm.generate_structured(
             prompt=prompt,
             response_format=response_format,
-            system_prompt=self.BRAND_SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             temperature=0.4,
             max_tokens=4000,
         )
@@ -258,10 +260,12 @@ CTA: {cta or "не указан"}
 {f'- Учти пожелания пользователя: {user_feedback}' if user_feedback else ''}
 """
 
+        system_prompt = await self.get_active_system_prompt(self.db, "content-agent", self.BRAND_SYSTEM_PROMPT)
+
         return await self.llm.generate_structured(
             prompt=prompt,
             response_format=response_format,
-            system_prompt=self.BRAND_SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             temperature=0.6,
             max_tokens=2500,
         )
@@ -354,9 +358,11 @@ SEO-ключевые слова для включения: {', '.join(seo_keywor
 
 Верни ТОЛЬКО текст описания, без дополнительных комментариев."""
 
+        system_prompt = await self.get_active_system_prompt(self.db, "content-agent", self.BRAND_SYSTEM_PROMPT)
+
         description = await self.generate_response(
             prompt=prompt,
-            system_prompt=self.BRAND_SYSTEM_PROMPT + "\n\nТы - SEO-копирайтер, специализирующийся на премиальных украшениях. Создавай описания, которые одновременно привлекают поисковые системы и вдохновляют покупателей.",
+            system_prompt=system_prompt,
             temperature=0.7,
             max_tokens=1500 if target_length == "long" else 800,
         )

@@ -29,6 +29,12 @@ This index is the source of truth for platform documentation. The root README gi
 
 ## Product domains
 
+### Plans
+
+- `plans/2026-06-30-crypto-glame-strategy.md` — CryptoGLAME / GLAME Coin strategy and implementation roadmap.
+- `plans/2026-07-01-glame-network-crypto-loyalty-platform.md` — GLAME Network: partner crypto loyalty platform for fashion stores.
+- `plans/referral-program-implementation-plan.md` — referral program implementation plan.
+
 ### Catalog / products
 
 - `product/catalog/PRODUCT_TABLES_STRUCTURE.md`

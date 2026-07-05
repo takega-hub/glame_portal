@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { communication, BatchGenerateRequest, GenerateMessageResponse } from '@/lib/api';
+import { communication, BatchGenerateRequest, GenerateMessageResponse, apiClient, BatchGenerateAsyncResponse } from '@/lib/api';
 
 const STORAGE_KEY_CUSTOM_EVENTS = 'glame_custom_event_types';
 
@@ -32,11 +32,13 @@ export default function BatchMessageGenerator() {
   const [customEvents, setCustomEvents] = useState<string[]>(loadCustomEvents);
   const [eventType, setEventType] = useState<string>('brand_arrival');
   const [customEventType, setCustomEventType] = useState('');
+  const [customEventDescription, setCustomEventDescription] = useState('');
   const [isCustomEvent, setIsCustomEvent] = useState(false);
   const [brand, setBrand] = useState('');
   const [store, setStore] = useState('');
   const [autoDetectStore, setAutoDetectStore] = useState(false);
   const [limit, setLimit] = useState(100);
+  const [maxLength, setMaxLength] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState('');
@@ -48,6 +50,8 @@ export default function BatchMessageGenerator() {
   const [availableBrands, setAvailableBrands] = useState<Array<{ brand: string; client_count: number }>>([]);
   const [showBrandsList, setShowBrandsList] = useState(false);
   const [showAdvancedCriteria, setShowAdvancedCriteria] = useState(false);
+  const [segmentsList, setSegmentsList] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedSegmentName, setSelectedSegmentName] = useState<string>('');
   
   // Критерии поиска
   const [searchCriteria, setSearchCriteria] = useState({
@@ -64,6 +68,19 @@ export default function BatchMessageGenerator() {
     is_local_only: false,
     cities: [] as string[],
   });
+
+  // Загружаем список сегментов для обязательного выбора
+  useEffect(() => {
+    const loadSegments = async () => {
+      try {
+        const resp = await apiClient.get<Array<{ id: string; name: string }>>('/api/admin/customers/segments/list');
+        setSegmentsList(resp.data || []);
+      } catch (e) {
+        console.error('Error loading segments list:', e);
+      }
+    };
+    loadSegments();
+  }, []);
 
   const handleGenerate = async () => {
     // Определяем финальный тип события
@@ -91,9 +108,15 @@ export default function BatchMessageGenerator() {
       return;
     }
 
+    // Обязательная валидация: выбранный сегмент
+    if (!selectedSegmentName) {
+      alert('Пожалуйста, выберите сегмент перед запуском массовой генерации.');
+      return;
+    }
+
     setLoading(true);
     setProgress(0);
-    setProgressText('Инициализация...');
+    setProgressText(`Инициализация для сегмента: «${selectedSegmentName}»...`);
     setTotalClients(0);
     setErrors([]);
     setMessages([]);
@@ -101,15 +124,15 @@ export default function BatchMessageGenerator() {
 
     try {
       // Показываем начальный прогресс
-      setProgressText('Поиск клиентов...');
+      setProgressText(`Поиск клиентов в сегменте «${selectedSegmentName}»...`);
       setProgress(10);
 
       // Формируем критерии поиска
       const criteria: any = {};
-      
-      if (searchCriteria.segments.length > 0) {
-        criteria.segments = searchCriteria.segments;
-      }
+      // Приоритетно используем выбранный сегмент из выпадающего списка
+      criteria.segment_name = selectedSegmentName;
+
+      // Игнорируем чекбоксы A–E, если выбран именованный сегмент
       if (searchCriteria.gender) {
         criteria.gender = searchCriteria.gender;
       }
@@ -149,67 +172,108 @@ export default function BatchMessageGenerator() {
           type: finalEventType as BatchGenerateRequest['event']['type'],
           brand: brand || undefined,
           store: autoDetectStore ? undefined : (store || undefined), // Если автопределение включено, не передаем store
+          metadata: isCustomEvent && customEventDescription ? { description: customEventDescription } : undefined,
         },
         brand: (finalEventType === 'brand_arrival' || finalEventType.toLowerCase().includes('бренд')) ? brand : undefined,
         limit: limit,
+        max_length: maxLength,
         search_criteria: Object.keys(criteria).length > 0 ? criteria : undefined,
         auto_detect_store: autoDetectStore // Добавляем флаг автопределения
       };
 
-      // Симулируем прогресс во время запроса (более медленно для долгих операций)
-      let progressInterval: NodeJS.Timeout | null = null;
-      try {
-        progressInterval = setInterval(() => {
-          setProgress(prev => {
-            // Медленнее увеличиваем прогресс, чтобы не достичь 100% до завершения
-            if (prev < 85) {
-              return prev + 2;
-            }
-            return prev;
+      setProgressText(`Генерация сообщений для сегмента «${selectedSegmentName}»...`);
+      setProgress(20);
+
+      let eventSource: any = null;
+      const startResponse: BatchGenerateAsyncResponse = await communication.startBatchGenerateAsync(request);
+
+      const generationId = startResponse.generation_id;
+      const eventsUrl = startResponse.events_url || `/api/communication/generations/${generationId}/events`;
+
+      const runPolling = async () => {
+        const startedAt = Date.now();
+        const maxWaitMs = 15 * 60 * 1000;
+        for (;;) {
+          const rec = await communication.getGeneration(generationId);
+          const total = rec.total || 0;
+          const processed = rec.processed || 0;
+          if (total > 0) {
+            const pct = Math.round((processed / total) * 100);
+            setProgress(pct);
+            setTotalClients(total);
+            setProgressText(`Обработано ${processed} из ${total} клиентов`);
+          } else {
+            setProgress(30);
+          }
+          if (rec.status === 'completed') {
+            setProgress(100);
+            setProgressText('Генерация завершена, подробности в истории генераций ниже');
+            break;
+          }
+          if (rec.status === 'failed') {
+            throw new Error(rec.error_message || 'Задача генерации завершилась с ошибкой');
+          }
+          if (Date.now() - startedAt > maxWaitMs) {
+            throw new Error('Превышено время ожидания выполнения генерации');
+          }
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      };
+
+      const canUseSse = typeof window !== 'undefined' && typeof EventSource !== 'undefined';
+
+      if (canUseSse) {
+        try {
+          await new Promise<void>((resolve, reject) => {
+            eventSource = new EventSource(eventsUrl);
+            eventSource.onmessage = (ev: MessageEvent) => {
+              if (!ev.data) {
+                return;
+              }
+              let rec: any;
+              try {
+                rec = JSON.parse(ev.data);
+              } catch {
+                return;
+              }
+              if (rec.event === 'not_found') {
+                reject(new Error('История генерации не найдена'));
+                return;
+              }
+              const total = rec.total || 0;
+              const processed = rec.processed || 0;
+              if (total > 0) {
+                const pct = Math.round((processed / total) * 100);
+                setProgress(pct);
+                setTotalClients(total);
+                setProgressText(`Обработано ${processed} из ${total} клиентов`);
+              }
+              if (rec.status === 'completed') {
+                setProgress(100);
+                setProgressText('Генерация завершена, подробности в истории генераций ниже');
+                eventSource?.close();
+                resolve();
+              } else if (rec.status === 'failed') {
+                eventSource?.close();
+                reject(new Error(rec.error_message || 'Задача генерации завершилась с ошибкой'));
+              }
+            };
+            eventSource.onerror = () => {
+              eventSource?.close();
+              reject(new Error('Ошибка SSE соединения'));
+            };
           });
-        }, 1000); // Обновляем каждую секунду
-
-        setProgressText('Генерация сообщений...');
-        setProgress(30);
-
-        const response = await communication.batchGenerate(request);
-        
-        if (progressInterval) {
-          clearInterval(progressInterval);
-          progressInterval = null;
+        } catch (sseError) {
+          await runPolling();
+        } finally {
+          eventSource?.close();
         }
-        
-        setProgress(100);
-        setProgressText('Завершено!');
-        
-        // Логируем ответ для отладки
-        console.log('Batch generate response:', response);
-        console.log('Messages count:', response.messages?.length || 0);
-        console.log('Errors count:', response.errors?.length || 0);
-        
-        setTotalClients((response.messages?.length || 0) + (response.errors?.length || 0));
-        setMessages(response.messages || []);
-        setErrors(response.errors || []);
-        setLastResponse(response);
-        setShowResults(true);
-        
-        // Показываем уведомление о результате
-        if (response.messages && response.messages.length > 0) {
-          console.log(`Успешно сгенерировано ${response.messages.length} сообщений`);
-        } else {
-          console.warn('Сообщения не были сгенерированы');
-        }
-
-        // Сбрасываем прогресс через секунду
-        setTimeout(() => {
-          setProgress(0);
-          setProgressText('');
-        }, 1000);
-      } finally {
-        if (progressInterval) {
-          clearInterval(progressInterval);
-        }
+      } else {
+        await runPolling();
       }
+
+      setShowResults(false);
+      setLastResponse(null);
     } catch (err: any) {
       setProgress(0);
       setProgressText('');
@@ -300,6 +364,26 @@ export default function BatchMessageGenerator() {
       <h2 className="text-xl font-bold text-gray-900 mb-4">Массовая генерация сообщений</h2>
       
       <div className="space-y-4">
+        {/* Обязательный выбор сегмента */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Сегмент <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={selectedSegmentName}
+            onChange={(e) => setSelectedSegmentName(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-pink-500 focus:border-pink-500"
+          >
+            <option value="">Выберите сегмент</option>
+            {segmentsList.map(s => (
+              <option key={s.id} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            Массовая генерация учитывает только клиентов выбранного сегмента.
+          </p>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Тип события
@@ -310,15 +394,18 @@ export default function BatchMessageGenerator() {
               if (e.target.value === 'custom') {
                 setIsCustomEvent(true);
                 setCustomEventType('');
+                setCustomEventDescription('');
                 setEventType('custom');
               } else if (customEvents.includes(e.target.value)) {
                 // Выбрано сохраненное кастомное событие
                 setIsCustomEvent(true);
                 setEventType(e.target.value);
                 setCustomEventType(e.target.value);
+                setCustomEventDescription(''); // Можно было бы загружать, если сохраняли
               } else {
                 setIsCustomEvent(false);
                 setEventType(e.target.value);
+                setCustomEventDescription('');
                 if (e.target.value !== 'brand_arrival') {
                   setBrand('');
                 }
@@ -376,8 +463,22 @@ export default function BatchMessageGenerator() {
                   </button>
                 )}
               </div>
+              
+              <div className="mt-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Описание события (для AI)
+                </label>
+                <textarea
+                  value={customEventDescription}
+                  onChange={(e) => setCustomEventDescription(e.target.value)}
+                  placeholder="Опишите, о чем нужно написать клиенту. Например: 'Предложи скидку 20% на новую коллекцию платьев' или 'Пригласи на закрытую распродажу'."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-pink-500 focus:border-pink-500 text-sm"
+                  rows={3}
+                />
+              </div>
+
               <p className="mt-1 text-xs text-gray-500">
-                Введите название нового типа события (например: "Новая коллекция", "Скидка на товары" и т.д.)
+                Введите название нового типа события (например: &quot;Новая коллекция&quot;, &quot;Скидка на товары&quot; и т.д.)
                 {customEvents.length > 0 && (
                   <span className="block mt-1">
                     Сохраненные события: {customEvents.join(', ')}
@@ -526,6 +627,50 @@ export default function BatchMessageGenerator() {
             max={1000}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-pink-500 focus:border-pink-500"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Длина сообщения (символов)
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              value={maxLength || ''}
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                setMaxLength(isNaN(val) ? undefined : val);
+              }}
+              placeholder="Не ограничено"
+              min={10}
+              max={2000}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-pink-500 focus:border-pink-500"
+            />
+            <div className="flex gap-1">
+              {[
+                { label: 'SMS (70)', value: 70 },
+                { label: 'SMS (140)', value: 140 },
+                { label: 'Push (250)', value: 250 },
+                { label: 'WhatsApp (1000)', value: 1000 }
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setMaxLength(opt.value)}
+                  className={`px-2 py-1 text-xs rounded border ${
+                    maxLength === opt.value
+                      ? 'bg-pink-100 border-pink-300 text-pink-700 font-medium'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Оставьте пустым для автоопределения оптимальной длины. AI постарается уложиться в этот лимит.
+          </p>
         </div>
 
         {/* Расширенные критерии поиска */}

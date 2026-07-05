@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GLAME - Ялта</title>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "soft-gray": "#D8DADB",
+                        "surface-variant": "#333537",
+                        "secondary-fixed": "#e2e2e5",
+                        "inverse-primary": "#5c5f60",
+                        "tertiary-fixed-dim": "#c2c7cb",
+                        "on-primary": "#2e3132",
+                        "on-primary-fixed": "#191c1d",
+                        "surface-container": "#1e2022",
+                        "primary-fixed": "#e1e3e4",
+                        "cold-light-gray": "#C7CBCF",
+                        "surface-dim": "#121416",
+                        "error": "#ffb4ab",
+                        "surface-container-high": "#282a2c",
+                        "tertiary": "#ffffff",
+                        "on-tertiary-fixed": "#171c1f",
+                        "background": "#121416",
+                        "on-secondary": "#2f3133",
+                        "tertiary-container": "#dee3e7",
+                        "primary-container": "#e1e3e4",
+                        "outline-variant": "#434749",
+                        "on-background": "#e2e2e5",
+                        "error-container": "#93000a",
+                        "surface-tint": "#c4c7c8",
+                        "inverse-on-surface": "#2f3133",
+                        "surface-container-low": "#1a1c1e",
+                        "surface-container-highest": "#333537",
+                        "secondary": "#c6c6c9",
+                        "on-tertiary-container": "#606569",
+                        "outline": "#8e9192",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "surface-bright": "#38393c",
+                        "on-tertiary-fixed-variant": "#42474b",
+                        "surface": "#121416",
+                        "border-gray": "#5C6064",
+                        "secondary-container": "#454749",
+                        "on-secondary-fixed-variant": "#454749",
+                        "inverse-surface": "#e2e2e5",
+                        "tertiary-fixed": "#dee3e7",
+                        "primary-fixed-dim": "#c4c7c8",
+                        "primary": "#ffffff",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "on-primary-container": "#626566",
+                        "on-secondary-container": "#b4b5b7",
+                        "on-error-container": "#ffdad6",
+                        "on-surface": "#e2e2e5",
+                        "on-primary-fixed-variant": "#444748",
+                        "on-error": "#690005",
+                        "on-surface-variant": "#c4c7c8",
+                        "on-tertiary": "#2c3134",
+                        "surface-container-lowest": "#0c0e10"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0rem",
+                        "lg": "0rem",
+                        "xl": "0rem",
+                        "full": "0rem"
+                    },
+                    "spacing": {
+                        "top-bar-height": "56px",
+                        "button-gap": "16px",
+                        "page-padding-h": "28px",
+                        "grid-gutter": "1px",
+                        "bottom-nav-height": "96px",
+                        "safe-air-bottom": "24px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "headline-lg": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #121416;
+            color: #e2e2e5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .bg-hero-overlay {
+            background: linear-gradient(180deg, rgba(18, 20, 22, 0.2) 0%, rgba(18, 20, 22, 0.8) 100%);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased overflow-x-hidden min-h-screen flex flex-col">
+<!-- Top Navigation Placeholder (Intentionally omitted as per instructions for Sub-pages, using custom back nav) -->
+<header class="fixed top-0 w-full h-top-bar-height flex items-center justify-between px-page-padding-h z-50 bg-background/80 backdrop-blur-md border-b border-border-gray">
+<button class="text-primary hover:opacity-70 transition-opacity flex items-center gap-2">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<span class="font-headline-lg-mobile text-headline-lg-mobile tracking-widest text-primary uppercase">GLAME</span>
+<div class="w-6"></div> <!-- Spacer for balance -->
+</header>
+<main class="flex-grow pt-top-bar-height pb-[120px]">
+<!-- Hero Section -->
+<section class="relative w-full h-[60vh] md:h-[70vh] border-b border-border-gray">
+<div class="absolute inset-0 bg-surface-container w-full h-full" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDhdnUaHwtUdB_sBrtIizxxauYGzCpwhQyq8BEGpW6nRJzHX1HcH4L5bzYhnEsvQaS6RJ8NsAom9QoopYv1x1fh8Z4vU_hNY66vDF2kgHyR5PYfXwep_47avaNRQnd78lBN2rX1DVrscQFv9wQPpIlRExvsSoagbCeGdUsbtOaxnSUQlhHO8J0cQwISMkbrReDDqurZk1lewFekotYnBhA6Ikxe1Xy6XpD56PmS-HUi0LkVw8zinQQ4ZQLHheIGbYw_U1QEQTcicUk'); background-size: cover; background-position: center;"></div>
+<div class="absolute inset-0 bg-hero-overlay"></div>
+<div class="absolute bottom-0 left-0 w-full p-page-padding-h pb-12 flex flex-col gap-4">
+<h1 class="font-display-lg text-display-lg text-primary">GLAME Ялта</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">пространство у моря</p>
+<div class="mt-4 border-l border-border-gray pl-4">
+<p class="font-body-md text-body-md text-on-surface">Набережная им. Ленина, 18</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Приморский пляж</p>
+</div>
+</div>
+</section>
+<!-- Intro Content -->
+<section class="px-page-padding-h py-12 md:py-20 border-b border-border-gray">
+<div class="max-w-3xl mx-auto flex flex-col gap-8">
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary">Пространство GLAME</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
+                    Место, где украшения подбирают как часть образа — спокойно, точно и без давления.
+                </p>
+<div class="flex flex-col gap-4 mt-4">
+<button class="w-full h-[56px] bg-transparent border border-border-gray flex items-center justify-between px-6 hover:bg-surface-variant transition-colors group">
+<span class="font-label-md text-label-md text-primary">Построить маршрут</span>
+<span class="material-symbols-outlined text-primary group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+<button class="w-full h-[56px] bg-transparent border border-border-gray flex items-center justify-between px-6 hover:bg-surface-variant transition-colors group">
+<span class="font-label-md text-label-md text-primary">Написать стилисту</span>
+<span class="material-symbols-outlined text-primary group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+<button class="w-full h-[56px] bg-primary text-background flex items-center justify-between px-6 hover:opacity-90 transition-opacity group mt-4">
+<span class="font-label-md text-label-md">Смотреть украшения в Ялте</span>
+<span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Gallery Section -->
+<section class="px-page-padding-h py-12 md:py-20 border-b border-border-gray">
+<div class="max-w-6xl mx-auto flex flex-col gap-8">
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile text-primary">Внутри пространства</h3>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-px bg-border-gray border border-border-gray">
+<div class="md:col-span-8 aspect-[4/5] md:aspect-auto bg-surface-container relative">
+<div class="absolute inset-0 bg-surface-container w-full h-full" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDNDmtbkGgIoQbTi2A8jcEJ06XFmIoFtpxavBBGQeKD5N7iSvFzmkIBaurUQCZQZqHUnalm3RF0kgJyHIKbxtcg3ibMU4kY5YI-MxqRzItFT0GQurZEKJ09gvbQ3t7IcMqW3NHJ7h4LNhW52i--2WhTfyQJEm-AUcfgyt_r_ZXMpQEPgIq-zHZjIm0I6rS-kIU-ed5pF6YMEfpED_9mCFKUaipYW3EHK_seeTybl4BF-c6Mk8yv-XuF2lM7GcErMZglqMSaoBiupRg'); background-size: cover; background-position: center;"></div>
+</div>
+<div class="md:col-span-4 flex flex-col gap-px bg-border-gray">
+<div class="aspect-[1.71] bg-surface-container relative">
+<div class="absolute inset-0 bg-surface-container w-full h-full" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBvNgfVjVZz3JQOfrnZUVodyPe661usQqqbWqzluNssVu2mE7ldp7gH5m-kf5N5vQwDFEkGFN2a6Ld8QzAtlLhltdmNOr3H_uRq4_27yibIGyLOtR7d5gp0i5GhPnePPjy_ZCUg2RSGZXxcINiV9XG0mv_fmO_JquCMlvmlpghJ8O0uNtavHJO3vi1kwz8ejTZ969ojMv9VaaoY7MecBym361EWFdQiRVLZPhUQrwHGJ5M3RF7sk3A8U35kCsKME4nfbmU28L_ROGM'); background-size: cover; background-position: center;"></div>
+</div>
+<div class="aspect-[1.71] bg-surface-container relative">
+<div class="absolute inset-0 bg-surface-container w-full h-full" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCS6pnbPSVusvLLMHs6--2SHVHnVxnlgMbPEVs9-AvQfCShLa-5SPvvf-3IzhSNaUReY0b-bYjy_2yyXFR_sj2h3nclynboB0fQMNT2eNZHuNFF1VOnmOMG1drk7NKT3veUqPjY0NxT187MDsU3QcTHpYRwCksN4dQE_eMB7QS9TZaSzzb6xtwBAwykJIqVr-n7VIxFWt35nZ-Kgkg5p7LTXQze5QHtuGbdOkxnXK70l4Pm859V3wmOfrwsVbCJRVozZO770lyyvcc'); background-size: cover; background-position: center;"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Services Section -->
+<section class="px-page-padding-h py-12 md:py-20">
+<div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-px bg-border-gray border border-border-gray">
+<div class="bg-background p-8 flex flex-col gap-4">
+<span class="font-label-sm text-label-sm text-on-surface-variant">01</span>
+<h4 class="font-headline-lg-mobile text-headline-lg-mobile text-primary mt-4">Подбор</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">стилист поможет собрать украшение под образ</p>
+</div>
+<div class="bg-background p-8 flex flex-col gap-4">
+<span class="font-label-sm text-label-sm text-on-surface-variant">02</span>
+<h4 class="font-headline-lg-mobile text-headline-lg-mobile text-primary mt-4">Примерка</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">можно увидеть изделие вживую и почувствовать масштаб</p>
+</div>
+<div class="bg-background p-8 flex flex-col gap-4">
+<span class="font-label-sm text-label-sm text-on-surface-variant">03</span>
+<h4 class="font-headline-lg-mobile text-headline-lg-mobile text-primary mt-4">Наличие</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">каталог покажет, что доступно в пространстве Ялты</p>
+</div>
+</div>
+<div class="max-w-6xl mx-auto mt-12">
+<button class="w-full h-[56px] bg-transparent border border-border-gray flex items-center justify-center px-6 hover:bg-surface-variant transition-colors text-primary font-label-md text-label-md">
+                    Вернуться к пространствам
+                </button>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Hidden on desktop, shown on mobile) -->
+<!-- Suppressed on this specific destination sub-page as per "Task-Focused" rule, but implemented as requested by prompt structure. 
+         Choosing "Home" as default active state since it's a location page, not specifically an e-commerce flow. -->
+<nav class="md:hidden fixed bottom-0 w-full h-[96px] bg-surface dark:bg-surface border-t border-border-gray z-50 flex justify-around items-center px-page-padding-h pb-safe-air-bottom">
+<a class="flex flex-col items-center justify-center text-primary border-t-2 border-primary pt-2 w-16 hover:bg-surface-variant transition-colors active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label-sm text-label-sm uppercase mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 hover:bg-surface-variant transition-colors active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined">diamond</span>
+<span class="font-label-sm text-label-sm uppercase mt-1">Jewelry</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 hover:bg-surface-variant transition-colors active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined">auto_awesome</span>
+<span class="font-label-sm text-label-sm uppercase mt-1">My Style</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 hover:bg-surface-variant transition-colors active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined">auto_fix_high</span>
+<span class="font-label-sm text-label-sm uppercase mt-1">Selection</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 w-16 hover:bg-surface-variant transition-colors active:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-sm text-label-sm uppercase mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

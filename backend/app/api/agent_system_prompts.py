@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
+from pathlib import Path
 
 from app.database.connection import get_db
 from app.api.auth import get_current_user, get_current_user_optional
@@ -20,6 +21,11 @@ from app.models.agent_system_prompt import (
     AgentPromptGenerationRequest
 )
 from app.agents.advanced_content_agent import AdvancedContentAgent
+from app.agents.prompt_parser import parse_agent_prompts_from_markdown
+from app.services.consultant_training_service import (
+    DEFAULT_TRAINING_MATERIAL_REFORMATTER_PROMPT,
+    TRAINING_MATERIAL_REFORMATTER_AGENT_TYPE,
+)
 
 router = APIRouter(tags=["agent-system-prompts"])
 
@@ -99,9 +105,150 @@ class GenerationRequestResponse(BaseModel):
     completed_at: Optional[str]
 
 
+class SeedPromptsResponse(BaseModel):
+    seeded: int
+    updated: int
+    skipped: int
+    agents: List[str]
+
+
+def prompt_version_response(prompt: AgentSystemPrompt) -> PromptVersionResponse:
+    return PromptVersionResponse(
+        id=str(prompt.id),
+        agent_type=prompt.agent_type,
+        version=prompt.version,
+        version_name=prompt.version_name,
+        name=prompt.name,
+        description=prompt.description,
+        system_prompt=prompt.system_prompt,
+        metadata=prompt.meta_data or {},
+        is_active=prompt.is_active,
+        is_default=prompt.is_default,
+        marketer_review_status=prompt.marketer_review_status,
+        marketer_feedback=prompt.marketer_feedback,
+        created_by=str(prompt.created_by) if prompt.created_by else None,
+        approved_by=str(prompt.approved_by) if prompt.approved_by else None,
+        created_at=prompt.created_at.isoformat() if prompt.created_at else None,
+    )
+
+
+async def ensure_training_material_reformatter_default_prompt(
+    db: AsyncSession,
+    current_user: Optional[User] = None,
+) -> AgentSystemPrompt:
+    """Persist the code fallback prompt so admins can see and edit it."""
+    result = await db.execute(
+        select(AgentSystemPrompt)
+        .where(AgentSystemPrompt.agent_type == TRAINING_MATERIAL_REFORMATTER_AGENT_TYPE)
+        .order_by(desc(AgentSystemPrompt.version))
+    )
+    prompts = result.scalars().all()
+    active = next((prompt for prompt in prompts if prompt.is_active), None)
+    if active:
+        return active
+
+    prompt = AgentSystemPrompt(
+        agent_type=TRAINING_MATERIAL_REFORMATTER_AGENT_TYPE,
+        version=(int(prompts[0].version or 0) + 1) if prompts else 1,
+        version_name="Default GLAME training reformatter",
+        name="Базовый промпт агента учебных материалов",
+        description=(
+            "Переформатирование загруженных исходников GLAME в draft learning pack: "
+            "слайды, практика, шаблон ответа, критерии проверки и admin-only visual/speaker notes."
+        ),
+        system_prompt=DEFAULT_TRAINING_MATERIAL_REFORMATTER_PROMPT,
+        meta_data={"source": "code_default", "seeded": True, "auto_created": True},
+        is_active=True,
+        is_default=True,
+        marketer_review_status="approved",
+        created_by=current_user.id if current_user else None,
+        approved_by=current_user.id if current_user else None,
+        approved_at=datetime.utcnow(),
+    )
+    db.add(prompt)
+    await db.commit()
+    await db.refresh(prompt)
+    return prompt
+
+
 # ============================================================================
 # Endpoints для управления версиями
 # ============================================================================
+
+@router.post("/seed-defaults", response_model=SeedPromptsResponse)
+async def seed_default_agent_prompts(
+    docs_path: str = Body("docs/admin/GLAME_AI_Agent_System_Prompts_v1_2.md", embed=True),
+    activate: bool = Body(True, embed=True),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Загрузить типовые системные промпты агентов из markdown-документа в БД."""
+    root = Path(__file__).resolve().parents[3]
+    path = (root / docs_path).resolve()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Prompt document not found: {docs_path}")
+
+    text = path.read_text(encoding="utf-8")
+    parsed = parse_agent_prompts_from_markdown(text, docs_path)
+
+    seeded = 0
+    updated = 0
+    skipped = 0
+    agents: List[str] = []
+    for item in parsed:
+        agents.append(item["agent_type"])
+        result = await db.execute(
+            select(AgentSystemPrompt)
+            .where(
+                and_(
+                    AgentSystemPrompt.agent_type == item["agent_type"],
+                    AgentSystemPrompt.is_default == True,
+                )
+            )
+            .order_by(desc(AgentSystemPrompt.version))
+        )
+        existing = result.scalars().first()
+        if existing and existing.system_prompt == item["system_prompt"]:
+            skipped += 1
+            if activate and not existing.is_active:
+                active_result = await db.execute(
+                    select(AgentSystemPrompt).where(AgentSystemPrompt.agent_type == item["agent_type"])
+                )
+                for prompt in active_result.scalars().all():
+                    prompt.is_active = False
+                existing.is_active = True
+            continue
+
+        if activate:
+            active_result = await db.execute(
+                select(AgentSystemPrompt).where(AgentSystemPrompt.agent_type == item["agent_type"])
+            )
+            for prompt in active_result.scalars().all():
+                prompt.is_active = False
+
+        prompt = AgentSystemPrompt(
+            agent_type=item["agent_type"],
+            version=(int(existing.version or 1) + 1) if existing else 1,
+            version_name="Default from docs",
+            name=item["name"],
+            description=item["description"],
+            system_prompt=item["system_prompt"],
+            meta_data={"source": docs_path, "seeded": True},
+            is_active=activate,
+            is_default=True,
+            marketer_review_status="approved",
+            created_by=current_user.id if current_user else None,
+            approved_by=current_user.id if current_user else None,
+            approved_at=datetime.utcnow(),
+        )
+        db.add(prompt)
+        if existing:
+            updated += 1
+        else:
+            seeded += 1
+
+    await db.commit()
+    return SeedPromptsResponse(seeded=seeded, updated=updated, skipped=skipped, agents=agents)
 
 @router.get("/{agent_type}/versions", response_model=List[PromptVersionResponse])
 async def list_prompt_versions(
@@ -114,6 +261,9 @@ async def list_prompt_versions(
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"Fetching versions for agent: {agent_type}")
+
+    if agent_type == TRAINING_MATERIAL_REFORMATTER_AGENT_TYPE:
+        await ensure_training_material_reformatter_default_prompt(db, current_user)
     
     query = select(AgentSystemPrompt).where(
         AgentSystemPrompt.agent_type == agent_type
@@ -125,26 +275,7 @@ async def list_prompt_versions(
     result = await db.execute(query)
     prompts = result.scalars().all()
     
-    return [
-        PromptVersionResponse(
-            id=str(p.id),
-            agent_type=p.agent_type,
-            version=p.version,
-            version_name=p.version_name,
-            name=p.name,
-            description=p.description,
-            system_prompt=p.system_prompt,
-            metadata=p.meta_data or {},
-            is_active=p.is_active,
-            is_default=p.is_default,
-            marketer_review_status=p.marketer_review_status,
-            marketer_feedback=p.marketer_feedback,
-            created_by=str(p.created_by) if p.created_by else None,
-            approved_by=str(p.approved_by) if p.approved_by else None,
-            created_at=p.created_at.isoformat() if p.created_at else None
-        )
-        for p in prompts
-    ]
+    return [prompt_version_response(p) for p in prompts]
 
 
 @router.post("/{agent_type}/versions", response_model=PromptVersionResponse)
@@ -521,27 +652,15 @@ async def get_active_prompt(
     agent.AGENT_TYPE = agent_type
     
     try:
+        if agent_type == TRAINING_MATERIAL_REFORMATTER_AGENT_TYPE:
+            prompt = await ensure_training_material_reformatter_default_prompt(db, current_user)
+            return prompt_version_response(prompt)
+
         prompt = await agent.get_active_system_prompt()
         
         if not prompt:
             return None
         
-        return PromptVersionResponse(
-            id=str(prompt.id),
-            agent_type=prompt.agent_type,
-            version=prompt.version,
-            version_name=prompt.version_name,
-            name=prompt.name,
-            description=prompt.description,
-            system_prompt=prompt.system_prompt,
-            metadata=prompt.meta_data or {},
-            is_active=prompt.is_active,
-            is_default=prompt.is_default,
-            marketer_review_status=prompt.marketer_review_status,
-            marketer_feedback=prompt.marketer_feedback,
-            created_by=str(prompt.created_by) if prompt.created_by else None,
-            approved_by=str(prompt.approved_by) if prompt.approved_by else None,
-            created_at=prompt.created_at.isoformat() if prompt.created_at else None
-        )
+        return prompt_version_response(prompt)
     finally:
         agent.AGENT_TYPE = original_type

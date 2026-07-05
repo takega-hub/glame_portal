@@ -5,11 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
 import { fetchJson } from '@/lib/utils';
+import * as XLSX from 'xlsx';
 
 export function StoreVisitsPanel() {
   const [status, setStatus] = useState<any>(null);
   const [dailyData, setDailyData] = useState<any>(null);
   const [salesData, setSalesData] = useState<any>(null);
+  const [dailySources, setDailySources] = useState<Array<{ date: string; sources: Record<string, number> }>>([]);
+  const [legend, setLegend] = useState<Array<{ id: string; name: string }>>([]);
   const [stores, setStores] = useState<any[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('all');
   const [loading, setLoading] = useState(false);
@@ -51,6 +54,39 @@ export function StoreVisitsPanel() {
     }
   };
 
+  // Выручка по магазинам (источникам) для расчета RPV
+  const fetchDailySources = async () => {
+    try {
+      const sel = selectedStoreId;
+      // Получаем external_id выбранного магазина
+      let externalId: string | undefined = undefined;
+      if (sel !== 'all') {
+        const st = stores.find((s) => s.id === sel);
+        externalId = st?.external_id;
+      }
+      const sources = externalId
+        ? encodeURIComponent(externalId)
+        : encodeURIComponent(stores.map((s) => s.external_id || s.id).filter(Boolean).join(','));
+      const url = `/api/analytics/1c-sales/daily-sources?days=${days}&dimension=store&sources=${sources}`;
+      const { data } = await fetchJson<{
+        status: string;
+        legend: Array<{ id: string; name: string }>;
+        daily: Array<{ date: string; sources: Record<string, number> }>;
+      }>(url);
+      if (data.status === 'success') {
+        setLegend(data.legend || []);
+        setDailySources(data.daily || []);
+      } else {
+        setLegend([]);
+        setDailySources([]);
+      }
+    } catch (e) {
+      console.error('Error fetching daily-sources', e);
+      setLegend([]);
+      setDailySources([]);
+    }
+  };
+
   const fetchSalesData = async () => {
     try {
       let url = `/api/analytics/1c-sales/daily?days=${days}&auto_sync=true`;
@@ -74,6 +110,7 @@ export function StoreVisitsPanel() {
     fetchStatus(); 
     fetchDailyData();
     fetchSalesData();
+    fetchDailySources();
   }, [days, selectedStoreId]);
 
   const formatDate = (dateStr: string) => {
@@ -84,6 +121,38 @@ export function StoreVisitsPanel() {
   const selectedStoreName = selectedStoreId === 'all' 
     ? 'Все магазины' 
     : stores.find(s => s.id === selectedStoreId)?.name || 'Все магазины';
+
+  // Подсчет RPV по источникам на основе legend (store external_id -> name),
+  // dailySources (выручка по дням) и dailyData (посетители по дням и магазинам)
+  const computeRpvRows = () => {
+    // Суммируем выручку по источникам
+    const revenueBySource: Record<string, number> = {};
+    for (const d of dailySources) {
+      for (const [id, val] of Object.entries(d.sources)) {
+        revenueBySource[id] = (revenueBySource[id] || 0) + (val || 0);
+      }
+    }
+    // Суммируем посетителей по названию магазина (legend.name)
+    const visitorsByName: Record<string, number> = {};
+    const storeDays = dailyData?.daily_data || [];
+    for (const day of storeDays) {
+      for (const s of (day.stores || [])) {
+        const name = s.name;
+        visitorsByName[name] = (visitorsByName[name] || 0) + (s.visitors || 0);
+      }
+    }
+    // Собираем итоговые строки
+    const rows = legend.map(l => {
+      const revenue = revenueBySource[l.id] || 0;
+      const visitors = visitorsByName[l.name] || 0;
+      const rpv = visitors > 0 ? revenue / visitors : 0;
+      return { id: l.id, name: l.name, revenue, visitors, rpv };
+    });
+    // Фильтруем нулевые строки, сортируем по rpv
+    return rows
+      .filter(r => r.revenue > 0 || r.visitors > 0)
+      .sort((a, b) => b.rpv - a.rpv);
+  };
 
   return (
     <div className="space-y-6">
@@ -315,6 +384,79 @@ export function StoreVisitsPanel() {
                   />
                 </LineChart>
               </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Средняя выручка на посетителя по источникам */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Средняя выручка на посетителя по источникам</CardTitle>
+              <CardDescription>Рассчитано как Выручка / Посетители за период</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2 mb-3">
+                <button
+                  className="px-3 py-1 border rounded text-sm"
+                  onClick={() => {
+                    // Экспорт в Excel
+                    const rows = computeRpvRows();
+                    const ws = XLSX.utils.json_to_sheet(rows.map(r => ({
+                      Источник: r.name,
+                      Выручка: r.revenue,
+                      Посетители: r.visitors,
+                      'Выручка на посетителя': r.rpv
+                    })));
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'RPV');
+                    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `rpv_${new Date().toISOString().slice(0,10)}.xlsx`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Экспорт Excel
+                </button>
+                <button
+                  className="px-3 py-1 border rounded text-sm"
+                  onClick={() => {
+                    // Экспорт в PDF (через print)
+                    const rows = computeRpvRows();
+                    const win = window.open('', '_blank');
+                    if (!win) return;
+                    const tr = rows.map(r => `<tr><td>${r.name}</td><td>₽${r.revenue.toLocaleString('ru-RU')}</td><td>${r.visitors.toLocaleString('ru-RU')}</td><td>₽${r.rpv.toLocaleString('ru-RU')}</td></tr>`).join('');
+                    win.document.write(`<html><head><title>RPV</title><style>table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px}</style></head><body><h1>Средняя выручка на посетителя</h1><table><thead><tr><th>Источник</th><th>Выручка</th><th>Посетители</th><th>Выручка/посетитель</th></tr></thead><tbody>${tr}</tbody></table><script>window.print()</script></body></html>`);
+                    win.document.close();
+                  }}
+                >
+                  PDF
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b">
+                      <th className="text-left p-2">Источник</th>
+                      <th className="text-right p-2">Выручка</th>
+                      <th className="text-right p-2">Посетители</th>
+                      <th className="text-right p-2">Выручка/посетитель</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {computeRpvRows().map((row) => (
+                      <tr key={row.id} className="border-b hover:bg-gray-50">
+                        <td className="p-2">{row.name}</td>
+                        <td className="p-2 text-right">₽{row.revenue.toLocaleString('ru-RU')}</td>
+                        <td className="p-2 text-right">{row.visitors.toLocaleString('ru-RU')}</td>
+                        <td className="p-2 text-right">₽{row.rpv.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
 

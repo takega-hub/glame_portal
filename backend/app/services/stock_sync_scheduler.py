@@ -1,6 +1,6 @@
 """
-Ночной планировщик синхронизации остатков по складам из 1С через CommerceML XML (offers.xml).
-OData методы удалены. Используется только XML импорт.
+Ночной планировщик синхронизации остатков по складам из 1С.
+Поддерживает OData движения регистра `ЗапасыНаСкладах` и CommerceML XML fallback.
 """
 import asyncio
 import logging
@@ -28,22 +28,37 @@ def _seconds_until(hour: int, minute: int) -> float:
 
 async def run_nightly_stock_sync() -> None:
     """
-    Ночная синхронизация остатков из offers.xml
+    Ночная синхронизация остатков.
     
-    Требует настройки переменных окружения:
-    - ONEC_XML_OFFERS_URL: URL к offers.xml файлу (например: https://server.com/1c_exchange/uploaded/offers.xml)
+    Переменные окружения:
+    - ONEC_STOCKS_SOURCE=odata|xml|auto (по умолчанию auto)
+    - ONEC_XML_OFFERS_URL: URL к offers.xml файлу для XML/fallback режима
     """
-    offers_url = os.getenv("ONEC_XML_OFFERS_URL")
-    if not offers_url:
-        logger.warning("ONEC_XML_OFFERS_URL is not set. Skipping nightly stock sync.")
-        logger.info("Для включения ночной синхронизации остатков установите переменную ONEC_XML_OFFERS_URL")
-        return
-
+    source = (os.getenv("ONEC_STOCKS_SOURCE") or "auto").strip().lower()
     async with AsyncSessionLocal() as session:
         async with OneCStockService(session) as stock_service:
-            logger.info(f"Starting nightly 1C stock sync from XML: {offers_url}")
+            if source in {"odata", "auto"}:
+                try:
+                    logger.info("Starting nightly 1C stock sync from OData")
+                    result = await stock_service.sync_stocks_from_odata_movements(
+                        page_size=int(os.getenv("ONEC_STOCKS_ODATA_PAGE_SIZE", "1000")),
+                        replace_all=_env_bool("ONEC_STOCKS_ODATA_REPLACE_ALL", "true"),
+                    )
+                    logger.info("Nightly 1C OData stock sync finished: %s", result)
+                    return
+                except Exception as exc:
+                    if source == "odata":
+                        raise
+                    logger.warning("OData stock sync failed, falling back to XML: %s", exc, exc_info=True)
+
+            offers_url = os.getenv("ONEC_XML_OFFERS_URL")
+            if not offers_url:
+                logger.warning("ONEC_XML_OFFERS_URL is not set. Skipping XML stock sync.")
+                return
+
+            logger.info("Starting nightly 1C stock sync from XML: %s", offers_url)
             result = await stock_service.sync_stocks_from_xml(offers_url)
-            logger.info(f"Nightly 1C stock sync finished: {result}")
+            logger.info("Nightly 1C XML stock sync finished: %s", result)
 
 
 async def nightly_stock_sync_loop(stop_event: asyncio.Event) -> None:

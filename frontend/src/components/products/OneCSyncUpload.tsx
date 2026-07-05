@@ -35,7 +35,7 @@ export default function OneCSyncUpload({ onSyncComplete }: OneCSyncUploadProps) 
   const [ymlUrl, setYmlUrl] = useState('https://glamejewelry.ru/tstore/yml/b743eb13397ad6a83d95caf72d40b7b2.yml');
   
   // Настройки XML
-  const [xmlUrl, setXmlUrl] = useState('https://s22b2e4d6.fastvps-server.com/1c_exchange/uploaded/import.xml');
+  const [xmlUrl, setXmlUrl] = useState('http://1c.glamejewelry.ru/1c_exchange/');
   
   // Прогресс синхронизации
   const [syncTaskId, setSyncTaskId] = useState<string | null>(null);
@@ -507,7 +507,7 @@ export default function OneCSyncUpload({ onSyncComplete }: OneCSyncUploadProps) 
               value={xmlUrl}
               onChange={(e) => setXmlUrl(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-gold-500 focus:border-gold-500 text-gray-900 bg-white"
-              placeholder="https://s22b2e4d6.fastvps-server.com/1c_exchange/uploaded/import.xml"
+              placeholder="http://1c.glamejewelry.ru/1c_exchange/"
             />
             <p className="mt-1 text-xs text-gray-600">
               <strong>Важно:</strong> Укажите URL к файлу <code className="bg-gray-100 px-1 rounded">import.xml</code> - это основной файл с каталогом товаров.

@@ -11,10 +11,33 @@ from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.models.purchase_history import PurchaseHistory
+from app.models.store import Store
 from app.models.customer_segment import CustomerSegment
 from app.models.user_segment import UserSegment
+from sqlalchemy import update
 
 logger = logging.getLogger(__name__)
+
+CENTRUM_STORE_ID_1C = "6c3a8322-a2ab-11f0-96fc-fa163e4cc04e"
+YALTA_STORE_ID_1C = "3daee4e4-a2ab-11f0-96fc-fa163e4cc04e"
+MEGANOM_STORE_ID_1C = "8cebda58-a2ab-11f0-96fc-fa163e4cc04e"
+CLOSED_STORE_REDIRECTS = {
+    MEGANOM_STORE_ID_1C: CENTRUM_STORE_ID_1C,
+}
+
+
+def _normalize_city(value: Optional[str]) -> str:
+    normalized = (value or "").strip().lower().replace("ё", "е")
+    return normalized.replace("c", "с")
+
+
+def _fallback_store_for_city(city: Optional[str]) -> str:
+    city_norm = _normalize_city(city)
+    if "ял" in city_norm:
+        return YALTA_STORE_ID_1C
+    if any(part in city_norm for part in ("сим", "сім", "смф", "сфер", "сифм", "севаст", "севас", "сев")):
+        return CENTRUM_STORE_ID_1C
+    return CENTRUM_STORE_ID_1C
 
 
 class CustomerAnalyticsService:
@@ -30,6 +53,86 @@ class CustomerAnalyticsService:
             return col
         # Если колонка не найдена, используем literal_column
         return literal_column(name)
+    
+    async def refresh_preferred_store_by_count(self, user_id: UUID, commit: bool = True) -> Dict[str, Any]:
+        """
+        Определяет предпочитаемый магазин по количеству покупок и сохраняет в users.*
+        Поля: preferred_store_external_id, preferred_store_name, preferred_store_share, preferred_store_updated_at
+        
+        Также обновляет город пользователя, если магазин однозначно определяет город:
+        - Ялта, Набережная 18 -> Ялта
+        - Меганом, Центрум -> Симферополь
+        """
+        # Считаем покупки по store_id_1c
+        rows = await self.db.execute(
+            select(
+                PurchaseHistory.store_id_1c,
+                func.count().label("cnt"),
+                func.coalesce(func.sum(PurchaseHistory.total_amount), 0).label("total_amount"),
+                func.max(PurchaseHistory.purchase_date).label("last_purchase_date"),
+            )
+            .where(PurchaseHistory.user_id == user_id, PurchaseHistory.store_id_1c.isnot(None))
+            .group_by(PurchaseHistory.store_id_1c)
+        )
+        stats = rows.all()
+        total = sum(r[1] for r in stats) or 0
+        if not stats:
+            user_row = await self.db.execute(select(User.city).where(User.id == user_id))
+            city = user_row.scalar_one_or_none()
+            best_store_id_1c = _fallback_store_for_city(city)
+            total = 0
+            best_cnt = 0
+        else:
+            # Выбираем магазин с максимальным количеством; при равенстве - по сумме и свежести.
+            best = max(
+                stats,
+                key=lambda x: (
+                    int(x.cnt or 0),
+                    int(x.total_amount or 0),
+                    x.last_purchase_date or datetime.min.replace(tzinfo=timezone.utc),
+                ),
+            )
+            best_store_id_1c = CLOSED_STORE_REDIRECTS.get(best.store_id_1c, best.store_id_1c)
+            best_cnt = best.cnt
+
+        # Находим название
+        store_row = await self.db.execute(select(Store.name, Store.city).where(Store.external_id == best_store_id_1c))
+        store_data = store_row.first()
+        name = store_data.name if store_data else None
+        store_city = store_data.city if store_data else None
+        share = (best_cnt / total) if total else 0.0
+        
+        # Подготовка значений для обновления
+        update_values = {
+            "preferred_store_external_id": best_store_id_1c,
+            "preferred_store_name": name,
+            "preferred_store_share": share,
+            "preferred_store_updated_at": func.now(),
+        }
+        
+        # Логика обновления города на основе магазина
+        if name:
+            normalized_name = name.lower()
+            new_city = None
+            if store_city:
+                new_city = store_city
+            elif "ялта" in normalized_name and "набережная" in normalized_name:
+                new_city = "Ялта"
+            elif "меганом" in normalized_name or "центрум" in normalized_name:
+                new_city = "Симферополь"
+            
+            if new_city:
+                update_values["city"] = new_city
+                logger.info(f"Обновлен город пользователя {user_id} на основе магазина {name}: {new_city}")
+
+        await self.db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(**update_values)
+        )
+        if commit:
+            await self.db.commit()
+        return {"user_id": str(user_id), "preferred_store": name or best_store_id_1c, "share": share}
     
     async def calculate_rfm_score(
         self,
@@ -63,11 +166,55 @@ class CustomerAnalyticsService:
             last_purchase = max(p.purchase_date for p in purchases)
             recency_days = (now - last_purchase.replace(tzinfo=None)).days if last_purchase.tzinfo else (now - last_purchase).days
             
-            # Frequency: количество покупок
-            frequency = len(purchases)
-            
-            # Monetary: общая сумма покупок
-            monetary = sum(p.total_amount for p in purchases)
+            PACKAGING_THRESHOLD = 500
+            store_ids = {p.store_id_1c for p in purchases if p.store_id_1c}
+            valid_store_ids: set = set()
+            if store_ids:
+                stores_rs = await self.db.execute(
+                    select(Store.external_id).where(Store.external_id.in_(list(store_ids)))
+                )
+                valid_store_ids = {row[0] for row in stores_rs.fetchall() if row and row[0]}
+
+            def _is_transfer(ph: PurchaseHistory) -> bool:
+                try:
+                    name = (ph.product_name or "").lower()
+                    if "перенос" in name:
+                        return True
+                    meta = ph.sync_metadata or {}
+                    rt = str(meta.get("Recorder_Type", "")).lower()
+                    if "вводначальныхостатков" in rt or "перенос" in rt:
+                        return True
+                except Exception:
+                    pass
+                return False
+
+            def _dedup_key(p: PurchaseHistory):
+                doc = p.document_id_1c or ""
+                prod = p.product_id_1c or (p.product_article or "")
+                ts = p.purchase_date.isoformat() if p.purchase_date else ""
+                amt = p.total_amount or 0
+                return (doc, prod, ts, amt)
+
+            filtered = [p for p in purchases if (p.total_amount or 0) >= PACKAGING_THRESHOLD]
+            dedup_map: Dict[Any, PurchaseHistory] = {}
+            for p in filtered:
+                key = _dedup_key(p)
+                cur = dedup_map.get(key)
+                prefer_new = False
+                if cur is None:
+                    prefer_new = True
+                else:
+                    if (not getattr(cur, "store_id_1c", None)) and getattr(p, "store_id_1c", None):
+                        prefer_new = True
+                if prefer_new:
+                    dedup_map[key] = p
+            deduped = [
+                p for p in dedup_map.values()
+                if (p.store_id_1c and p.store_id_1c in valid_store_ids) or _is_transfer(p)
+            ]
+
+            frequency = len(deduped)
+            monetary = sum((p.total_amount or 0) for p in deduped)
             
             # Скоринг (1-5)
             r_score = self._score_recency(recency_days)

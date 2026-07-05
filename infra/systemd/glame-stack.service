@@ -1,0 +1,43 @@
+[Unit]
+Description=GLAME Stack with Backend, Admin Frontend, Storefront and ML Inference bootstrap
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/glame-platform
+EnvironmentFile=-/etc/glame-platform/glame-stack.env
+Environment=ROOT_DIR=/root/glame-platform
+Environment=ADMIN_PORT=3000
+Environment=BACKEND_HOST=127.0.0.1
+Environment=BACKEND_PORT=8000
+Environment=STOREFRONT_PORT=9092
+Environment=API_BASE_URL=https://portal.glamejewelry.ru
+Environment=DATABASE_URL=postgresql://glame_user:glame_password@127.0.0.1:5433/glame_db
+Environment=QDRANT_URL=http://127.0.0.1:6333
+Environment=REDIS_URL=redis://127.0.0.1:6379
+Environment=START_INFRA_SERVICES=true
+Environment=INFRA_COMPOSE_FILE=infra/docker-compose.prod.yml
+Environment=INFRA_ENV_FILE=infra/.env
+Environment=INFRA_SERVICES=postgres qdrant redis ml_inference
+Environment=WAIT_FOR_INFRA=true
+Environment=INFRA_WAIT_TIMEOUT_SECONDS=120
+Environment=START_ML_INFERENCE=true
+Environment=ML_INFERENCE_URL=http://127.0.0.1:8010
+Environment=ML_INFERENCE_COMPOSE_FILE=infra/docker-compose.prod.yml
+Environment=ML_INFERENCE_ENV_FILE=infra/.env
+Environment=PWA_STRATEGY=none
+Environment=PATH=/root/.nvm/versions/node/v24.14.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HOME=/root
+Environment=GIT_CONFIG_GLOBAL=/root/.gitconfig
+ExecStartPre=/usr/bin/env bash -c '/usr/bin/fuser -k 3000/tcp 8000/tcp 9092/tcp || true'
+ExecStartPre=/usr/bin/env bash -c 'cd /root/glame-platform/frontend && npm run build'
+ExecStart=/root/glame-platform/scripts/start_glame_stack.sh
+Restart=always
+RestartSec=5
+KillMode=control-group
+TimeoutStartSec=600
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

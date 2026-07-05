@@ -1,5 +1,5 @@
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv, find_dotenv
@@ -65,6 +65,8 @@ class VectorService:
             "content_pieces",
             "persona_knowledge",
             "client_requirements",  # Правила и требования клиентов для генерации образов
+            "task_dialogs",  # История диалогов задач AI-маркетолога
+            "director_knowledge",  # Долгая память AI-директора (векторизованные знания)
         ]
 
     def ensure_collection(self, collection_name: str):
@@ -326,3 +328,35 @@ class VectorService:
 
 # Singleton instance
 vector_service = VectorService()
+
+def _safe_delete_by_filter(client: QdrantClient, collection: str, key: str, value: str):
+    try:
+        flt = Filter(must=[FieldCondition(key=key, match=MatchValue(value=value))])
+        ids: list[str] = []
+        next_page = None
+        while True:
+            res = client.scroll(collection_name=collection, scroll_filter=flt, limit=256, with_payload=False, with_vectors=False, offset=next_page)
+            pts = res[0] if isinstance(res, tuple) else res
+            if not pts:
+                break
+            ids.extend([p.id for p in pts])
+            try:
+                next_page = res[1]
+            except Exception:
+                next_page = None
+            if not next_page:
+                break
+        if ids:
+            client.delete(collection_name=collection, points_selector=ids)
+    except Exception:
+        pass
+
+def delete_task_dialog_by_log_id(log_id: str):
+    try:
+        vector_service.ensure_collection("task_dialogs")
+    except Exception:
+        pass
+    try:
+        _safe_delete_by_filter(vector_service.client, "task_dialogs", "log_id", str(log_id))
+    except Exception:
+        pass

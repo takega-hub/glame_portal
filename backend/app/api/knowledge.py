@@ -12,12 +12,76 @@ from app.services.vector_service import vector_service
 from app.services.pdf_processor import pdf_processor
 from app.models.knowledge_document import KnowledgeDocument
 from app.models.product import Product
+from app.models.user import User
+from app.api.auth import get_current_user
+from app.services.admin_access import ROLE_ADMIN, get_allowed_sections, normalize_role
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+KNOWLEDGE_BASE_SECTION_ID = "knowledge_base"
+
+
+async def _require_knowledge_access(
+    required_level: str,
+    current_user: User,
+    db: AsyncSession,
+) -> User:
+    """Backend guard for /api/knowledge operations.
+
+    Frontend navigation visibility is not enough for this API: these endpoints can
+    upload, move, replace, delete, or clear vector knowledge used by agents.
+    """
+    role = normalize_role(getattr(current_user, "role", None))
+    allowed_sections = await get_allowed_sections(db, role)
+    if role != ROLE_ADMIN and KNOWLEDGE_BASE_SECTION_ID not in allowed_sections:
+        raise HTTPException(status_code=403, detail="Нет доступа к разделу «База знаний»")
+    if required_level == "delete" and role != ROLE_ADMIN:
+        raise HTTPException(status_code=403, detail="Удаление и очистка базы знаний доступны только администратору")
+    return current_user
+
+
+async def knowledge_read_access(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    return await _require_knowledge_access("read", current_user, db)
+
+
+async def knowledge_upload_access(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    return await _require_knowledge_access("upload", current_user, db)
+
+
+async def knowledge_manage_access(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    return await _require_knowledge_access("manage", current_user, db)
+
+
+async def knowledge_delete_access(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    return await _require_knowledge_access("delete", current_user, db)
+
+
+def _audit_knowledge_action(user: User, action: str, **details) -> None:
+    safe_details = {key: str(value) for key, value in details.items() if value is not None}
+    logger.info(
+        "knowledge_audit action=%s user_id=%s user_email=%s user_role=%s details=%s",
+        action,
+        getattr(user, "id", None),
+        getattr(user, "email", None),
+        normalize_role(getattr(user, "role", None)),
+        safe_details,
+    )
 
 class SyncProductsToKnowledgeResponse(BaseModel):
     success: bool
@@ -28,7 +92,9 @@ class SyncProductsToKnowledgeResponse(BaseModel):
     errors: List[str] = []
 
 @router.get("/debug/env")
-async def debug_env():
+async def debug_env(
+    current_user: User = Depends(knowledge_read_access),
+):
     """Диагностика окружения (каким Python запущен backend и доступны ли PDF-библиотеки)."""
     import sys
     import importlib.util
@@ -110,6 +176,7 @@ class KnowledgeDocumentResponse(BaseModel):
 async def upload_knowledge(
     request: KnowledgeUploadRequest,
     collection_name: str = Query("brand_philosophy"),
+    current_user: User = Depends(knowledge_upload_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Загрузка базы знаний о бренде через API"""
@@ -126,6 +193,12 @@ async def upload_knowledge(
             )
             document_ids.append(doc_id)
         
+        _audit_knowledge_action(
+            current_user,
+            "upload_json",
+            collection_name=collection_name,
+            uploaded_count=len(document_ids),
+        )
         return KnowledgeUploadResponse(
             success=True,
             message=f"Успешно загружено {len(document_ids)} документов",
@@ -144,6 +217,7 @@ async def sync_products_to_knowledge(
     collection_name: str = Query("product_knowledge"),
     only_active: bool = Query(True),
     limit: int = Query(500, ge=1, le=5000),
+    current_user: User = Depends(knowledge_upload_access),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -213,6 +287,14 @@ async def sync_products_to_knowledge(
                 if len(errors) < 10:
                     errors.append(f"{p.name}: {str(e)}")
 
+        _audit_knowledge_action(
+            current_user,
+            "sync_products",
+            collection_name=collection_name,
+            total_products=len(products),
+            synced=synced,
+            failed=failed,
+        )
         return SyncProductsToKnowledgeResponse(
             success=(failed == 0),
             collection_name=collection_name,
@@ -238,6 +320,7 @@ async def upload_knowledge_from_file(
     file: UploadFile = File(...),
     collection_name: str = Query("brand_philosophy"),
     replace_duplicates: bool = Query(False, description="Если True — заменить существующий документ с тем же именем"),
+    current_user: User = Depends(knowledge_upload_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Загрузка базы знаний о бренде из JSON или PDF файла"""
@@ -352,6 +435,15 @@ async def upload_knowledge_from_file(
             doc_record.source = filename
             await db.commit()
             
+            _audit_knowledge_action(
+                current_user,
+                "upload_file",
+                collection_name=collection_name,
+                filename=filename,
+                document_id=doc_record.id,
+                uploaded_count=len(document_ids),
+                failed_count=failed_count,
+            )
             return KnowledgeUploadResponse(
                 success=True,
                 message=f"PDF обработан: извлечено {len(knowledge_items)}, загружено {len(document_ids)}, ошибок {failed_count}",
@@ -425,6 +517,15 @@ async def upload_knowledge_from_file(
             doc_record.source = filename
             await db.commit()
             
+            _audit_knowledge_action(
+                current_user,
+                "upload_file",
+                collection_name=collection_name,
+                filename=filename,
+                document_id=doc_record.id,
+                uploaded_count=len(document_ids),
+                failed_count=failed_count,
+            )
             return KnowledgeUploadResponse(
                 success=True,
                 message=f"Успешно загружено {len(document_ids)} документов из JSON файла",
@@ -452,6 +553,7 @@ async def upload_knowledge_batch(
     files: List[UploadFile] = File(..., description="PDF или JSON файлы"),
     collection_name: str = Query("brand_philosophy"),
     replace_duplicates: bool = Query(False, description="Если True — заменить существующие документы с теми же именами"),
+    current_user: User = Depends(knowledge_upload_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Пакетная загрузка базы знаний из нескольких файлов (папка или выбор файлов)."""
@@ -605,6 +707,14 @@ async def upload_knowledge_batch(
             await db.commit()
             results.append(BatchFileResult(filename=filename, success=False, message=str(e)))
     succeeded = sum(1 for r in results if r.success)
+    _audit_knowledge_action(
+        current_user,
+        "upload_batch",
+        collection_name=collection_name,
+        total_files=len(results),
+        succeeded=succeeded,
+        failed=len(results) - succeeded,
+    )
     return KnowledgeBatchUploadResponse(
         total_files=len(results),
         succeeded=succeeded,
@@ -619,6 +729,7 @@ async def search_knowledge(
     limit: int = 5,
     score_threshold: float = 0.5,
     collection_name: str = Query("brand_philosophy"),
+    current_user: User = Depends(knowledge_read_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Поиск в базе знаний о бренде"""
@@ -644,7 +755,11 @@ async def search_knowledge(
 
 
 @router.get("/stats")
-async def get_knowledge_stats(collection_name: str = Query("brand_philosophy"), db: AsyncSession = Depends(get_db)):
+async def get_knowledge_stats(
+    collection_name: str = Query("brand_philosophy"),
+    current_user: User = Depends(knowledge_read_access),
+    db: AsyncSession = Depends(get_db),
+):
     """Получение статистики по базе знаний"""
     try:
         # В некоторых версиях Qdrant qdrant-client может падать на валидации ответа (pydantic).
@@ -695,6 +810,7 @@ class CheckDuplicatesResponse(BaseModel):
 async def check_duplicates(
     collection_name: str = Query("brand_philosophy"),
     filenames: str = Query(..., description="Имена файлов через запятую"),
+    current_user: User = Depends(knowledge_read_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Проверка: какие из переданных имён файлов уже есть в коллекции."""
@@ -749,6 +865,7 @@ async def get_knowledge_documents(
     limit: int = Query(100, ge=1, le=100),
     status: Optional[str] = None,
     collection_name: Optional[str] = None,
+    current_user: User = Depends(knowledge_read_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение истории загрузки документов"""
@@ -774,6 +891,7 @@ async def get_knowledge_documents(
 @router.get("/documents/{document_id}", response_model=KnowledgeDocumentResponse)
 async def get_knowledge_document(
     document_id: UUID,
+    current_user: User = Depends(knowledge_read_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Получение информации о конкретном документе"""
@@ -800,6 +918,7 @@ class ChangeCollectionRequest(BaseModel):
 async def change_document_collection(
     document_id: UUID,
     body: ChangeCollectionRequest,
+    current_user: User = Depends(knowledge_manage_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Перенос загруженного документа в другую коллекцию (векторы копируются в новую коллекцию, из старой удаляются)."""
@@ -816,6 +935,12 @@ async def change_document_collection(
         )
     if document.collection_name == new_collection:
         await db.refresh(document)
+        _audit_knowledge_action(
+            current_user,
+            "move_document_noop",
+            document_id=document.id,
+            collection_name=new_collection,
+        )
         return document
     old_collection = document.collection_name
     ids_old = document.vector_document_ids or []
@@ -823,6 +948,14 @@ async def change_document_collection(
         document.collection_name = new_collection
         await db.commit()
         await db.refresh(document)
+        _audit_knowledge_action(
+            current_user,
+            "move_document",
+            document_id=document.id,
+            old_collection=old_collection,
+            new_collection=new_collection,
+            vector_count=0,
+        )
         return document
     ids_old_str = [str(i) for i in ids_old]
     points = vector_service.retrieve_points(old_collection, ids_old_str)
@@ -862,12 +995,21 @@ async def change_document_collection(
     document.vector_document_ids = new_ids
     await db.commit()
     await db.refresh(document)
+    _audit_knowledge_action(
+        current_user,
+        "move_document",
+        document_id=document.id,
+        old_collection=old_collection,
+        new_collection=new_collection,
+        vector_count=len(new_ids),
+    )
     return document
 
 
 @router.delete("/documents/{document_id}")
 async def delete_knowledge_document(
     document_id: UUID,
+    current_user: User = Depends(knowledge_delete_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Удаление документа из базы знаний"""
@@ -909,15 +1051,26 @@ async def delete_knowledge_document(
                 print(f"Ошибка при удалении из векторной БД: {e}")
         
         # Удаляем запись из БД
+        filename = document.filename
+        collection_name = document.collection_name
         await db.delete(document)
         await db.commit()
         
+        _audit_knowledge_action(
+            current_user,
+            "delete_document",
+            document_id=document_id,
+            filename=filename,
+            collection_name=collection_name,
+            deleted_vector_count=len(deleted_vector_ids),
+            skipped_vector_count=len(skipped_vector_ids),
+        )
         return {
             "success": True,
-            "message": f"Документ {document.filename} успешно удален",
+            "message": f"Документ {filename} успешно удален",
             "deleted_vector_ids": deleted_vector_ids,
             "skipped_vector_ids": skipped_vector_ids,
-            "collection_name": document.collection_name,
+            "collection_name": collection_name,
         }
     except HTTPException:
         raise
@@ -932,6 +1085,7 @@ async def delete_knowledge_document(
 @router.delete("/collections/{collection_name}/clear")
 async def clear_knowledge_collection(
     collection_name: str,
+    current_user: User = Depends(knowledge_delete_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Полная очистка коллекции: удаляет все точки из Qdrant и историю загрузок по этой коллекции."""
@@ -963,6 +1117,12 @@ async def clear_knowledge_collection(
             await db.delete(d)
         await db.commit()
 
+        _audit_knowledge_action(
+            current_user,
+            "clear_collection",
+            collection_name=collection_name,
+            deleted_history_records=deleted_history,
+        )
         return {
             "success": True,
             "collection_name": collection_name,
@@ -978,6 +1138,7 @@ async def replace_knowledge_document(
     document_id: UUID,
     file: UploadFile = File(...),
     collection_name: Optional[str] = Query(None),
+    current_user: User = Depends(knowledge_manage_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Замена документа - удаление старого и загрузка нового"""
@@ -1067,6 +1228,15 @@ async def replace_knowledge_document(
         old_document.source = filename
         await db.commit()
         
+        _audit_knowledge_action(
+            current_user,
+            "replace_document",
+            document_id=old_document.id,
+            filename=filename,
+            collection_name=target_collection,
+            uploaded_count=len(document_ids),
+            failed_count=failed_count,
+        )
         return {
             "success": True,
             "message": f"Документ успешно заменен. Загружено {len(document_ids)} знаний",

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, Calendar } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { fetchJson } from '@/lib/utils';
+import * as XLSX from 'xlsx';
 import {
   Select,
   SelectContent,
@@ -29,6 +30,21 @@ interface SalesDetail {
   store_id?: string;
   store_name?: string;
   channel?: string;
+  external_id?: string;
+  document_id?: string;
+  check_id?: string;
+  seller_id?: string;
+  seller_external_id?: string;
+  seller_name?: string;
+  seller_unmatched?: boolean;
+}
+
+interface DataWarning {
+  code: string;
+  message: string;
+  sample_unmatched?: number;
+  sample_total?: number;
+  sample_share?: number;
 }
 
 type VisitorsByStore = Record<string, { visitor_count: number; store_name: string }>;
@@ -39,6 +55,7 @@ export function SalesPanel() {
   const [visitorsByStore, setVisitorsByStore] = useState<VisitorsByStore>({});
   const [stores, setStores] = useState<any[]>([]);
   const [salesDetails, setSalesDetails] = useState<SalesDetail[]>([]);
+  const [salesDetailsWarnings, setSalesDetailsWarnings] = useState<DataWarning[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -57,6 +74,11 @@ export function SalesPanel() {
     }>;
   } | null>(null);
   const [loadingCharts, setLoadingCharts] = useState(false);
+  const [chartWebsiteVisitsDaily, setChartWebsiteVisitsDaily] = useState<{
+    daily_data: Array<{ date: string; visits: number; users?: number }>;
+  } | null>(null);
+  const [showStoreVisits, setShowStoreVisits] = useState(true);
+  const [showWebsiteVisits, setShowWebsiteVisits] = useState(true);
 
   const fetchMetrics = async () => {
     try {
@@ -206,9 +228,10 @@ export function SalesPanel() {
       
       url += 'limit=100';
       
-      const { data } = await fetchJson<{ status?: string; sales?: SalesDetail[] }>(url);
+      const { data } = await fetchJson<{ status?: string; sales?: SalesDetail[]; data_warnings?: DataWarning[] }>(url);
       if (data.status === 'success') {
         setSalesDetails(data.sales || []);
+        setSalesDetailsWarnings(data.data_warnings || []);
       }
     } catch (err) {
       console.error('Ошибка загрузки детальных продаж:', err);
@@ -257,9 +280,11 @@ export function SalesPanel() {
       let visitsUrl = `/api/analytics/store-visits/daily?days=${chartDays}`;
       if (storeIdForVisits) visitsUrl += `&store_id=${encodeURIComponent(storeIdForVisits)}`;
 
-      const [salesRes, visitsRes] = await Promise.all([
+      const websiteUrl = `/api/analytics/website-visits/daily?days=${chartDays}`;
+      const [salesRes, visitsRes, websiteRes] = await Promise.all([
         fetchJson<{ status?: string; daily_data?: Array<{ date: string; revenue: number; orders: number; items_sold: number }> }>(salesUrl),
         fetchJson<{ status?: string; daily_data?: Array<{ date: string; visitors: number; stores?: Array<{ name: string; visitors: number }> }> }>(visitsUrl),
+        fetchJson<{ status?: string; daily_data?: Array<{ date: string; visits: number; users?: number }> }>(websiteUrl),
       ]);
       if (salesRes.data.status === 'success' && salesRes.data.daily_data) {
         setChartSalesDaily({ daily_data: salesRes.data.daily_data });
@@ -271,10 +296,16 @@ export function SalesPanel() {
       } else {
         setChartVisitsDaily(null);
       }
+      if (websiteRes.data.status === 'success' && websiteRes.data.daily_data) {
+        setChartWebsiteVisitsDaily({ daily_data: websiteRes.data.daily_data });
+      } else {
+        setChartWebsiteVisitsDaily(null);
+      }
     } catch (err) {
       console.error('Ошибка загрузки данных для графиков:', err);
       setChartSalesDaily(null);
       setChartVisitsDaily(null);
+      setChartWebsiteVisitsDaily(null);
     } finally {
       setLoadingCharts(false);
     }
@@ -312,6 +343,7 @@ export function SalesPanel() {
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
   // Выручка на входящего = Выручка / Посещаемость
   const revenuePerVisitor = totalVisitors > 0 ? totalRevenue / totalVisitors : 0;
+  const conversionRateOffline = totalVisitors > 0 ? (totalOrders / totalVisitors) * 100 : 0;
 
   // Список магазинов из данных 1С (для выпадающего списка)
   const availableStores = byStore ? Object.keys(byStore).filter(id => id !== "unknown") : [];
@@ -326,6 +358,115 @@ export function SalesPanel() {
     // Затем проверяем в списке магазинов из API
     const store = stores.find(s => s.external_id === storeId);
     return store?.name || storeId;
+  };
+
+  const buildCombinedData = () => {
+    const salesMap = new Map<string, number>();
+    (chartSalesDaily?.daily_data || []).forEach((d) => {
+      const key = d.date.split('T')[0];
+      salesMap.set(key, d.revenue ?? 0);
+    });
+    const visitsDaily = chartVisitsDaily?.daily_data || [];
+    const visitsMap = new Map<string, number>();
+    visitsDaily.forEach((d) => {
+      const key = d.date.split('T')[0];
+      visitsMap.set(key, d.visitors ?? 0);
+    });
+    const websiteDaily = chartWebsiteVisitsDaily?.daily_data || [];
+    const websiteMap = new Map<string, number>();
+    websiteDaily.forEach((d) => {
+      const key = d.date.split('T')[0];
+      websiteMap.set(key, d.visits ?? 0);
+    });
+    const allDates = new Set([
+      ...Array.from(salesMap.keys()),
+      ...Array.from(visitsMap.keys()),
+      ...Array.from(websiteMap.keys()),
+    ]);
+    return Array.from(allDates)
+      .sort()
+      .map((date) => ({
+        date,
+        revenue: salesMap.get(date) ?? 0,
+        store_visitors: visitsMap.get(date) ?? 0,
+        website_visits: websiteMap.get(date) ?? 0,
+      }));
+  };
+
+  const exportCSV = () => {
+    const rows = buildCombinedData();
+    const header = ['Дата', 'Выручка', 'Посещения магазинов', 'Посещения сайта'];
+    const csvRows = rows.map(r => [
+      r.date,
+      String(r.revenue).replace('.', ','),
+      r.store_visitors,
+      r.website_visits
+    ].join(','));
+    const content = ['\uFEFF' + header.join(','), ...csvRows].join('\n');
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportXLSX = () => {
+    const rows = buildCombinedData();
+    const wsData = [
+      ['Дата', 'Выручка', 'Посещения магазинов', 'Посещения сайта'],
+      ...rows.map(r => [r.date, r.revenue, r.store_visitors, r.website_visits]),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wsSummary = XLSX.utils.aoa_to_sheet([
+      ['Метрика', 'Значение'],
+      ['Выручка', totalRevenue],
+      ['Чеки', totalOrders],
+      ['Средний чек', avgOrderValue],
+      ['Посещения офлайн', totalVisitors],
+      ['Конверсия офлайн, %', conversionRateOffline],
+      ['Выручка на посетителя', revenuePerVisitor],
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Данные');
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Итоги');
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `analytics_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = () => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const rows = buildCombinedData();
+    const tableRows = rows.map(r => `<tr><td>${r.date}</td><td>₽${r.revenue.toLocaleString('ru-RU')}</td><td>${r.store_visitors}</td><td>${r.website_visits}</td></tr>`).join('');
+    win.document.write(`
+      <html><head><title>Отчет</title>
+      <style>
+      body{font-family:Arial,sans-serif;padding:24px}
+      h1{font-size:18px;margin:0 0 12px}
+      table{border-collapse:collapse;width:100%;font-size:12px}
+      th,td{border:1px solid #ddd;padding:6px;text-align:right}
+      th:first-child,td:first-child{text-align:left}
+      </style>
+      </head><body>
+      <h1>Аналитика продаж и посещаемости</h1>
+      <p>Выручка: ₽${totalRevenue.toLocaleString('ru-RU')} • Чеки: ${totalOrders.toLocaleString('ru-RU')} • Средний чек: ₽${avgOrderValue.toLocaleString('ru-RU')} • Посещения офлайн: ${totalVisitors.toLocaleString('ru-RU')} • Конверсия офлайн: ${conversionRateOffline.toFixed(2)}% • Выручка на посетителя: ₽${revenuePerVisitor.toLocaleString('ru-RU')}</p>
+      <table><thead><tr><th>Дата</th><th>Выручка</th><th>Посещения магазинов</th><th>Посещения сайта</th></tr></thead><tbody>${tableRows}</tbody></table>
+      <script>window.print();</script>
+      </body></html>
+    `);
+    win.document.close();
   };
 
   return (
@@ -364,6 +505,11 @@ export function SalesPanel() {
                 <SelectItem value="custom">Диапазон дат</SelectItem>
               </SelectContent>
             </Select>
+            <div className="hidden sm:flex items-center gap-2">
+              <Button onClick={exportCSV} size="sm" variant="outline">CSV</Button>
+              <Button onClick={exportXLSX} size="sm" variant="outline">Excel</Button>
+              <Button onClick={exportPDF} size="sm" variant="outline">PDF</Button>
+            </div>
             {period === "custom" && (
               <>
                 <input
@@ -465,7 +611,7 @@ export function SalesPanel() {
         {loading && !aggregated ? (
           <div>Загрузка...</div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
             <div className="bg-gray-100 p-4 rounded-lg">
               <p className="text-sm text-gray-600">Выручка</p>
               <p className="text-2xl font-bold text-gray-900">₽{totalRevenue.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
@@ -520,12 +666,26 @@ export function SalesPanel() {
               <p className="text-sm text-gray-600">Выручка на входящего</p>
               <p className="text-2xl font-bold text-gray-900">₽{revenuePerVisitor.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
             </div>
+            <div className="bg-gray-100 p-4 rounded-lg">
+              <p className="text-sm text-gray-600">Конверсия офлайн</p>
+              <p className="text-2xl font-bold text-gray-900">{conversionRateOffline.toFixed(2)}%</p>
+            </div>
           </div>
         )}
 
         {/* Объединённый график: выручка и посещаемость по дате */}
         <div className="mt-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Выручка и посещаемость по дням</h3>
+          <div className="flex items-center gap-4 mb-2">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={showStoreVisits} onChange={(e) => setShowStoreVisits(e.target.checked)} />
+              Магазины
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={showWebsiteVisits} onChange={(e) => setShowWebsiteVisits(e.target.checked)} />
+              Сайт
+            </label>
+          </div>
           {loadingCharts ? (
             <div className="h-[340px] flex items-center justify-center text-gray-500">Загрузка...</div>
           ) : (() => {
@@ -547,9 +707,16 @@ export function SalesPanel() {
                 visitsByStoreMap.get(s.name)!.set(key, s.visitors ?? 0);
               });
             });
+            const websiteDaily = chartWebsiteVisitsDaily?.daily_data || [];
+            const websiteMap = new Map<string, number>();
+            websiteDaily.forEach((d) => {
+              const key = d.date.split('T')[0];
+              websiteMap.set(key, d.visits ?? 0);
+            });
             const allDates = new Set([
               ...Array.from(salesMap.keys()),
               ...Array.from(visitsMap.keys()),
+              ...Array.from(websiteMap.keys()),
             ]);
             const storeNames = Array.from(storeNamesSet);
             const hasPerStore = storeNames.length > 0;
@@ -561,6 +728,7 @@ export function SalesPanel() {
                   revenue: salesMap.get(date) ?? 0,
                   visitors: visitsMap.get(date) ?? 0,
                 };
+                row['website_visits'] = websiteMap.get(date) ?? 0;
                 storeNames.forEach((name) => {
                   row[name] = visitsByStoreMap.get(name)?.get(date) ?? 0;
                 });
@@ -570,6 +738,8 @@ export function SalesPanel() {
             combinedData.forEach((row) => {
               const v = Number(row.visitors ?? 0);
               if (v > maxVisitors) maxVisitors = v;
+              const w = Number((row as any)['website_visits'] ?? 0);
+              if (w > maxVisitors) maxVisitors = w;
               storeNames.forEach((name) => {
                 const vv = Number(row[name] ?? 0);
                 if (vv > maxVisitors) maxVisitors = vv;
@@ -610,7 +780,7 @@ export function SalesPanel() {
                   />
                   <Legend />
                   <Bar yAxisId="left" dataKey="revenue" fill="#b8860b" name="Выручка" radius={[4, 4, 0, 0]} />
-                  {hasPerStore
+                  {showStoreVisits && (hasPerStore
                     ? storeNames.map((name, i) => (
                         <Line
                           key={name}
@@ -625,8 +795,11 @@ export function SalesPanel() {
                         />
                       ))
                     : (
-                      <Line yAxisId="right" type="monotone" dataKey="visitors" stroke="#4f46e5" strokeWidth={2} name="Посещаемость" dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                    )}
+                      <Line yAxisId="right" type="monotone" dataKey="visitors" stroke="#4f46e5" strokeWidth={2} name="Магазины" dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    ))}
+                  {showWebsiteVisits && (
+                    <Line yAxisId="right" type="monotone" dataKey="website_visits" stroke="#10b981" strokeWidth={2} name="Сайт" dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  )}
                 </ComposedChart>
               </ResponsiveContainer>
             );
@@ -636,6 +809,16 @@ export function SalesPanel() {
         {/* Таблица детальных продаж */}
         <div className="mt-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Детальные продажи</h3>
+          {salesDetailsWarnings.length > 0 && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              {salesDetailsWarnings.map((warning) => (
+                <div key={warning.code}>
+                  <span className="font-semibold">Data-warning:</span> {warning.message}
+                  {warning.sample_total ? ` На текущей странице: ${warning.sample_unmatched || 0}/${warning.sample_total} (${Math.round((warning.sample_share || 0) * 100)}%).` : ''}
+                </div>
+              ))}
+            </div>
+          )}
           {loadingDetails ? (
             <div className="text-center py-8 text-gray-500">Загрузка...</div>
           ) : salesDetails.length === 0 ? (
@@ -652,6 +835,8 @@ export function SalesPanel() {
                     <th className="text-right p-3 font-semibold text-gray-700">Количество</th>
                     <th className="text-right p-3 font-semibold text-gray-700">Сумма</th>
                     <th className="text-left p-3 font-semibold text-gray-700">Магазин</th>
+                    <th className="text-left p-3 font-semibold text-gray-700">Чек</th>
+                    <th className="text-left p-3 font-semibold text-gray-700">Продавец</th>
                     <th className="text-left p-3 font-semibold text-gray-700">Канал</th>
                   </tr>
                 </thead>
@@ -677,6 +862,14 @@ export function SalesPanel() {
                         ₽{sale.revenue != null ? sale.revenue.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                       </td>
                       <td className="p-3 text-gray-600">{sale.store_name || sale.store_id || '—'}</td>
+                      <td className="p-3 text-gray-600">{sale.check_id || sale.external_id || '—'}</td>
+                      <td className="p-3 text-gray-600">
+                        {sale.seller_unmatched ? (
+                          <span className="rounded bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">Не сопоставлено с продавцом</span>
+                        ) : (
+                          <span title={sale.seller_external_id || sale.seller_id || ''}>{sale.seller_name || sale.seller_external_id || sale.seller_id || '—'}</span>
+                        )}
+                      </td>
                       <td className="p-3 text-gray-600">{sale.channel || 'offline'}</td>
                     </tr>
                   ))}

@@ -1,0 +1,1287 @@
+{
+  "total_products": 1445,
+  "active_products": 1445,
+  "category_count": 17,
+  "top_categories": [
+    [
+      "Серьги",
+      336
+    ],
+    [
+      "AGafi",
+      211
+    ],
+    [
+      "Колье",
+      208
+    ],
+    [
+      "Кольца",
+      193
+    ],
+    [
+      "Браслеты",
+      176
+    ],
+    [
+      "SALE",
+      90
+    ],
+    [
+      "Antura",
+      56
+    ],
+    [
+      "Каффы",
+      51
+    ],
+    [
+      "Сопутствующие материалы",
+      29
+    ],
+    [
+      "Men",
+      24
+    ],
+    [
+      "Кулоны",
+      22
+    ],
+    [
+      "Прочее",
+      20
+    ],
+    [
+      "Чокеры",
+      10
+    ],
+    [
+      "Броши",
+      8
+    ],
+    [
+      "Подарочная упаковка",
+      7
+    ],
+    [
+      "Madreperla",
+      3
+    ],
+    [
+      "Eva Rites",
+      1
+    ]
+  ],
+  "top_active_categories": [
+    [
+      "Серьги",
+      336
+    ],
+    [
+      "AGafi",
+      211
+    ],
+    [
+      "Колье",
+      208
+    ],
+    [
+      "Кольца",
+      193
+    ],
+    [
+      "Браслеты",
+      176
+    ],
+    [
+      "SALE",
+      90
+    ],
+    [
+      "Antura",
+      56
+    ],
+    [
+      "Каффы",
+      51
+    ],
+    [
+      "Сопутствующие материалы",
+      29
+    ],
+    [
+      "Men",
+      24
+    ],
+    [
+      "Кулоны",
+      22
+    ],
+    [
+      "Прочее",
+      20
+    ],
+    [
+      "Чокеры",
+      10
+    ],
+    [
+      "Броши",
+      8
+    ],
+    [
+      "Подарочная упаковка",
+      7
+    ],
+    [
+      "Madreperla",
+      3
+    ],
+    [
+      "Eva Rites",
+      1
+    ]
+  ],
+  "counts": {
+    "no_images_all": 965,
+    "no_images_active": 965,
+    "missing_local_image_files_all": 0,
+    "no_description_all": 928,
+    "no_description_active": 928,
+    "html_or_heading_tags_all": 171,
+    "raw_meta_seo_tags_all": 137,
+    "markdown_markup_all": 152,
+    "ai_seo_tone_all": 173,
+    "brand_as_category_all": 214,
+    "suspicious_category_all": 220,
+    "brand_spec_mismatch_all": 20,
+    "active_zero_stock": 965,
+    "quantity_stock_mismatch_all": 415
+  },
+  "mismatch_groups_top": [
+    {
+      "brand": "PRISM OF ELEGANCE",
+      "spec_brand": "CRYSTAL",
+      "count": 12
+    },
+    {
+      "brand": "CLAUDIO CANZIAN",
+      "spec_brand": "СLAUDIO CANZIAN",
+      "count": 5
+    },
+    {
+      "brand": "WRINKLES OF TIME",
+      "spec_brand": "GEOMETRY",
+      "count": 1
+    },
+    {
+      "brand": "GEOMETRY",
+      "spec_brand": "CRYSTAL",
+      "count": 1
+    },
+    {
+      "brand": "WRINKLES OF TIME",
+      "spec_brand": "CRYSTAL",
+      "count": 1
+    }
+  ],
+  "brand_category_groups_top": [
+    {
+      "category": "AGafi",
+      "brand": "<empty>",
+      "count": 186
+    },
+    {
+      "category": "AGafi",
+      "brand": "WRINKLES OG TIME",
+      "count": 11
+    },
+    {
+      "category": "AGafi",
+      "brand": "GEOMETRY",
+      "count": 8
+    },
+    {
+      "category": "AGafi",
+      "brand": "BLACK MYSTIQUE",
+      "count": 3
+    },
+    {
+      "category": "Madreperla",
+      "brand": "<empty>",
+      "count": 3
+    },
+    {
+      "category": "AGafi",
+      "brand": "MAGNA",
+      "count": 1
+    },
+    {
+      "category": "AGafi",
+      "brand": "BICOLOR",
+      "count": 1
+    },
+    {
+      "category": "AGafi",
+      "brand": "CRYSTAL",
+      "count": 1
+    }
+  ],
+  "samples": {
+    "no_images_active": [
+      {
+        "id": "ecbe7455-5346-499b-8d8e-eff2cd263efd",
+        "article": "40016",
+        "name": "Салфетка GLAME",
+        "brand": null,
+        "category": "Сопутствующие материалы",
+        "stock": 767.0
+      },
+      {
+        "id": "c830046b-82d1-476e-865b-ad9629630845",
+        "article": "170026",
+        "name": "Кулон Wrinkles of Time с розовым кварцем длинный",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 0.0
+      },
+      {
+        "id": "74338e17-642e-400a-99ca-4199828b6fcf",
+        "article": "160016",
+        "name": "Кольцо Wrinkles of Time с синей эмалью",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 4.0
+      },
+      {
+        "id": "52235365-b902-452b-91a1-75a8e2194b2d",
+        "article": "71174",
+        "name": "Чокер Bicolor с биколорным подвесом",
+        "brand": "BICOLOR",
+        "category": "Колье",
+        "stock": 3.0
+      },
+      {
+        "id": "920b93ee-bd87-4fba-853b-557ec6597ea6",
+        "article": "RP01759",
+        "name": "Серьги с монетами в биколоре Raganella Princess",
+        "brand": "Raganella Princess",
+        "category": "Серьги",
+        "stock": 1.0
+      },
+      {
+        "id": "beae2bdf-8d30-4583-a1e9-03a1bccc6b20",
+        "article": "AOT45030",
+        "name": "Серьги Antura с культивированным жемчугом и мятой пластиной",
+        "brand": null,
+        "category": "Antura",
+        "stock": 0.0
+      },
+      {
+        "id": "fb477b86-7845-419a-9b2c-61b45558b13e",
+        "article": "AOT45028",
+        "name": "Серьги Antura с тремя мятыми пластинами",
+        "brand": null,
+        "category": "Antura",
+        "stock": 3.0
+      },
+      {
+        "id": "677dcac5-3098-4972-816a-89f76be28e65",
+        "article": "80155",
+        "name": "Серьги Pearl с жемчужинами на мятой основе",
+        "brand": "PEARL",
+        "category": "Серьги",
+        "stock": 6.0
+      },
+      {
+        "id": "b638212b-0f9c-4279-8f7d-676135f81723",
+        "article": "100013",
+        "name": "Каффа Geometry с шариками",
+        "brand": "GEOMETRY",
+        "category": "Каффы",
+        "stock": 0.0
+      },
+      {
+        "id": "f4686ae2-e2c2-41b7-ab7d-354a12a208b3",
+        "article": "AG25159",
+        "name": "Сотуар на цепочке AGafi (раухтопаз в \"авоське\", раухтопаз бусины шар, черный агат)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "72b148f9-2250-4a68-83d7-4e05e38f803e",
+        "article": "AGL20055",
+        "name": "Колье на цепочке Pearl (натуральный барочный жемчуг)",
+        "brand": "PEARL",
+        "category": "Колье",
+        "stock": 0.0
+      },
+      {
+        "id": "4b659115-f520-48b0-aef0-48606b6fc824",
+        "article": "ANI0851GRSORO15",
+        "name": "Кольцо SER DESLUMBRANTE",
+        "brand": "UNOde50",
+        "category": "Кольца",
+        "stock": 0.0
+      },
+      {
+        "id": "65de33dc-e41c-4937-9b23-9d09c71b07d9",
+        "article": "AGL20056",
+        "name": "Колье на цепочке Pearl (натуральный барочный жемчуг)",
+        "brand": "PEARL",
+        "category": "Колье",
+        "stock": 0.0
+      },
+      {
+        "id": "80db6f9f-9826-4a9f-8a8d-8131e75abaec",
+        "article": "AGL20057",
+        "name": "Колье на цепочке Pearl (натуральный барочный жемчуг)",
+        "brand": "PEARL",
+        "category": "Колье",
+        "stock": 0.0
+      },
+      {
+        "id": "c40d0da3-19c6-46b8-82ee-4bd0c688e114",
+        "article": "AG25173",
+        "name": "Серьги AGafi(желтый кварцит, гематитовая галтовка)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      }
+    ],
+    "no_description_active": [
+      {
+        "id": "9590387b-3126-4ffd-9bec-35df06ae5153",
+        "article": "77151",
+        "name": "Кулон Bicolor трансформер с цепью ролло",
+        "brand": "BICOLOR",
+        "category": "Колье",
+        "stock": 0.0
+      },
+      {
+        "id": "ecbe7455-5346-499b-8d8e-eff2cd263efd",
+        "article": "40016",
+        "name": "Салфетка GLAME",
+        "brand": null,
+        "category": "Сопутствующие материалы",
+        "stock": 767.0
+      },
+      {
+        "id": "82e96080-242d-40ad-af98-f66ada6361d3",
+        "article": "73050",
+        "name": "Браслет Crystal жесткий с багетным камнем по кругу",
+        "brand": "CRYSTAL",
+        "category": "Браслеты",
+        "stock": 10.0
+      },
+      {
+        "id": "52235365-b902-452b-91a1-75a8e2194b2d",
+        "article": "71174",
+        "name": "Чокер Bicolor с биколорным подвесом",
+        "brand": "BICOLOR",
+        "category": "Колье",
+        "stock": 3.0
+      },
+      {
+        "id": "4fcb873b-beb3-4c7d-b925-5999cd387519",
+        "article": "71092",
+        "name": "Браслет Geometry с изгибом",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "920b93ee-bd87-4fba-853b-557ec6597ea6",
+        "article": "RP01759",
+        "name": "Серьги с монетами в биколоре Raganella Princess",
+        "brand": "Raganella Princess",
+        "category": "Серьги",
+        "stock": 1.0
+      },
+      {
+        "id": "4d029cf3-b191-45df-86fc-379ffe76aed1",
+        "article": "80046",
+        "name": "Браслет Magna мятый с замком на крючок",
+        "brand": "MAGNA",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "1e630e34-bd0c-4023-b1d7-d06a8223e69d",
+        "article": "71140",
+        "name": "Браслет Magna мятый изогнутый кафф",
+        "brand": "MAGNA",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "beae2bdf-8d30-4583-a1e9-03a1bccc6b20",
+        "article": "AOT45030",
+        "name": "Серьги Antura с культивированным жемчугом и мятой пластиной",
+        "brand": null,
+        "category": "Antura",
+        "stock": 0.0
+      },
+      {
+        "id": "fb477b86-7845-419a-9b2c-61b45558b13e",
+        "article": "AOT45028",
+        "name": "Серьги Antura с тремя мятыми пластинами",
+        "brand": null,
+        "category": "Antura",
+        "stock": 3.0
+      },
+      {
+        "id": "677dcac5-3098-4972-816a-89f76be28e65",
+        "article": "80155",
+        "name": "Серьги Pearl с жемчужинами на мятой основе",
+        "brand": "PEARL",
+        "category": "Серьги",
+        "stock": 6.0
+      },
+      {
+        "id": "295a1cf4-d5bb-464b-a6b9-694aac5d4543",
+        "article": "71201",
+        "name": "Браслет Geometry изогнутый",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 2.0
+      },
+      {
+        "id": "e167b7df-81d4-44f9-b061-f20e0ed0f793",
+        "article": "80152",
+        "name": "Кольцо Pearl с жумчужиной в рельсовом закрепе",
+        "brand": "PEARL",
+        "category": "Кольца",
+        "stock": 6.0
+      },
+      {
+        "id": "40b0174e-e296-4a3d-a20c-45abf275ec1d",
+        "article": "73029",
+        "name": "Браслет Crystal с камнями по кругу",
+        "brand": "CRYSTAL",
+        "category": "Браслеты",
+        "stock": 6.0
+      },
+      {
+        "id": "4f130c0d-f925-4e10-9781-641b5f49790f",
+        "article": "71167",
+        "name": "Кулон Bicolor с мятым подвесным элементом в биколоре",
+        "brand": "BICOLOR",
+        "category": "Колье",
+        "stock": 1.0
+      }
+    ],
+    "raw_meta": [
+      {
+        "id": "c77200f3-1846-4308-a4b8-4e9e82e2d7ea",
+        "article": "160011",
+        "name": "Серьги Wrinkles of Time в форме круассана",
+        "brand": "WRINKLES OG TIME",
+        "category": "AGafi",
+        "stock": 5.0
+      },
+      {
+        "id": "3c50a75f-0ae1-4ce2-97b8-b87462d8c130",
+        "article": "170018",
+        "name": "Кольцо Wrinkles of Time с красным агатом объемное",
+        "brand": "WRINKLES OG TIME",
+        "category": "AGafi",
+        "stock": 5.0
+      },
+      {
+        "id": "8add2911-e7cc-4ba8-9f2f-d45021367b7a",
+        "article": "170034",
+        "name": "Кольцо Wrinkles of Time с малахитом объемное",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 3.0
+      },
+      {
+        "id": "c830046b-82d1-476e-865b-ad9629630845",
+        "article": "170026",
+        "name": "Кулон Wrinkles of Time с розовым кварцем длинный",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 0.0
+      },
+      {
+        "id": "cebce88c-e30c-4208-86ba-bc2567974bcb",
+        "article": "76043",
+        "name": "Кулон Wrinkles of Time с ракушкой и фианитами",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 4.0
+      },
+      {
+        "id": "74338e17-642e-400a-99ca-4199828b6fcf",
+        "article": "160016",
+        "name": "Кольцо Wrinkles of Time с синей эмалью",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 4.0
+      },
+      {
+        "id": "dde9af6a-b274-4693-a5f0-4b8229751325",
+        "article": "170011",
+        "name": "Кольцо Wrinkles of Time перекрученное с малахитом",
+        "brand": "WRINKLES OG TIME",
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "f0a5d707-6853-4986-b1bc-24bde038a1a1",
+        "article": "71123",
+        "name": "Браслет Geometry кафф плоский с гранями",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 6.0
+      },
+      {
+        "id": "292bbf66-e85f-4fe7-826e-c05431b4782c",
+        "article": "100034",
+        "name": "Каффа Geometry маленькая шарообразная",
+        "brand": "GEOMETRY",
+        "category": "Каффы",
+        "stock": 1.0
+      },
+      {
+        "id": "5e3e884e-9433-400b-a7bf-22d3b0699f9a",
+        "article": "200010",
+        "name": "Серьги Snake в винтажной обработке",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "82d9be3c-2ce5-47f2-ba22-5ea28770251c",
+        "article": "160017",
+        "name": "Кольцо Wrinkles of Time с красным агатом акцентное",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 3.0
+      },
+      {
+        "id": "48f349ea-10ab-4511-b523-47752282f3e0",
+        "article": "210004",
+        "name": "Браслет Geometry кафф вогнутый классический",
+        "brand": "GEOMETRY",
+        "category": "SALE",
+        "stock": 9.0
+      },
+      {
+        "id": "a0d94971-0336-4d43-a105-b57d23967f9d",
+        "article": "71186",
+        "name": "Браслет Momenti жесткий в форме сердца",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "42fe7f84-23b7-48aa-9c0f-f35fc80b23e7",
+        "article": "74068",
+        "name": "Серьги Geometry рефленые с фианитом",
+        "brand": "GEOMETRY",
+        "category": "AGafi",
+        "stock": 2.0
+      },
+      {
+        "id": "a14c5baa-8b6e-4cd8-a575-00d7aab51d2f",
+        "article": "200066",
+        "name": "Серьги Geometry прямоугольник вытянутый",
+        "brand": "GEOMETRY",
+        "category": "AGafi",
+        "stock": 3.0
+      }
+    ],
+    "brand_as_category": [
+      {
+        "id": "c77200f3-1846-4308-a4b8-4e9e82e2d7ea",
+        "article": "160011",
+        "name": "Серьги Wrinkles of Time в форме круассана",
+        "brand": "WRINKLES OG TIME",
+        "category": "AGafi",
+        "stock": 5.0
+      },
+      {
+        "id": "3c50a75f-0ae1-4ce2-97b8-b87462d8c130",
+        "article": "170018",
+        "name": "Кольцо Wrinkles of Time с красным агатом объемное",
+        "brand": "WRINKLES OG TIME",
+        "category": "AGafi",
+        "stock": 5.0
+      },
+      {
+        "id": "dde9af6a-b274-4693-a5f0-4b8229751325",
+        "article": "170011",
+        "name": "Кольцо Wrinkles of Time перекрученное с малахитом",
+        "brand": "WRINKLES OG TIME",
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "655e8dcd-b7c0-4470-bba5-3afc6663c9f7",
+        "article": "200091",
+        "name": "Серьги Momenti плоские в форме сердца",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 1.0
+      },
+      {
+        "id": "f4686ae2-e2c2-41b7-ab7d-354a12a208b3",
+        "article": "AG25159",
+        "name": "Сотуар на цепочке AGafi (раухтопаз в \"авоське\", раухтопаз бусины шар, черный агат)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "c40d0da3-19c6-46b8-82ee-4bd0c688e114",
+        "article": "AG25173",
+        "name": "Серьги AGafi(желтый кварцит, гематитовая галтовка)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "11cb259a-c508-40bc-a3b9-ca480e6f7ba4",
+        "article": "AG25175",
+        "name": "Серьги AGafi (халцедон, галтовка из вулканической лавы)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "afdd3f38-637c-4e38-b439-3eade4dfef8d",
+        "article": "AG25179",
+        "name": "Колье - бусы AGafi (янтарь, белый губчатый коралл, ангелит, желтый кварцит, сапфирин, горный хрустал",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "dfe7c250-f397-4a9e-a6ef-8bf0d05103f5",
+        "article": "AG25191",
+        "name": "Серьги AGafi (ювелирная смола)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "2247b624-ad40-488b-81b9-a0928bf5a3be",
+        "article": "AG25196",
+        "name": "Серьги AGafi (натуральный речной жемчуг, сапфирин)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 1.0
+      },
+      {
+        "id": "9f8b51e7-68f2-41cf-b692-86f43b1af70c",
+        "article": "AG25130",
+        "name": "Сотуар - пояс AGafi (натуральный янтарь разных форм и размеров (Калининград), ювелирная смола, гемат",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "abfedc96-ab92-4411-b382-e2a5f32fbffd",
+        "article": "AG25132",
+        "name": "Колье на цепочке AGafi  (натуральный янтарь (Калининград, гематит, стекло)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "d23c0558-49fa-439c-a6d8-20fc21441a22",
+        "article": "AG25140",
+        "name": "Колье на цепочке AGafi  (натуральный янтарь (Калининград), ювелирная смола)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "5e3e884e-9433-400b-a7bf-22d3b0699f9a",
+        "article": "200010",
+        "name": "Серьги Snake в винтажной обработке",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "8c3fb06b-861d-4ec0-884d-928b5abf1bbe",
+        "article": "AG25142",
+        "name": "Колье-бусы AGafi  (натуральный янтарь (Калининград),ювелирная смола, гематит, кокос)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "babc502f-7e76-43f2-8dbd-d8102fc49de7",
+        "article": "AG25143",
+        "name": "Браслет AGafi (натуральный янтарь (Калининград), ювелирная смола, кокос, гематит)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 1.0
+      },
+      {
+        "id": "e5e534b6-d913-47f3-bcca-040e9b07665b",
+        "article": "AG25147",
+        "name": "Браслет AGafi (натуральный янтарь разных форм и размеров (Калининград), ювыелирная смола, гематит, к",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "545f8e45-813a-4839-b00f-105d7bc1809f",
+        "article": "AG25055",
+        "name": "Анклет AGafi (крашеный кварц, стекло)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "79aec90f-a552-48fb-89cc-d19a4227244e",
+        "article": "AG25148",
+        "name": "Браслет AGafi (натуральный янтарь (Калининград), ювелирная смола, стекло, гематит )",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 2.0
+      },
+      {
+        "id": "dd189be9-3e9d-4cc5-b625-4cb2da4b2486",
+        "article": "AG25081",
+        "name": "Серьги AGafi (агат, лабрадорит)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      }
+    ],
+    "brand_spec_mismatch": [
+      {
+        "id": "b136bb55-f036-4b2c-9837-4ae4d00b0ce1",
+        "article": "73054",
+        "name": "Браслет Prism of Elegance с камнями в графитовом цвете",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Браслеты",
+        "stock": 0.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "b45a9afb-5113-4c14-b5c8-0873f08299d2",
+        "article": "73023",
+        "name": "Чокер Prism of Elegance с камнямии сверху",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Колье",
+        "stock": 14.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "b3d1395d-df3e-4280-b152-83f4fd3ba70b",
+        "article": "73027",
+        "name": "Чокер Prism of Elegance  с камнями и подвесом крестом",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Колье",
+        "stock": 3.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "b7001450-6905-4339-8a8b-c2d6a21e9b81",
+        "article": "77161",
+        "name": "Кольцо  Wrinkles of Time с двумя шариками",
+        "brand": "WRINKLES OG TIME",
+        "category": "Кольца",
+        "stock": 0.0,
+        "spec_brand": "Geometry"
+      },
+      {
+        "id": "e73b276c-e105-41b2-93c8-01278a46b739",
+        "article": "73048",
+        "name": "Серьги Prism of Elegance конго с круглыми камнями в ободковом касте",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Серьги",
+        "stock": 1.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "b17d377e-b489-498f-8d72-4f7e73826baa",
+        "article": "73045",
+        "name": "Серьги Prism of Elegance гвоздики с круглыми крупными камнями графитового цвета",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Серьги",
+        "stock": 0.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "3dda2944-d360-488b-9c56-32bd6307f194",
+        "article": "73014",
+        "name": "Кулон Prism of Elegance крест с камнями в изумдудной огранке",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Колье",
+        "stock": 2.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "043bbc10-45f0-42d1-97b6-44251845c417",
+        "article": "73037",
+        "name": "Серьги Prism of Elegance длинные с крупными камнями в цвете графит",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Серьги",
+        "stock": 3.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "85dd932b-ad90-40bf-a456-b6c9b6938f28",
+        "article": "73022",
+        "name": "Чокер Prism of Elegance с графитовыми камными сбоку",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Колье",
+        "stock": 15.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "e2d5a35d-c62e-4c82-9217-ae7010e82fa8",
+        "article": "73020",
+        "name": "Кулон Prism of Elegance галстук с графитовыми камнями",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Колье",
+        "stock": 0.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "67e4767f-f743-4e25-8049-6b670780b7d5",
+        "article": "CC00204296",
+        "name": "Браслет Сlaudio Canzian с мятой полусферой",
+        "brand": "Claudio Canzian",
+        "category": "Браслеты",
+        "stock": 1.0,
+        "spec_brand": "Сlaudio Canzian"
+      },
+      {
+        "id": "7d4017b0-ce53-437a-8fa6-5dd49b0dc50e",
+        "article": "CC00202618",
+        "name": "Серьги Сlaudio Canzian мятые полусферы",
+        "brand": "Claudio Canzian",
+        "category": "Серьги",
+        "stock": 2.0,
+        "spec_brand": "Сlaudio Canzian"
+      },
+      {
+        "id": "15eeae45-70a6-4eae-9bbd-1c3028a48c2e",
+        "article": "77294",
+        "name": "Каффа Geometry с изгибом двойная с камнями",
+        "brand": "GEOMETRY",
+        "category": "Каффы",
+        "stock": 0.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "26d33f08-64d7-4cec-8b98-525a192a8f77",
+        "article": "CC00201401",
+        "name": "Кольцо Сlaudio Canzian мятая полусфера",
+        "brand": "Claudio Canzian",
+        "category": "Кольца",
+        "stock": 2.0,
+        "spec_brand": "Сlaudio Canzian"
+      },
+      {
+        "id": "6381d8b9-0b6c-46aa-947d-d4a2792cbf38",
+        "article": "CC00201410",
+        "name": "Кольцо Сlaudio Canzian с цепями и фианитами",
+        "brand": "Claudio Canzian",
+        "category": "Кольца",
+        "stock": 0.0,
+        "spec_brand": "Сlaudio Canzian"
+      },
+      {
+        "id": "2b3734ba-301a-4916-93b8-419ff8d79119",
+        "article": "76042",
+        "name": "Серьги Wrinkles of Time в форме ракушки с фианитами",
+        "brand": "WRINKLES OG TIME",
+        "category": "AGafi",
+        "stock": 5.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "6b178e40-7443-403e-b9c3-9c939df4da36",
+        "article": "73074",
+        "name": "Серьги Prism of Elegance в форме креста с крупными фианитами",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Серьги",
+        "stock": 1.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "726d1621-813d-4a7a-9a78-da18e6488c8e",
+        "article": "73031",
+        "name": "Кулон Prism of Elegance галстук с крупными камнями и крестом",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Колье",
+        "stock": 1.0,
+        "spec_brand": "Crystal"
+      },
+      {
+        "id": "5d4f0943-40e2-419c-ad65-7c2f013329af",
+        "article": "CC00202615",
+        "name": "Серьги Сlaudio Canzian с цепями и фианитами",
+        "brand": "Claudio Canzian",
+        "category": "Серьги",
+        "stock": 0.0,
+        "spec_brand": "Сlaudio Canzian"
+      },
+      {
+        "id": "bf79e22c-5c3c-40ce-bba8-1ea79b4bf60e",
+        "article": "73018",
+        "name": "Серьги Prism of Elegance в цвете графит с подвесом в форме креста",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Серьги",
+        "stock": 1.0,
+        "spec_brand": "Crystal"
+      }
+    ],
+    "active_zero_stock": [
+      {
+        "id": "9590387b-3126-4ffd-9bec-35df06ae5153",
+        "article": "77151",
+        "name": "Кулон Bicolor трансформер с цепью ролло",
+        "brand": "BICOLOR",
+        "category": "Колье",
+        "stock": 0.0
+      },
+      {
+        "id": "7552de39-b217-45c7-925c-5d59e2a63659",
+        "article": "71029",
+        "name": "Браслет Geometry разъемный плоский",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "c0011ed8-1ced-422f-bc07-d5a4ec22d844",
+        "article": "71052",
+        "name": "Браслет Geometry кафф базовый дутый",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "879a0a82-5f9a-4c3a-9979-587eb9212230",
+        "article": "71093",
+        "name": "Браслет Geometry с матовой вставкой",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "c830046b-82d1-476e-865b-ad9629630845",
+        "article": "170026",
+        "name": "Кулон Wrinkles of Time с розовым кварцем длинный",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 0.0
+      },
+      {
+        "id": "dde9af6a-b274-4693-a5f0-4b8229751325",
+        "article": "170011",
+        "name": "Кольцо Wrinkles of Time перекрученное с малахитом",
+        "brand": "WRINKLES OG TIME",
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "4fcb873b-beb3-4c7d-b925-5999cd387519",
+        "article": "71092",
+        "name": "Браслет Geometry с изгибом",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "3237afce-860b-4b84-b983-63101673c375",
+        "article": "71054",
+        "name": "Браслет Geometry слейв",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "c418404f-5f6d-4ba9-9cee-b549ff23872d",
+        "article": "73089",
+        "name": "Серьги Prism of Elegance гвоздик с крупным акцентным голубым фианитом",
+        "brand": "PRISM OF ELEGANCE",
+        "category": "Серьги",
+        "stock": 0.0
+      },
+      {
+        "id": "4d029cf3-b191-45df-86fc-379ffe76aed1",
+        "article": "80046",
+        "name": "Браслет Magna мятый с замком на крючок",
+        "brand": "MAGNA",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "1e630e34-bd0c-4023-b1d7-d06a8223e69d",
+        "article": "71140",
+        "name": "Браслет Magna мятый изогнутый кафф",
+        "brand": "MAGNA",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "beae2bdf-8d30-4583-a1e9-03a1bccc6b20",
+        "article": "AOT45030",
+        "name": "Серьги Antura с культивированным жемчугом и мятой пластиной",
+        "brand": null,
+        "category": "Antura",
+        "stock": 0.0
+      },
+      {
+        "id": "d68f6070-b333-4456-82b9-c44591be5331",
+        "article": "79114",
+        "name": "Кольцо Geometry гладкое базовое",
+        "brand": "GEOMETRY",
+        "category": "Кольца",
+        "stock": 0.0
+      },
+      {
+        "id": "b638212b-0f9c-4279-8f7d-676135f81723",
+        "article": "100013",
+        "name": "Каффа Geometry с шариками",
+        "brand": "GEOMETRY",
+        "category": "Каффы",
+        "stock": 0.0
+      },
+      {
+        "id": "f4686ae2-e2c2-41b7-ab7d-354a12a208b3",
+        "article": "AG25159",
+        "name": "Сотуар на цепочке AGafi (раухтопаз в \"авоське\", раухтопаз бусины шар, черный агат)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0
+      },
+      {
+        "id": "72b148f9-2250-4a68-83d7-4e05e38f803e",
+        "article": "AGL20055",
+        "name": "Колье на цепочке Pearl (натуральный барочный жемчуг)",
+        "brand": "PEARL",
+        "category": "Колье",
+        "stock": 0.0
+      },
+      {
+        "id": "11df4fb7-e7b9-4523-913c-7220ddcbcc17",
+        "article": "73049",
+        "name": "Браслет Crystal с камнями в два ряда",
+        "brand": "CRYSTAL",
+        "category": "Браслеты",
+        "stock": 0.0
+      },
+      {
+        "id": "4b659115-f520-48b0-aef0-48606b6fc824",
+        "article": "ANI0851GRSORO15",
+        "name": "Кольцо SER DESLUMBRANTE",
+        "brand": "UNOde50",
+        "category": "Кольца",
+        "stock": 0.0
+      },
+      {
+        "id": "65de33dc-e41c-4937-9b23-9d09c71b07d9",
+        "article": "AGL20056",
+        "name": "Колье на цепочке Pearl (натуральный барочный жемчуг)",
+        "brand": "PEARL",
+        "category": "Колье",
+        "stock": 0.0
+      },
+      {
+        "id": "80db6f9f-9826-4a9f-8a8d-8131e75abaec",
+        "article": "AGL20057",
+        "name": "Колье на цепочке Pearl (натуральный барочный жемчуг)",
+        "brand": "PEARL",
+        "category": "Колье",
+        "stock": 0.0
+      }
+    ],
+    "missing_local_image_files": [],
+    "quantity_stock_mismatch": [
+      {
+        "id": "ecbe7455-5346-499b-8d8e-eff2cd263efd",
+        "article": "40016",
+        "name": "Салфетка GLAME",
+        "brand": null,
+        "category": "Сопутствующие материалы",
+        "stock": 767.0,
+        "spec_quantity": 672
+      },
+      {
+        "id": "82e96080-242d-40ad-af98-f66ada6361d3",
+        "article": "73050",
+        "name": "Браслет Crystal жесткий с багетным камнем по кругу",
+        "brand": "CRYSTAL",
+        "category": "Браслеты",
+        "stock": 10.0,
+        "spec_quantity": 19
+      },
+      {
+        "id": "8add2911-e7cc-4ba8-9f2f-d45021367b7a",
+        "article": "170034",
+        "name": "Кольцо Wrinkles of Time с малахитом объемное",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 3.0,
+        "spec_quantity": 4
+      },
+      {
+        "id": "c830046b-82d1-476e-865b-ad9629630845",
+        "article": "170026",
+        "name": "Кулон Wrinkles of Time с розовым кварцем длинный",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 0.0,
+        "spec_quantity": 1
+      },
+      {
+        "id": "cebce88c-e30c-4208-86ba-bc2567974bcb",
+        "article": "76043",
+        "name": "Кулон Wrinkles of Time с ракушкой и фианитами",
+        "brand": "WRINKLES OG TIME",
+        "category": "SALE",
+        "stock": 4.0,
+        "spec_quantity": 6
+      },
+      {
+        "id": "52235365-b902-452b-91a1-75a8e2194b2d",
+        "article": "71174",
+        "name": "Чокер Bicolor с биколорным подвесом",
+        "brand": "BICOLOR",
+        "category": "Колье",
+        "stock": 3.0,
+        "spec_quantity": 0
+      },
+      {
+        "id": "920b93ee-bd87-4fba-853b-557ec6597ea6",
+        "article": "RP01759",
+        "name": "Серьги с монетами в биколоре Raganella Princess",
+        "brand": "Raganella Princess",
+        "category": "Серьги",
+        "stock": 1.0,
+        "spec_quantity": 0
+      },
+      {
+        "id": "655e8dcd-b7c0-4470-bba5-3afc6663c9f7",
+        "article": "200091",
+        "name": "Серьги Momenti плоские в форме сердца",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 1.0,
+        "spec_quantity": 2
+      },
+      {
+        "id": "fb477b86-7845-419a-9b2c-61b45558b13e",
+        "article": "AOT45028",
+        "name": "Серьги Antura с тремя мятыми пластинами",
+        "brand": null,
+        "category": "Antura",
+        "stock": 3.0,
+        "spec_quantity": 0
+      },
+      {
+        "id": "f0a5d707-6853-4986-b1bc-24bde038a1a1",
+        "article": "71123",
+        "name": "Браслет Geometry кафф плоский с гранями",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 6.0,
+        "spec_quantity": 5
+      },
+      {
+        "id": "677dcac5-3098-4972-816a-89f76be28e65",
+        "article": "80155",
+        "name": "Серьги Pearl с жемчужинами на мятой основе",
+        "brand": "PEARL",
+        "category": "Серьги",
+        "stock": 6.0,
+        "spec_quantity": 0
+      },
+      {
+        "id": "40d456fe-e0e6-4c14-966d-6c144b38cdf7",
+        "article": "71183",
+        "name": "Серьги Magna мятые удлиненные",
+        "brand": "MAGNA",
+        "category": "Серьги",
+        "stock": 1.0,
+        "spec_quantity": 2
+      },
+      {
+        "id": "295a1cf4-d5bb-464b-a6b9-694aac5d4543",
+        "article": "71201",
+        "name": "Браслет Geometry изогнутый",
+        "brand": "GEOMETRY",
+        "category": "Браслеты",
+        "stock": 2.0,
+        "spec_quantity": 5
+      },
+      {
+        "id": "e167b7df-81d4-44f9-b061-f20e0ed0f793",
+        "article": "80152",
+        "name": "Кольцо Pearl с жумчужиной в рельсовом закрепе",
+        "brand": "PEARL",
+        "category": "Кольца",
+        "stock": 6.0,
+        "spec_quantity": 0
+      },
+      {
+        "id": "40b0174e-e296-4a3d-a20c-45abf275ec1d",
+        "article": "73029",
+        "name": "Браслет Crystal с камнями по кругу",
+        "brand": "CRYSTAL",
+        "category": "Браслеты",
+        "stock": 6.0,
+        "spec_quantity": 17
+      },
+      {
+        "id": "f4686ae2-e2c2-41b7-ab7d-354a12a208b3",
+        "article": "AG25159",
+        "name": "Сотуар на цепочке AGafi (раухтопаз в \"авоське\", раухтопаз бусины шар, черный агат)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0,
+        "spec_quantity": 1
+      },
+      {
+        "id": "4f130c0d-f925-4e10-9781-641b5f49790f",
+        "article": "71167",
+        "name": "Кулон Bicolor с мятым подвесным элементом в биколоре",
+        "brand": "BICOLOR",
+        "category": "Колье",
+        "stock": 1.0,
+        "spec_quantity": 0
+      },
+      {
+        "id": "c40d0da3-19c6-46b8-82ee-4bd0c688e114",
+        "article": "AG25173",
+        "name": "Серьги AGafi(желтый кварцит, гематитовая галтовка)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0,
+        "spec_quantity": 1
+      },
+      {
+        "id": "11cb259a-c508-40bc-a3b9-ca480e6f7ba4",
+        "article": "AG25175",
+        "name": "Серьги AGafi (халцедон, галтовка из вулканической лавы)",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0,
+        "spec_quantity": 1
+      },
+      {
+        "id": "afdd3f38-637c-4e38-b439-3eade4dfef8d",
+        "article": "AG25179",
+        "name": "Колье - бусы AGafi (янтарь, белый губчатый коралл, ангелит, желтый кварцит, сапфирин, горный хрустал",
+        "brand": null,
+        "category": "AGafi",
+        "stock": 0.0,
+        "spec_quantity": 1
+      }
+    ]
+  }
+}

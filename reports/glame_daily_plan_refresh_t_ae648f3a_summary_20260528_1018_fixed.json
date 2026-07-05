@@ -1,0 +1,297 @@
+{
+  "prepared_at": "2026-05-28T10:18:54Z",
+  "status_codes": {
+    "health": 200,
+    "task": 200,
+    "agent_tasks": 200,
+    "director_kanban": 200,
+    "analytics": 200,
+    "today_sales": 200,
+    "sales_7d": 200,
+    "recent_orders": 200,
+    "product_summary": 200,
+    "customer_summary": 200
+  },
+  "platform_task": {
+    "status": "pending",
+    "output_data_is_null": true,
+    "completed_at": null
+  },
+  "agent_status_counts": {
+    "pending_approval": 2,
+    "completed": 2,
+    "cancelled": 15,
+    "pending": 1
+  },
+  "agent_tasks_count": 20,
+  "director_column_counts": {
+    "Нужно сделать": 3,
+    "В работе": 0,
+    "Готово": 1,
+    "Блокеры / отменено": 6
+  },
+  "top_director_cards": [
+    {
+      "column": "Нужно сделать",
+      "status": "pending_approval",
+      "priority": "P1",
+      "title": "Проверить устаревание синхронизации 1С",
+      "target_agent": "director-agent",
+      "task_type": "onec_sync_admin_review",
+      "id": "c6d56e55-1eed-4fc2-84eb-334519ff1994"
+    },
+    {
+      "column": "Нужно сделать",
+      "status": "pending",
+      "priority": "P1",
+      "title": "Разобрать сбой статуса синхронизации 1С и пустую аналитику остатков",
+      "target_agent": null,
+      "task_type": "assignment",
+      "id": "e6284d00-42f5-41c7-a50e-d89a5013f6e6"
+    },
+    {
+      "column": "Нужно сделать",
+      "status": "pending_approval",
+      "priority": "P2",
+      "title": "Проверка клиентов с ДР",
+      "target_agent": "crm-agent",
+      "task_type": "crm_birthday_check",
+      "id": "f44f5bf0-50a9-4aa4-b450-a4d3d42102f9"
+    },
+    {
+      "column": "Готово",
+      "status": "completed",
+      "priority": "P2",
+      "title": "Контроль синхронизации 1С",
+      "target_agent": "analytics-agent",
+      "task_type": "data_freshness_review",
+      "id": "35a0e2bf-ae46-48fd-8820-94fae2cd5d20"
+    }
+  ],
+  "business": {
+    "today_sales": {
+      "checks_count": 0,
+      "date": "2026-05-28T00:00:00",
+      "items_sold": 0,
+      "orders_count": 0,
+      "period": "today",
+      "source": "orders_fallback",
+      "total_revenue": 0,
+      "total_revenue_rub": 0.0
+    },
+    "sales_7d": {
+      "average_check": 12037.76,
+      "average_check_rub": 12037.76,
+      "checks_count": 38,
+      "days": 7,
+      "items_sold": 179.0,
+      "last_sale_at": "2026-05-27T18:45:06+00:00",
+      "orders_count": 38,
+      "period": "last_7_days",
+      "since": "2026-05-21T10:18:50.225447",
+      "source": "sales_records",
+      "total_revenue": 457434.9999999998,
+      "total_revenue_rub": 457435.0,
+      "unique_customers": 22
+    },
+    "analytics": {
+      "aov": {
+        "aov": 0.0,
+        "order_count": 0,
+        "period": {
+          "end": "2026-05-28T10:18:47.949529",
+          "start": "2026-04-28T10:18:47.949529"
+        },
+        "total_revenue": 0.0
+      },
+      "conversion": {
+        "conversion_rates": {
+          "look_to_purchase": 0.0,
+          "product_to_purchase": 0.0
+        },
+        "events": {
+          "chat_message": 0,
+          "look_view": 1,
+          "product_click": 3,
+          "purchase": 0
+        },
+        "period": {
+          "end": "2026-05-28T10:18:47.949529",
+          "start": "2026-04-28T10:18:47.949529"
+        }
+      },
+      "engagement": {
+        "avg_events_per_session": 8.76923076923077,
+        "avg_session_duration_seconds": 63295.8491449,
+        "period": {
+          "end": "2026-05-28T10:18:47.949529",
+          "start": "2026-04-28T10:18:47.949529"
+        },
+        "total_events": 114,
+        "total_sessions": 13,
+        "unique_products_viewed": 1
+      },
+      "events_by_type": {
+        "look_view": 1,
+        "page_view": 85,
+        "product_click": 3,
+        "ui_click": 24,
+        "yandex_metrika_sync": 1
+      },
+      "period": {
+        "days": 30,
+        "end": "2026-05-28T10:18:47.949529",
+        "start": "2026-04-28T10:18:47.949529"
+      },
+      "total_events": 114
+    },
+    "product_summary": {
+      "by_brand": {
+        "Antura": 1,
+        "BICOLOR": 73,
+        "BLACK MYSTIQUE": 118,
+        "CRYSTAL": 336,
+        "Claudio Canzian": 27,
+        "GEOMETRY": 723,
+        "Kalliope": 80,
+        "MAGNA": 284,
+        "PEARL": 431,
+        "PRISM OF ELEGANCE": 210,
+        "Raganella Princess": 98,
+        "UNOde50": 165,
+        "WRINKLES OG TIME": 167,
+        "unknown": 644
+      },
+      "by_category": {
+        "AGafi": 420,
+        "Antura": 55,
+        "Eva Rites": 15,
+        "Madreperla": 9,
+        "Men": 58,
+        "SALE": 253,
+        "Браслеты": 418,
+        "Броши": 11,
+        "Каффы": 149,
+        "Колье": 503,
+        "Кольца": 562,
+        "Кулоны": 46,
+        "Подарочная упаковка": 7,
+        "Прочее": 21,
+        "Серьги": 783,
+        "Сопутствующие материалы": 29,
+        "Чокеры": 18
+      },
+      "core_assortment": 0,
+      "total_active_products": 3357
+    },
+    "customer_summary": {
+      "available_customer_data": {
+        "app_behavior": [
+          "analytics_events",
+          "page_view",
+          "ui_click",
+          "product_view",
+          "look_view",
+          "chat_message",
+          "channel",
+          "utm",
+          "event_data"
+        ],
+        "communications": [
+          "generated_customer_messages",
+          "message",
+          "cta",
+          "event_type",
+          "event_brand",
+          "event_store",
+          "status",
+          "sent_at",
+          "payload"
+        ],
+        "loyalty": [
+          "loyalty_points",
+          "loyalty_transactions",
+          "transaction_type",
+          "points",
+          "balance_after",
+          "reason",
+          "description",
+          "source",
+          "expires_at"
+        ],
+        "profile": [
+          "id",
+          "phone",
+          "email",
+          "full_name",
+          "city",
+          "gender",
+          "discount_card_number",
+          "customer_id_1c",
+          "discount_card_id_1c",
+          "persona",
+          "preferences",
+          "customer_segment",
+          "rfm_score",
+          "purchase_preferences",
+          "preferred_store_name",
+          "secondary_store_name",
+          "synced_at"
+        ],
+        "purchase_history": [
+          "purchase_date",
+          "document_id_1c",
+          "store_id_1c",
+          "store_name",
+          "product_name",
+          "product_article",
+          "category",
+          "brand",
+          "quantity",
+          "price",
+          "total_amount"
+        ],
+        "saved_content": [
+          "saved_looks",
+          "favorite/generated",
+          "notes",
+          "is_purchased",
+          "recommended_occasions",
+          "look_name"
+        ],
+        "stylist": [
+          "live_stylist_conversations",
+          "conversation_status",
+          "scenario",
+          "source",
+          "assigned_stylist",
+          "internal_notes",
+          "result_purchase_status",
+          "stylist_chat_messages",
+          "attachments"
+        ]
+      },
+      "by_segment": {
+        "Active": 201,
+        "New": 433,
+        "Regular": 920,
+        "Sleeping": 4647,
+        "VIP": 8,
+        "unknown": 7
+      },
+      "customers_with_purchases": 6034,
+      "new_last_30_days": 76,
+      "total_customers": 6216,
+      "total_loyalty_points": 2029444
+    },
+    "recent_orders_count": 1,
+    "recent_orders_note": "1 order in /api/director/data/recent-orders?limit=10; amount 12080 RUB; status pending"
+  },
+  "crm": {
+    "status": "pending_approval",
+    "matches_count": 8,
+    "segment_id": "db1e2214-4580-42fb-92bf-2e47aa558e31",
+    "segment_customer_count": 5791,
+    "artifact_path": "/workspace/glame-platform/reports/crm_birthday_check_f44f5bf0_2026-05-28.md"
+  }
+}

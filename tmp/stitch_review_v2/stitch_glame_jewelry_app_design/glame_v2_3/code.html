@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GLAME - Каталог</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#333537",
+                        "on-primary-fixed-variant": "#444748",
+                        "surface-tint": "#c4c7c8",
+                        "on-tertiary-fixed-variant": "#42474b",
+                        "tertiary-fixed-dim": "#c2c7cb",
+                        "on-surface-variant": "#c4c7c8",
+                        "cold-light-gray": "#C7CBCF",
+                        "on-primary": "#2e3132",
+                        "error": "#ffb4ab",
+                        "on-background": "#e2e2e5",
+                        "inverse-surface": "#e2e2e5",
+                        "primary-fixed-dim": "#c4c7c8",
+                        "tertiary-fixed": "#dee3e7",
+                        "on-tertiary": "#2c3134",
+                        "on-tertiary-fixed": "#171c1f",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "on-secondary-fixed-variant": "#454749",
+                        "secondary-container": "#454749",
+                        "surface-container-lowest": "#0c0e10",
+                        "background": "#121416",
+                        "on-primary-container": "#626566",
+                        "surface-container-high": "#282a2c",
+                        "outline-variant": "#434749",
+                        "primary-container": "#e1e3e4",
+                        "tertiary-container": "#dee3e7",
+                        "on-secondary": "#2f3133",
+                        "border-gray": "#5C6064",
+                        "surface-container-low": "#1a1c1e",
+                        "surface-container": "#1e2022",
+                        "surface-variant": "#333537",
+                        "outline": "#8e9192",
+                        "on-error": "#690005",
+                        "on-surface": "#e2e2e5",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "on-secondary-container": "#b4b5b7",
+                        "inverse-primary": "#5c5f60",
+                        "tertiary": "#ffffff",
+                        "soft-gray": "#D8DADB",
+                        "secondary": "#c6c6c9",
+                        "surface-dim": "#121416",
+                        "error-container": "#93000a",
+                        "surface": "#121416",
+                        "on-error-container": "#ffdad6",
+                        "primary": "#ffffff",
+                        "primary-fixed": "#e1e3e4",
+                        "on-tertiary-container": "#606569",
+                        "on-primary-fixed": "#191c1d",
+                        "inverse-on-surface": "#2f3133",
+                        "surface-bright": "#38393c",
+                        "secondary-fixed": "#e2e2e5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "0px"
+                    },
+                    "spacing": {
+                        "grid-gutter": "1px",
+                        "top-bar-height": "56px",
+                        "page-padding-h": "28px",
+                        "safe-air-bottom": "24px",
+                        "button-gap": "16px",
+                        "bottom-nav-height": "96px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Clinica Pro", "sans-serif"],
+                        "headline-lg": ["Clinica Pro", "sans-serif"],
+                        "label-md": ["Clinica Pro", "sans-serif"],
+                        "display-lg": ["Clinica Pro", "sans-serif"],
+                        "body-md": ["Clinica Pro", "sans-serif"],
+                        "headline-lg-mobile": ["Clinica Pro", "sans-serif"],
+                        "body-lg": ["Clinica Pro", "sans-serif"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen pb-[120px] rounded-none">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full h-[56px] z-50 flex items-center justify-between px-page-padding-h bg-transparent dark:bg-transparent border-b border-border-gray pt-0">
+<button aria-label="Menu" class="text-primary dark:text-primary hover:opacity-70 transition-opacity active:scale-95 transition-transform p-2 -ml-2">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<img alt="GLAME" class="h-5 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCesLYvxo4qz8Xv8tY6wR-RTmm5MTR1j3tQwHa9rbFohVDaqEMOoIRsDptbCDhSVwAenvLOaUflnyAQchRJALDdEuA_GkwOb3Wau0oQxyO09SpCRtsacW9pjJffJo0oxR1xHtjMS4XYePBe90wqg9OG0j6QbGi8fRhxMsPnZAbe6L0relYRRXNdtxPP7bz78_ojF7Ddrl8oaCI95DjeZgSw0RV28GiFZGjHgwNIwierb8METvZyFuOeccmTVcsNR-FsYVSoQlqc1uE"/>
+<div class="flex items-center gap-4">
+<button aria-label="Search" class="text-primary dark:text-primary hover:opacity-70 transition-opacity active:scale-95 transition-transform p-2">
+<span class="material-symbols-outlined">search</span>
+</button>
+<button aria-label="Cart" class="text-primary dark:text-primary hover:opacity-70 transition-opacity active:scale-95 transition-transform p-2 -mr-2">
+<span class="material-symbols-outlined">shopping_bag</span>
+</button>
+</div>
+</header>
+<main class="pt-[80px] px-page-padding-h">
+<!-- Header & Search -->
+<div class="mb-8 mt-4">
+<h2 class="font-headline-lg text-headline-lg mb-6 text-primary">Каталог</h2>
+<div class="relative w-full">
+<input class="w-full bg-surface-container border border-border-gray text-on-surface font-body-md py-4 pl-4 pr-12 focus:outline-none focus:border-primary placeholder-on-surface-variant transition-colors" placeholder="Поиск украшений..." type="text"/>
+<span class="material-symbols-outlined absolute right-4 top-1/2 transform -translate-y-1/2 text-on-surface-variant pointer-events-none">search</span>
+</div>
+</div>
+<!-- Filter Chips -->
+<div class="overflow-x-auto no-scrollbar mb-8">
+<div class="flex gap-4 w-max">
+<button class="px-6 py-2 border border-primary text-primary font-label-md bg-surface-container-high transition-colors">Все</button>
+<button class="px-6 py-2 border border-border-gray text-on-surface-variant hover:border-primary hover:text-primary font-label-md transition-colors">Кольца</button>
+<button class="px-6 py-2 border border-border-gray text-on-surface-variant hover:border-primary hover:text-primary font-label-md transition-colors">Серьги</button>
+<button class="px-6 py-2 border border-border-gray text-on-surface-variant hover:border-primary hover:text-primary font-label-md transition-colors">Колье</button>
+<button class="px-6 py-2 border border-border-gray text-on-surface-variant hover:border-primary hover:text-primary font-label-md transition-colors">Браслеты</button>
+<button class="px-6 py-2 border border-border-gray text-on-surface-variant hover:border-primary hover:text-primary font-label-md transition-colors">Каффы</button>
+<button class="px-6 py-2 border border-border-gray text-primary font-label-md transition-colors uppercase tracking-widest bg-surface-container">NEW</button>
+<button class="px-6 py-2 border border-border-gray text-error font-label-md transition-colors uppercase tracking-widest bg-surface-container">SALE</button>
+</div>
+</div>
+<!-- Product Grid -->
+<div class="grid grid-cols-2 gap-4">
+<!-- Product Card 1 -->
+<article class="border border-border-gray bg-surface group flex flex-col cursor-pointer hover:border-primary transition-colors">
+<div class="relative aspect-[3/4] overflow-hidden bg-surface-container-low border-b border-border-gray">
+<img alt="Minimalist Band" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A minimalist silver band ring resting on a textured concrete surface. The lighting is cold, dramatic, and structural, casting sharp shadows that emphasize the ring's perfect circular geometry against the raw, brutalist architectural background. The overall tone is cool graphite and stark white, fitting a premium digital catalog for luxury architectural jewelry." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9IvUMR0kruDoHua3KkcZlprwxl3XcCOky_2FTFGb9CfAbB5TiQCSI028iQmdlFy8vGpd_NWS89XrLKJJIPNygEFCWadmTsPwJr6qieBSZVEqzQlTigy8MxUuutZB8zRIivfr5VL3Eg2ZvI0VXRiDcEhTPlrlELFK3FSihs8PPF_OL4qCbHXss98yalgsn2sn-_O1ufijQmPLIj8kvk7ZWTEaYocikBGSmya4dvK536hYxnPiQ-r0dUKo7W2MzToZLYshsEGyC2No"/>
+<button aria-label="Add to favorites" class="absolute top-4 right-4 p-0 text-on-surface-variant hover:text-error transition-colors bg-transparent">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">favorite</span>
+</button>
+</div>
+<div class="p-4 flex flex-col flex-grow justify-between">
+<div>
+<p class="font-label-sm text-on-surface-variant uppercase tracking-widest mb-1">Geometry</p>
+<h3 class="font-body-md text-primary mb-2 line-clamp-1">Minimalist Band</h3>
+</div>
+<p class="font-label-md text-primary mt-4">24 000 ₽</p>
+</div>
+</article>
+<!-- Product Card 2 -->
+<article class="border border-border-gray bg-surface group flex flex-col cursor-pointer hover:border-primary transition-colors">
+<div class="relative aspect-[3/4] overflow-hidden bg-surface-container-low border-b border-border-gray">
+<img alt="Chain Necklace" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A heavy industrial silver chain necklace draped over a block of polished black glass. The setting is cold and architectural, with precise studio lighting highlighting the metallic sheen and interlocking links. The aesthetic is extremely minimalist, utilizing a color palette of deep blacks, steel grays, and blinding white highlights to convey modern luxury." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQkrcnI5KWWl5s6DvpdwfmnGQkPGRAYZnR2DVgHlJeUji40irvA-0jpNH0h8csOZyggB2RWuqrMo6VOl1SQMIPDyxdRuCRbbJSjN71Apy733TWXliPvD3YahHmShi-T5trR8-_h0EvwHKm_cJ2C5ijAFd5G0n00PX1kP15LPPKzt2DKBAghvhi-1qiPbJuxUSeXR71n86Yv436MOT9BIY-R4qUY4i2z0HlgfXIvOrosOBd2igd2g3NA2iOCqugJ_UvIRA37wPkRuw"/>
+<button aria-label="Add to favorites" class="absolute top-4 right-4 p-0 text-on-surface-variant hover:text-error transition-colors bg-transparent">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">favorite</span>
+</button>
+</div>
+<div class="p-4 flex flex-col flex-grow justify-between">
+<div>
+<p class="font-label-sm text-on-surface-variant uppercase tracking-widest mb-1">Magna</p>
+<h3 class="font-body-md text-primary mb-2 line-clamp-1">Chain Necklace</h3>
+</div>
+<p class="font-label-md text-primary mt-4">68 000 ₽</p>
+</div>
+</article>
+<!-- Product Card 3 -->
+<article class="border border-border-gray bg-surface group flex flex-col cursor-pointer hover:border-primary transition-colors">
+<div class="relative aspect-[3/4] overflow-hidden bg-surface-container-low border-b border-border-gray">
+<img alt="Cuff Absolute" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A thick, brushed metal ear cuff suspended in mid-air against a dark slate background. The lighting is harsh and directional, emphasizing the structural integrity and sharp edges of the jewelry piece. The composition is stark and uncluttered, aligning with an architectural luxury brand's visual identity, focusing purely on form and cold materiality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVz_PFppqt5Uq4nb1yH4Bdv_8DiEMsOgQZUOfRu-Zb9ed7xVw4wxBgf4MBUw4VNPqej-64lkI7_ei8qrvgUmwPs_ZRcISHL53L52cqqR9ZbTkNKySCFoamfc_3GRoXNgTv6cR1QG0TLnpFi6rFK1oJwsMSPk2taF8MFWuBHm62eyA0QZqqr8pPQqTagXgBtZ6TzAdVdmYz-BRZimZMRuINDJk367LOevVkse4nfsKml_33NQxRTSOnFnpHu1K6yoEPNrUzWwlSg3E"/>
+<button aria-label="Add to favorites" class="absolute top-4 right-4 p-0 text-on-surface-variant hover:text-error transition-colors bg-transparent">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">favorite</span>
+</button>
+</div>
+<div class="p-4 flex flex-col flex-grow justify-between">
+<div>
+<p class="font-label-sm text-on-surface-variant uppercase tracking-widest mb-1">Architecture</p>
+<h3 class="font-body-md text-primary mb-2 line-clamp-1">Cuff Absolute</h3>
+</div>
+<p class="font-label-md text-primary mt-4">18 500 ₽</p>
+</div>
+</article>
+<!-- Product Card 4 -->
+<article class="border border-border-gray bg-surface group flex flex-col cursor-pointer hover:border-primary transition-colors">
+<div class="relative aspect-[3/4] overflow-hidden bg-surface-container-low border-b border-border-gray">
+<div class="absolute top-2 left-2 bg-surface text-primary px-2 py-1 text-[10px] tracking-widest uppercase border border-border-gray z-10">NEW</div>
+<img alt="Structural Drop Earrings" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A pair of structural, geometric drop earrings laid flat on a slab of brushed steel. The lighting is extremely cool and clinical, creating long, distinct shadows that mirror the jewelry's angular design. The image feels like a high-end architectural rendering, devoid of warmth, focusing entirely on metallic textures and precision engineering." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqWQdjrd7IjtbEFDy1_WmnrEb41inYSfajLhV-M8eaedlfcMUQkhIA7f9nrkrXwAOyE6n3dWp630DL_c32nsNAgpW2H4ayj5RTqvgsj-sTTGmsFuifT_7jF4bc_8bC_zK34szpFfDdw-TkA7ZIJ4NrQVy-c42jBIwnbszhmS8ES0m3rVxRJvpFVy1C_1skzx5MPCstWxhoFIUPotCEsVcfpDTefr8CNoLqxthclJ2PPgllPWORinM1TJu3ouYlyU1F6CWcMI75h8c"/>
+<button aria-label="Add to favorites" class="absolute top-4 right-4 p-0 text-on-surface-variant hover:text-error transition-colors bg-transparent">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">favorite</span>
+</button>
+</div>
+<div class="p-4 flex flex-col flex-grow justify-between">
+<div>
+<p class="font-label-sm text-on-surface-variant uppercase tracking-widest mb-1">Geometry</p>
+<h3 class="font-body-md text-primary mb-2 line-clamp-1">Structural Drop</h3>
+</div>
+<p class="font-label-md text-primary mt-4">42 000 ₽</p>
+</div>
+</article>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-page-padding-h pb-safe-air-bottom bg-surface dark:bg-surface border-t border-border-gray h-[96px] md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest w-full h-full" href="#">
+<img alt="G" class="w-6 h-6 mb-1 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdJO53RuyL1rcupfRtZnRDlond9XCJEax0qxHVMDsDs6QvuxUxDz9Q10tB0C85GOqz6qLZOA4Ww4INt6QENmMD7RXt9cNg2T5qloIKGYv34VnfPYmzjbck4YuAdfF_mYEXSug8CpLhOnaGzg6zhvh56guDsETvWwzlPd-XHa1aIg0J0cE4ySVU8FadrGIyWhh9D6lUwQ5jswjJf-crVuvroZL_Dyc9QoBv9cskx8V_tn76XohsnvvZ9HG12-fqrggH1awozw4Ymos"/>
+</a>
+<a class="flex flex-col items-center justify-center text-primary border-t-2 border-primary pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1">diamond</span>
+<span class="font-label-sm text-label-sm uppercase">Украшения</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1">auto_awesome</span>
+<span class="font-label-sm text-label-sm uppercase">Мой стиль</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1">auto_fix_high</span>
+<span class="font-label-sm text-label-sm uppercase">Подбор</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant pt-2 hover:bg-surface-variant transition-colors active:bg-surface-container-highest w-full h-full" href="#">
+<span class="material-symbols-outlined mb-1">person</span>
+<span class="font-label-sm text-label-sm uppercase">Профиль</span>
+</a>
+</nav>
+<script>
+        // Simple script to toggle active state on chips for demonstration
+        document.querySelectorAll('button').forEach(btn => {
+            if(btn.textContent === 'Все' || btn.textContent === 'Кольца' || btn.textContent === 'Серьги' || btn.textContent === 'Колье' || btn.textContent === 'Браслеты' || btn.textContent === 'Каффы') {
+                btn.addEventListener('click', function() {
+                    // Reset all similar chips
+                    this.parentElement.querySelectorAll('button').forEach(b => {
+                        if(b.textContent !== 'NEW' && b.textContent !== 'SALE') {
+                            b.classList.remove('border-primary', 'text-primary', 'bg-surface-container-high');
+                            b.classList.add('border-border-gray', 'text-on-surface-variant');
+                        }
+                    });
+                    // Set active
+                    this.classList.remove('border-border-gray', 'text-on-surface-variant');
+                    this.classList.add('border-primary', 'text-primary', 'bg-surface-container-high');
+                });
+            }
+        });
+        
+        // Favorite toggle
+        document.querySelectorAll('[aria-label="Add to favorites"]').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation(); // prevent card click
+                const icon = this.querySelector('span');
+                const isFilled = icon.style.fontVariationSettings.includes("'FILL' 1");
+                icon.style.fontVariationSettings = isFilled ? "'FILL' 0" : "'FILL' 1";
+                if(!isFilled) {
+                    this.classList.remove('text-on-surface-variant');
+                    this.classList.add('text-error');
+                } else {
+                    this.classList.add('text-on-surface-variant');
+                    this.classList.remove('text-error');
+                }
+            });
+        });
+    </script>
+</body></html>

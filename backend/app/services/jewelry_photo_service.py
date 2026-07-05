@@ -1,12 +1,17 @@
 """
-Сервис обработки фото украшений для каталога: удаление фона, белый фон, единый стиль.
-Модель берётся из настроек (image_generation_model). Обработанные изображения
-сохраняются по имени артикула и используются для генерации образов.
+Сервис ретуши фото украшений для каталога GLAME.
+
+По умолчанию обработка выполняется через Hermes runtime и GPT Image 2.
+Legacy OpenRouter оставлен только для явного аварийного режима.
 """
+import asyncio
+import json
 import os
 import re
 import base64
 import logging
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -19,17 +24,180 @@ from app.models.app_setting import AppSetting
 
 logger = logging.getLogger(__name__)
 
-# Размер выходного квадратного изображения (пиксели)
-OUTPUT_SIZE = 1024
+# Основной формат GLAME из утвержденного ретушь-промпта: вертикальный 3:4.
+OUTPUT_WIDTH = 1536
+OUTPUT_HEIGHT = 2048
 MAX_FILES = 5
 MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
 
-JEWELRY_PROCESSING_PROMPT = """Обработай это фото украшения для каталога e-commerce:
-- Удали весь фон, замени на чистый белый (#FFFFFF).
-- Оставь только украшение в центре, без лишних элементов (пальцы, подставки, пыль).
-- Идеальное студийное освещение: мягкий свет спереди, лёгкие блики на металле/камнях.
-- Крупный план, украшение занимает большую часть кадра.
-- Вывод: одно чистое PNG-фото на белом фоне для каталога (professional jewelry product shot)."""
+JEWELRY_PROCESSING_PROMPT = """Обработай предметное фото украшения GLAME в эстетике Net-a-Porter / Farfetch luxury jewelry catalog / Vogue Jewelry / Tiffany clean product photography.
+
+Сохрани реальное изделие: не меняй форму, толщину, пропорции, геометрию, конструкцию, посадку, ракурс, камни, жемчуг, замки и реальные особенности украшения. Это должна быть ретушь исходного фото, а не генерация нового изделия и не CGI.
+
+Сделай чистый белый или холодно-белый фон без бумаги, пятен, стола, рук, телефона, лишних объектов и грязных серых зон. Изделие строго по центру, с большим количеством воздуха вокруг. Масштаб реалистичный, без чрезмерного увеличения.
+
+Свет мягкий студийный, премиальный, с аккуратными контролируемыми бликами. Тень короткая, мягкая, чистая, контактная, без грязного ореола.
+
+Металл сделай дорогим и реалистичным: если золото — нейтральное luxury gold без оранжевости, кислотной желтизны и зеленцы; если серебро — холодное, чистое, полированное, не серое, не белесое и не пластиковое. Убери отражения телефона, рук, комнаты и грязные пятна, но сохрани живой объем металла.
+
+Если есть жемчуг — сделай его натуральным, перламутровым, мягким и объемным, без пластика и мыльности. Если есть камни/Swarovski — добавь аккуратную четкость и премиальный блеск без дешевого glitter-эффекта.
+
+Финальный формат: 1536 × 2048 px, вертикальный 3:4. Без текста, логотипов, интерфейса и декоративных элементов."""
+
+JEWELRY_REVISION_PROMPT = """Доведи фото до уровня Net-a-Porter luxury jewelry product shot. Сохрани реальную форму и конструкцию изделия, не перерисовывай. Убери ощущение CGI/рендера. Сделай металл чище, дороже и реалистичнее, фон холодно-белым и чистым, тень мягкой и короткой. Добавь четкости без перешарпа. Не меняй пропорции, ракурс, толщину, геометрию, камни/жемчуг и посадку элементов."""
+
+HERMES_CODEX_IMAGE_SCRIPT = r"""
+import base64
+import json
+import sys
+
+import httpx
+
+from agent.auxiliary_client import _codex_cloudflare_headers, _read_codex_access_token
+
+CODEX_CHAT_MODEL = "gpt-5.4"
+CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
+
+
+def _extract_image_b64(value):
+    found = None
+    if isinstance(value, dict):
+        if value.get("type") == "image_generation_call":
+            result = value.get("result")
+            if isinstance(result, str) and result:
+                found = result
+        partial = value.get("partial_image_b64")
+        if isinstance(partial, str) and partial:
+            found = partial
+        for child in value.values():
+            nested = _extract_image_b64(child)
+            if nested:
+                found = nested
+    elif isinstance(value, list):
+        for child in value:
+            nested = _extract_image_b64(child)
+            if nested:
+                found = nested
+    return found
+
+
+def _iter_sse_json(response):
+    event_name = None
+    data_lines = []
+
+    def flush():
+        nonlocal event_name, data_lines
+        if not data_lines:
+            event_name = None
+            return None
+        raw = "\n".join(data_lines).strip()
+        event = event_name
+        event_name = None
+        data_lines = []
+        if not raw or raw == "[DONE]":
+            return None
+        payload = json.loads(raw)
+        if isinstance(payload, dict) and event and "type" not in payload:
+            payload["type"] = event
+        return payload
+
+    for line in response.iter_lines():
+        if isinstance(line, bytes):
+            line = line.decode("utf-8", errors="replace")
+        line = str(line)
+        if line == "":
+            payload = flush()
+            if payload is not None:
+                yield payload
+            continue
+        if line.startswith(":"):
+            continue
+        if line.startswith("event:"):
+            event_name = line[len("event:"):].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[len("data:"):].lstrip())
+
+    payload = flush()
+    if payload is not None:
+        yield payload
+
+
+def main():
+    payload_in = json.load(sys.stdin)
+    prompt = payload_in["prompt"]
+    mime = payload_in["mime"]
+    image_b64 = payload_in["image_b64"]
+    quality = payload_in.get("quality") or "medium"
+    size = payload_in.get("size") or "1024x1536"
+
+    token = _read_codex_access_token()
+    if not token:
+        raise RuntimeError("Hermes Codex auth is not configured. Run `hermes auth codex`.")
+
+    headers = _codex_cloudflare_headers(token)
+    headers.update({
+        "Accept": "text/event-stream",
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    })
+
+    request = {
+        "model": CODEX_CHAT_MODEL,
+        "store": False,
+        "instructions": (
+            "You are the GLAME jewelry retouching agent. Use the provided source image "
+            "as the strict visual reference and fulfill the request through the image_generation tool."
+        ),
+        "input": [{
+            "type": "message",
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": prompt},
+                {"type": "input_image", "image_url": f"data:{mime};base64,{image_b64}"},
+            ],
+        }],
+        "tools": [{
+            "type": "image_generation",
+            "model": "gpt-image-2",
+            "size": size,
+            "quality": quality,
+            "output_format": "png",
+            "background": "opaque",
+            "partial_images": 1,
+        }],
+        "tool_choice": {
+            "type": "allowed_tools",
+            "mode": "required",
+            "tools": [{"type": "image_generation"}],
+        },
+        "stream": True,
+    }
+
+    timeout = httpx.Timeout(300.0, connect=30.0, read=300.0, write=30.0, pool=30.0)
+    image_out = None
+    with httpx.Client(timeout=timeout, headers=headers) as client:
+        with client.stream("POST", f"{CODEX_BASE_URL}/responses", json=request) as response:
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                exc.response.read()
+                raise RuntimeError(
+                    f"Hermes GPT Image 2 returned HTTP {exc.response.status_code}: {exc.response.text[:800]}"
+                ) from exc
+            for event in _iter_sse_json(response):
+                found = _extract_image_b64(event)
+                if found:
+                    image_out = found
+
+    if not image_out:
+        raise RuntimeError("Hermes GPT Image 2 returned no image.")
+
+    print(json.dumps({"success": True, "image_b64": image_out}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+"""
 
 
 def _sanitize_article(article: str) -> str:
@@ -59,8 +227,47 @@ class JewelryPhotoService:
         self.db = db
         self.api_key = os.getenv("IMAGE_GENERATION_API_KEY") or os.getenv("OPENROUTER_API_KEY")
         self.api_url = os.getenv("IMAGE_GENERATION_API_URL", "https://openrouter.ai/api/v1")
+        self.runtime = (os.getenv("JEWELRY_PHOTO_RUNTIME") or os.getenv("GLAME_IMAGE_RUNTIME") or "hermes").strip().lower()
+        self.hermes_home = Path(os.getenv("HERMES_AGENT_HOME", "/home/glameAI/hermes-agent"))
+        self.hermes_python = os.getenv(
+            "HERMES_PYTHON",
+            str(self.hermes_home / "venv" / "bin" / "python"),
+        )
+        self.hermes_model = os.getenv("JEWELRY_PHOTO_HERMES_MODEL", "gpt-image-2").strip() or "gpt-image-2"
+        self.hermes_quality = os.getenv("JEWELRY_PHOTO_HERMES_QUALITY", "medium").strip() or "medium"
         self.storage_dir = Path("static/jewelry_processed")
         self.storage_dir.mkdir(parents=True, exist_ok=True)
+        self.last_prompt_used: Optional[str] = None
+
+    def build_prompt(
+        self,
+        revision_description: Optional[str] = None,
+        prompt_override: Optional[str] = None,
+    ) -> str:
+        """Формирует финальный промпт, который реально уйдет в image model."""
+        base_prompt = (prompt_override or "").strip() or JEWELRY_PROCESSING_PROMPT
+        if len(base_prompt) > 8000:
+            raise JewelryPhotoServiceError("Промпт слишком длинный: максимум 8000 символов.")
+        revision = (revision_description or "").strip()
+        if not revision:
+            return base_prompt
+        if (prompt_override or "").strip():
+            return f"{base_prompt}\n\nДополнительное пожелание пользователя (учти при обработке): {revision}"
+        return (
+            f"{JEWELRY_REVISION_PROMPT}\n\n"
+            f"Дополнительное пожелание пользователя: {revision}\n\n"
+            f"Полные правила GLAME для контроля качества:\n{JEWELRY_PROCESSING_PROMPT}"
+        )
+
+    def provider_info(self) -> dict:
+        if self.runtime == "openrouter":
+            return {"runtime": "openrouter", "model": os.getenv("IMAGE_GENERATION_MODEL") or "settings:image_generation_model"}
+        return {
+            "runtime": "hermes",
+            "model": self.hermes_model,
+            "profile": "glame-jewelry-retoucher",
+            "quality": self.hermes_quality,
+        }
 
     async def _get_model_from_settings(self) -> Optional[str]:
         """Получает модель для обработки изображений из БД (тот же ключ, что и для генерации)."""
@@ -88,6 +295,7 @@ class JewelryPhotoService:
         image_bytes: bytes,
         model: str,
         revision_description: Optional[str] = None,
+        prompt_override: Optional[str] = None,
     ) -> bytes:
         """
         Отправляет одно изображение в OpenRouter с промптом обработки.
@@ -101,9 +309,8 @@ class JewelryPhotoService:
         mime = "image/png" if fmt == "png" else "image/jpeg"
         b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-        prompt = JEWELRY_PROCESSING_PROMPT
-        if revision_description and revision_description.strip():
-            prompt = prompt.rstrip() + "\n\nДополнительное пожелание пользователя (учти при обработке): " + revision_description.strip()
+        prompt = self.build_prompt(revision_description=revision_description, prompt_override=prompt_override)
+        self.last_prompt_used = prompt
         messages_content = [
             {
                 "type": "image_url",
@@ -211,8 +418,76 @@ class JewelryPhotoService:
             logger.warning("Failed to decode image data: %s", e)
             raise JewelryPhotoServiceError("Не удалось извлечь изображение из ответа API.")
 
+    async def _process_one_with_hermes_gpt_image_2(
+        self,
+        image_bytes: bytes,
+        revision_description: Optional[str] = None,
+        prompt_override: Optional[str] = None,
+    ) -> bytes:
+        """Ретуширует фото через Hermes Codex-auth provider и GPT Image 2."""
+        hermes_python = Path(self.hermes_python)
+        if not hermes_python.is_file():
+            raise JewelryPhotoServiceError(
+                f"Hermes Python runtime не найден: {hermes_python}. Проверьте HERMES_PYTHON."
+            )
+        if not self.hermes_home.is_dir():
+            raise JewelryPhotoServiceError(
+                f"Hermes agent home не найден: {self.hermes_home}. Проверьте HERMES_AGENT_HOME."
+            )
+
+        fmt = "png" if image_bytes[:8].startswith(b"\x89PNG") else "jpeg"
+        mime = "image/png" if fmt == "png" else "image/jpeg"
+        prompt = self.build_prompt(revision_description=revision_description, prompt_override=prompt_override)
+        self.last_prompt_used = prompt
+
+        request_payload = {
+            "prompt": prompt,
+            "mime": mime,
+            "image_b64": base64.b64encode(image_bytes).decode("utf-8"),
+            "quality": self.hermes_quality,
+            "size": "1024x1536",
+        }
+
+        env = os.environ.copy()
+        env.setdefault("HERMES_HOME", str(Path.home() / ".hermes"))
+        env["PYTHONPATH"] = str(self.hermes_home)
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                str(hermes_python),
+                "-c",
+                HERMES_CODEX_IMAGE_SCRIPT,
+                cwd=str(self.hermes_home),
+                env=env,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(json.dumps(request_payload).encode("utf-8")),
+                timeout=330.0,
+            )
+        except asyncio.TimeoutError as exc:
+            raise JewelryPhotoServiceError("Hermes GPT Image 2 не успел обработать фото за 5 минут.") from exc
+        except Exception as exc:
+            raise JewelryPhotoServiceError(f"Не удалось запустить Hermes GPT Image 2: {exc}") from exc
+
+        if proc.returncode != 0:
+            detail = (stderr.decode("utf-8", errors="replace") or stdout.decode("utf-8", errors="replace")).strip()
+            raise JewelryPhotoServiceError(f"Hermes GPT Image 2 error: {detail[:1200]}")
+
+        try:
+            data = json.loads(stdout.decode("utf-8"))
+            image_b64 = data.get("image_b64")
+            if not image_b64:
+                raise ValueError("image_b64 is empty")
+            return base64.b64decode(image_b64)
+        except Exception as exc:
+            logger.warning("Could not parse Hermes image response: %s; stdout=%s", exc, stdout[:500])
+            raise JewelryPhotoServiceError("Hermes GPT Image 2 вернул некорректный результат.") from exc
+
     def _postprocess_with_pillow(self, image_bytes: bytes) -> bytes:
-        """Наложение на белый фон, квадрат, лёгкое усиление резкости/контраста/насыщенности."""
+        """Наложение на белый фон, вертикальный 3:4, лёгкое усиление резкости/контраста."""
         try:
             from PIL import Image, ImageEnhance
             import io
@@ -227,14 +502,23 @@ class JewelryPhotoService:
             return image_bytes
 
         w, h = img.size
-        size = max(w, h, OUTPUT_SIZE)
-        canvas = Image.new("RGBA", (size, size), (255, 255, 255, 255))
-        paste_x = (size - w) // 2
-        paste_y = (size - h) // 2
+        canvas_ratio = OUTPUT_WIDTH / OUTPUT_HEIGHT
+        img_ratio = w / h if h else 1
+        if img_ratio > canvas_ratio:
+            paste_w = OUTPUT_WIDTH
+            paste_h = max(1, int(OUTPUT_WIDTH / img_ratio))
+        else:
+            paste_h = OUTPUT_HEIGHT
+            paste_w = max(1, int(OUTPUT_HEIGHT * img_ratio))
+
+        img = img.resize((paste_w, paste_h), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGBA", (OUTPUT_WIDTH, OUTPUT_HEIGHT), (255, 255, 255, 255))
+        paste_x = (OUTPUT_WIDTH - paste_w) // 2
+        paste_y = (OUTPUT_HEIGHT - paste_h) // 2
         canvas.paste(img, (paste_x, paste_y), img if img.mode == "RGBA" else None)
         canvas_rgb = Image.new("RGB", canvas.size, (255, 255, 255))
         canvas_rgb.paste(canvas, mask=canvas.split()[3] if canvas.mode == "RGBA" else None)
-        out = canvas_rgb.resize((OUTPUT_SIZE, OUTPUT_SIZE), Image.Resampling.LANCZOS)
+        out = canvas_rgb
 
         try:
             enhancer = ImageEnhance.Sharpness(out)
@@ -276,6 +560,7 @@ class JewelryPhotoService:
         image_bytes_list: List[bytes],
         article: str,
         revision_description: Optional[str] = None,
+        prompt_override: Optional[str] = None,
     ) -> List[str]:
         """
         Обрабатывает список фото украшений с одинаковыми параметрами.
@@ -287,6 +572,11 @@ class JewelryPhotoService:
             return []
         if len(image_bytes_list) > MAX_FILES:
             raise JewelryPhotoServiceError(f"Максимум {MAX_FILES} фото за один запрос.")
+        # Валидируем и фиксируем финальный промпт до запуска, чтобы его можно было вернуть в UI.
+        self.last_prompt_used = self.build_prompt(
+            revision_description=revision_description,
+            prompt_override=prompt_override,
+        )
         for i, b in enumerate(image_bytes_list):
             if len(b) > MAX_FILE_BYTES:
                 raise JewelryPhotoServiceError(
@@ -296,7 +586,14 @@ class JewelryPhotoService:
         model = await self._get_model_from_settings()
         if not model:
             model = os.getenv("IMAGE_GENERATION_MODEL", "black-forest-labs/flux-pro")
-        logger.info(f"Jewelry photo processing: model={model}, images={len(image_bytes_list)}, article={article}")
+        logger.info(
+            "Jewelry photo processing: runtime=%s, hermes_model=%s, legacy_model=%s, images=%s, article=%s",
+            self.runtime,
+            self.hermes_model,
+            model,
+            len(image_bytes_list),
+            article,
+        )
 
         sanitized = _sanitize_article(article)
         urls = []
@@ -304,17 +601,27 @@ class JewelryPhotoService:
         for idx, img_bytes in enumerate(image_bytes_list):
             try:
                 logger.info("Processing image %s/%s...", idx + 1, len(image_bytes_list))
-                processed = await self._process_one_with_openrouter(
-                    img_bytes, model, revision_description=revision_description
-                )
+                if self.runtime == "openrouter":
+                    processed = await self._process_one_with_openrouter(
+                        img_bytes,
+                        model,
+                        revision_description=revision_description,
+                        prompt_override=prompt_override,
+                    )
+                else:
+                    processed = await self._process_one_with_hermes_gpt_image_2(
+                        img_bytes,
+                        revision_description=revision_description,
+                        prompt_override=prompt_override,
+                    )
                 logger.info("Model returned image, size=%s bytes", len(processed))
             except ModelDoesNotSupportImageError:
                 raise
             except Exception as e:
-                logger.exception(f"OpenRouter processing failed for image {idx}: {e}")
+                logger.exception("Jewelry photo processing failed for image %s: %s", idx, e)
                 raise JewelryPhotoServiceError(
                     f"Ошибка обработки изображения: {str(e)}. "
-                    "Убедитесь, что выбранная модель поддерживает ввод изображения (Настройки)."
+                    "Проверьте Hermes/Codex авторизацию и доступность GPT Image 2."
                 )
 
             # 2) Постобработка Pillow

@@ -4,6 +4,7 @@ import base64
 import logging
 import asyncio
 import re
+import io
 from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
 from pathlib import Path
@@ -28,6 +29,93 @@ class ImageGenerationService:
         self.local_storage_dir.mkdir(parents=True, exist_ok=True)
         self.models_root_dir = Path("static/models")
         self.models_root_dir.mkdir(parents=True, exist_ok=True)
+        self.optimize_max_side = int(os.getenv("IMAGE_OPTIMIZE_MAX_SIDE", "1800"))
+        self.optimize_quality = int(os.getenv("IMAGE_OPTIMIZE_QUALITY", "82"))
+        self.optimize_format = os.getenv("IMAGE_OPTIMIZE_FORMAT", "WEBP").strip().upper()
+
+    def _optimize_image_for_storage(
+        self,
+        image_data: bytes,
+        filename: str,
+        content_type: str,
+    ) -> tuple[bytes, str, str]:
+        """
+        Оптимизирует изображение перед записью в storage:
+        - применяет EXIF orientation;
+        - ограничивает максимальную сторону;
+        - сохраняет в WebP/JPEG с контролируемым quality.
+        """
+        if not image_data or not content_type.startswith("image/"):
+            return image_data, filename, content_type
+
+        try:
+            from PIL import Image, ImageOps
+        except Exception as e:
+            logger.warning("Pillow недоступен, сохраняем изображение без оптимизации: %s", e)
+            return image_data, filename, content_type
+
+        try:
+            original_size = len(image_data)
+            with Image.open(io.BytesIO(image_data)) as img:
+                img = ImageOps.exif_transpose(img)
+
+                if self.optimize_max_side > 0:
+                    img.thumbnail(
+                        (self.optimize_max_side, self.optimize_max_side),
+                        Image.Resampling.LANCZOS,
+                    )
+
+                target_format = self.optimize_format
+                if target_format not in {"WEBP", "JPEG"}:
+                    target_format = "WEBP"
+
+                output = io.BytesIO()
+                stem = Path(filename).stem
+
+                if target_format == "JPEG":
+                    if img.mode not in ("RGB", "L"):
+                        background = Image.new("RGB", img.size, (255, 255, 255))
+                        if img.mode in ("RGBA", "LA"):
+                            alpha = img.getchannel("A")
+                            background.paste(img.convert("RGBA"), mask=alpha)
+                        else:
+                            background.paste(img.convert("RGB"))
+                        img = background
+                    else:
+                        img = img.convert("RGB")
+
+                    img.save(
+                        output,
+                        format="JPEG",
+                        quality=self.optimize_quality,
+                        optimize=True,
+                        progressive=True,
+                    )
+                    optimized_filename = f"{stem}.jpg"
+                    optimized_content_type = "image/jpeg"
+                else:
+                    if img.mode not in ("RGB", "RGBA"):
+                        img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
+                    img.save(
+                        output,
+                        format="WEBP",
+                        quality=self.optimize_quality,
+                        method=6,
+                    )
+                    optimized_filename = f"{stem}.webp"
+                    optimized_content_type = "image/webp"
+
+                optimized_data = output.getvalue()
+                logger.info(
+                    "Изображение оптимизировано перед сохранением: %s -> %s байт, файл %s",
+                    original_size,
+                    len(optimized_data),
+                    optimized_filename,
+                )
+                return optimized_data, optimized_filename, optimized_content_type
+        except Exception as e:
+            logger.warning("Не удалось оптимизировать изображение, сохраняем оригинал: %s", e)
+            return image_data, filename, content_type
     
     def set_db_session(self, db_session: AsyncSession):
         """Устанавливает сессию БД для сервиса"""
@@ -61,6 +149,11 @@ class ImageGenerationService:
         storage_subdir: str = "look_images",
     ) -> str:
         """Загрузка изображения в хранилище (local или S3)"""
+        image_data, filename, content_type = self._optimize_image_for_storage(
+            image_data=image_data,
+            filename=filename,
+            content_type=content_type,
+        )
         safe_subdir = (storage_subdir or "look_images").strip().strip("/").replace("\\", "/")
         if not safe_subdir:
             safe_subdir = "look_images"
@@ -493,6 +586,171 @@ class ImageGenerationService:
         
         return None
     
+    async def _generate_with_comfyui(
+        self,
+        prompt: str,
+        aspect_ratio: str = "1:1",
+        negative_prompt: Optional[str] = None,
+    ) -> Optional[bytes]:
+        """Генерация через внешний ComfyUI HTTP API.
+
+        Это лёгкий backend-path для Hermes/Elena: он использует стандартный SDXL
+        txt2img workflow и текущий GLAME_COMFYUI_URL. Для точной передачи реальных
+        украшений OpenRouter/image-reference path предпочтительнее; ComfyUI здесь
+        нужен как альтернативный creative backend для mood/editorial вариантов.
+        """
+        comfy_url = (os.getenv("GLAME_COMFYUI_URL") or "").strip().rstrip("/")
+        if not comfy_url:
+            logger.warning("GLAME_COMFYUI_URL is not set; skipping ComfyUI generation")
+            return None
+
+        width, height = 1024, 1024
+        ratio = (aspect_ratio or "1:1").strip().lower()
+        if ratio in {"portrait", "9:16", "story", "reels"}:
+            width, height = 832, 1216
+        elif ratio in {"landscape", "16:9", "banner"}:
+            width, height = 1344, 768
+
+        negative = negative_prompt or (
+            "cheap marketplace photo, wildberries style, low quality, bad anatomy, "
+            "extra fingers, fused fingers, distorted hands, deformed jewelry, text, "
+            "watermark, logo, blurry, noisy, oversaturated, cartoon"
+        )
+        seed = int.from_bytes(os.urandom(4), "big")
+        workflow = {
+            "3": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": 28, "cfg": 6.5, "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1, "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0]}},
+            "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": os.getenv("GLAME_COMFYUI_CHECKPOINT", "juggernautXL_ragnarokBy.safetensors")}},
+            "5": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
+            "6": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["4", 1]}},
+            "7": {"class_type": "CLIPTextEncode", "inputs": {"text": negative, "clip": ["4", 1]}},
+            "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+            "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "GLAME_Hermes", "images": ["8", 0]}},
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=600.0, headers={"ngrok-skip-browser-warning": "true"}) as client:
+                stats = await client.get(f"{comfy_url}/system_stats", timeout=20.0)
+                stats.raise_for_status()
+                response = await client.post(f"{comfy_url}/prompt", json={"prompt": workflow})
+                response.raise_for_status()
+                prompt_id = (response.json() or {}).get("prompt_id")
+                if not prompt_id:
+                    return None
+                for _ in range(180):
+                    await asyncio.sleep(2)
+                    history_resp = await client.get(f"{comfy_url}/history/{prompt_id}")
+                    history_resp.raise_for_status()
+                    history = history_resp.json() or {}
+                    item = history.get(prompt_id) or {}
+                    outputs = item.get("outputs") or {}
+                    for output in outputs.values():
+                        images = output.get("images") or []
+                        if images:
+                            img = images[0]
+                            view_resp = await client.get(
+                                f"{comfy_url}/view",
+                                params={
+                                    "filename": img.get("filename"),
+                                    "subfolder": img.get("subfolder", ""),
+                                    "type": img.get("type", "output"),
+                                },
+                                timeout=120.0,
+                            )
+                            view_resp.raise_for_status()
+                            return view_resp.content
+        except Exception as e:
+            logger.error("Error generating image with ComfyUI: %s", e)
+        return None
+
+    async def generate_custom_image(
+        self,
+        prompt: str,
+        reference_image_urls: Optional[List[str]] = None,
+        model_profile: Optional[str] = None,
+        asset_group: str = "hermes_generated",
+        filename_prefix: str = "hermes",
+        provider: str = "auto",
+        aspect_ratio: str = "1:1",
+        negative_prompt: Optional[str] = None,
+        no_text_on_image: bool = True,
+        allow_text_only_fallback: bool = False,
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Универсальная генерация изображения для Hermes/Elena.
+
+        provider: auto | openrouter/platform | comfyui. Возвращает URL и полную
+        metadata, чтобы агент мог сравнивать варианты и переиспользовать prompts.
+        """
+        clean_prompt = (prompt or "").strip()
+        if not clean_prompt:
+            raise ValueError("prompt is required")
+        if no_text_on_image and "без надпис" not in clean_prompt.lower() and "no text" not in clean_prompt.lower():
+            clean_prompt = clean_prompt.rstrip() + "\n\nСТРОГО: не добавляй текст на изображение, без надписей, букв, логотипов, watermark, плашек и баннеров."
+
+        provider_norm = (provider or "auto").strip().lower()
+        if provider_norm == "platform":
+            provider_norm = "openrouter"
+        providers = ["openrouter", "comfyui"] if provider_norm == "auto" else [provider_norm]
+        if provider_norm not in {"auto", "openrouter", "comfyui"}:
+            raise ValueError("provider must be one of: auto, openrouter, platform, comfyui")
+
+        product_refs = [u for u in (reference_image_urls or []) if isinstance(u, str) and u.strip()]
+        model_refs = self._discover_model_reference_images(model_profile=model_profile, limit=4) if model_profile else []
+        selected_model = model or await self._get_model_from_settings() or self.model
+        attempts: List[Dict[str, Any]] = []
+        image_data: Optional[bytes] = None
+        used_provider: Optional[str] = None
+
+        for candidate in providers:
+            if candidate == "comfyui" and product_refs:
+                attempts.append({"provider": candidate, "status": "skipped", "reason": "reference images require OpenRouter/platform path"})
+                continue
+            if candidate == "openrouter":
+                image_data = await self._generate_with_openrouter(
+                    clean_prompt,
+                    selected_model,
+                    product_images=product_refs,
+                    reference_images=model_refs,
+                )
+            elif candidate == "comfyui":
+                image_data = await self._generate_with_comfyui(
+                    clean_prompt,
+                    aspect_ratio=aspect_ratio,
+                    negative_prompt=negative_prompt,
+                )
+            else:
+                image_data = None
+
+            attempts.append({"provider": candidate, "status": "success" if image_data else "failed"})
+            if image_data:
+                used_provider = candidate
+                break
+
+        if not image_data and allow_text_only_fallback and "openrouter" in providers:
+            image_data = await self._generate_with_replicate(clean_prompt, selected_model)
+            attempts.append({"provider": "replicate", "status": "success" if image_data else "failed", "text_only_fallback": True})
+            if image_data:
+                used_provider = "replicate"
+
+        if not image_data or not used_provider:
+            raise ValueError("Не удалось сгенерировать изображение ни одним backend-ом")
+
+        safe_prefix = (filename_prefix or "hermes").strip().replace(" ", "_")
+        filename = f"{safe_prefix}_{uuid4()}.png"
+        image_url = await self._upload_image_to_storage(image_data, filename, storage_subdir=asset_group)
+        return {
+            "url": image_url,
+            "prompt_used": clean_prompt,
+            "provider": used_provider,
+            "model": selected_model if used_provider in {"openrouter", "replicate"} else None,
+            "reference_images_count": len(product_refs),
+            "model_reference_images_count": len(model_refs),
+            "reference_image_urls": product_refs,
+            "model_reference_image_urls": model_refs,
+            "asset_group": asset_group,
+            "attempts": attempts,
+        }
+
     async def generate_look_image(
         self,
         look_description: Dict[str, Any],

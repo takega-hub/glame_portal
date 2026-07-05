@@ -1,0 +1,24 @@
+{
+  "name": "@glame/glm-ton-jetton",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate:env": "node scripts/validate-env.mjs",
+    "validate:artifact": "node scripts/validate-artifact.mjs",
+    "reference:status": "node scripts/reference-status.mjs",
+    "reference:fetch": "node scripts/fetch-reference.mjs",
+    "blueprint:prepare": "node scripts/prepare-blueprint-deploy.mjs",
+    "blueprint:status": "node scripts/blueprint-status.mjs",
+    "build:status": "node scripts/validate-build-artifacts.mjs",
+    "mint:prepare": "node scripts/prepare-mint-operation.mjs",
+    "refill:prepare": "node scripts/prepare-refill-transfer.mjs",
+    "mint:prepare-claim": "node scripts/prepare-claim-mint.mjs",
+    "mint:status": "node scripts/mint-status.mjs",
+    "deploy:handoff": "node scripts/prepare-deploy-handoff.mjs",
+    "deploy:handoff:write": "node scripts/prepare-deploy-handoff.mjs --write",
+    "prepare:claims": "node scripts/prepare-claim-plan.mjs",
+    "prepare:claims:sample": "node scripts/prepare-claim-plan.mjs fixtures/pending-claims.sample.csv",
+    "record:deploy": "node scripts/record-deploy.mjs"
+  }
+}

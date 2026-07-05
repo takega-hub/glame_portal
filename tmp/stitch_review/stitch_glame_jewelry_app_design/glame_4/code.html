@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="ru"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GLAME - Photo Upload</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#1a1c1e",
+                        "error": "#ffb4ab",
+                        "soft-gray": "#D8DADB",
+                        "on-tertiary": "#2c3134",
+                        "on-surface": "#e2e2e5",
+                        "on-error": "#690005",
+                        "surface-container-lowest": "#0c0e10",
+                        "secondary": "#c6c6c9",
+                        "surface": "#121416",
+                        "tertiary-container": "#dee3e7",
+                        "on-primary-fixed": "#191c1d",
+                        "inverse-surface": "#e2e2e5",
+                        "primary-fixed-dim": "#c4c7c8",
+                        "tertiary-fixed-dim": "#c2c7cb",
+                        "inverse-on-surface": "#2f3133",
+                        "on-tertiary-fixed": "#171c1f",
+                        "on-secondary": "#2f3133",
+                        "outline-variant": "#434749",
+                        "surface-container-high": "#282a2c",
+                        "inverse-primary": "#5c5f60",
+                        "surface-container-highest": "#333537",
+                        "error-container": "#93000a",
+                        "tertiary-fixed": "#dee3e7",
+                        "background": "#121416",
+                        "on-surface-variant": "#c4c7c8",
+                        "secondary-fixed-dim": "#c6c6c9",
+                        "surface-tint": "#c4c7c8",
+                        "on-tertiary-container": "#606569",
+                        "surface-container": "#1e2022",
+                        "surface-bright": "#38393c",
+                        "primary-container": "#e1e3e4",
+                        "secondary-container": "#454749",
+                        "on-primary-container": "#626566",
+                        "surface-dim": "#121416",
+                        "on-secondary-container": "#b4b5b7",
+                        "surface-variant": "#333537",
+                        "primary-fixed": "#e1e3e4",
+                        "on-secondary-fixed": "#1a1c1e",
+                        "on-tertiary-fixed-variant": "#42474b",
+                        "tertiary": "#ffffff",
+                        "outline": "#8e9192",
+                        "secondary-fixed": "#e2e2e5",
+                        "on-primary-fixed-variant": "#444748",
+                        "on-error-container": "#ffdad6",
+                        "border-gray": "#5C6064",
+                        "cold-light-gray": "#C7CBCF",
+                        "on-secondary-fixed-variant": "#454749",
+                        "primary": "#ffffff",
+                        "on-background": "#e2e2e5",
+                        "on-primary": "#2e3132"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0px",
+                        "lg": "0px",
+                        "xl": "0px",
+                        "full": "0px"
+                    },
+                    "spacing": {
+                        "bottom-nav-height": "96px",
+                        "page-padding-h": "28px",
+                        "safe-air-bottom": "24px",
+                        "grid-gutter": "1px",
+                        "top-bar-height": "56px",
+                        "button-gap": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"],
+                        "body-md": ["Hanken Grotesk"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Hanken Grotesk"],
+                        "label-sm": ["Hanken Grotesk"],
+                        "display-lg": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "0em", "fontWeight": "500" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md antialiased min-h-screen flex flex-col selection:bg-primary selection:text-on-primary">
+<!-- Top App Bar -->
+<header class="fixed top-0 left-0 w-full z-50 bg-surface/80 backdrop-blur-md border-b border-border-gray">
+<div class="flex justify-between items-center w-full px-[28px] h-[56px]">
+<button aria-label="Back" class="w-8 h-8 flex items-center justify-start text-primary hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-2xl">arrow_back</span>
+</button>
+<div class="text-headline-lg-mobile font-headline-lg-mobile tracking-tighter text-primary">
+                GLAME
+            </div>
+<div class="w-8 h-8"></div> <!-- Placeholder to center the logo -->
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow pt-[56px] pb-[96px] flex flex-col relative">
+<!-- Hero Image Section -->
+<div class="relative w-full h-[45vh] min-h-[300px] border-b border-border-gray overflow-hidden">
+<img alt="Portrait of a woman with clean lighting and neutral expression" class="absolute inset-0 w-full h-full object-cover object-top opacity-80" data-alt="A striking portrait of an elegant woman with a neutral, calm expression, facing forward. The lighting is soft but distinct, highlighting her facial structure and jawline perfectly. The background is a stark, minimal architectural space in varying shades of cool graphite and concrete grey. The mood is highly premium, sophisticated, and technologically precise, fitting a luxury digital aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD0l8v5c72cZW1YwY5DRv3QU1v-1DgHdeCzxfUtLSpmwIFmnAfL7_KRExovOSA7yWpzFJ4eklqySJZ7AdCyplaHi2XeY_sILGEloOW0H44OoRo2YfFkEufvnHW0h6lnDhfObGrXxwJYeGP-UJNcuc_DmN_aBDJRMAryVg5NyzyGH6WzCWZGWqRAFsVtnROU1HLAFPSVHWk0AhnkiHXP7lU59wqi-2ic2lJa1MKLEUud1X_90NHrKXC3UjKyZWTHQZJ8GHbeVnLOmq4"/>
+<!-- Overlay for text readability -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent"></div>
+<!-- Architectural Accents -->
+<div class="absolute top-6 left-6 w-8 h-8 border-t border-l border-white/30"></div>
+<div class="absolute top-6 right-6 w-8 h-8 border-t border-r border-white/30"></div>
+<div class="absolute bottom-6 left-6 w-8 h-8 border-b border-l border-white/30"></div>
+<div class="absolute bottom-6 right-6 w-8 h-8 border-b border-r border-white/30"></div>
+</div>
+<!-- Content Section -->
+<div class="px-[28px] py-8 flex flex-col gap-6 relative z-10 -mt-16">
+<div class="flex flex-col gap-4">
+<h1 class="text-headline-lg font-headline-lg text-primary">
+                    Подбор по фото
+                </h1>
+<p class="text-body-md font-body-md text-on-surface-variant max-w-md leading-relaxed">
+                    Чтобы подбор получился точнее, выберите спокойный портрет с хорошо видимым лицом. Мы проанализируем формы, линии и масштаб для поиска ваших идеальных украшений.
+                </p>
+</div>
+<div class="mt-4 flex flex-col gap-button-gap">
+<!-- Info CTA -->
+<button class="w-full flex items-center p-4 border border-border-gray bg-surface-container-low hover:bg-surface-container transition-colors group">
+<span class="material-symbols-outlined text-primary mr-4 group-hover:scale-110 transition-transform">info</span>
+<div class="flex-grow text-left">
+<span class="text-label-md font-label-md text-primary block">Какое фото подойдет?</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant mt-1 block">Посмотреть примеры и требования</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">chevron_right</span>
+</button>
+<!-- Primary Action -->
+<button class="w-full h-[56px] bg-primary text-on-primary text-label-md font-label-md flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">photo_camera</span>
+                    Выбрать или сделать фото
+                </button>
+<p class="text-label-sm font-label-sm text-on-surface-variant text-center mt-2">
+                    Загрузка фото доступна после входа в профиль.
+                </p>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-[28px] h-[96px] pb-safe-air-bottom bg-surface border-t border-border-gray">
+<button class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors gap-1 w-16">
+<span class="material-symbols-outlined text-[24px]">grid_view</span>
+<span class="text-[10px] font-label-sm tracking-wider uppercase">Главная</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors gap-1 w-16">
+<span class="material-symbols-outlined text-[24px]">layers</span>
+<span class="text-[10px] font-label-sm tracking-wider uppercase">Каталог</span>
+</button>
+<!-- Active Tab -->
+<button class="flex flex-col items-center justify-center text-primary scale-110 transition-transform duration-150 gap-1 w-16 relative">
+<span class="material-symbols-outlined text-[24px] fill">auto_awesome</span>
+<span class="text-[10px] font-label-sm tracking-wider uppercase font-semibold">Подбор</span>
+<!-- Active indicator dot -->
+<div class="absolute -top-3 w-1 h-1 bg-primary rounded-full"></div>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors gap-1 w-16">
+<span class="material-symbols-outlined text-[24px]">favorite</span>
+<span class="text-[10px] font-label-sm tracking-wider uppercase">Избранное</span>
+</button>
+<button class="flex flex-col items-center justify-center text-secondary hover:text-primary transition-colors gap-1 w-16">
+<span class="material-symbols-outlined text-[24px]">person</span>
+<span class="text-[10px] font-label-sm tracking-wider uppercase">Профиль</span>
+</button>
+</nav>
+</body></html>

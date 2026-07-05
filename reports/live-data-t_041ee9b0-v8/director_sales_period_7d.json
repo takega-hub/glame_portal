@@ -1,0 +1,16 @@
+HTTP 200 OK
+{
+  "average_check": 12037.76,
+  "average_check_rub": 12037.76,
+  "checks_count": 38,
+  "days": 7,
+  "items_sold": 179.0,
+  "last_sale_at": "2026-05-27T18:45:06+00:00",
+  "orders_count": 38,
+  "period": "last_7_days",
+  "since": "2026-05-21T10:49:25.055311",
+  "source": "sales_records",
+  "total_revenue": 457435.00000000006,
+  "total_revenue_rub": 457435.0,
+  "unique_customers": 22
+}

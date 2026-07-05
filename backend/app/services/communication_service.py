@@ -287,27 +287,53 @@ class CommunicationService:
         
         conditions = []
         
-        # Фильтр по сегментам (A, B, C, D, E)
-        if criteria.get("segments"):
-            segments = criteria["segments"]
-            # Сегменты определяются динамически, нужно вычислять их
-            # Для упрощения используем поле customer_segment если оно есть
-            if hasattr(User, 'customer_segment'):
-                segment_conditions = []
-                for segment in segments:
-                    # Маппинг наших сегментов на сегменты в БД
-                    segment_mapping = {
-                        "A": ["VIP", "A"],
-                        "B": ["Active", "B"],
-                        "C": ["Regular", "C"],
-                        "D": ["Sleeping", "D"],
-                        "E": ["New", "E"]
-                    }
-                    db_segments = segment_mapping.get(segment, [segment])
-                    segment_conditions.append(User.customer_segment.in_(db_segments))
-                
-                if segment_conditions:
-                    conditions.append(or_(*segment_conditions))
+        # Фильтр по сегменту из справочника сегментов (по имени или ID)
+        seg_name = criteria.get("segment_name")
+        seg_id = criteria.get("segment_id")
+        if seg_name or seg_id:
+            try:
+                from app.models.user_segment import UserSegment
+                from app.models.customer_segment import CustomerSegment
+                if seg_id:
+                    try:
+                        seg_uuid = UUID(seg_id)
+                        subq = select(UserSegment.user_id).where(UserSegment.segment_id == seg_uuid)
+                        conditions.append(User.id.in_(subq))
+                    except Exception:
+                        pass
+                elif seg_name:
+                    subq = (
+                        select(UserSegment.user_id)
+                        .join(CustomerSegment, UserSegment.segment_id == CustomerSegment.id)
+                        .where(and_(CustomerSegment.name == seg_name, CustomerSegment.is_active == True))
+                    )
+                    conditions.append(User.id.in_(subq))
+            except Exception as e:
+                logger.warning(f"Failed to apply segment_name/segment_id filter: {e}")
+        # Если задан segment_name/segment_id, игнорируем упрощённые чекбоксы A–E,
+        # чтобы не расширять выборку сверх выбранного сегмента
+        else:
+            # Фильтр по сегментам (A, B, C, D, E)
+            if criteria.get("segments"):
+                segments = criteria["segments"]
+                # Сегменты определяются динамически, нужно вычислять их
+                # Для упрощения используем поле customer_segment если оно есть
+                if hasattr(User, 'customer_segment'):
+                    segment_conditions = []
+                    for segment in segments:
+                        # Маппинг наших сегментов на сегменты в БД
+                        segment_mapping = {
+                            "A": ["VIP", "A"],
+                            "B": ["Active", "B"],
+                            "C": ["Regular", "C"],
+                            "D": ["Sleeping", "D"],
+                            "E": ["New", "E"]
+                        }
+                        db_segments = segment_mapping.get(segment, [segment])
+                        segment_conditions.append(User.customer_segment.in_(db_segments))
+                    
+                    if segment_conditions:
+                        conditions.append(or_(*segment_conditions))
         
         # Фильтр по полу
         if criteria.get("gender"):
@@ -662,6 +688,25 @@ class CommunicationService:
                     if search_criteria.get("max_total_spend_365") is not None:
                         sql_query += " AND total_spent <= :max_spend"
                         params["max_spend"] = search_criteria["max_total_spend_365"]
+                    # Отбор по сегменту справочника (по имени или ID)
+                    if search_criteria.get("segment_name"):
+                        sql_query += """
+ AND EXISTS (
+     SELECT 1 FROM user_segments us
+     JOIN customer_segments cs ON us.segment_id = cs.id
+     WHERE us.user_id = users.id
+       AND cs.name = :segment_name
+       AND cs.is_active = TRUE
+ )"""
+                        params["segment_name"] = search_criteria["segment_name"]
+                    if search_criteria.get("segment_id"):
+                        sql_query += """
+ AND EXISTS (
+     SELECT 1 FROM user_segments us
+     WHERE us.user_id = users.id
+       AND us.segment_id = :segment_id
+ )"""
+                        params["segment_id"] = search_criteria["segment_id"]
                     if search_criteria.get("min_purchases_365") is not None:
                         sql_query += " AND total_purchases >= :min_purchases"
                         params["min_purchases"] = search_criteria["min_purchases_365"]
@@ -733,6 +778,25 @@ class CommunicationService:
                             if criteria_without_gender.get("max_total_spend_365") is not None:
                                 sql_query_null += " AND total_spent <= :max_spend"
                                 params_null["max_spend"] = criteria_without_gender["max_total_spend_365"]
+                            # Отбор по сегменту справочника (по имени или ID)
+                            if criteria_without_gender.get("segment_name"):
+                                sql_query_null += """
+ AND EXISTS (
+     SELECT 1 FROM user_segments us
+     JOIN customer_segments cs ON us.segment_id = cs.id
+     WHERE us.user_id = users.id
+       AND cs.name = :segment_name
+       AND cs.is_active = TRUE
+ )"""
+                                params_null["segment_name"] = criteria_without_gender["segment_name"]
+                            if criteria_without_gender.get("segment_id"):
+                                sql_query_null += """
+ AND EXISTS (
+     SELECT 1 FROM user_segments us
+     WHERE us.user_id = users.id
+       AND us.segment_id = :segment_id
+ )"""
+                                params_null["segment_id"] = criteria_without_gender["segment_id"]
                             if criteria_without_gender.get("min_purchases_365") is not None:
                                 sql_query_null += " AND total_purchases >= :min_purchases"
                                 params_null["min_purchases"] = criteria_without_gender["min_purchases_365"]

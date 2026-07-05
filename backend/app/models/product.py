@@ -36,6 +36,9 @@ class Product(Base):
     is_active = Column(Boolean, default=True, nullable=False)  # Активен ли товар
     sync_status = Column(String(50), nullable=True)  # Статус синхронизации: synced, pending, error
     sync_metadata = Column(JSON, nullable=True)  # Метаданные синхронизации (дата последней синхронизации, источник и т.д.)
+
+    is_core_assortment = Column(Boolean, default=False, nullable=False)
+    supports_brand_concept = Column(Boolean, default=False, nullable=False)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
