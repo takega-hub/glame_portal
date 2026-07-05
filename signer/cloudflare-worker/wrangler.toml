@@ -7,8 +7,8 @@ workers_dev = true
 
 [[kv_namespaces]]
 binding = "SIGNER_KV"
-id = "REPLACE_WITH_CLOUDFLARE_KV_NAMESPACE_ID"
-preview_id = "REPLACE_WITH_CLOUDFLARE_PREVIEW_KV_NAMESPACE_ID"
+id = "5f2337d61a4e4d9dbd9c86090a808c50"
+preview_id = "5f2337d61a4e4d9dbd9c86090a808c50"
 
 [vars]
 TON_NETWORK = "mainnet"
@@ -22,4 +22,3 @@ FORWARD_NANOTON = "1"
 MAX_AMOUNT_GLM = "1000"
 DAILY_LIMIT_GLM = "5000"
 EMERGENCY_PAUSED = "false"
-
