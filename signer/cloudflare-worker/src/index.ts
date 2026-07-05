@@ -106,6 +106,10 @@ function glmToBaseUnits(glm: number, decimals: number): bigint {
 }
 
 async function hotWallet(env: Env) {
+  const runtime = globalThis as typeof globalThis & { window?: unknown };
+  if (!runtime.window) {
+    runtime.window = runtime;
+  }
   const words = String(env.TON_HOT_WALLET_MNEMONIC || '')
     .trim()
     .split(/\s+/)
