@@ -6,7 +6,7 @@
     "symbol": "GLM",
     "decimals": 9,
     "description": "GLAME club utility unit for CryptoGLAME testnet claim pilot.",
-    "image": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v1.png",
+    "image": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png",
     "metadata_url": "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json"
   },
   "policy": {

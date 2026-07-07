@@ -78,11 +78,12 @@ For operator handoff, use `DEPLOY_OPERATOR_HANDOFF.md` or run `npm run deploy:ha
 
 - Name: GLAME Coin
 - Symbol: GLM
-- Decimals: 0
+- Decimals: 9
 - Initial mainnet supply: not defined
 - Testnet minting: admin-controlled, only for verified GLAME claim tests
 - Admin: GLAME testnet treasury wallet
 - Content URI: `/static/glm_policy/jetton-metadata.json`
+- Icon: `/static/glm_policy/glm-token-icon-v3.png` with the approved GLAME brand sign
 
 ## Decimals
 

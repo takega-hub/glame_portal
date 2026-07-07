@@ -38,7 +38,7 @@ from app.api.dependencies import require_admin
 from app.database.connection import get_db
 from app.models.referral import ReferralAttribution, ReferralCashUpgradeRequest, ReferralCode, ReferralCommission, ReferralPayout, ReferralProgramMember
 from app.models.loyalty_transaction import LoyaltyTransaction
-from app.models.glame_token import GlameTokenAccount, GlameTokenBridgeOperation, GlameTokenDailyAuditHash, GlameTokenTransaction
+from app.models.glame_token import GlameTokenAccount, GlameTokenBridgeOperation, GlameTokenDailyAuditHash, GlameTokenTransaction, GlameTreasuryRefillCheck
 from app.models.reward_store import RewardStoreItem
 from app.models.customer_message import CustomerMessage
 from app.models.onec_user_sync_job import OneCUserSyncJob
@@ -78,6 +78,214 @@ PROJECT_ROOT_DIR = Path(__file__).resolve().parents[3]
 GLM_TON_TESTNET_ARTIFACT = PROJECT_ROOT_DIR / "contracts" / "ton" / "glm-jetton" / "glm-jetton.testnet.json"
 GLM_TON_REFERENCE_LOCK = PROJECT_ROOT_DIR / "contracts" / "ton" / "glm-jetton" / "reference.jetton-contract.lock.json"
 logger = logging.getLogger(__name__)
+
+
+def _glm_operational_stats_start_at() -> datetime | None:
+    raw = (os.getenv("TON_GLM_OPERATIONAL_STATS_START_AT") or "").strip()
+    if not raw:
+        return None
+    try:
+        normalized = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+        value = datetime.fromisoformat(normalized)
+    except ValueError:
+        logger.warning("Invalid TON_GLM_OPERATIONAL_STATS_START_AT=%s", raw)
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _glm_operational_network() -> str:
+    return (os.getenv("TON_NETWORK", "testnet") or "testnet").strip() or "testnet"
+
+
+def _glm_tx_meta_network(meta: Any) -> str | None:
+    if not isinstance(meta, dict):
+        return None
+    value = meta.get("ton_network") or meta.get("network")
+    return str(value).strip().lower() if value else None
+
+
+def _normalize_ton_tx_hash(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _collect_meta_ton_hashes(meta: Any) -> list[tuple[str, str]]:
+    if not isinstance(meta, dict):
+        return []
+    auto_transfer = meta.get("ton_auto_transfer") if isinstance(meta.get("ton_auto_transfer"), dict) else {}
+    items = [
+        ("meta.tx_hash", meta.get("tx_hash")),
+        ("meta.operator_tx_hash", meta.get("operator_tx_hash")),
+        ("meta.deposit_tx_hash", meta.get("deposit_tx_hash")),
+        ("meta.ton_tx_hash", meta.get("ton_tx_hash")),
+        ("meta.ton_refund_tx_hash", meta.get("ton_refund_tx_hash")),
+        ("meta.ton_auto_transfer.tx_hash", auto_transfer.get("tx_hash")),
+    ]
+    return [(field, tx_hash) for field, raw in items if (tx_hash := _normalize_ton_tx_hash(raw))]
+
+
+async def _glm_replay_idempotency_audit_payload(db: AsyncSession) -> dict[str, Any]:
+    bridge_operations = (
+        await db.execute(
+            select(GlameTokenBridgeOperation)
+            .where(GlameTokenBridgeOperation.token_code == "GLM")
+            .order_by(desc(GlameTokenBridgeOperation.created_at))
+        )
+    ).scalars().all()
+    operations_by_transaction_id = {
+        str(operation.transaction_id): str(operation.id)
+        for operation in bridge_operations
+        if operation.transaction_id
+    }
+    tx_hash_sources: dict[str, list[dict[str, Any]]] = {}
+
+    def add_hash_source(tx_hash: str, source: dict[str, Any]) -> None:
+        normalized = _normalize_ton_tx_hash(tx_hash)
+        if not normalized:
+            return
+        tx_hash_sources.setdefault(normalized, []).append(source)
+
+    for operation in bridge_operations:
+        add_hash_source(
+            str(operation.ton_tx_hash or ""),
+            {
+                "entity_key": f"bridge_operation:{operation.id}",
+                "kind": "bridge_operation",
+                "id": str(operation.id),
+                "transaction_id": str(operation.transaction_id),
+                "direction": operation.direction,
+                "status": operation.status,
+                "field": "ton_tx_hash",
+            },
+        )
+
+    transactions = (
+        await db.execute(
+            select(GlameTokenTransaction)
+            .where(
+                GlameTokenTransaction.token_code == "GLM",
+                GlameTokenTransaction.transaction_type.in_(("claim", "bridge", "redemption")),
+            )
+            .order_by(desc(GlameTokenTransaction.created_at))
+        )
+    ).scalars().all()
+    for tx in transactions:
+        meta = tx.meta if isinstance(tx.meta, dict) else {}
+        entity_key = (
+            f"bridge_operation:{operations_by_transaction_id[str(tx.id)]}"
+            if str(tx.id) in operations_by_transaction_id
+            else f"transaction:{tx.id}"
+        )
+        for field, tx_hash in _collect_meta_ton_hashes(meta):
+            add_hash_source(
+                tx_hash,
+                {
+                    "entity_key": entity_key,
+                    "kind": "transaction",
+                    "id": str(tx.id),
+                    "transaction_type": tx.transaction_type,
+                    "status": tx.status,
+                    "reason": tx.reason,
+                    "field": field,
+                },
+            )
+
+    duplicate_hash_issues = []
+    for tx_hash, sources in tx_hash_sources.items():
+        distinct_entities = sorted({str(source.get("entity_key")) for source in sources})
+        if len(distinct_entities) <= 1:
+            continue
+        duplicate_hash_issues.append({
+            "code": "duplicate_ton_tx_hash",
+            "severity": "critical",
+            "tx_hash": tx_hash,
+            "entities": distinct_entities,
+            "sources": sources[:10],
+        })
+
+    processed_without_ton: list[dict[str, Any]] = []
+    for operation in bridge_operations:
+        if operation.status != "processed":
+            continue
+        if _normalize_ton_tx_hash(operation.ton_tx_hash):
+            continue
+        if str(operation.ton_status or "").lower() in {"legacy_manual", "manual_reviewed"}:
+            continue
+        processed_without_ton.append({
+            "code": "bridge_processed_without_ton_tx",
+            "severity": "critical",
+            "operation_id": str(operation.id),
+            "transaction_id": str(operation.transaction_id),
+            "direction": operation.direction,
+            "status": operation.status,
+            "ton_status": operation.ton_status,
+            "glm_amount": int(operation.glm_amount or 0),
+        })
+
+    store_payment_issues: list[dict[str, Any]] = []
+    refund_issues: list[dict[str, Any]] = []
+    for tx in transactions:
+        if tx.transaction_type != "redemption":
+            continue
+        meta = tx.meta if isinstance(tx.meta, dict) else {}
+        payment_method = str(meta.get("payment_method") or "")
+        if tx.reason == "glm_store_item" and payment_method == "ton_glm" and tx.status in {"pending_fulfillment", "fulfilled"}:
+            if not (_normalize_ton_tx_hash(meta.get("deposit_tx_hash")) or _normalize_ton_tx_hash(meta.get("tx_hash"))):
+                store_payment_issues.append({
+                    "code": "store_paid_without_ton_tx",
+                    "severity": "critical",
+                    "transaction_id": str(tx.id),
+                    "status": tx.status,
+                    "amount_glm": abs(int(tx.amount or 0)),
+                })
+        refund_status = str(meta.get("ton_refund_status") or "")
+        if refund_status in {"sent", "verified", "settled"} and not _normalize_ton_tx_hash(meta.get("ton_refund_tx_hash")):
+            refund_issues.append({
+                "code": "refund_marked_sent_without_ton_tx",
+                "severity": "critical",
+                "transaction_id": str(tx.id),
+                "status": tx.status,
+                "refund_status": refund_status,
+                "amount_glm": abs(int(tx.amount or 0)),
+            })
+
+    issues = duplicate_hash_issues + processed_without_ton + store_payment_issues + refund_issues
+    checks = [
+        {
+            "code": "ton_tx_hash_uniqueness",
+            "status": "ok" if not duplicate_hash_issues else "failed",
+            "message": f"{len(duplicate_hash_issues)} duplicated TON tx hash groups across bridge/store/refund.",
+        },
+        {
+            "code": "processed_bridge_has_ton_tx",
+            "status": "ok" if not processed_without_ton else "failed",
+            "message": f"{len(processed_without_ton)} processed bridge operations do not have TON tx hash.",
+        },
+        {
+            "code": "store_paid_has_ton_tx",
+            "status": "ok" if not store_payment_issues else "failed",
+            "message": f"{len(store_payment_issues)} GLM Store paid orders do not have TON tx hash.",
+        },
+        {
+            "code": "refund_sent_has_ton_tx",
+            "status": "ok" if not refund_issues else "failed",
+            "message": f"{len(refund_issues)} TON refunds marked sent/verified without TON tx hash.",
+        },
+    ]
+    return {
+        "schema": "glame_replay_idempotency_audit_v1",
+        "status": "ok" if not issues else "failed",
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked": {
+            "bridge_operations": len(bridge_operations),
+            "transactions": len(transactions),
+            "ton_tx_hashes": len(tx_hash_sources),
+        },
+        "checks": checks,
+        "issues_count": len(issues),
+        "issues": issues[:50],
+    }
 
 
 class ReferralMemberResponse(BaseModel):
@@ -147,7 +355,10 @@ class ReferralDashboardResponse(BaseModel):
 
 class ReferralRegisterRequest(BaseModel):
     phone: str = Field(min_length=6, max_length=32)
-    full_name: str = Field(min_length=2, max_length=255)
+    full_name: str | None = Field(default=None, max_length=255)
+    last_name: str | None = Field(default=None, max_length=120)
+    first_name: str | None = Field(default=None, max_length=120)
+    middle_name: str | None = Field(default=None, max_length=120)
     password: str = Field(min_length=6, max_length=128)
     email: str | None = Field(default=None, max_length=255)
     offer_accepted: bool = False
@@ -303,6 +514,18 @@ class AdminGlmTonAutoTransferOverrideRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class AdminGlmProductionSignerEmergencyPauseRequest(BaseModel):
+    paused: bool
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class AdminGlmProductionApprovalsRequest(BaseModel):
+    legal_approved: bool = False
+    security_approved: bool = False
+    treasury_approved: bool = False
+    comment: str | None = Field(default=None, max_length=1000)
+
+
 class AdminGlmHotWalletLimitsRequest(BaseModel):
     hot_wallet_refill_glm_threshold: Decimal = Field(ge=0, le=10_000_000)
     hot_wallet_refill_ton_threshold: Decimal = Field(ge=0, le=100)
@@ -314,6 +537,15 @@ class AdminGlmHotWalletRefillRecordRequest(BaseModel):
     manual_glm_amount: Decimal = Field(default=0, ge=0, le=10_000_000)
     manual_ton_amount: Decimal = Field(default=0, ge=0, le=100)
     ton_tx_hash: str | None = Field(default=None, max_length=160)
+    comment: str | None = Field(default=None, max_length=500)
+
+
+class AdminGlmHotWalletRefillApprovalRequest(BaseModel):
+    comment: str | None = Field(default=None, max_length=500)
+
+
+class AdminGlmHotWalletRefillApprovalDecisionRequest(BaseModel):
+    approved: bool
     comment: str | None = Field(default=None, max_length=500)
 
 
@@ -400,6 +632,17 @@ class AdminGlmClaimStatusRequest(BaseModel):
 class AdminGlmRedemptionStatusRequest(BaseModel):
     status: str = Field(pattern="^(fulfilled|failed|canceled)$")
     comment: str | None = Field(default=None, max_length=500)
+
+
+class AdminGlmRedemptionTonRefundRecordRequest(BaseModel):
+    tx_hash: str | None = Field(default=None, max_length=255)
+    comment: str | None = Field(default=None, max_length=500)
+
+
+class AdminGlmRedemptionTonRefundSettlementRequest(BaseModel):
+    tx_hash: str = Field(min_length=4, max_length=255)
+    comment: str | None = Field(default=None, max_length=500)
+    require_verified: bool = True
 
 
 class AdminGlmToPointsBridgeStatusRequest(BaseModel):
@@ -990,6 +1233,11 @@ def _glm_transaction_payload(
         "onec_request_payload": meta.get("onec_request_payload"),
         "refunded_glm": meta.get("refunded_glm"),
         "ton_refund_required": meta.get("ton_refund_required"),
+        "ton_refund_status": meta.get("ton_refund_status"),
+        "ton_refund_tx_hash": meta.get("ton_refund_tx_hash"),
+        "ton_refund_submitted_at": meta.get("ton_refund_submitted_at"),
+        "ton_refund_verified_at": meta.get("ton_refund_verified_at"),
+        "ton_refund_verification": meta.get("ton_refund_verification"),
         "loyalty_points_expires_at": meta.get("loyalty_points_expires_at"),
         "loyalty_points_expires_days": meta.get("loyalty_points_expires_days"),
         "sku": meta.get("sku"),
@@ -2326,8 +2574,12 @@ async def admin_glm_effectiveness(
     db: AsyncSession = Depends(get_db),
 ):
     now = datetime.now(timezone.utc)
+    stats_start_at = _glm_operational_stats_start_at()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if stats_start_at and stats_start_at > month_start:
+        month_start = stats_start_at
     active_redemption_statuses = ("pending_fulfillment", "fulfilled")
+    tx_window_conditions = [GlameTokenTransaction.created_at >= stats_start_at] if stats_start_at else []
 
     totals = (
         await db.execute(
@@ -2378,7 +2630,7 @@ async def admin_glm_effectiveness(
                     GlameTokenTransaction.status.in_(active_redemption_statuses),
                     GlameTokenTransaction.created_at >= month_start,
                 ), 0),
-            ).where(GlameTokenTransaction.token_code == "GLM")
+            ).where(GlameTokenTransaction.token_code == "GLM", *tx_window_conditions)
         )
     ).one()
     redeemed_account_ids = (
@@ -2388,6 +2640,7 @@ async def admin_glm_effectiveness(
                 GlameTokenTransaction.token_code == "GLM",
                 GlameTokenTransaction.transaction_type == "redemption",
                 GlameTokenTransaction.status.in_(active_redemption_statuses),
+                *tx_window_conditions,
             )
             .group_by(GlameTokenTransaction.account_id)
         )
@@ -2411,6 +2664,7 @@ async def admin_glm_effectiveness(
                 GlameTokenTransaction.token_code == "GLM",
                 GlameTokenTransaction.transaction_type == "redemption",
                 GlameTokenTransaction.status.in_(active_redemption_statuses),
+                *tx_window_conditions,
             )
             .order_by(GlameTokenTransaction.created_at.desc())
             .limit(500)
@@ -2434,16 +2688,20 @@ async def admin_glm_effectiveness(
     accounts_total = int(totals[0] or 0)
     active_balance_accounts = int(totals[1] or 0)
     ready_to_redeem_count = int(totals[2] or 0)
-    lifetime_earned_total = int(totals[4] or 0)
-    lifetime_burned_total = int(totals[5] or 0)
     redeemers_count = int(tx_totals[0] or 0)
     redemption_total = abs(int(tx_totals[2] or 0))
     conversion_total = int(tx_totals[4] or 0)
     monthly_redemption_total = abs(int(tx_totals[7] or 0))
+    lifetime_earned_total = int(tx_totals[5] or 0)
+    lifetime_burned_total = redemption_total
 
     return {
         "generated_at": now.isoformat(),
-        "period": {"current_month_start": month_start.isoformat()},
+        "network": _glm_operational_network(),
+        "period": {
+            "current_month_start": month_start.isoformat(),
+            "operational_stats_start_at": stats_start_at.isoformat() if stats_start_at else None,
+        },
         "accounts_total": accounts_total,
         "active_balance_accounts": active_balance_accounts,
         "redeemers_count": redeemers_count,
@@ -3368,34 +3626,43 @@ async def admin_glm_ton_readiness(
     mainnet_enabled = bool(policy.get("mainnet_enabled"))
     hot_wallet_secret_source = str(auto_transfer_config.get("secret_source") or "none")
     hot_wallet_address = str(auto_transfer_config.get("hot_wallet_address") or "").strip()
+    active_hot_wallet_address = str(auto_transfer_config.get("active_hot_wallet_address") or "").strip()
     production_hot_wallet_address = str(auto_transfer_config.get("production_hot_wallet_address") or "").strip()
+    production_treasury_address = str(auto_transfer_config.get("production_treasury_address") or "").strip()
     production_signer_mode = str(auto_transfer_config.get("production_signer_mode") or "not_configured").strip()
+    production_safe_signer = bool(auto_transfer_config.get("production_safe_signer"))
     security_warnings = []
     mainnet_blockers = []
     if hot_wallet_secret_source == "env_mnemonic":
         security_warnings.append({
             "code": "hot_wallet_env_mnemonic",
             "severity": "pilot_warning",
-            "message": "Hot-wallet signer хранится как mnemonic в env. Это допустимо только для testnet-пилота; перед production/mainnet нужен новый wallet и secret manager/external signer.",
+            "message": "Testnet hot-wallet signer хранится как mnemonic в env. Это допустимо только для testnet-пилота; production/mainnet должен использовать отдельный secret manager/external signer.",
         })
-        mainnet_blockers.append({
-            "code": "hot_wallet_env_mnemonic",
-            "message": "Mainnet запрещен, пока auto-transfer signer хранится как TON_GLM_AUTO_TRANSFER_HOT_WALLET_MNEMONIC.",
-        })
-    if auto_transfer_config.get("enabled") and not hot_wallet_address:
+        if not production_safe_signer:
+            mainnet_blockers.append({
+                "code": "hot_wallet_env_mnemonic",
+                "message": "Mainnet запрещен, пока production signer не вынесен из backend env в KMS/Vault/external signer.",
+            })
+    if auto_transfer_config.get("enabled") and not active_hot_wallet_address:
         mainnet_blockers.append({
             "code": "hot_wallet_address_missing",
-            "message": "Для auto-transfer должен быть задан TON_GLM_AUTO_TRANSFER_HOT_WALLET_ADDRESS.",
+            "message": "Для auto-transfer должен быть задан активный hot-wallet address: testnet TON_GLM_AUTO_TRANSFER_HOT_WALLET_ADDRESS или mainnet TON_GLM_PRODUCTION_HOT_WALLET_ADDRESS.",
         })
     if not production_hot_wallet_address:
         mainnet_blockers.append({
             "code": "production_hot_wallet_missing",
             "message": "Для mainnet нужен отдельный production hot-wallet address без seed-фразы в env.",
         })
-    if production_hot_wallet_address and not auto_transfer_config.get("production_safe_signer"):
+    if not production_treasury_address:
+        mainnet_blockers.append({
+            "code": "production_treasury_missing",
+            "message": "Для mainnet нужен production treasury/bank wallet address, куда минтится основной банк GLM.",
+        })
+    if production_hot_wallet_address and not production_safe_signer:
         mainnet_blockers.append({
             "code": "production_signer_missing",
-            "message": f"Production hot-wallet address задан, но безопасный signer не подключен: signer_mode={production_signer_mode}. Нужен KMS/Vault/external signer без mnemonic в env.",
+            "message": f"Production hot-wallet address задан, но безопасный signer не подключен: signer_mode={production_signer_mode}, endpoint={bool(auto_transfer_config.get('production_signer_endpoint_configured'))}, token={bool(auto_transfer_config.get('production_signer_auth_configured'))}. Нужен KMS/Vault/external signer endpoint без mnemonic в backend env.",
         })
     if not auto_transfer_config.get("production_legal_approved"):
         mainnet_blockers.append({
@@ -3437,8 +3704,10 @@ async def admin_glm_ton_readiness(
         "TON_GLM_AUTO_TRANSFER_SIGNER_MODE": auto_transfer_config.get("signer_mode"),
         "TON_GLM_AUTO_TRANSFER_PRODUCTION_SAFE_SIGNER": bool(auto_transfer_config.get("production_safe_signer")),
         "TON_GLM_PRODUCTION_HOT_WALLET_ADDRESS": bool(auto_transfer_config.get("production_hot_wallet_address")),
+        "TON_GLM_PRODUCTION_TREASURY_ADDRESS": bool(auto_transfer_config.get("production_treasury_address")),
         "TON_GLM_PRODUCTION_SIGNER_MODE": auto_transfer_config.get("production_signer_mode"),
         "TON_GLM_PRODUCTION_SIGNER_ENDPOINT": bool(auto_transfer_config.get("production_signer_endpoint_configured")),
+        "TON_GLM_PRODUCTION_SIGNER_TOKEN": bool(auto_transfer_config.get("production_signer_auth_configured")),
         "TON_GLM_PRODUCTION_LEGAL_APPROVED": bool(auto_transfer_config.get("production_legal_approved")),
         "TON_GLM_PRODUCTION_SECURITY_APPROVED": bool(auto_transfer_config.get("production_security_approved")),
         "TON_GLM_PRODUCTION_TREASURY_APPROVED": bool(auto_transfer_config.get("production_treasury_approved")),
@@ -3446,9 +3715,9 @@ async def admin_glm_ton_readiness(
     }
     checks = [
         {
-            "code": "network_testnet",
-            "ok": (policy.get("network") or "testnet") == "testnet",
-            "message": "TON_NETWORK должен быть testnet для pilot",
+            "code": "network_configured",
+            "ok": (policy.get("network") or "testnet") in {"testnet", "mainnet"},
+            "message": "TON_NETWORK должен быть testnet или mainnet",
         },
         {
             "code": "metadata_url",
@@ -3522,8 +3791,16 @@ async def admin_glm_ton_readiness(
         },
         {
             "code": "artifact_deployed",
-            "ok": artifact_deployment.get("status") == "testnet_deployed",
-            "message": "glm-jetton.testnet.json должен быть записан через record:deploy после deploy",
+            "ok": (
+                bool(policy.get("jetton_master_address"))
+                if (policy.get("network") or "testnet") == "mainnet"
+                else artifact_deployment.get("status") == "testnet_deployed"
+            ),
+            "message": (
+                "TON_GLM_JETTON_MASTER_ADDRESS должен указывать на mainnet Jetton master"
+                if (policy.get("network") or "testnet") == "mainnet"
+                else "glm-jetton.testnet.json должен быть записан через record:deploy после deploy"
+            ),
         },
     ]
     blockers = [item for item in checks if not item["ok"]]
@@ -3548,7 +3825,7 @@ async def admin_glm_ton_readiness(
     if not (os.getenv("TON_GLM_SETTLEMENT_ADMIN_USER_ID") or "").strip():
         next_steps.append("Set TON_GLM_SETTLEMENT_ADMIN_USER_ID before enabling background auto-settlement.")
     if auto_transfer_config.get("production_candidate_ready") and not auto_transfer_config.get("production_safe_signer"):
-        next_steps.append("Connect TON_GLM_PRODUCTION_SIGNER_MODE as kms/vault/external_signer and keep production seed out of env/chat.")
+        next_steps.append("Connect TON_GLM_PRODUCTION_SIGNER_MODE and TON_GLM_PRODUCTION_SIGNER_ENDPOINT as KMS/Vault/external signer; keep production seed out of env/chat.")
     if auto_transfer_config.get("production_safe_signer") and not auto_transfer_config.get("production_approvals_ready"):
         next_steps.append("Collect TON_GLM_PRODUCTION_LEGAL_APPROVED, TON_GLM_PRODUCTION_SECURITY_APPROVED and TON_GLM_PRODUCTION_TREASURY_APPROVED before mainnet.")
     if not blockers and pending_claim_count > 0:
@@ -3634,6 +3911,88 @@ async def admin_glm_ton_readiness(
             "severity": item.get("severity") or "warning",
             "message": item.get("message") or "TON treasury balance требует проверки.",
         })
+    go_no_go_checks = [
+        {
+            "code": "network_mainnet",
+            "ok": str(policy.get("network") or "").strip() == "mainnet",
+            "label": "Network mainnet",
+            "message": "TON_NETWORK должен быть mainnet для публичного GLM режима.",
+        },
+        {
+            "code": "jetton_mainnet_deployed",
+            "ok": bool(policy.get("jetton_master_address")) and str(policy.get("network") or "").strip() == "mainnet",
+            "label": "Mainnet Jetton",
+            "message": "GLM Jetton master должен быть задан и опубликован в mainnet.",
+        },
+        {
+            "code": "external_signer_ready",
+            "ok": bool(auto_transfer_config.get("production_safe_signer")),
+            "label": "External signer",
+            "message": "Production hot-wallet должен подписывать через external signer/KMS/Vault, без seed в backend.",
+        },
+        {
+            "code": "signer_limits_set",
+            "ok": int(auto_transfer_config.get("max_amount_glm") or 0) > 0 and int(auto_transfer_config.get("daily_limit_glm") or 0) > 0,
+            "label": "Signer limits",
+            "message": "Должны быть заданы max per tx и daily cap для hot-wallet auto-transfer.",
+        },
+        {
+            "code": "auto_transfer_enabled",
+            "ok": bool(auto_transfer_config.get("enabled")),
+            "label": "Auto-transfer enabled",
+            "message": "Backend auto-transfer не должен быть на паузе перед публичным запуском.",
+        },
+        {
+            "code": "hot_wallet_funded",
+            "ok": hot_wallet_balance.get("status") in {"ok", "warning"} and float(hot_wallet_balance.get("glm_balance") or 0) > 0 and float(hot_wallet_balance.get("ton_balance") or 0) > 0,
+            "label": "Hot-wallet funded",
+            "message": "Hot-wallet должен иметь GLM и TON gas для заявок.",
+        },
+        {
+            "code": "treasury_funded",
+            "ok": treasury_balance.get("status") in {"ok", "warning"} and float(treasury_balance.get("glm_balance") or 0) > 0 and float(treasury_balance.get("ton_balance") or 0) > 0,
+            "label": "Treasury funded",
+            "message": "Treasury/bank должен иметь GLM и TON gas для refill/refund операций.",
+        },
+        {
+            "code": "approvals_ready",
+            "ok": bool(auto_transfer_config.get("production_approvals_ready")),
+            "label": "Approvals",
+            "message": "Нужны legal, security и treasury approval.",
+        },
+        {
+            "code": "no_mainnet_blockers",
+            "ok": not mainnet_blockers,
+            "label": "No blockers",
+            "message": "Readiness не должен иметь mainnet blockers.",
+        },
+        {
+            "code": "no_bridge_attention",
+            "ok": not bridge_operations_health.get("needs_attention") and not auto_transfer_health.get("needs_attention") and not glm_to_points_health.get("needs_attention"),
+            "label": "Bridge health",
+            "message": "Перед публичным запуском не должно быть зависших bridge/TON/1C операций.",
+        },
+        {
+            "code": "token_verification_package",
+            "ok": (PROJECT_ROOT_DIR / "contracts" / "ton" / "glm-jetton" / "ton-assets-verification" / "GLM.yaml").exists(),
+            "label": "Token verification package",
+            "message": "Пакет для Tonkeeper/asset-list должен быть готов; сам PR/merge остается внешним шагом.",
+        },
+    ]
+    go_no_go_blockers = [item for item in go_no_go_checks if not item.get("ok")]
+    go_no_go = {
+        "status": "go" if not go_no_go_blockers else "blocked",
+        "ready": not go_no_go_blockers,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "max_amount_glm": int(auto_transfer_config.get("max_amount_glm") or 0),
+        "daily_limit_glm": int(auto_transfer_config.get("daily_limit_glm") or 0),
+        "checks": go_no_go_checks,
+        "blockers": go_no_go_blockers,
+        "next_steps": [
+            item["message"]
+            for item in go_no_go_blockers[:6]
+        ],
+    }
     return {
         "status": "ready_for_treasury_transfer" if not blockers else "blocked",
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -3723,17 +4082,25 @@ async def admin_glm_ton_readiness(
             "production_hot_wallet_address": auto_transfer_config.get("production_hot_wallet_address"),
             "production_hot_wallet_bounceable": auto_transfer_config.get("production_hot_wallet_bounceable"),
             "production_hot_wallet_raw": auto_transfer_config.get("production_hot_wallet_raw"),
+            "production_treasury_address": auto_transfer_config.get("production_treasury_address"),
+            "production_treasury_bounceable": auto_transfer_config.get("production_treasury_bounceable"),
+            "production_treasury_raw": auto_transfer_config.get("production_treasury_raw"),
+            "production_treasury_ready": bool(auto_transfer_config.get("production_treasury_ready")),
             "production_candidate_ready": bool(auto_transfer_config.get("production_candidate_ready")),
             "production_ready": bool(auto_transfer_config.get("production_ready")),
             "production_signer_mode": auto_transfer_config.get("production_signer_mode"),
             "production_signer_endpoint_configured": bool(auto_transfer_config.get("production_signer_endpoint_configured")),
+            "production_signer_pause_endpoint_configured": bool(auto_transfer_config.get("production_signer_pause_endpoint_configured")),
+            "production_signer_auth_configured": bool(auto_transfer_config.get("production_signer_auth_configured")),
             "production_legal_approved": bool(auto_transfer_config.get("production_legal_approved")),
             "production_security_approved": bool(auto_transfer_config.get("production_security_approved")),
             "production_treasury_approved": bool(auto_transfer_config.get("production_treasury_approved")),
             "production_approvals_ready": bool(auto_transfer_config.get("production_approvals_ready")),
+            "production_approvals_override": auto_transfer_config.get("production_approvals_override"),
             "warnings": security_warnings,
             "mainnet_blockers": mainnet_blockers,
         },
+        "go_no_go": go_no_go,
         "alerts": readiness_alerts,
         "telegram_notifications": TelegramNotificationService.config_payload(),
         "schedulers": glm_token_scheduler_status(request.app),
@@ -3750,10 +4117,61 @@ async def admin_glm_ton_readiness(
             "prepare_claim_transfer": "Open GLAME treasury wallet and transfer existing GLM to claim wallet from TON CSV.",
             "settle_claim": "POST /api/referrals/admin/glm-claims/{claim_id}/ton-settlement with { tx_hash, require_verified: true }",
             "auto_transfer_run": "POST /api/referrals/admin/glm-ton-auto-transfer/run with { limit: 20 }",
+            "replay_idempotency_audit": "GET /api/referrals/admin/glm-replay-idempotency-audit",
         },
         "next_steps": next_steps,
         "checks": checks,
         "blockers": blockers,
+    }
+
+
+@router.get("/admin/glm-replay-idempotency-audit")
+async def admin_glm_replay_idempotency_audit(
+    _current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _glm_replay_idempotency_audit_payload(db)
+
+
+@router.post("/admin/glm-production-signer/check")
+async def admin_glm_production_signer_check(
+    _current_user: User = Depends(require_admin()),
+):
+    return await TonGlmAutoTransferService.check_production_signer_health()
+
+
+@router.post("/admin/glm-production-signer/emergency-pause")
+async def admin_glm_production_signer_emergency_pause(
+    payload: AdminGlmProductionSignerEmergencyPauseRequest,
+    current_user: User = Depends(require_admin()),
+):
+    result = await TonGlmAutoTransferService.set_production_signer_emergency_pause(
+        paused=payload.paused,
+        reason=payload.reason,
+        admin_user_id=current_user.id,
+    )
+    return {
+        "status": "paused" if payload.paused else "ok",
+        "result": result,
+    }
+
+
+@router.post("/admin/glm-production-approvals")
+async def admin_glm_production_approvals(
+    payload: AdminGlmProductionApprovalsRequest,
+    current_user: User = Depends(require_admin()),
+):
+    approvals = TonGlmAutoTransferService.write_production_approvals(
+        legal_approved=payload.legal_approved,
+        security_approved=payload.security_approved,
+        treasury_approved=payload.treasury_approved,
+        comment=payload.comment,
+        admin_user_id=current_user.id,
+    )
+    return {
+        "status": "success",
+        "approvals": approvals,
+        "auto_transfer": TonGlmAutoTransferService.config_payload(),
     }
 
 
@@ -3900,6 +4318,253 @@ async def admin_check_glm_treasury_balances(
     return payload
 
 
+@router.get("/admin/glm-treasury-turnover")
+async def admin_glm_treasury_turnover(
+    days: int = Query(default=30, ge=1, le=365),
+    limit: int = Query(default=30, ge=1, le=200),
+    _current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    stats_start_at = _glm_operational_stats_start_at()
+    network = _glm_operational_network()
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    if stats_start_at and stats_start_at > since:
+        since = stats_start_at
+    tx_rows = (
+        await db.execute(
+            select(GlameTokenTransaction, ReferralProgramMember, User)
+            .join(ReferralProgramMember, ReferralProgramMember.id == GlameTokenTransaction.referral_member_id, isouter=True)
+            .join(User, User.id == GlameTokenTransaction.user_id, isouter=True)
+            .where(
+                GlameTokenTransaction.token_code == "GLM",
+                GlameTokenTransaction.created_at >= since,
+                or_(
+                    and_(
+                        GlameTokenTransaction.transaction_type == "redemption",
+                        GlameTokenTransaction.reason == "glm_store_item",
+                    ),
+                    and_(
+                        GlameTokenTransaction.transaction_type == "bridge",
+                        GlameTokenTransaction.reason.in_(("glm_to_points_bridge", "buy_loyalty_points")),
+                    ),
+                ),
+            )
+            .order_by(desc(GlameTokenTransaction.created_at))
+            .limit(max(limit * 3, 100))
+        )
+    ).all()
+    await TonGlmTreasuryBalanceService(db).ensure_refill_check_table()
+    refill_rows = (
+        await db.execute(
+            select(GlameTreasuryRefillCheck)
+            .where(
+                GlameTreasuryRefillCheck.event_type == "manual_refill",
+                GlameTreasuryRefillCheck.created_at >= since,
+                or_(GlameTreasuryRefillCheck.network == network, GlameTreasuryRefillCheck.network.is_(None)),
+            )
+            .order_by(desc(GlameTreasuryRefillCheck.created_at))
+            .limit(max(limit, 50))
+        )
+    ).scalars().all()
+
+    incoming_total = 0
+    outgoing_total = 0
+    refund_required_total = 0
+    refund_required_count = 0
+    by_source: dict[str, dict[str, Any]] = {}
+    items: list[dict[str, Any]] = []
+
+    def add_source(source: str, amount: int, count_delta: int = 1) -> None:
+        bucket = by_source.setdefault(source, {"amount_glm": 0, "count": 0})
+        bucket["amount_glm"] += int(amount or 0)
+        bucket["count"] += count_delta
+
+    for tx, _member, user in tx_rows:
+        meta = tx.meta if isinstance(tx.meta, dict) else {}
+        tx_network = _glm_tx_meta_network(meta)
+        if tx_network and tx_network != network:
+            continue
+        amount = abs(int(tx.amount or 0))
+        if amount <= 0:
+            continue
+        direction = None
+        source = None
+        title = None
+        status = tx.status
+        tx_hash = meta.get("deposit_tx_hash") or meta.get("tx_hash")
+        if tx.transaction_type == "redemption" and tx.reason == "glm_store_item":
+            if meta.get("payment_method") != "ton_glm":
+                continue
+            if tx.status in {"pending_fulfillment", "fulfilled"}:
+                direction = "incoming"
+                source = "glm_store"
+            elif tx.status in {"canceled", "failed"} and meta.get("ton_refund_required"):
+                direction = "obligation"
+                source = "ton_refund_required"
+                refund_required_total += amount
+                refund_required_count += 1
+            elif tx.status in {"canceled", "failed"} and meta.get("ton_refund_status") in {"submitted", "sent", "verified"}:
+                direction = "outgoing"
+                source = "ton_refund"
+            else:
+                continue
+            title = (meta.get("item") or {}).get("title") if isinstance(meta.get("item"), dict) else meta.get("sku")
+        elif tx.transaction_type == "bridge" and tx.reason in {"glm_to_points_bridge", "buy_loyalty_points"}:
+            if tx.status != "processed" and not meta.get("deposit_tx_hash"):
+                continue
+            direction = "incoming"
+            source = "buy_loyalty_points" if tx.reason == "buy_loyalty_points" else "glm_to_points"
+            title = "Покупка баллов за GLM" if tx.reason == "buy_loyalty_points" else "GLM -> баллы 1C"
+        if source is None:
+            continue
+        if direction == "incoming":
+            incoming_total += amount
+        elif direction == "outgoing":
+            outgoing_total += amount
+        add_source(source, amount)
+        items.append({
+            "id": str(tx.id),
+            "direction": direction,
+            "source": source,
+            "amount_glm": amount,
+            "status": status,
+            "title": title,
+            "partner_name": getattr(user, "full_name", None) or "Партнер GLAME",
+            "partner_phone": getattr(user, "phone", None),
+            "tx_hash": tx_hash,
+            "created_at": tx.created_at.isoformat() if tx.created_at else None,
+        })
+
+    refill_total = 0
+    refill_ton_total = Decimal("0")
+    for row in refill_rows:
+        glm_amount = int(Decimal(row.manual_glm_amount or 0))
+        ton_amount = Decimal(row.manual_ton_amount or 0)
+        if glm_amount <= 0 and ton_amount <= 0:
+            continue
+        refill_total += max(0, glm_amount)
+        refill_ton_total += max(Decimal("0"), ton_amount)
+        outgoing_total += max(0, glm_amount)
+        add_source("hot_wallet_refill", max(0, glm_amount))
+        items.append({
+            "id": str(row.id),
+            "direction": "outgoing",
+            "source": "hot_wallet_refill",
+            "amount_glm": max(0, glm_amount),
+            "amount_ton": float(ton_amount),
+            "status": row.status,
+            "title": "Пополнение hot-wallet",
+            "partner_name": None,
+            "partner_phone": None,
+            "tx_hash": row.ton_tx_hash,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "comment": row.comment,
+        })
+
+    items.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    balances = await TonGlmTreasuryBalanceService(db).payload()
+    refill_plan = balances.get("refill_plan") if isinstance(balances.get("refill_plan"), dict) else {}
+    return {
+        "status": "success",
+        "network": network,
+        "period_days": days,
+        "since": since.isoformat(),
+        "operational_stats_start_at": stats_start_at.isoformat() if stats_start_at else None,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "incoming_glm": incoming_total,
+        "outgoing_glm": outgoing_total,
+        "net_glm": incoming_total - outgoing_total,
+        "refill_glm": refill_total,
+        "refill_ton": float(refill_ton_total),
+        "refund_required_glm": refund_required_total,
+        "refund_required_count": refund_required_count,
+        "by_source": by_source,
+        "refill_plan": refill_plan,
+        "treasury_balance": {
+            "glm": refill_plan.get("treasury_glm_balance"),
+            "ton": refill_plan.get("treasury_ton_balance"),
+        },
+        "hot_wallet_balance": {
+            "glm": refill_plan.get("hot_wallet_glm_balance"),
+            "ton": refill_plan.get("hot_wallet_ton_balance"),
+        },
+        "items": items[:limit],
+    }
+
+
+@router.get("/admin/glm-treasury-turnover/export.csv")
+async def admin_glm_treasury_turnover_export_csv(
+    days: int = Query(default=30, ge=1, le=365),
+    limit: int = Query(default=200, ge=1, le=1000),
+    current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    payload = await admin_glm_treasury_turnover(days=days, limit=limit, _current_user=current_user, db=db)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["GLAME treasury turnover export"])
+    writer.writerow(["generated_at", payload.get("generated_at")])
+    writer.writerow(["network", payload.get("network")])
+    writer.writerow(["since", payload.get("since")])
+    writer.writerow(["period_days", payload.get("period_days")])
+    writer.writerow(["operational_stats_start_at", payload.get("operational_stats_start_at") or ""])
+    writer.writerow(["incoming_glm", payload.get("incoming_glm")])
+    writer.writerow(["outgoing_glm", payload.get("outgoing_glm")])
+    writer.writerow(["net_glm", payload.get("net_glm")])
+    writer.writerow(["refill_glm", payload.get("refill_glm")])
+    writer.writerow(["refill_ton", payload.get("refill_ton")])
+    writer.writerow(["refund_required_glm", payload.get("refund_required_glm")])
+    writer.writerow(["refund_required_count", payload.get("refund_required_count")])
+    writer.writerow([])
+    writer.writerow(["source", "amount_glm", "count"])
+    for source, source_payload in sorted((payload.get("by_source") or {}).items()):
+        writer.writerow([
+            source,
+            source_payload.get("amount_glm") if isinstance(source_payload, dict) else "",
+            source_payload.get("count") if isinstance(source_payload, dict) else "",
+        ])
+    writer.writerow([])
+    writer.writerow([
+        "created_at",
+        "direction",
+        "source",
+        "amount_glm",
+        "amount_ton",
+        "status",
+        "title",
+        "partner_name",
+        "partner_phone",
+        "tx_hash",
+        "comment",
+        "id",
+    ])
+    for item in payload.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        writer.writerow([
+            item.get("created_at") or "",
+            item.get("direction") or "",
+            item.get("source") or "",
+            item.get("amount_glm") if item.get("amount_glm") is not None else "",
+            item.get("amount_ton") if item.get("amount_ton") is not None else "",
+            item.get("status") or "",
+            item.get("title") or "",
+            item.get("partner_name") or "",
+            item.get("partner_phone") or "",
+            item.get("tx_hash") or "",
+            item.get("comment") or "",
+            item.get("id") or "",
+        ])
+    filename_date = datetime.now(timezone.utc).strftime("%Y%m%d")
+    filename = f"glm-treasury-turnover-{payload.get('network') or 'ton'}-{filename_date}.csv"
+    content = output.getvalue().encode("utf-8-sig")
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/admin/glm-hot-wallet-refill-checks")
 async def admin_glm_hot_wallet_refill_checks(
     limit: int = Query(default=50, ge=1, le=200),
@@ -3933,6 +4598,47 @@ async def admin_record_glm_hot_wallet_refill(
     }
 
 
+@router.post("/admin/glm-hot-wallet-refill-approvals")
+async def admin_create_glm_hot_wallet_refill_approval(
+    payload: AdminGlmHotWalletRefillApprovalRequest,
+    current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await TonGlmTreasuryBalanceService(db).create_refill_approval(
+            admin_user_id=current_user.id,
+            comment=payload.comment,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {
+        "status": "pending",
+        "item": TonGlmTreasuryBalanceService.refill_check_payload(item),
+    }
+
+
+@router.post("/admin/glm-hot-wallet-refill-approvals/{approval_id}/decision")
+async def admin_decide_glm_hot_wallet_refill_approval(
+    approval_id: UUID,
+    payload: AdminGlmHotWalletRefillApprovalDecisionRequest,
+    current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await TonGlmTreasuryBalanceService(db).decide_refill_approval(
+            approval_id,
+            admin_user_id=current_user.id,
+            approved=payload.approved,
+            comment=payload.comment,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {
+        "status": item.status,
+        "item": TonGlmTreasuryBalanceService.refill_check_payload(item),
+    }
+
+
 @router.get("/admin/glm-hot-wallet-refill-plan")
 async def admin_glm_hot_wallet_refill_plan(
     _current_user: User = Depends(require_admin()),
@@ -3948,11 +4654,12 @@ async def admin_glm_hot_wallet_refill_plan(
 
 @router.post("/admin/glm-hot-wallet-refill-plan/ton-transaction")
 async def admin_glm_hot_wallet_refill_ton_transaction(
+    approval_id: UUID | None = Query(default=None),
     _current_user: User = Depends(require_admin()),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await TonGlmTreasuryBalanceService(db).prepare_refill_ton_connect_transaction()
+        return await TonGlmTreasuryBalanceService(db).prepare_refill_ton_connect_transaction(approval_id=approval_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -4217,8 +4924,6 @@ async def admin_set_glm_hot_wallet_limits(
     current_user: User = Depends(require_admin()),
     db: AsyncSession = Depends(get_db),
 ):
-    if payload.hot_wallet_refill_glm_target < payload.hot_wallet_refill_glm_threshold:
-        raise HTTPException(status_code=400, detail="GLM target должен быть не меньше GLM threshold")
     if payload.hot_wallet_refill_ton_target < payload.hot_wallet_refill_ton_threshold:
         raise HTTPException(status_code=400, detail="TON target должен быть не меньше TON threshold")
     override = TonGlmTreasuryBalanceService.write_limits_override(
@@ -4297,6 +5002,85 @@ async def admin_update_glm_redemption(
         raise HTTPException(status_code=400, detail=str(error)) from error
     await db.commit()
     return {"status": "success", "redemption": _glm_transaction_payload(tx)}
+
+
+@router.post("/admin/glm-redemptions/{redemption_id}/ton-refund-transaction")
+async def admin_prepare_glm_redemption_ton_refund(
+    redemption_id: UUID,
+    _current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    tx = (
+        await db.execute(
+            select(GlameTokenTransaction).where(
+                GlameTokenTransaction.id == redemption_id,
+                GlameTokenTransaction.transaction_type == "redemption",
+            )
+        )
+    ).scalar_one_or_none()
+    if tx is None:
+        raise HTTPException(status_code=404, detail="GLM redemption не найден")
+    try:
+        payload = await GlameTokenService(db).prepare_redemption_ton_refund_transaction(redemption=tx)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    await db.commit()
+    return {"status": "success", **payload}
+
+
+@router.post("/admin/glm-redemptions/{redemption_id}/ton-refund-record")
+async def admin_record_glm_redemption_ton_refund(
+    redemption_id: UUID,
+    payload: AdminGlmRedemptionTonRefundRecordRequest,
+    current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    tx = (
+        await db.execute(
+            select(GlameTokenTransaction).where(
+                GlameTokenTransaction.id == redemption_id,
+                GlameTokenTransaction.transaction_type == "redemption",
+            )
+        )
+    ).scalar_one_or_none()
+    if tx is None:
+        raise HTTPException(status_code=404, detail="GLM redemption не найден")
+    try:
+        tx = await GlameTokenService(db).record_redemption_ton_refund(
+            redemption=tx,
+            admin_user_id=current_user.id,
+            tx_hash=payload.tx_hash,
+            comment=payload.comment,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    await db.commit()
+    return {"status": "success", "redemption": _glm_transaction_payload(tx)}
+
+
+@router.post("/admin/glm-redemptions/{redemption_id}/ton-refund-settlement")
+async def admin_settle_glm_redemption_ton_refund(
+    redemption_id: UUID,
+    payload: AdminGlmRedemptionTonRefundSettlementRequest,
+    current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        result = await TonGlmSettlementService(db).settle_redemption_ton_refund_by_tx_hash(
+            redemption_id=redemption_id,
+            tx_hash=payload.tx_hash,
+            admin_user_id=current_user.id,
+            comment=payload.comment,
+            require_verified=payload.require_verified,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    await db.commit()
+    return {
+        "status": result.get("status"),
+        "redemption": _glm_transaction_payload(result["redemption"]),
+        "verification": result.get("verification"),
+    }
 
 
 @router.get("/admin/glm-bridge/glm-to-points")
@@ -4914,6 +5698,58 @@ async def admin_glm_bridge_reconciliation_csv(
     report = await GlameTokenService(db).reconcile_bridge_operations(stale_hours=stale_hours, limit=limit)
     issues = report.get("issues") if isinstance(report, dict) else []
     output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["GLAME bridge reconciliation export"])
+    writer.writerow(["generated_at", report.get("generated_at") if isinstance(report, dict) else None])
+    writer.writerow(["stale_hours", report.get("stale_hours") if isinstance(report, dict) else stale_hours])
+    writer.writerow(["bridge_operations_source", report.get("bridge_operations_source") if isinstance(report, dict) else ""])
+    writer.writerow(["checked_bridge_operations", report.get("checked_bridge_operations") if isinstance(report, dict) else ""])
+    writer.writerow(["bridge_operations_total", report.get("bridge_operations_total") if isinstance(report, dict) else ""])
+    writer.writerow(["bridge_operations_missing_domain_count", report.get("bridge_operations_missing_domain_count") if isinstance(report, dict) else ""])
+    writer.writerow(["bridge_operations_stale_pending_count", report.get("bridge_operations_stale_pending_count") if isinstance(report, dict) else ""])
+    writer.writerow(["bridge_operations_consistency_issue_count", report.get("bridge_operations_consistency_issue_count") if isinstance(report, dict) else ""])
+    writer.writerow(["checked_total_transactions", report.get("checked_total_transactions") if isinstance(report, dict) else ""])
+    writer.writerow(["checked_bridge_transactions", report.get("checked_bridge_transactions") if isinstance(report, dict) else ""])
+    writer.writerow(["checked_points_to_glm_transactions", report.get("checked_points_to_glm_transactions") if isinstance(report, dict) else ""])
+    writer.writerow(["pending_count", report.get("pending_count") if isinstance(report, dict) else ""])
+    writer.writerow(["pending_reserved_glm", report.get("pending_reserved_glm") if isinstance(report, dict) else ""])
+    writer.writerow(["processed_count", report.get("processed_count") if isinstance(report, dict) else ""])
+    writer.writerow(["processed_points", report.get("processed_points") if isinstance(report, dict) else ""])
+    writer.writerow(["points_to_glm_pending_count", report.get("points_to_glm_pending_count") if isinstance(report, dict) else ""])
+    writer.writerow(["points_to_glm_processed_count", report.get("points_to_glm_processed_count") if isinstance(report, dict) else ""])
+    writer.writerow(["points_to_glm_canceled_count", report.get("points_to_glm_canceled_count") if isinstance(report, dict) else ""])
+    writer.writerow(["ton_sent_waiting_count", report.get("ton_sent_waiting_count") if isinstance(report, dict) else ""])
+    writer.writerow(["ton_processed_without_tx_count", report.get("ton_processed_without_tx_count") if isinstance(report, dict) else ""])
+    writer.writerow(["onec_ready_count", report.get("onec_ready_count") if isinstance(report, dict) else ""])
+    writer.writerow(["onec_failed_count", report.get("onec_failed_count") if isinstance(report, dict) else ""])
+    writer.writerow(["onec_spend_ready_count", report.get("onec_spend_ready_count") if isinstance(report, dict) else ""])
+    writer.writerow(["onec_spend_failed_count", report.get("onec_spend_failed_count") if isinstance(report, dict) else ""])
+    writer.writerow(["onec_cancel_spend_failed_count", report.get("onec_cancel_spend_failed_count") if isinstance(report, dict) else ""])
+    writer.writerow(["negative_accounts_count", report.get("negative_accounts_count") if isinstance(report, dict) else ""])
+    writer.writerow(["issues_count", report.get("issues_count") if isinstance(report, dict) else ""])
+    writer.writerow([])
+
+    writer.writerow(["direction", "count", "amount_glm", "statuses"])
+    by_direction = report.get("bridge_operations_by_direction") if isinstance(report, dict) else {}
+    for direction, payload in sorted((by_direction or {}).items()):
+        writer.writerow([
+            direction,
+            payload.get("count") if isinstance(payload, dict) else "",
+            payload.get("amount_glm") if isinstance(payload, dict) else "",
+            json.dumps(payload.get("statuses") or {}, ensure_ascii=False, sort_keys=True) if isinstance(payload, dict) else "",
+        ])
+    writer.writerow([])
+
+    writer.writerow(["status", "count", "amount_glm"])
+    by_status = report.get("bridge_operations_by_status") if isinstance(report, dict) else {}
+    for status_key, payload in sorted((by_status or {}).items()):
+        writer.writerow([
+            status_key,
+            payload.get("count") if isinstance(payload, dict) else "",
+            payload.get("amount_glm") if isinstance(payload, dict) else "",
+        ])
+    writer.writerow([])
+    writer.writerow(["issues"])
     fieldnames = [
         "severity",
         "code",
@@ -4927,12 +5763,12 @@ async def admin_glm_bridge_reconciliation_csv(
         "message",
         "checked_at",
     ]
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
-    writer.writeheader()
+    issue_writer = csv.DictWriter(output, fieldnames=fieldnames)
+    issue_writer.writeheader()
     for issue in issues if isinstance(issues, list) else []:
         if not isinstance(issue, dict):
             continue
-        writer.writerow({
+        issue_writer.writerow({
             "severity": issue.get("severity"),
             "code": issue.get("code"),
             "operation": issue.get("operation"),
@@ -5284,12 +6120,20 @@ async def join_referral_program(
 @router.post("/register", response_model=ReferralRegisterResponse)
 async def register_referral_partner(payload: ReferralRegisterRequest, db: AsyncSession = Depends(get_db)):
     phone_norm = normalize_phone(payload.phone)
-    full_name = payload.full_name.strip()
+    last_name = (payload.last_name or "").strip()
+    first_name = (payload.first_name or "").strip()
+    middle_name = (payload.middle_name or "").strip()
+    full_name = (payload.full_name or "").strip() or " ".join(part for part in (last_name, first_name, middle_name) if part)
+    if (not last_name or not first_name) and full_name:
+        name_parts = full_name.split()
+        last_name = last_name or (name_parts[0] if len(name_parts) > 0 else "")
+        first_name = first_name or (name_parts[1] if len(name_parts) > 1 else "")
+        middle_name = middle_name or (" ".join(name_parts[2:]) if len(name_parts) > 2 else "")
     email_norm = str(payload.email).strip().lower() if payload.email else None
-    if not phone_norm:
+    if not re.fullmatch(r"7\d{10}", phone_norm or ""):
         raise HTTPException(status_code=400, detail="Некорректный телефон")
-    if not full_name:
-        raise HTTPException(status_code=400, detail="Укажите ФИО")
+    if not last_name or not first_name:
+        raise HTTPException(status_code=400, detail="Укажите фамилию и имя")
     if not payload.offer_accepted:
         raise HTTPException(status_code=400, detail="Для регистрации нужно ознакомиться с офертой")
 
@@ -5297,6 +6141,9 @@ async def register_referral_partner(payload: ReferralRegisterRequest, db: AsyncS
         "referral_offer_accepted_at": datetime.utcnow().isoformat(),
         "referral_offer_version": "v2",
         "referral_offer_file": "glame-referral-offer-v2.docx",
+        "referral_last_name": last_name,
+        "referral_first_name": first_name,
+        "referral_middle_name": middle_name or None,
     }
 
     user = (await db.execute(select(User).where(User.phone == phone_norm))).scalar_one_or_none()
@@ -5959,6 +6806,34 @@ async def prepare_glm_store_ton_transaction(
     return {"status": "success", **payload}
 
 
+@router.post("/me/glm-store/redemptions/{redemption_id}/cancel")
+async def cancel_glm_store_ton_redemption(
+    redemption_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ReferralService(db)
+    member = await service.get_member_by_user_id(current_user.id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="Partner profile not found")
+
+    token_service = GlameTokenService(db)
+    try:
+        tx = await token_service.cancel_pending_store_ton_checkout(
+            member=member,
+            redemption_id=redemption_id,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    await db.commit()
+    token = await token_service.summary_for_member(member.id)
+    return {
+        "status": "success",
+        "redemption": _glm_transaction_payload(tx),
+        "token": token,
+    }
+
+
 @router.post("/me/reward-store/redeem-points")
 async def redeem_reward_store_item_with_points(
     payload: GlmStoreRedeemRequest,
@@ -6071,14 +6946,23 @@ async def bridge_points_to_ton_withdrawal(
         raise HTTPException(status_code=400, detail=str(error)) from error
     await db.commit()
     auto_transfer_result: dict[str, Any] | None = None
+    withdrawal_tx_id = withdrawal_tx.id
     try:
         auto_transfer_result = await TonGlmAutoTransferService(db).process_claim(claim=withdrawal_tx)
         await db.commit()
-        await db.refresh(withdrawal_tx)
     except Exception as error:
         await db.rollback()
-        await db.refresh(withdrawal_tx)
         auto_transfer_result = {"status": "failed", "error": str(error)}
+    withdrawal_tx = (
+        await db.execute(
+            select(GlameTokenTransaction).where(
+                GlameTokenTransaction.id == withdrawal_tx_id,
+                GlameTokenTransaction.referral_member_id == member.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if withdrawal_tx is None:
+        raise HTTPException(status_code=500, detail="GLM withdrawal transaction не найдена после создания")
     await db.refresh(current_user)
     token = await token_service.summary_for_member(member.id)
     return {

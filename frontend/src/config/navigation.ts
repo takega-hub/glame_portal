@@ -47,7 +47,8 @@ export const NAVIGATION_GROUPS: Array<{ title: string; items: NavItem[] }> = [
       { name: 'Образы', href: '/looks', icon: '👗', sectionId: 'looks' },
       { name: 'Покупатели', href: '/admin/customers', icon: '👥', sectionId: 'customers' },
       { name: 'Партнеры', href: '/admin/referrals', icon: '🤝', sectionId: 'referrals_admin' },
-      { name: 'Товары за баллы', href: '/admin/referrals#reward-store', icon: '🎁', sectionId: 'referrals_admin', matchPrefixes: ['/admin/referrals'] },
+      { name: 'КРИПТО', href: '/admin/crypto', icon: '💠', sectionId: 'referrals_admin', matchPrefixes: ['/admin/crypto'] },
+      { name: 'Товары за баллы', href: '/admin/crypto#reward-store', icon: '🎁', sectionId: 'referrals_admin', matchPrefixes: ['/admin/crypto'] },
     ],
   },
   {

@@ -218,6 +218,7 @@ class GlmTelegramAlertService:
                 else wallet.get("refill_threshold_ton")
             )
             target = wallet.get("refill_target_glm") if metric_label == "GLM" else wallet.get("refill_target_ton")
+            target_label = "batch" if metric_label == "GLM" else "цель"
             latest = activity.get("latest") if isinstance(activity.get("latest"), dict) else {}
             elapsed_minutes = int(elapsed.total_seconds() // 60)
             result.append(
@@ -230,7 +231,7 @@ class GlmTelegramAlertService:
                     ),
                     "message": (
                         f"Hot-wallet все еще ниже refill-лимита по {metric_label}: "
-                        f"баланс {balance}, лимит {threshold}, цель {target}. "
+                        f"баланс {balance}, лимит {threshold}, {target_label} {target}. "
                         f"Первый warning был {elapsed_minutes} мин назад, но в журнале нет manual_refill "
                         f"или успешной проверки восстановления."
                     ),

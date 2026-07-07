@@ -7,6 +7,7 @@ import base64
 import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_CEILING
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -473,7 +474,7 @@ class GlameTokenService:
             "limit": "1",
         }
         headers = {}
-        api_key = (os.getenv("TON_API_KEY") or "").strip()
+        api_key = (os.getenv("TONCENTER_API_KEY") or os.getenv("TON_API_KEY") or "").strip()
         if api_key:
             headers["X-API-Key"] = api_key
 
@@ -617,7 +618,14 @@ class GlameTokenService:
         balance_payload = await self.ton_wallet_glm_balance(sender_wallet_address)
         jetton_wallet_address = (balance_payload.get("jetton_wallet_address") or "").strip()
         if not jetton_wallet_address:
-            raise ValueError("Не удалось найти GLM Jetton Wallet для привязанного TON-кошелька")
+            network = str(balance_payload.get("network") or os.getenv("TON_NETWORK", "mainnet") or "mainnet")
+            detail = str(balance_payload.get("error") or "").strip()
+            suffix = f" Детали Toncenter: {detail}" if detail else ""
+            raise ValueError(
+                f"На привязанном TON-кошельке не найден GLM Jetton Wallet в сети {network}. "
+                "Проверьте, что подключен именно mainnet-кошелек с GLM, или переподключите TON-кошелек через TON Connect."
+                f"{suffix}"
+            )
 
         decimals = int(os.getenv("TON_GLM_DECIMALS", "9") or 9)
         amount_glm = abs(int(bridge.amount or 0))
@@ -737,6 +745,19 @@ class GlameTokenService:
         tier_payload = self.tier_payload(privilege_score)
         policy = self.policy_payload()
         policy["store_items"] = await self.reward_store_items(only_active=True)
+        pending_store_redemption = (
+            await self.db.execute(
+                select(GlameTokenTransaction)
+                .where(
+                    GlameTokenTransaction.account_id == account.id,
+                    GlameTokenTransaction.token_code == GLAME_TOKEN_CODE,
+                    GlameTokenTransaction.transaction_type == "redemption",
+                    GlameTokenTransaction.status == "pending_ton_payment",
+                    GlameTokenTransaction.reason == "glm_store_item",
+                )
+                .order_by(GlameTokenTransaction.created_at.desc())
+            )
+        ).scalars().first()
         return {
             **policy,
             "account_id": str(account.id),
@@ -750,12 +771,36 @@ class GlameTokenService:
             "claimable_balance": int(account.balance or 0),
             "pending_claim_amount": int(pending_claim_amount or 0),
             "pending_claim": int(pending_claim_amount or 0) > 0,
+            "pending_store_redemption": self._store_redemption_summary(pending_store_redemption),
             "onchain_balance": onchain_balance,
             "privilege_score": privilege_score,
             "privilege_score_basis": "ton_wallet_balance" if onchain_balance.get("status") == "ok" else "ledger_lifetime",
             "ledger_privilege_score": ledger_privilege_score,
             "onchain_privilege_score": onchain_privilege_score,
             **tier_payload,
+        }
+
+    @staticmethod
+    def _store_redemption_summary(tx: GlameTokenTransaction | None) -> dict[str, Any] | None:
+        if tx is None:
+            return None
+        meta = tx.meta if isinstance(tx.meta, dict) else {}
+        item = meta.get("item") if isinstance(meta.get("item"), dict) else {}
+        return {
+            "id": str(tx.id),
+            "type": tx.transaction_type,
+            "status": tx.status,
+            "amount": int(tx.amount or 0),
+            "reason": tx.reason,
+            "created_at": tx.created_at.isoformat() if tx.created_at else None,
+            "sku": meta.get("sku"),
+            "item_title": item.get("title"),
+            "price_glm": meta.get("price_glm"),
+            "payment_method": meta.get("payment_method"),
+            "ton_deposit_status": meta.get("ton_deposit_status"),
+            "ton_deposit_requested_at": meta.get("ton_deposit_requested_at"),
+            "expected_ton_sender_address": meta.get("expected_ton_sender_address"),
+            "treasury_address": meta.get("treasury_address"),
         }
 
     async def convert_bonus_points_to_glm(
@@ -1261,7 +1306,7 @@ class GlameTokenService:
                 "rate": "1 bonus point = 1 GLM",
                 "requested_at": now.isoformat(),
                 "policy": "points to TON bridge; operator transfers existing GLM from GLAME treasury/bank to user TON wallet",
-                "operator_action": "transfer_testnet_glm_from_treasury_to_wallet",
+                "operator_action": "transfer_glm_from_hot_wallet_to_wallet",
             },
         )
         account.meta = {
@@ -1274,6 +1319,31 @@ class GlameTokenService:
                 "bridge_type": "points_to_ton",
             },
         }
+        flag_modified(account, "meta")
+        self.db.add(tx)
+        await self.db.flush()
+        onec_spend_result = await self._sync_points_to_glm_spend_to_onec(
+            bridge=tx,
+            user=user,
+            points=amount,
+            operation="points_to_ton",
+        )
+        if (
+            _env_bool("ONEC_GLM_BRIDGE_SPEND_REQUIRE_SUCCESS", "false")
+            and onec_spend_result.get("status") != "success"
+        ):
+            raise ValueError(f"1C не подтвердил списание баллов: {onec_spend_result.get('error') or onec_spend_result.get('status')}")
+        tx.meta = {
+            **(tx.meta or {}),
+            "onec_spend_document_id": onec_spend_result.get("document_id"),
+            "onec_spend_sync_status": onec_spend_result.get("status"),
+            "onec_spend_sync_error": onec_spend_result.get("error"),
+            "onec_spend_request_payload": onec_spend_result.get("payload"),
+            "onec_spend_response_payload": onec_spend_result.get("response"),
+        }
+        flag_modified(tx, "meta")
+        await self.sync_bridge_operation(tx)
+        return tx
 
     async def prepare_reward_store_ton_transaction(
         self,
@@ -1354,31 +1424,6 @@ class GlameTokenService:
                 ],
             },
         }
-        flag_modified(account, "meta")
-        self.db.add(tx)
-        await self.db.flush()
-        onec_spend_result = await self._sync_points_to_glm_spend_to_onec(
-            bridge=tx,
-            user=user,
-            points=amount,
-            operation="points_to_ton",
-        )
-        if (
-            _env_bool("ONEC_GLM_BRIDGE_SPEND_REQUIRE_SUCCESS", "false")
-            and onec_spend_result.get("status") != "success"
-        ):
-            raise ValueError(f"1C не подтвердил списание баллов: {onec_spend_result.get('error') or onec_spend_result.get('status')}")
-        tx.meta = {
-            **(tx.meta or {}),
-            "onec_spend_document_id": onec_spend_result.get("document_id"),
-            "onec_spend_sync_status": onec_spend_result.get("status"),
-            "onec_spend_sync_error": onec_spend_result.get("error"),
-            "onec_spend_request_payload": onec_spend_result.get("payload"),
-            "onec_spend_response_payload": onec_spend_result.get("response"),
-        }
-        flag_modified(tx, "meta")
-        await self.sync_bridge_operation(tx)
-        return tx
 
     async def request_ton_claim(
         self,
@@ -1584,6 +1629,30 @@ class GlameTokenService:
         if next_quantity <= 0:
             item.status = "sold_out"
             item.is_active = False
+        item.updated_at = datetime.now(timezone.utc)
+        flag_modified(item, "meta")
+
+    async def _release_reward_store_item(self, sku: str | None) -> None:
+        if not sku:
+            return
+        item = (
+            await self.db.execute(
+                select(RewardStoreItem)
+                .where(RewardStoreItem.sku == sku)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if item is None:
+            return
+        quantity = self._reward_store_quantity(item)
+        if quantity is None:
+            return
+        meta = dict(item.meta or {})
+        meta["quantity_available"] = max(0, quantity) + 1
+        item.meta = meta
+        if item.status == "sold_out":
+            item.status = "limited"
+            item.is_active = True
         item.updated_at = datetime.now(timezone.utc)
         flag_modified(item, "meta")
 
@@ -3186,6 +3255,52 @@ class GlameTokenService:
         await self.db.flush()
         return tx
 
+    async def cancel_pending_store_ton_checkout(
+        self,
+        *,
+        member: ReferralProgramMember,
+        redemption_id: UUID,
+    ) -> GlameTokenTransaction:
+        account = await self.get_or_create_account(user_id=member.user_id, referral_member_id=member.id)
+        redemption = (
+            await self.db.execute(
+                select(GlameTokenTransaction)
+                .where(
+                    GlameTokenTransaction.id == redemption_id,
+                    GlameTokenTransaction.account_id == account.id,
+                    GlameTokenTransaction.referral_member_id == member.id,
+                    GlameTokenTransaction.token_code == GLAME_TOKEN_CODE,
+                    GlameTokenTransaction.transaction_type == "redemption",
+                    GlameTokenTransaction.reason == "glm_store_item",
+                )
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if redemption is None:
+            raise ValueError("GLM Store TON-заказ не найден")
+        if redemption.status != "pending_ton_payment":
+            raise ValueError("Можно отменить только ожидающую TON-оплату")
+
+        meta = redemption.meta if isinstance(redemption.meta, dict) else {}
+        verification = meta.get("ton_deposit_verification") if isinstance(meta.get("ton_deposit_verification"), dict) else {}
+        if meta.get("deposit_tx_hash") or meta.get("tx_hash") or verification.get("ok"):
+            raise ValueError("TON-перевод уже найден. Отмена возможна только через администратора.")
+
+        await self._release_reward_store_item(str(meta.get("sku") or "").strip() or None)
+        now = datetime.now(timezone.utc)
+        redemption.status = "canceled"
+        redemption.meta = {
+            **meta,
+            "fulfillment_status": "canceled",
+            "ton_deposit_status": "canceled_before_payment",
+            "canceled_at": now.isoformat(),
+            "cancel_reason": "partner_canceled_pending_ton_payment",
+            "reserved_item_released": True,
+        }
+        flag_modified(redemption, "meta")
+        await self.db.flush()
+        return redemption
+
     async def redeem_store_item_with_points(
         self,
         *,
@@ -3376,6 +3491,147 @@ class GlameTokenService:
             "ton_refund_required": ton_refund_required,
             "refunded_points": refund_points if points_refund_payload else 0,
             "points_refund": points_refund_payload,
+        }
+        flag_modified(redemption, "meta")
+        await self.db.flush()
+        return redemption
+
+    async def prepare_redemption_ton_refund_transaction(
+        self,
+        *,
+        redemption: GlameTokenTransaction,
+    ) -> dict[str, Any]:
+        redemption = (
+            await self.db.execute(
+                select(GlameTokenTransaction)
+                .where(GlameTokenTransaction.id == redemption.id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if redemption is None:
+            raise ValueError("GLM redemption не найден")
+        if redemption.transaction_type != "redemption" or redemption.reason != "glm_store_item":
+            raise ValueError("Это не GLM Store redemption")
+        if redemption.status not in {"canceled", "failed"}:
+            raise ValueError("TON refund доступен только для canceled/failed заказа")
+
+        meta = redemption.meta if isinstance(redemption.meta, dict) else {}
+        if meta.get("payment_method") != "ton_glm" or not meta.get("ton_refund_required"):
+            raise ValueError("Для этого заказа TON refund не требуется")
+
+        treasury_address = str(meta.get("treasury_address") or os.getenv("TON_GLM_TREASURY_ADDRESS") or "").strip()
+        recipient_address = str(meta.get("expected_ton_sender_address") or "").strip()
+        if not treasury_address:
+            raise ValueError("TON treasury не настроен")
+        if not recipient_address:
+            raise ValueError("Не найден TON-кошелек для возврата")
+
+        network = os.getenv("TON_NETWORK", "testnet").strip() or "testnet"
+        if network != "testnet":
+            raise ValueError("TON refund через TON Connect пока разрешен только для testnet pilot")
+
+        balance_payload = await self.ton_wallet_glm_balance(treasury_address)
+        treasury_jetton_wallet = str(balance_payload.get("jetton_wallet_address") or "").strip()
+        if not treasury_jetton_wallet:
+            detail = balance_payload.get("error") or balance_payload.get("status") or "unknown"
+            raise ValueError(f"Не удалось найти GLM Jetton Wallet для treasury: {detail}")
+
+        amount_glm = abs(int(redemption.amount or 0))
+        if amount_glm <= 0:
+            raise ValueError("Некорректная сумма TON refund")
+        decimals = int(os.getenv("TON_GLM_DECIMALS", "9") or 9)
+        amount_base_units = amount_glm * (10 ** decimals)
+        tx_value = int(os.getenv("TON_GLM_REFUND_TRANSFER_TX_VALUE_NANOTON", os.getenv("TON_GLM_TRANSFER_TX_VALUE_NANOTON", "30000000")) or 30_000_000)
+        forward_ton_amount = int(os.getenv("TON_GLM_TRANSFER_FORWARD_NANOTON", "1") or 1)
+        query_id = int(datetime.now(timezone.utc).timestamp())
+
+        forward_payload = Cell()
+        forward_payload.bits.write_uint(0, 32)
+        forward_payload.bits.write_string(f"GLAME reward_store refund {redemption.id}")
+
+        body = Cell()
+        body.bits.write_uint(JETTON_TRANSFER_OP, 32)
+        body.bits.write_uint(query_id, 64)
+        body.bits.write_coins(amount_base_units)
+        body.bits.write_address(Address(recipient_address))
+        body.bits.write_address(Address(treasury_address))
+        body.bits.write_bit(0)
+        body.bits.write_coins(forward_ton_amount)
+        body.bits.write_bit(1)
+        body.refs.append(forward_payload)
+        payload = base64.b64encode(body.to_boc(False)).decode("ascii")
+
+        valid_until = int(datetime.now(timezone.utc).timestamp()) + int(os.getenv("TON_GLM_CONNECT_TX_TTL_SECONDS", "600") or 600)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        redemption.meta = {
+            **meta,
+            "ton_refund_status": "wallet_request_prepared",
+            "ton_refund_requested_at": now_iso,
+            "ton_refund_query_id": str(query_id),
+            "ton_refund_valid_until": valid_until,
+            "ton_refund_recipient_address": recipient_address,
+            "ton_refund_treasury_jetton_wallet": treasury_jetton_wallet,
+        }
+        flag_modified(redemption, "meta")
+        await self.db.flush()
+
+        return {
+            "redemption_id": str(redemption.id),
+            "network": network,
+            "source_address": treasury_address,
+            "recipient_address": recipient_address,
+            "amount_glm": amount_glm,
+            "amount_base_units": str(amount_base_units),
+            "query_id": str(query_id),
+            "transaction": {
+                "validUntil": valid_until,
+                "network": "-3",
+                "from": treasury_address,
+                "messages": [
+                    {
+                        "address": treasury_jetton_wallet,
+                        "amount": str(tx_value),
+                        "payload": payload,
+                    }
+                ],
+            },
+            "note": "Проверьте в кошельке: treasury GLAME возвращает GLM покупателю.",
+        }
+
+    async def record_redemption_ton_refund(
+        self,
+        *,
+        redemption: GlameTokenTransaction,
+        admin_user_id: UUID,
+        tx_hash: str | None = None,
+        comment: str | None = None,
+    ) -> GlameTokenTransaction:
+        redemption = (
+            await self.db.execute(
+                select(GlameTokenTransaction)
+                .where(GlameTokenTransaction.id == redemption.id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if redemption is None:
+            raise ValueError("GLM redemption не найден")
+        meta = redemption.meta if isinstance(redemption.meta, dict) else {}
+        if redemption.transaction_type != "redemption" or redemption.reason != "glm_store_item":
+            raise ValueError("Это не GLM Store redemption")
+        if redemption.status not in {"canceled", "failed"}:
+            raise ValueError("TON refund можно записать только для canceled/failed заказа")
+        if meta.get("payment_method") != "ton_glm" or not meta.get("ton_refund_required"):
+            raise ValueError("Для этого заказа TON refund не требуется")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        redemption.meta = {
+            **meta,
+            "ton_refund_required": False,
+            "ton_refund_status": "submitted" if not tx_hash else "sent",
+            "ton_refund_tx_hash": (tx_hash or "").strip() or None,
+            "ton_refund_submitted_at": now_iso,
+            "ton_refund_processed_by": str(admin_user_id),
+            "ton_refund_comment": (comment or "").strip() or None,
         }
         flag_modified(redemption, "meta")
         await self.db.flush()
@@ -3647,7 +3903,47 @@ class GlameTokenService:
             os.getenv("TON_GLM_METADATA_URL")
             or "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json"
         ).strip()
-        onchain_status = "testnet_ready" if jetton_master else "draft_not_deployed"
+        approvals_path = Path(__file__).resolve().parents[2] / "static" / "glm_policy" / "production-approvals.json"
+        approvals_payload: dict[str, Any] = {}
+        if approvals_path.exists():
+            try:
+                raw_approvals = json.loads(approvals_path.read_text(encoding="utf-8"))
+                if isinstance(raw_approvals, dict):
+                    approvals_payload = raw_approvals
+            except Exception as error:
+                logger.warning("Unable to read GLM production approvals for policy payload: %s", error)
+        production_approvals_ready = all(
+            bool(approvals_payload.get(key) or _env_bool(env_name, "false"))
+            for key, env_name in (
+                ("legal_approved", "TON_GLM_PRODUCTION_LEGAL_APPROVED"),
+                ("security_approved", "TON_GLM_PRODUCTION_SECURITY_APPROVED"),
+                ("treasury_approved", "TON_GLM_PRODUCTION_TREASURY_APPROVED"),
+            )
+        )
+        production_signer_ready = (
+            (os.getenv("TON_GLM_PRODUCTION_SIGNER_MODE") or "").strip().lower() in {"kms", "vault", "external_signer"}
+            and bool((os.getenv("TON_GLM_PRODUCTION_SIGNER_ENDPOINT") or "").strip())
+            and bool((os.getenv("TON_GLM_PRODUCTION_SIGNER_TOKEN") or "").strip())
+        )
+        mainnet_enabled = bool(ton_network == "mainnet" and jetton_master and treasury_address and production_approvals_ready and production_signer_ready)
+        if not jetton_master:
+            onchain_status = "draft_not_deployed"
+        elif ton_network == "mainnet":
+            onchain_status = "mainnet_ready" if mainnet_enabled else "mainnet_deployed"
+        else:
+            onchain_status = "testnet_ready"
+        claim_mode = (
+            "automatic_mainnet_hot_wallet_transfer"
+            if ton_network == "mainnet" and mainnet_enabled
+            else "operator_testnet_treasury_transfer"
+            if jetton_master
+            else "offchain_pending_claim_only"
+        )
+        mainnet_gate = (
+            "production_ready"
+            if mainnet_enabled
+            else "legal_security_treasury_or_signer_approval_required"
+        )
         return {
             "token_code": GLAME_TOKEN_CODE,
             "token_name": GLAME_TOKEN_NAME,
@@ -3682,16 +3978,20 @@ class GlameTokenService:
                 "network": ton_network,
                 "standard": "TON Jetton / TEP-74 compatible",
                 "status": onchain_status,
-                "claim_mode": "operator_testnet_treasury_transfer" if jetton_master else "offchain_pending_claim_only",
+                "claim_mode": claim_mode,
                 "treasury_distribution_mode": "transfer_existing_glm_from_treasury",
                 "jetton_master_address": jetton_master,
                 "treasury_address": treasury_address,
                 "metadata_url": metadata_url,
                 "metadata_status": "published",
-                "mainnet_enabled": False,
-                "mainnet_gate": "legal_security_treasury_approval_required",
+                "mainnet_enabled": mainnet_enabled,
+                "mainnet_gate": mainnet_gate,
                 "implementation_package": "contracts/ton/glm-jetton",
-                "disclaimer": "GLM withdrawal to TON is a controlled testnet/operator workflow until legal and security approval. It is not a public cash-out, buyback promise or bonus-to-token exchange duplicate.",
+                "disclaimer": (
+                    "GLM withdrawal to TON is processed through GLAME hot-wallet automation on mainnet."
+                    if mainnet_enabled
+                    else "GLM withdrawal to TON is a controlled pilot/operator workflow until legal, security and treasury approval is complete."
+                ),
             },
             "transferable": False,
             "cash_out": False,

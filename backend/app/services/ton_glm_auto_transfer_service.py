@@ -35,9 +35,43 @@ class TonGlmAutoTransferService:
     """Send pending points->GLM claims from a limited hot wallet."""
 
     OVERRIDE_FILE = Path(__file__).resolve().parents[2] / "static" / "glm_policy" / "ton-auto-transfer-override.json"
+    APPROVALS_FILE = Path(__file__).resolve().parents[2] / "static" / "glm_policy" / "production-approvals.json"
+    SECRET_RESPONSE_KEY_PARTS = (
+        "authorization",
+        "api_key",
+        "apikey",
+        "bearer",
+        "credential",
+        "mnemonic",
+        "password",
+        "private_key",
+        "secret",
+        "seed",
+        "token",
+    )
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @classmethod
+    def _is_secret_response_key(cls, key: str) -> bool:
+        normalized = str(key or "").strip().lower()
+        return any(part in normalized for part in cls.SECRET_RESPONSE_KEY_PARTS)
+
+    @classmethod
+    def _redact_external_payload(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            redacted: dict[str, Any] = {}
+            for key, item in value.items():
+                key_text = str(key)
+                if cls._is_secret_response_key(key_text):
+                    redacted[key_text] = "[redacted]"
+                else:
+                    redacted[key_text] = cls._redact_external_payload(item)
+            return redacted
+        if isinstance(value, list):
+            return [cls._redact_external_payload(item) for item in value]
+        return value
 
     @staticmethod
     def override_payload() -> dict[str, Any]:
@@ -72,6 +106,49 @@ class TonGlmAutoTransferService:
         return TonGlmAutoTransferService.override_payload()
 
     @staticmethod
+    def production_approvals_override_payload() -> dict[str, Any]:
+        path = TonGlmAutoTransferService.APPROVALS_FILE
+        if not path.exists():
+            return {"exists": False}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as error:
+            return {"exists": True, "error": str(error)}
+        if not isinstance(payload, dict):
+            return {"exists": True, "error": "production approvals payload must be an object"}
+        return {
+            "exists": True,
+            "legal_approved": payload.get("legal_approved"),
+            "security_approved": payload.get("security_approved"),
+            "treasury_approved": payload.get("treasury_approved"),
+            "comment": payload.get("comment"),
+            "updated_at": payload.get("updated_at"),
+            "updated_by": payload.get("updated_by"),
+        }
+
+    @staticmethod
+    def write_production_approvals(
+        *,
+        legal_approved: bool,
+        security_approved: bool,
+        treasury_approved: bool,
+        comment: str | None,
+        admin_user_id: UUID,
+    ) -> dict[str, Any]:
+        path = TonGlmAutoTransferService.APPROVALS_FILE
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "legal_approved": bool(legal_approved),
+            "security_approved": bool(security_approved),
+            "treasury_approved": bool(treasury_approved),
+            "comment": (comment or "").strip() or None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": str(admin_user_id),
+        }
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return TonGlmAutoTransferService.production_approvals_override_payload()
+
+    @staticmethod
     def config_payload() -> dict[str, Any]:
         network = os.getenv("TON_NETWORK", "testnet").strip() or "testnet"
         mnemonic_present = bool((os.getenv("TON_GLM_AUTO_TRANSFER_HOT_WALLET_MNEMONIC") or "").strip())
@@ -80,14 +157,44 @@ class TonGlmAutoTransferService:
         production_hot_wallet_address = (os.getenv("TON_GLM_PRODUCTION_HOT_WALLET_ADDRESS") or "").strip() or None
         production_hot_wallet_bounceable = (os.getenv("TON_GLM_PRODUCTION_HOT_WALLET_BOUNCEABLE") or "").strip() or None
         production_hot_wallet_raw = (os.getenv("TON_GLM_PRODUCTION_HOT_WALLET_RAW") or "").strip() or None
+        production_treasury_address = (os.getenv("TON_GLM_PRODUCTION_TREASURY_ADDRESS") or "").strip() or None
+        production_treasury_bounceable = None
+        production_treasury_raw = None
+        if production_treasury_address:
+            try:
+                parsed_production_treasury = Address(production_treasury_address)
+                production_treasury_bounceable = parsed_production_treasury.to_string(
+                    is_user_friendly=True,
+                    is_bounceable=True,
+                    is_url_safe=True,
+                )
+                production_treasury_raw = parsed_production_treasury.to_string(is_user_friendly=False)
+            except Exception:
+                production_treasury_bounceable = None
+                production_treasury_raw = None
         production_signer_endpoint = (os.getenv("TON_GLM_PRODUCTION_SIGNER_ENDPOINT") or "").strip() or None
-        production_safe_signer = production_signer_mode in PRODUCTION_SIGNER_MODES and not mnemonic_present
+        production_signer_pause_endpoint = (os.getenv("TON_GLM_PRODUCTION_SIGNER_PAUSE_ENDPOINT") or "").strip() or None
+        production_signer_auth = bool((os.getenv("TON_GLM_PRODUCTION_SIGNER_TOKEN") or "").strip())
+        production_safe_signer = (
+            production_signer_mode in PRODUCTION_SIGNER_MODES
+            and bool(production_signer_endpoint)
+            and production_signer_auth
+        )
         production_candidate_ready = bool(production_hot_wallet_address and production_hot_wallet_bounceable and production_hot_wallet_raw)
-        production_legal_approved = _env_bool("TON_GLM_PRODUCTION_LEGAL_APPROVED", "false")
-        production_security_approved = _env_bool("TON_GLM_PRODUCTION_SECURITY_APPROVED", "false")
-        production_treasury_approved = _env_bool("TON_GLM_PRODUCTION_TREASURY_APPROVED", "false")
+        production_treasury_ready = bool(production_treasury_address and production_treasury_bounceable and production_treasury_raw)
+        approvals_override = TonGlmAutoTransferService.production_approvals_override_payload()
+
+        def approval_value(key: str, env_name: str) -> bool:
+            override_value = approvals_override.get(key) if isinstance(approvals_override, dict) else None
+            if isinstance(override_value, bool):
+                return override_value
+            return _env_bool(env_name, "false")
+
+        production_legal_approved = approval_value("legal_approved", "TON_GLM_PRODUCTION_LEGAL_APPROVED")
+        production_security_approved = approval_value("security_approved", "TON_GLM_PRODUCTION_SECURITY_APPROVED")
+        production_treasury_approved = approval_value("treasury_approved", "TON_GLM_PRODUCTION_TREASURY_APPROVED")
         production_approvals_ready = bool(production_legal_approved and production_security_approved and production_treasury_approved)
-        production_ready = bool(production_candidate_ready and production_safe_signer and production_approvals_ready)
+        production_ready = bool(production_candidate_ready and production_treasury_ready and production_safe_signer and production_approvals_ready)
         override = TonGlmAutoTransferService.override_payload()
         env_enabled = _env_bool("TON_GLM_AUTO_TRANSFER_ENABLED", "false")
         override_enabled = override.get("enabled")
@@ -103,17 +210,25 @@ class TonGlmAutoTransferService:
             "production_safe_signer": production_safe_signer,
             "production_signer_mode": production_signer_mode,
             "production_signer_endpoint_configured": bool(production_signer_endpoint),
+            "production_signer_pause_endpoint_configured": bool(production_signer_pause_endpoint or production_signer_endpoint),
+            "production_signer_auth_configured": production_signer_auth,
             "production_hot_wallet_address": production_hot_wallet_address,
             "production_hot_wallet_bounceable": production_hot_wallet_bounceable,
             "production_hot_wallet_raw": production_hot_wallet_raw,
+            "production_treasury_address": production_treasury_address,
+            "production_treasury_bounceable": production_treasury_bounceable,
+            "production_treasury_raw": production_treasury_raw,
+            "production_treasury_ready": production_treasury_ready,
             "production_candidate_ready": production_candidate_ready,
             "production_legal_approved": production_legal_approved,
             "production_security_approved": production_security_approved,
             "production_treasury_approved": production_treasury_approved,
             "production_approvals_ready": production_approvals_ready,
+            "production_approvals_override": approvals_override,
             "production_ready": production_ready,
             "requires_secret_rotation": mnemonic_present,
             "hot_wallet_address": (os.getenv("TON_GLM_AUTO_TRANSFER_HOT_WALLET_ADDRESS") or "").strip() or None,
+            "active_hot_wallet_address": production_hot_wallet_address if network == "mainnet" and production_hot_wallet_address else (os.getenv("TON_GLM_AUTO_TRANSFER_HOT_WALLET_ADDRESS") or "").strip() or None,
             "wallet_version": (os.getenv("TON_GLM_AUTO_TRANSFER_WALLET_VERSION") or "v4r2").strip().lower(),
             "admin_user_id": (os.getenv("TON_GLM_AUTO_TRANSFER_ADMIN_USER_ID") or os.getenv("TON_GLM_SETTLEMENT_ADMIN_USER_ID") or "").strip() or None,
             "max_amount_glm": int(os.getenv("TON_GLM_AUTO_TRANSFER_MAX_AMOUNT_GLM", "1000") or 1000),
@@ -140,6 +255,100 @@ class TonGlmAutoTransferService:
     @staticmethod
     def _api_key() -> str:
         return (os.getenv("TONCENTER_API_KEY") or os.getenv("TON_API_KEY") or "").strip()
+
+    @staticmethod
+    async def check_production_signer_health() -> dict[str, Any]:
+        config = TonGlmAutoTransferService.config_payload()
+        endpoint = (os.getenv("TON_GLM_PRODUCTION_SIGNER_HEALTH_ENDPOINT") or "").strip()
+        signer_endpoint = (os.getenv("TON_GLM_PRODUCTION_SIGNER_ENDPOINT") or "").strip()
+        if not endpoint and signer_endpoint:
+            endpoint = signer_endpoint.rstrip("/") + "/health"
+        payload: dict[str, Any] = {
+            "configured": bool(endpoint),
+            "mode": config.get("production_signer_mode"),
+            "endpoint_configured": bool(signer_endpoint),
+            "health_endpoint_configured": bool(endpoint),
+            "auth_configured": bool(config.get("production_signer_auth_configured")),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "status": "not_configured",
+            "errors": [],
+        }
+        if not endpoint:
+            payload["errors"].append("TON_GLM_PRODUCTION_SIGNER_ENDPOINT or TON_GLM_PRODUCTION_SIGNER_HEALTH_ENDPOINT is not set")
+            return payload
+
+        headers: dict[str, str] = {"Accept": "application/json"}
+        token = (os.getenv("TON_GLM_PRODUCTION_SIGNER_TOKEN") or "").strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        try:
+            async with httpx.AsyncClient(timeout=float(os.getenv("TON_GLM_PRODUCTION_SIGNER_HEALTH_TIMEOUT_SECONDS", "10") or 10)) as client:
+                response = await client.get(endpoint, headers=headers)
+                payload["http_status"] = response.status_code
+                response.raise_for_status()
+                content_type = response.headers.get("content-type", "")
+                if "application/json" in content_type.lower():
+                    body = response.json()
+                    if isinstance(body, dict):
+                        payload["response"] = TonGlmAutoTransferService._redact_external_payload(body)
+                        for key in (
+                            "emergency_paused",
+                            "emergency_pause_source",
+                            "emergency_pause_reason",
+                            "emergency_pause_updated_at",
+                            "emergency_pause_updated_by",
+                        ):
+                            if key in body:
+                                payload[key] = body.get(key)
+                        status = str(body.get("status") or body.get("health") or "ok").strip().lower()
+                        payload["status"] = "ok" if status in {"ok", "ready", "healthy"} else "warning"
+                    else:
+                        payload["status"] = "ok"
+                else:
+                    payload["status"] = "ok"
+        except Exception as error:
+            payload["status"] = "error"
+            payload["errors"].append(str(error))
+        return payload
+
+    @staticmethod
+    async def set_production_signer_emergency_pause(
+        *,
+        paused: bool,
+        reason: str | None,
+        admin_user_id: UUID,
+    ) -> dict[str, Any]:
+        signer_endpoint = (os.getenv("TON_GLM_PRODUCTION_SIGNER_ENDPOINT") or "").strip()
+        endpoint = (os.getenv("TON_GLM_PRODUCTION_SIGNER_PAUSE_ENDPOINT") or "").strip()
+        if not endpoint and signer_endpoint:
+            endpoint = signer_endpoint.rstrip("/")
+            if endpoint.endswith("/ton/jetton-transfer"):
+                endpoint = endpoint[: -len("/ton/jetton-transfer")]
+            endpoint = endpoint.rstrip("/") + "/admin/emergency-pause"
+        if not endpoint:
+            raise ValueError("TON_GLM_PRODUCTION_SIGNER_PAUSE_ENDPOINT or TON_GLM_PRODUCTION_SIGNER_ENDPOINT is not set")
+        token = (os.getenv("TON_GLM_PRODUCTION_SIGNER_TOKEN") or "").strip()
+        if not token:
+            raise ValueError("TON_GLM_PRODUCTION_SIGNER_TOKEN is not set")
+
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        request_payload = {
+            "paused": bool(paused),
+            "reason": (reason or "").strip() or None,
+            "updated_by": str(admin_user_id),
+        }
+        async with httpx.AsyncClient(timeout=float(os.getenv("TON_GLM_PRODUCTION_SIGNER_PAUSE_TIMEOUT_SECONDS", "10") or 10)) as client:
+            response = await client.post(endpoint, json=request_payload, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Production signer pause endpoint returned invalid payload")
+        return TonGlmAutoTransferService._redact_external_payload(payload)
 
     @staticmethod
     def _hot_wallet_mnemonic_words() -> list[str]:
@@ -169,6 +378,15 @@ class TonGlmAutoTransferService:
         if not expected:
             raise ValueError("TON_GLM_AUTO_TRANSFER_HOT_WALLET_ADDRESS is not set")
         return expected
+
+    @staticmethod
+    def _active_hot_wallet_address(config: dict[str, Any]) -> str:
+        if str(config.get("network") or "").strip() == "mainnet":
+            expected = str(config.get("production_hot_wallet_address") or "").strip()
+            if not expected:
+                raise ValueError("TON_GLM_PRODUCTION_HOT_WALLET_ADDRESS is not set")
+            return expected
+        return TonGlmAutoTransferService._expected_hot_wallet_address()
 
     async def _send_w5_jetton_transfer(
         self,
@@ -222,6 +440,63 @@ class TonGlmAutoTransferService:
                 raise ValueError(f"W5 transfer helper returned invalid response: {stdout}") from error
 
         return await asyncio.to_thread(run)
+
+    async def _send_external_signer_jetton_transfer(
+        self,
+        *,
+        amount_base_units: int,
+        destination: str,
+        hot_wallet_address: str,
+        hot_jetton_wallet: str,
+        query_id: int,
+        comment: str,
+        config: dict[str, Any],
+    ) -> dict[str, Any]:
+        endpoint = (os.getenv("TON_GLM_PRODUCTION_SIGNER_ENDPOINT") or "").strip()
+        if not endpoint:
+            raise ValueError("TON_GLM_PRODUCTION_SIGNER_ENDPOINT is not set")
+        if str(config.get("network") or "").strip() != "mainnet":
+            raise ValueError("External production signer is allowed only for mainnet flow")
+
+        request = {
+            "schema": "glame_ton_jetton_transfer_intent_v1",
+            "network": "mainnet",
+            "signer_mode": str(config.get("production_signer_mode") or "").strip(),
+            "wallet_address": hot_wallet_address,
+            "jetton_wallet_address": hot_jetton_wallet,
+            "jetton_master_address": os.getenv("TON_GLM_JETTON_MASTER_ADDRESS"),
+            "destination_wallet_address": destination,
+            "amount_base_units": str(amount_base_units),
+            "tx_value_nanoton": str(config["tx_value_nanoton"]),
+            "forward_nanoton": str(config["forward_nanoton"]),
+            "query_id": str(query_id),
+            "comment": comment,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        headers = {"Content-Type": "application/json"}
+        token = (os.getenv("TON_GLM_PRODUCTION_SIGNER_TOKEN") or "").strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        async with httpx.AsyncClient(timeout=float(os.getenv("TON_GLM_PRODUCTION_SIGNER_TIMEOUT_SECONDS", "30") or 30)) as client:
+            response = await client.post(endpoint, json=request, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+
+        if not isinstance(payload, dict):
+            raise ValueError("Production signer returned invalid payload")
+        status = str(payload.get("status") or "").strip().lower()
+        if status not in {"ok", "sent", "accepted"}:
+            raise ValueError(str(payload.get("error") or payload.get("message") or "Production signer did not accept transfer"))
+        return {
+            "status": status,
+            "signer_mode": str(config.get("production_signer_mode") or "").strip(),
+            "tx_hash": payload.get("tx_hash"),
+            "external_message_hash": payload.get("external_message_hash"),
+            "seqno": payload.get("seqno"),
+            "query_id": payload.get("query_id") or str(query_id),
+            "signer_request_id": payload.get("request_id"),
+        }
 
     async def _wallet_seqno(self, wallet_address: str) -> int:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -450,6 +725,13 @@ class TonGlmAutoTransferService:
 
         if not config["enabled"]:
             return await mark("disabled")
+        if str(config.get("network") or "").strip() == "mainnet" and not config.get("production_ready"):
+            return await mark(
+                "blocked_production_not_ready",
+                production_signer_mode=config.get("production_signer_mode"),
+                production_signer_endpoint_configured=bool(config.get("production_signer_endpoint_configured")),
+                production_approvals_ready=bool(config.get("production_approvals_ready")),
+            )
         if claim.status != "pending" or claim.transaction_type != "claim" or claim.reason != "points_to_ton_bridge":
             return await mark("skipped_not_points_to_ton")
         existing_transfer = await self._settle_existing_transfer(claim=claim, meta=meta, config=config)
@@ -468,8 +750,13 @@ class TonGlmAutoTransferService:
             return await mark("blocked_no_admin_user")
 
         wallet_version = str(config.get("wallet_version") or "v4r2").lower()
+        signer_mode = str(config.get("production_signer_mode") if str(config.get("network") or "").strip() == "mainnet" else config.get("signer_mode") or "").lower()
+        use_external_signer = str(config.get("network") or "").strip() == "mainnet" and signer_mode in PRODUCTION_SIGNER_MODES
         try:
-            if wallet_version in {"w5", "w5r1", "v5", "v5r1"}:
+            if use_external_signer:
+                hot_wallet_address = self._active_hot_wallet_address(config)
+                wallet = None
+            elif wallet_version in {"w5", "w5r1", "v5", "v5r1"}:
                 self._hot_wallet_mnemonic_words()
                 hot_wallet_address = self._expected_hot_wallet_address()
                 wallet = None
@@ -510,7 +797,19 @@ class TonGlmAutoTransferService:
         body.bits.write_bit(1)
         body.refs.append(forward_payload)
 
-        if wallet_version in {"w5", "w5r1", "v5", "v5r1"}:
+        if use_external_signer:
+            send_payload = await self._send_external_signer_jetton_transfer(
+                amount_base_units=amount_base_units,
+                destination=destination,
+                hot_wallet_address=hot_wallet_address,
+                hot_jetton_wallet=hot_jetton_wallet,
+                query_id=query_id,
+                comment=f"GLAME points_to_glm {claim.id}",
+                config=config,
+            )
+            seqno = int(send_payload.get("seqno") or 0)
+            external_message_hash = str(send_payload.get("external_message_hash") or "") or None
+        elif wallet_version in {"w5", "w5r1", "v5", "v5r1"}:
             send_payload = await self._send_w5_jetton_transfer(
                 amount_base_units=amount_base_units,
                 destination=destination,
@@ -541,7 +840,9 @@ class TonGlmAutoTransferService:
             destination_wallet_address=destination,
             query_id=str(query_id),
             seqno=seqno,
+            tx_hash=send_payload.get("tx_hash"),
             external_message_hash=external_message_hash,
+            signer_mode=signer_mode or None,
             wallet_version=wallet_version,
             send_response=send_payload,
         )

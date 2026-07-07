@@ -265,10 +265,17 @@ class TonGlmSettlementService:
         tx: dict[str, Any],
         claim: GlameTokenTransaction | None,
         config: dict[str, Any],
+        expected_wallet_address: str | None = None,
+        expected_amount_glm: int | None = None,
+        context: str = "claim",
     ) -> dict[str, Any]:
         meta = claim.meta if claim is not None and isinstance(claim.meta, dict) else {}
-        expected_wallet = meta.get("wallet_address") if isinstance(meta.get("wallet_address"), str) else None
-        expected_amount_glm = int(claim.amount or 0) if claim is not None else None
+        expected_wallet = expected_wallet_address or (meta.get("wallet_address") if isinstance(meta.get("wallet_address"), str) else None)
+        expected_amount_glm = (
+            abs(int(expected_amount_glm))
+            if expected_amount_glm is not None
+            else (abs(int(claim.amount or 0)) if claim is not None else None)
+        )
         expected_amount_base_units = (
             expected_amount_glm * (10 ** int(config.get("decimals") or 0))
             if expected_amount_glm is not None
@@ -355,7 +362,7 @@ class TonGlmSettlementService:
                 "ok": bool(mint_matches_recipient or transfer_matches_recipient)
                 if expected_wallet_raw
                 else None,
-                "message": "Recipient в Jetton mint/transfer body должен совпадать с TON-кошельком claim.",
+                "message": f"Recipient в Jetton mint/transfer body должен совпадать с TON-кошельком {context}.",
                 "expected": expected_wallet_raw,
                 "actual": transfer_destination_raw or decoded_destination_raw,
             },
@@ -484,6 +491,9 @@ class TonGlmSettlementService:
         tx_hash: str,
         lookup_addresses: list[str],
         claim: GlameTokenTransaction | None = None,
+        expected_wallet_address: str | None = None,
+        expected_amount_glm: int | None = None,
+        context: str = "claim",
     ) -> dict[str, Any]:
         config = self.config_payload()
         normalized_hash = self._normalize_hash(tx_hash)
@@ -545,6 +555,9 @@ class TonGlmSettlementService:
                             tx=tx,
                             claim=claim,
                             config=config,
+                            expected_wallet_address=expected_wallet_address,
+                            expected_amount_glm=expected_amount_glm,
+                            context=context,
                         )
                         return {
                             "ok": bool(visible_validation.get("ok")),
@@ -571,6 +584,100 @@ class TonGlmSettlementService:
             "tx_hash": normalized_hash,
             "config": config,
             "checked": checked,
+        }
+
+    @staticmethod
+    def _redemption_refund_lookup_addresses(redemption: GlameTokenTransaction) -> list[str]:
+        meta = redemption.meta if isinstance(redemption.meta, dict) else {}
+        addresses: list[str] = []
+        for key in ("treasury_address", "ton_refund_treasury_jetton_wallet", "settlement_lookup_address"):
+            value = (meta.get(key) or "").strip() if isinstance(meta.get(key), str) else ""
+            if value and value not in addresses:
+                addresses.append(value)
+        treasury = (os.getenv("TON_GLM_TREASURY_ADDRESS") or "").strip()
+        if treasury and treasury not in addresses:
+            addresses.append(treasury)
+        for value in TonGlmSettlementService.config_payload()["lookup_addresses"]:
+            if value not in addresses:
+                addresses.append(value)
+        return addresses
+
+    async def settle_redemption_ton_refund_by_tx_hash(
+        self,
+        *,
+        redemption_id: UUID,
+        tx_hash: str,
+        admin_user_id: UUID,
+        comment: str | None = None,
+        require_verified: bool = True,
+    ) -> dict[str, Any]:
+        redemption = (
+            await self.db.execute(
+                select(GlameTokenTransaction).where(
+                    GlameTokenTransaction.id == redemption_id,
+                    GlameTokenTransaction.transaction_type == "redemption",
+                    GlameTokenTransaction.reason == "glm_store_item",
+                )
+            )
+        ).scalar_one_or_none()
+        if redemption is None:
+            raise ValueError("GLM Store redemption не найден")
+        if redemption.status not in {"canceled", "failed"}:
+            raise ValueError("TON refund можно сверять только для отмененных или ошибочных GLM Store заказов")
+
+        meta = redemption.meta if isinstance(redemption.meta, dict) else {}
+        if meta.get("payment_method") != "ton_glm":
+            raise ValueError("TON refund доступен только для GLM Store заказов, оплаченных GLM в TON")
+
+        recipient = (
+            (meta.get("ton_refund_recipient_address") or "").strip()
+            if isinstance(meta.get("ton_refund_recipient_address"), str)
+            else ""
+        ) or (
+            (meta.get("expected_ton_sender_address") or "").strip()
+            if isinstance(meta.get("expected_ton_sender_address"), str)
+            else ""
+        )
+        if not recipient:
+            raise ValueError("Не найден TON-кошелек получателя refund")
+
+        verification = await self.verify_tx_hash(
+            tx_hash=tx_hash,
+            lookup_addresses=self._redemption_refund_lookup_addresses(redemption),
+            claim=redemption,
+            expected_wallet_address=recipient,
+            expected_amount_glm=abs(int(redemption.amount or 0)),
+            context="refund",
+        )
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        redemption.meta = {
+            **meta,
+            "ton_refund_tx_hash": tx_hash,
+            "ton_refund_status": "verified" if verification.get("ok") else "verification_failed",
+            "ton_refund_required": False if verification.get("ok") else meta.get("ton_refund_required", False),
+            "ton_refund_verified_at": now_iso if verification.get("ok") else meta.get("ton_refund_verified_at"),
+            "ton_refund_settlement_comment": (comment or "").strip() or None,
+            "ton_refund_verification": {
+                **verification,
+                "verified_at": now_iso,
+                "verified_by": str(admin_user_id),
+            },
+        }
+        flag_modified(redemption, "meta")
+        await self.db.flush()
+
+        if require_verified and not verification.get("ok"):
+            return {
+                "status": "blocked",
+                "redemption": redemption,
+                "verification": verification,
+            }
+
+        return {
+            "status": "verified" if verification.get("ok") else "recorded",
+            "redemption": redemption,
+            "verification": verification,
         }
 
     async def settle_claim_by_tx_hash(

@@ -185,6 +185,7 @@ interface TokenSummary {
     next_mode?: string;
     description: string;
   };
+  pending_store_redemption?: GlmTransactionItem | null;
   risk_note?: string;
 }
 
@@ -262,6 +263,10 @@ interface GlmTransactionItem {
   admin_comment?: string | null;
   bridge_type?: string | null;
   target_points?: number | null;
+  sku?: string | null;
+  item_title?: string | null;
+  price_glm?: number | null;
+  payment_method?: string | null;
 }
 
 interface PartnerProfile {
@@ -362,6 +367,12 @@ const statusRu = (value?: string | null) => {
     blocked_policy: 'Требуется проверка',
     verified: 'Проверено',
     not_found: 'TON не найден',
+    draft_not_deployed: 'Draft',
+    testnet_ready: 'Testnet ready',
+    mainnet_deployed: 'Mainnet deployed',
+    mainnet_ready: 'Mainnet ready',
+    production_ready: 'Production ready',
+    legal_security_treasury_or_signer_approval_required: 'Требуется approval',
   };
   return map[value || ''] || value || '—';
 };
@@ -539,6 +550,7 @@ const glmTransactionStage = (tx: GlmTransactionItem): BridgeStage => {
 const tonPolicyModeLabel = (value?: string | null) => {
   const map: Record<string, string> = {
     operator_testnet_treasury_transfer: 'автоматический перевод GLM',
+    automatic_mainnet_hot_wallet_transfer: 'mainnet auto-transfer GLM',
     offchain_pending_claim_only: 'ожидает TON-настройку',
   };
   return map[value || ''] || (value ? statusRu(value) : 'перевод через GLAME');
@@ -713,6 +725,27 @@ function DataTable({
   );
 }
 
+const normalizeRussianPhoneDigits = (value: string) => {
+  let digits = value.replace(/\D/g, '');
+  if (digits.startsWith('87') && digits.length >= 12) digits = digits.slice(1);
+  if (digits.startsWith('8')) digits = `7${digits.slice(1)}`;
+  if (!digits.startsWith('7')) digits = `7${digits}`;
+  return digits.slice(0, 11);
+};
+
+const formatRussianPhone = (value: string) => {
+  const digits = normalizeRussianPhoneDigits(value);
+  const national = digits.startsWith('7') ? digits.slice(1) : digits;
+  const parts = ['+7'];
+  if (national.length > 0) parts.push(national.slice(0, 3));
+  if (national.length > 3) parts.push(national.slice(3, 5));
+  if (national.length > 5) parts.push(national.slice(5, 7));
+  if (national.length > 7) parts.push(national.slice(7, 10));
+  return parts.filter(Boolean).join(' ');
+};
+
+const isValidRussianPhone = (value: string) => /^7\d{10}$/.test(normalizeRussianPhoneDigits(value));
+
 export default function ReferralPortalPage() {
   const [view, setView] = useState<PortalView>('landing');
   const [rewardType, setRewardType] = useState<RewardType>('points');
@@ -728,10 +761,10 @@ export default function ReferralPortalPage() {
   const [member, setMember] = useState<PartnerMember>({});
   const [ratePromotion, setRatePromotion] = useState<RatePromotion | null>(null);
   const [, setAccessToken] = useState<string | null>(null);
-  const [joinForm, setJoinForm] = useState({ fullName: '', phone: '', password: '', offerAccepted: false });
+  const [joinForm, setJoinForm] = useState({ lastName: '', firstName: '', middleName: '', phone: '+7', password: '', offerAccepted: false });
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinLoading, setJoinLoading] = useState(false);
-  const [loginForm, setLoginForm] = useState({ phone: '', password: '' });
+  const [loginForm, setLoginForm] = useState({ phone: '+7', password: '' });
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
@@ -1005,11 +1038,22 @@ export default function ReferralPortalPage() {
 
   const submitJoin = async () => {
     setJoinError(null);
-    const fullName = joinForm.fullName.trim();
-    const phone = joinForm.phone.trim();
+    const lastName = joinForm.lastName.trim();
+    const firstName = joinForm.firstName.trim();
+    const middleName = joinForm.middleName.trim();
+    const fullName = [lastName, firstName, middleName].filter(Boolean).join(' ');
+    const phone = normalizeRussianPhoneDigits(joinForm.phone);
     const password = joinForm.password;
-    if (!fullName || !phone || password.length < 6) {
-      setJoinError('Укажите ФИО, телефон и пароль от 6 символов.');
+    if (!lastName || !firstName) {
+      setJoinError('Укажите фамилию и имя.');
+      return;
+    }
+    if (!isValidRussianPhone(joinForm.phone)) {
+      setJoinError('Укажите корректный российский номер телефона.');
+      return;
+    }
+    if (password.length < 6) {
+      setJoinError('Пароль должен быть не короче 6 символов.');
       return;
     }
     if (!joinForm.offerAccepted) {
@@ -1021,7 +1065,15 @@ export default function ReferralPortalPage() {
       const resp = await fetch('/api/referrals/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName, phone, password, offer_accepted: joinForm.offerAccepted }),
+        body: JSON.stringify({
+          last_name: lastName,
+          first_name: firstName,
+          middle_name: middleName || null,
+          full_name: fullName,
+          phone,
+          password,
+          offer_accepted: joinForm.offerAccepted,
+        }),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
@@ -1044,10 +1096,14 @@ export default function ReferralPortalPage() {
 
   const submitLogin = async () => {
     setLoginError(null);
+    if (!isValidRussianPhone(loginForm.phone)) {
+      setLoginError('Введите корректный телефон.');
+      return;
+    }
     setLoginLoading(true);
     try {
       const form = new URLSearchParams();
-      form.set('username', loginForm.phone.trim());
+      form.set('username', normalizeRussianPhoneDigits(loginForm.phone));
       form.set('password', loginForm.password);
       const resp = await fetch('/api/auth/login', {
         method: 'POST',
@@ -1210,6 +1266,82 @@ export default function ReferralPortalPage() {
     }
   };
 
+  const sendGlmStoreTonPayment = async (redemptionId: string, tokenValue: string) => {
+    const tonResp = await fetch(`/api/referrals/me/glm-store/redemptions/${redemptionId}/ton-transaction`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${tokenValue}` },
+    });
+    const tonData = await tonResp.json().catch(() => ({}));
+    if (!tonResp.ok) {
+      throw new Error(tonData?.detail || 'Не удалось подготовить TON-транзакцию.');
+    }
+    await tonConnectUI.sendTransaction(tonData.transaction);
+  };
+
+  const continuePendingGlmStorePayment = async (redemptionId: string) => {
+    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    if (!tokenValue) {
+      setRedeemError('Нужно войти заново.');
+      return;
+    }
+    if (!tonWallet) {
+      setRedeemError('Подключите подтвержденный TON-кошелек.');
+      return;
+    }
+    if (token.claim_wallet_address && tonWallet.account.address !== token.claim_wallet_address) {
+      setRedeemError('Подключенный TON-кошелек отличается от подтвержденного кошелька партнера.');
+      return;
+    }
+    setRedeemLoadingSku(`glm-pending:${redemptionId}`);
+    setRedeemMessage(null);
+    setRedeemError(null);
+    try {
+      await sendGlmStoreTonPayment(redemptionId, tokenValue);
+      setRedeemMessage('TON-транзакция отправлена в кошелек. После подтверждения в сети заказ попадет в очередь выдачи.');
+      await loadDashboard(tokenValue, false);
+    } catch (error: any) {
+      const message = String(error?.message || '');
+      setRedeemError(
+        message.toLowerCase().includes('insufficient')
+          ? 'В кошельке не хватает testnet GRAM для комиссии TON. Пополните testnet-кошелек и повторите оплату.'
+          : message || 'TON-транзакция отменена или не отправлена.'
+      );
+    } finally {
+      setRedeemLoadingSku(null);
+    }
+  };
+
+  const cancelPendingGlmStorePayment = async (redemptionId: string) => {
+    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    if (!tokenValue) {
+      setRedeemError('Нужно войти заново.');
+      return;
+    }
+    setRedeemLoadingSku(`glm-cancel:${redemptionId}`);
+    setRedeemMessage(null);
+    setRedeemError(null);
+    try {
+      const resp = await fetch(`/api/referrals/me/glm-store/redemptions/${redemptionId}/cancel`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${tokenValue}` },
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setRedeemError(data?.detail || 'Не удалось отменить GLM Store оплату.');
+        return;
+      }
+      setToken((prev) => ({ ...prev, ...(data.token || {}) }));
+      setRedeemMessage('Ожидающая GLM Store оплата отменена. Резерв товара возвращен.');
+      await loadDashboard(tokenValue, false);
+    } catch (error: any) {
+      setRedeemError(error?.message || 'Не удалось связаться с сервером.');
+    } finally {
+      setRedeemLoadingSku(null);
+    }
+  };
+
   const submitGlmStoreRedeem = async (sku: string) => {
     const tokenValue = window.localStorage.getItem('glame_partner_access_token');
     if (!tokenValue) {
@@ -1236,6 +1368,9 @@ export default function ReferralPortalPage() {
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
+        if (String(data?.detail || '').includes('pending GLM Store')) {
+          await loadDashboard(tokenValue, false);
+        }
         setRedeemError(data?.detail || 'Не удалось оформить покупку за GLM.');
         return;
       }
@@ -1244,17 +1379,7 @@ export default function ReferralPortalPage() {
         setRedeemError('Заказ создан, но не удалось подготовить TON-оплату. Обновите страницу и повторите.');
         return;
       }
-      const tonResp = await fetch(`/api/referrals/me/glm-store/redemptions/${redemptionId}/ton-transaction`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { Authorization: `Bearer ${tokenValue}` },
-      });
-      const tonData = await tonResp.json().catch(() => ({}));
-      if (!tonResp.ok) {
-        setRedeemError(tonData?.detail || 'Не удалось подготовить TON-транзакцию.');
-        return;
-      }
-      await tonConnectUI.sendTransaction(tonData.transaction);
+      await sendGlmStoreTonPayment(redemptionId, tokenValue);
       setToken((prev) => ({ ...prev, ...(data.token || {}) }));
       setRedeemMessage('TON-транзакция отправлена в кошелек. После подтверждения в сети заказ попадет в очередь выдачи.');
       await loadDashboard(tokenValue, false);
@@ -1617,6 +1742,24 @@ export default function ReferralPortalPage() {
                   </a>
                 </div>
                 <div className="grid gap-4">
+                  <div className="border border-[#d3c170] bg-[#17160f] p-6 shadow-[0_0_0_1px_rgba(211,193,112,0.18)] md:p-7">
+                    <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#d3c170]">Главные условия</div>
+                    <div className="mt-4 text-2xl font-semibold md:text-3xl">Условия реферальных отчислений</div>
+                    <p className="mt-3 text-sm leading-6 text-[#d8d2b2]">
+                      Процент зависит от годового реферального оборота партнера. Чем выше оборот, тем выше ставка начисления баллов GLAME.
+                    </p>
+                    <div className="mt-6 grid gap-2">
+                      {referralLevels.map(([level, turnover, percent]) => (
+                        <div key={level} className="grid grid-cols-[1fr_auto] gap-4 border-b border-[#5b5332] py-3 last:border-b-0">
+                          <div>
+                            <div className="text-base font-semibold text-[#f1f1f3]">{level}</div>
+                            <div className="mt-1 text-xs text-[#b9ae78]">{turnover}</div>
+                          </div>
+                          <div className="self-center text-2xl font-semibold text-[#f1f1f3]">{percent}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                   {[
                     ['01', 'Баллы GLAME', 'Стартовый режим для всех партнеров. Уровни по годовому реферальному обороту: 3%, 5%, 7% или 10%.'],
                     ['02', 'Деньги', 'Доступно с уровня Stylish Pro. Нужны статус ИП или самозанятого, данные для документов и агентское оформление.'],
@@ -1628,20 +1771,6 @@ export default function ReferralPortalPage() {
                       <p className="mt-3 text-sm leading-6 text-[#c5c6ca]">{text}</p>
                     </div>
                   ))}
-                  <div className="border border-[#44474a] bg-[#121416] p-5">
-                    <div className="text-xs uppercase tracking-[0.18em] text-[#8f9194]">Уровни</div>
-                    <div className="mt-4 grid gap-2">
-                      {referralLevels.map(([level, turnover, percent]) => (
-                        <div key={level} className="grid grid-cols-[1fr_auto] gap-3 border-b border-[#333537] py-2 text-sm last:border-b-0">
-                          <div>
-                            <div className="font-semibold">{level}</div>
-                            <div className="mt-1 text-xs text-[#8f9194]">{turnover}</div>
-                          </div>
-                          <div className="text-lg font-semibold">{percent}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </section>
             ) : null}
@@ -1652,7 +1781,16 @@ export default function ReferralPortalPage() {
                   <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">Вход</div>
                   <h1 className="mt-4 text-4xl font-semibold">Кабинет партнера</h1>
                   <label className="mt-8 block text-xs uppercase tracking-[0.16em] text-[#8f9194]">Телефон</label>
-                  <input value={loginForm.phone} onChange={(event) => setLoginForm((prev) => ({ ...prev, phone: event.target.value }))} className="mt-3 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-4 text-[#e2e2e5] outline-none" placeholder="+7" />
+                  <input
+                    value={loginForm.phone}
+                    onChange={(event) => setLoginForm((prev) => ({ ...prev, phone: formatRussianPhone(event.target.value) }))}
+                    onFocus={() => setLoginForm((prev) => ({ ...prev, phone: prev.phone ? formatRussianPhone(prev.phone) : '+7' }))}
+                    onBlur={() => setLoginForm((prev) => ({ ...prev, phone: formatRussianPhone(prev.phone) }))}
+                    className="mt-3 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-4 text-[#e2e2e5] outline-none"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="+7"
+                  />
                   <label className="mt-4 block text-xs uppercase tracking-[0.16em] text-[#8f9194]">Пароль</label>
                   <input value={loginForm.password} onChange={(event) => setLoginForm((prev) => ({ ...prev, password: event.target.value }))} type="password" className="mt-3 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-4 text-[#e2e2e5] outline-none" />
                   {loginError ? <div className="mt-4 border border-[#7a3a3a] bg-[#1a1111] p-3 text-sm text-[#f0c7c7]">{loginError}</div> : null}
@@ -1696,20 +1834,36 @@ export default function ReferralPortalPage() {
                           <StatusBadge tone="warn">После уровня Stylish Pro</StatusBadge>
                         </div>
                       </div>
-                      <div className="grid gap-4 border-t border-[#44474a] p-6 md:grid-cols-3">
+                      <div className="grid gap-4 border-t border-[#44474a] p-6 md:grid-cols-2 xl:grid-cols-5">
                         <label className="block">
-                          <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">ФИО</span>
-                          <input value={joinForm.fullName} onChange={(event) => setJoinForm((prev) => ({ ...prev, fullName: event.target.value }))} className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none" />
+                          <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Фамилия</span>
+                          <input value={joinForm.lastName} onChange={(event) => setJoinForm((prev) => ({ ...prev, lastName: event.target.value }))} className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none" autoComplete="family-name" />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Имя</span>
+                          <input value={joinForm.firstName} onChange={(event) => setJoinForm((prev) => ({ ...prev, firstName: event.target.value }))} className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none" autoComplete="given-name" />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Отчество</span>
+                          <input value={joinForm.middleName} onChange={(event) => setJoinForm((prev) => ({ ...prev, middleName: event.target.value }))} className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none" autoComplete="additional-name" />
                         </label>
                         <label className="block">
                           <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Телефон</span>
-                          <input value={joinForm.phone} onChange={(event) => setJoinForm((prev) => ({ ...prev, phone: event.target.value }))} className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none" placeholder="+7" />
+                          <input
+                            value={joinForm.phone}
+                            onChange={(event) => setJoinForm((prev) => ({ ...prev, phone: formatRussianPhone(event.target.value) }))}
+                            onFocus={() => setJoinForm((prev) => ({ ...prev, phone: prev.phone ? formatRussianPhone(prev.phone) : '+7' }))}
+                            onBlur={() => setJoinForm((prev) => ({ ...prev, phone: formatRussianPhone(prev.phone) }))}
+                            className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none"
+                            inputMode="tel"
+                            autoComplete="tel"
+                          />
                         </label>
                         <label className="block">
                           <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Пароль</span>
                           <input value={joinForm.password} onChange={(event) => setJoinForm((prev) => ({ ...prev, password: event.target.value }))} type="password" className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none" />
                         </label>
-                        <label className="flex items-start gap-3 border border-[#44474a] bg-[#1a1c1e] p-4 text-sm leading-6 text-[#c5c6ca] md:col-span-3">
+                        <label className="flex items-start gap-3 border border-[#44474a] bg-[#1a1c1e] p-4 text-sm leading-6 text-[#c5c6ca] md:col-span-2 xl:col-span-5">
                           <input
                             type="checkbox"
                             checked={joinForm.offerAccepted}
@@ -1942,8 +2096,8 @@ export default function ReferralPortalPage() {
               <section>
                 <PageTitle title="CryptoGLAME" subtitle="GLAME Coin, TON-кошелек, обмен баллов и дорожная карта полноценного токена GLM." />
 
-                <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-                  <div className="border border-[#44474a] bg-[#121416] p-5">
+                <div className="grid gap-6">
+                  <div className="order-2 border border-[#44474a] bg-[#121416] p-5">
                     <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">GLAME Coin</div>
                     <div className="mt-4 text-4xl font-semibold">{token.token_code} в TON</div>
                     <p className="mt-3 text-sm leading-6 text-[#c5c6ca]">
@@ -1952,7 +2106,8 @@ export default function ReferralPortalPage() {
                     <div className="mt-4 flex flex-wrap gap-2 text-xs">
                       <a href="/static/glm_policy/token-policy.md" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">Token policy</a>
                       <a href="/static/glm_policy/risk-disclosure.md" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">Risk disclosure</a>
-                        <a href="/static/glm_policy/bridge-rules.md" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">Правила обмена</a>
+                      <a href="/static/glm_policy/bridge-rules.md" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">Правила обмена</a>
+                      <a href="/static/glm_policy/faq.md" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">FAQ</a>
                       <a href="/api/referrals/glm-audit-hashes/public" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">Audit journal</a>
                     </div>
                     <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -2031,8 +2186,8 @@ export default function ReferralPortalPage() {
                       {convertError ? <div className="mt-3 border border-[#7a3a3a] bg-[#1a1111] p-3 text-sm text-[#f0c7c7]">{convertError}</div> : null}
                       <div className="mt-3 grid gap-3 sm:grid-cols-3">
                         <Metric label="TON network" value={token.onchain_policy?.network || 'testnet'} sub={token.onchain_policy?.standard || 'TON Jetton / TEP-74'} />
-                        <Metric label="Jetton status" value={token.onchain_policy?.status || 'draft_not_deployed'} sub={tonPolicyModeLabel(token.onchain_policy?.claim_mode)} />
-                        <Metric label="Mainnet" value={token.onchain_policy?.mainnet_enabled ? 'Enabled' : 'Blocked'} sub={token.onchain_policy?.mainnet_gate || 'legal/security approval'} />
+                        <Metric label="Jetton status" value={statusRu(token.onchain_policy?.status || 'draft_not_deployed')} sub={tonPolicyModeLabel(token.onchain_policy?.claim_mode)} />
+                        <Metric label="Mainnet" value={token.onchain_policy?.mainnet_enabled ? 'Enabled' : 'Blocked'} sub={statusRu(token.onchain_policy?.mainnet_gate || 'legal_security_treasury_or_signer_approval_required')} />
                       </div>
                       {token.onchain_policy?.jetton_master_address || token.onchain_policy?.metadata_url ? (
                         <div className="mt-3 border border-[#333537] bg-[#121416] p-3 text-xs leading-5 text-[#8f9194]">
@@ -2134,7 +2289,7 @@ export default function ReferralPortalPage() {
                     </div>
                   </div>
 
-                  <div className="border border-[#44474a] bg-[#121416] p-5">
+                  <div className="order-1 border border-[#44474a] bg-[#121416] p-5">
                     <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">TON-кошелек</div>
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       <TonConnectButton />
@@ -2206,6 +2361,38 @@ export default function ReferralPortalPage() {
                     </div>
                     <div className="text-xs leading-5 text-[#8f9194]">Холдеры, travel pouch, стилист, закрытые подборки и private sale pass.</div>
                   </div>
+                  {token.pending_store_redemption ? (
+                    <div className="mt-4 border border-[#806422] bg-[#181408] p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.16em] text-[#f0d58b]">Ожидает GLM оплату</div>
+                          <div className="mt-2 text-base font-semibold text-[#f4e6b0]">
+                            {token.pending_store_redemption.item_title || token.pending_store_redemption.sku || 'GLM Store заказ'}
+                          </div>
+                          <div className="mt-1 text-sm leading-5 text-[#d8c68e]">
+                            Нужно подтвердить перевод {Math.abs(Number(token.pending_store_redemption.price_glm || token.pending_store_redemption.amount || 0))} GLM в TON-кошельке.
+                            Статус: {token.pending_store_redemption.ton_deposit_status || token.pending_store_redemption.status}.
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <button
+                            disabled={redeemLoadingSku === `glm-pending:${token.pending_store_redemption.id}`}
+                            onClick={() => void continuePendingGlmStorePayment(token.pending_store_redemption!.id)}
+                            className="border border-[#e2e2e5] bg-[#e2e2e5] px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#171c1f] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {redeemLoadingSku === `glm-pending:${token.pending_store_redemption.id}` ? 'Открываем кошелек...' : 'Подтвердить в кошельке'}
+                          </button>
+                          <button
+                            disabled={redeemLoadingSku === `glm-cancel:${token.pending_store_redemption.id}`}
+                            onClick={() => void cancelPendingGlmStorePayment(token.pending_store_redemption!.id)}
+                            className="border border-[#806422] px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#f0d58b] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {redeemLoadingSku === `glm-cancel:${token.pending_store_redemption.id}` ? 'Отменяем...' : 'Отменить оплату'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="mt-4 grid gap-4 lg:grid-cols-3">
                     {(token.store_items || []).map((item) => {
                       const priceGlm = Number(item.price_glm || 0);

@@ -32,6 +32,8 @@ def normalize_phone(phone: str) -> str:
     if not phone:
         return ""
     digits = re.sub(r'\D', '', phone)
+    if len(digits) == 12 and digits.startswith('87'):
+        return digits[1:]
     if len(digits) == 11 and digits.startswith('8'):
         return '7' + digits[1:]
     if len(digits) == 10:

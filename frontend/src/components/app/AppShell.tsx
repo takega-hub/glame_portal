@@ -9,8 +9,9 @@ import GlobalSidebar from '@/components/layout/GlobalSidebar';
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isReferralPortal = pathname === '/referral' || pathname.startsWith('/referral/');
+  const isPublicGlmLanding = pathname === '/glm' || pathname.startsWith('/glm/');
 
-  if (isReferralPortal) {
+  if (isReferralPortal || isPublicGlmLanding) {
     return <>{children}</>;
   }
 

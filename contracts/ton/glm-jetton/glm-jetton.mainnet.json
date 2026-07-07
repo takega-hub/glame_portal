@@ -1,0 +1,55 @@
+{
+  "schema": "glame_ton_jetton_mainnet_v1",
+  "network": "mainnet",
+  "token": {
+    "name": "GLAME Coin",
+    "symbol": "GLM",
+    "decimals": 9,
+    "description": "GLAME club utility token for CryptoGLAME online rewards, bridge operations and GLM Store utility.",
+    "image": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png",
+    "metadata_url": "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json"
+  },
+  "policy": {
+    "no_investment_promise": true,
+    "no_buyback_promise": true,
+    "mainnet_requires_legal_approval": true,
+    "mainnet_requires_security_review": true,
+    "mainnet_requires_treasury_approval": true
+  },
+  "contracts": {
+    "implementation": "standard_tep74_jetton",
+    "jetton_master_address": "EQBaHSwImRBl25rWgCpG1is_g_fByAt-dT36APLnywC7v2fl",
+    "jetton_wallet_code_hash": "ba2918c8947e9b25af9ac1b883357754173e5812f807a3d6e642a14709595395",
+    "admin_address": "UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq",
+    "treasury_address": "UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq"
+  },
+  "deployment": {
+    "status": "mainnet_deployed",
+    "deployed_at": "2026-07-05T19:11:05.168Z",
+    "deploy_tx_hash": "6ab47FN+Os2kdl/ldHYx+4d7gRZrXmRURXutA+87EwM=",
+    "deployer": "UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq"
+  },
+  "verification": {
+    "wallet_library_status": null,
+    "wallet_library_checked_at": null,
+    "wallet_library_hash": null,
+    "minter_code_hash": null,
+    "wallet_code_hash": null
+  },
+  "mainnet_mints": [
+    {
+      "kind": "initial_bank_mint",
+      "status": "onchain_verified",
+      "amount_glm": "10000000",
+      "amount_base_units": "10000000000000000",
+      "destination_address": "UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq",
+      "jetton_wallet_address": "EQBLQoVnddiZoCEj_6HOzAnwvsJUp-Dc7GKoNHNiMU3_KSAY",
+      "tx_hash": null,
+      "recorded_at": "2026-07-05T19:19:53.777Z",
+      "verified_at": "2026-07-05T19:33:47Z",
+      "verified_total_supply_glm": "10000000",
+      "verified_destination_balance_glm": "10000000",
+      "note": "Initial 10000000 GLM mainnet bank mint verified on-chain through Toncenter: total supply and treasury Jetton wallet balance match."
+    }
+  ]
+}

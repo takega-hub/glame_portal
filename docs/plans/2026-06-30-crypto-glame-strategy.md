@@ -1,8 +1,8 @@
 # КриптоГлэйм: план применения криптовалюты и развития GLAME Coin
 
-Дата: 2026-06-30  
-Обновлено: 2026-07-05  
-Статус: partner MVP внедрен -> TON Connect/proof работает -> GLM Jetton testnet deployed -> `points_to_glm` работает как transfer из банка GLAME через testnet hot-wallet -> `glm_to_points` TON deposit watcher + 1С auto-retry -> treasury/hot-wallet balance readiness показывает реальные testnet-балансы -> Telegram notification/broadcast/escalation layer включен -> GLM/Reward Store online utility pilot с TON checkout, оплатой баллами, фото и остатками -> production hot-wallet/legal/security/mainnet gate  
+Дата: 2026-06-30
+Обновлено: 2026-07-06
+Статус: controlled mainnet technical pilot готов -> GLM Jetton mainnet deployed -> bank mint `10 000 000 GLM` выполнен -> TON Connect/proof работает -> `points_to_glm` и `glm_to_points` проверены end-to-end -> GLM Store/Reward Store работает через TON checkout и баллы 1C -> treasury/hot-wallet readiness и Telegram alerts включены -> external signer подключен -> public landing `/glm` опубликован -> публичный запуск заблокирован до legal/accounting/security/treasury approvals
 Рабочее название: CryptoGLAME / GLAME Coin / GLM
 
 ## 0.0. Архитектурное решение: баллы = 1С, GLM = TON, платформа = bridge
@@ -51,150 +51,72 @@ Bridge-модель:
 - `reconciliation`: сверяет только bridge-операции и treasury, а не весь внешний рынок GLM;
 - `immutability/audit`: каждое движение bridge/TON/1C и каждая связь между ними фиксируются отдельно.
 
-## 0. Текущий статус реализации на 2026-07-04
+## 0. Текущий статус реализации на 2026-07-06
+
+### Итоговая сверка
+
+CryptoGLAME уже прошел путь от раннего технического пилота к controlled mainnet technical pilot. Основные пользовательские и операционные потоки работают, но публичный mainnet-запуск остается закрыт approval-gate до финального legal/accounting/security/treasury решения.
 
 ### Сделано
 
-- [x] Операционный GLM ledger: добавлены `glame_token_accounts` и `glame_token_transactions` как журнал/буфер до TON-исполнения, не как целевой кошелек GLM.
-- [x] GLM начисляется при создании реферальной комиссии из расчета `1 GLM = 1 ₽ реферального вознаграждения`.
-- [x] GLM попадает в `hold_balance` до подтверждения комиссии.
-- [x] Партнерский кабинет показывает GLM-состояние: TON balance из кошелька, pending/hold/историю заявок и GLM по комиссиям.
-- [x] В партнерском кабинете добавлен раздел `CryptoGLAME`.
-- [x] Добавлена ручная привязка TON-адреса как резервный путь, без статуса `verified`.
-- [x] Добавлен настоящий TON Connect: manifest, provider, подключение кошелька.
-- [x] Добавлен `ton_proof`: backend выдает challenge, проверяет domain, timestamp, payload и Ed25519-подпись.
-- [x] Подтвержденный кошелек получает `crypto_wallet.status = verified`.
-- [x] В админке партнеров добавлены TON-статус, фильтр `TON verified/manual/claim enabled/no wallet`, карточка TON Wallet.
-- [x] Админ может включить/выключить `glm_claim_enabled` только для verified TON-кошелька.
-- [x] Админ может перевести GLM из `hold_balance` в доступный `balance` для теста/подтвержденных комиссий.
-- [x] Партнер может создать pending TON-заявку как техническое исполнение `points_to_glm` после verified wallet, admin approval и доступных баллов/разрешенного баланса.
-- [x] В админке добавлена очередь `GLM claim` с фильтром по статусу.
-- [x] Админ может обработать pending claim как `processed`, `failed` или `canceled`, сохранить `tx_hash` и комментарий.
-- [x] Pending claim резервирует доступный баланс: при заявке GLM списывается из `balance`, при `failed/canceled` возвращается.
-- [x] Добавлен batch-release истекшего GLM hold: `available_at <= now` переводится в доступный balance, связанная комиссия переводится в `approved`.
-- [x] В админке добавлен GLM Ledger: журнал `earn/release/claim` транзакций с фильтрами по типу и статусу.
-- [x] В админке добавлен базовый GLM dashboard: accounts, balance, hold, due hold, monthly earn, pending/processed claim и топ партнеров.
-- [x] Добавлена ручная корректировка доступного GLM balance с обязательной причиной и audit-транзакцией `adjustment`.
-- [x] Добавлен автоматический scheduler истекшего GLM hold: по расписанию вызывает release due hold и переводит комиссии в `approved`.
-- [x] В партнерском кабинете добавлена история GLM-транзакций: начисления, release и claim.
-- [x] Добавлены базовые GLM privilege tiers: Start / Muse / Privé / Ambassador, статусный счет и прогресс до следующего уровня.
-- [x] Добавлена витрина применения GLM и draft-правила внутреннего приема `1 GLM = 1 ₽` с лимитами по категориям.
-- [x] Добавлен MVP `GLM Store`: брендированные товары/сервисы можно оформить за GLM через TON checkout или за баллы 1С через отдельное списание.
-- [x] В админке добавлена очередь GLM Store fulfillment: `fulfilled`, `canceled/failed` с возвратом GLM.
-- [x] GLM Store расширен до сервисов и доступов: private stylist session, закрытая подборка, private sale pass.
-- [x] Внутреннее списание GLM ledger для GLM Store отключено; GLM-оплата идет как TON transfer в treasury, watcher после подтверждения переводит заказ в очередь выдачи.
-- [x] Решение скорректировано: GLM POS-код/QR убирается из пользовательского продукта; физические магазины работают только через баллы 1С после `glm_to_points`.
-- [x] Добавлена bridge-механика `points_to_glm`: списание бонусных баллов и создание GLM/TON withdrawal-заявки через ledger.
-- [x] Добавлены лимиты legacy-конвертации: минимум/максимум за операцию и месячный лимит.
-- [x] Добавлен monthly emission guardrail для реферального выпуска GLM.
-- [x] В админском dashboard добавлены emission cap, real-backed share, conversion total, store burn/burned total, campaign status.
-- [x] Добавлены аудитории и CRM-слой для исторических сгорающих бонусов: список, CSV export, draft `CustomerMessage`; для нового GLM-баланса срок действия должен быть бессрочным.
-- [x] Добавлены GLM AI segments: ready to redeem, near tier, high balance no redemption, bonus converters.
-- [x] Добавлен включаемый campaign multiplier для "двойной GLM" через env с audit meta в earn-транзакциях.
-- [x] Добавлена ledger-based аналитика эффективности GLM: redemption conversion, burn ratio, monthly earn/conversion/redemption, ready-to-spend, high-balance-no-redemption, топ категорий и товаров GLM Store.
-- [x] Добавлена admin-корректировка GLM при отмене/возврате реферальной комиссии: отмена комиссии, reversal-транзакция, возврат из hold/balance или пометка manual recovery.
-- [x] Добавлена GLM Refund Control очередь: кандидаты на отмену GLM по `orders.status=canceled/refunded/returned` и отрицательным/возвратным сигналам `purchase_history`.
-- [x] Добавлен controlled auto-apply для GLM Refund Control: `dry_run` по умолчанию, применение только high-confidence кандидатов, audit через `reversal`.
-- [x] Добавлен backend-слой автоматического списания GLM в app checkout: `use_glm_amount`, расчет лимита по категориям, `glm_payment` в order/payment meta, checkout `redemption` ledger.
-- [x] GLM Jetton deployed в TON testnet: master `EQAyYQYj96groHTRfNTmEMRTNeK9CAo1L3e1n8Hamnup-cc0`, metadata/icon опубликованы.
-- [x] Выполнен первый настоящий `points_to_glm` end-to-end: 500 баллов -> pending TON-заявка -> mint 500 GLM в verified TON wallet -> claim закрыт как `processed` с tx hash.
-- [x] Доступный GLM-баланс в партнерке читается из TON-кошелька; platform ledger больше не показывается как источник доступного GLM.
-- [x] `GLM -> баллы` переведен в TON deposit модель: заявка больше не списывает внутренний GLM balance, показывает treasury/sender, а settlement проверяет входящий Jetton transfer_notification. Добавлен background auto-watch pending bridge: watcher ищет входящий GLM deposit в treasury по sender/amount после создания заявки и закрывает bridge без ручного tx hash в нормальном сценарии.
-- [x] Admin readiness показывает обе очереди bridge: `баллы -> GLM` с auto-transfer статусами и `GLM -> баллы` с TON deposit статусами (`not_started`, `wallet_request_prepared`, `waiting_for_deposit`, `tx_hash_present`) и sample pending-заявок.
-- [x] В админке добавлена операторская обработка `GLM -> баллы` через TON deposit tx hash: проверка отправителя, treasury, Jetton и суммы перед начислением баллов 1С.
-- [x] В партнерском кабинете добавлен TON Connect сценарий для `GLM -> баллы`: pending-заявка может открыть готовый Jetton transfer в привязанном кошельке, пользователь только подтверждает отправку GLM в treasury.
-- [x] Добавлен backend auto-transfer слой для `points_to_glm`: после успешного 1С-списания сервис отправляет GLM из treasury/hot-wallet, находит TON tx и закрывает claim без админа. Background auto-transfer scheduler включен, settlement watcher включен, readiness показывает статус воркеров и разбивку pending-заявок по `ton_auto_transfer.status`.
-- [x] Добавлен автоматический retry scheduler для `GLM -> баллы` после TON settlement: если bridge уже закрыт on-chain, но начисление баллов в 1С временно не прошло (`failed`, `ready_for_1c`, `created_without_ref_key`, `posted_without_balance_change`), backend повторяет 1С-sync тем же repair-механизмом без ручной кнопки администратора; readiness показывает статус `1C retry`.
-- [x] Добавлен security/readiness gate для hot-wallet signer: testnet env-mnemonic помечается как `pilot_only`, readiness показывает security warnings/mainnet blockers и запрещает считать mainnet-ready, пока signer не вынесен в secret manager/external signer и не создан новый production hot-wallet.
-- [x] Добавлен emergency override для `points_to_glm` auto-transfer: админка может поставить auto-transfer на паузу или включить обратно без изменения systemd env и без рестарта; readiness учитывает override и показывает effective enabled status.
-- [x] Добавлен auto-transfer health summary в readiness: blocked/not started/waiting settlement counts, GLM amounts, возраст старейшей pending-заявки и флаг `needs_attention` для операционного мониторинга.
-- [x] Добавлен `GLM -> баллы` health summary в readiness: waiting TON deposit, tx found, 1C issue counts/amounts, возраст старейшей pending-заявки и `needs_attention`.
-- [x] Добавлен readiness alerts layer: backend формирует список alert-ов по paused auto-transfer, blocked/waiting/old pending, найденным TON tx, 1C issues и security warnings; админка показывает alert table.
-- [x] Добавлен CSV export для GLM Bridge Reconciliation: операционный отчет по расхождениям bridge/TON/1С можно выгрузить из админки без ручного SQL.
-- [x] Добавлена отдельная bridge-domain модель `glame_token_bridge_operations`: каждая операция `points_to_glm` / `glm_to_points` получает нормализованную строку с direction/status/idempotency, GLM/points amount, TON tx/wallet/treasury, 1C document/status и ссылкой на legacy ledger transaction. Выполнен backfill исторических bridge-записей, readiness показывает count/amount/gap, reconciliation использует bridge-domain слой как primary source и дополнительно сверяет legacy ledger consistency.
-- [x] Добавлен production alert layer поверх `glame_token_bridge_operations`: readiness считает stale pending, TON waiting, 1C issue, domain gap и показывает sample проблемных операций. В админке добавлена operator-витрина последних bridge operations по новой domain-модели.
-- [x] Testnet hot-wallet operational: W5 testnet signer настроен в env, auto-transfer включен, wallet funded примерно 400 GLM и 1 TON gas. Важно: seed был передан в чат, поэтому этот wallet остается только testnet/pilot; production/mainnet требует новый wallet/seed вне чата и secret manager/external signer.
-- [x] Production hot-wallet candidate создан без передачи seed в систему и записан в runtime-readiness только как публичный адрес: address `UQBdaChDle6gwKrNroYUL9EE8yKX2n57IQdAp8wJgtwGF44q`, bounceable `EQBdaChDle6gwKrNroYUL9EE8yKX2n57IQdAp8wJgtwGF9Pv`, raw `0:5d68284395eea0c0aacdae86142fd104f32297da7e7b210740a7cc0982dc0617`. Подпись production-транзакций не настроена (`production_signer_mode=not_configured`), mainnet остается blocked до legal/security/secret-manager approval.
-- [x] Production/mainnet gate формализован в readiness: добавлены отдельные проверки `production_signer_mode`, `production_legal_approved`, `production_security_approved`, `production_treasury_approved`. Даже при наличии production hot-wallet address mainnet остается заблокирован, пока signer не вынесен в KMS/Vault/external signer и approvals не переведены в true.
-- [x] Выполнен testnet `points_to_glm` через transfer существующего GLM из treasury W5: 1С списала 100 баллов, treasury отправил 100 GLM в TON-кошелек партнера, claim закрыт `processed`; добавлен retry на Toncenter `429` и защита от повторной отправки уже sent/sent_waiting transfer.
-- [x] Исправлена логика отмены `points_to_glm`: для отмененной заявки 1С не получает новое начисление, а распроводится исходный документ списания, чтобы корректно возвращалось поле `К списанию`.
-- [x] UI партнерки разделяет `Баллы 1С`, `GLM в TON`, `GLM в холде` и `TON-заявки`; GLM ledger больше не показывает внутренний `balance/hold` как пользовательский баланс.
-- [x] Production deployment выполнен, `/referral`, TON manifest и основные API routes проверены.
-- [x] Админские bridge-действия переведены на domain operation id: добавлены endpoints `/admin/glm-bridge/operations/{operation_id}/...` для claim, TON settlement, `glm_to_points`, TON deposit, repair и reconciliation actions; фронт использует `bridge_operation_id` с fallback на legacy `transaction_id`.
-- [x] Добавлен MVP Telegram notification layer: отдельный `TelegramNotificationService`, env-настройки admin/partner notifications, admin test/status endpoints, readiness config, уведомления админу о новом партнере, новом реферале, TON verified и GLM hold; партнерские уведомления отправляются при наличии `telegram_chat_id` в profile/meta.
-- [x] Привязка Telegram-бота перенесена в профиль партнерского сайта: сайт выдает одноразовую `/start`-ссылку на 15 минут, webhook бота принимает привязку только по этому токену и отклоняет прямой `/start` без сайта.
-- [x] Production Telegram webhook настроен для `GLAME_Partner_bot`: env содержит bot token, bot username, webhook secret, admin chat ids; webhook установлен на `/api/referrals/telegram/webhook`, проверен `getWebhookInfo`, прямые запросы без secret получают `403`.
-- [x] Админ `315851436` подключен к системным Telegram-оповещениям через `TELEGRAM_ADMIN_CHAT_IDS`; тестовое admin-уведомление отправлено успешно (`sent=1`, errors=0).
-- [x] В админке партнерской программы добавлен Telegram broadcast: админ может отправить сообщение от имени партнерской программы всем активным или всем подключенным партнерам, предварительно проверив аудиторию через dry-run.
-- [x] Добавлен automatic Telegram escalation MVP для bridge/readiness: фоновый scheduler раз в 15 минут проверяет paused auto-transfer, stale pending bridge operations, TON waiting и 1С issues, отправляет админу агрегированное сообщение с cooldown-state, чтобы не спамить одинаковыми alert-ами.
-- [x] Добавлен TON treasury/hot-wallet balance reconciliation: backend сверяет on-chain GLM Jetton balance и TON gas для hot-wallet и treasury/deposit, считает хватит ли GLM/TON на pending `points_to_glm` auto-transfer заявки с buffer, показывает это в readiness/admin UI и добавляет low-balance alerts в Telegram escalation.
-- [x] Разведены testnet treasury и hot-wallet: treasury/deposit address `0QDZEwYBMl-73VYhOY3mSzhxg8GRmZ0EjOovVhq9IDMXupJq`, hot-wallet signer/address `0QByviidLvTw0f8ZAIE7Pe672Tg8RCSwWoljQ_cMvcVAXgvn`; W5 signer проверен, env mnemonic корректно читается как 24 слова в кавычках, readiness показывает реальные on-chain balances.
-- [x] Исправлен post-transfer response bug в `points_to_glm`: операция на 150 GLM фактически прошла, но endpoint падал на `member_id`; исправлено на `member.id`, операция закрыта `processed/settled`.
-- [x] Закрыт ложный `Bridge health = Attention` по старой canceled testnet-операции: readiness health больше не считает 1С issue для `canceled/superseded` bridge-operations; локальный пересчет дает `stale_pending=0`, `ton_waiting=0`, `onec_issue=0`, `needs_attention=false`.
-- [x] Добавлены управляемые лимиты testnet hot-wallet в админке: readiness хранит и показывает минимальный/целевой запас GLM и TON gas, дефолт для pilot - минимум 5000 GLM и 0.5 TON gas, целевой запас - 5000 GLM и 2 TON gas. При балансе ниже порога readiness/Telegram escalation дают refill alert.
-- [x] Проведена UX-полировка партнерского CryptoGLAME: внутренние слова `claim`, `ledger`, `bridge`, `manual` заменены в пользовательских карточках и истории GLM на понятные этапы "Баллы -> GLM", "GLM -> баллы", "отправляем GLM", "ждем TON-перевод", "баллы начислены", "требуется проверка".
-- [x] Добавлен hot-wallet refill plan: backend/admin readiness рассчитывает, сколько GLM и TON gas нужно долить из treasury до целевого hot-wallet уровня, показывает source/destination addresses, дефицит treasury и отдельный endpoint `/api/referrals/admin/glm-hot-wallet-refill-plan`. Автоподпись treasury не включена, чтобы не хранить treasury seed в backend.
-- [x] Telegram escalation стал actionable: у каждого GLM alert теперь есть `action_label` и `action_url`, low-balance/refill ведет прямо на `#ton-readiness`, очереди points_to_glm/glm_to_points и reconciliation имеют отдельные anchors в админке. Добавлен `TELEGRAM_ADMIN_PORTAL_URL`.
-- [x] Добавлен усиленный overdue-alert для hot-wallet refill: если low-balance warning уже был, но за заданное время нет записи `manual_refill` или успешной проверки восстановления, админ получает повторный `critical` Telegram alert.
-- [x] Добавлена безопасная admin-кнопка refill hot-wallet через TON Connect: backend готовит testnet treasury -> hot-wallet транзакцию по refill plan, админ подтверждает ее treasury-кошельком, после `sendTransaction` админка записывает `manual_refill` и обновляет readiness.
+- [x] Архитектура зафиксирована: баллы 1C и GLM - разные сущности, связанные контролируемым bridge; GLM хранится в TON-кошельке, 1C-баллы остаются кассовым инструментом.
+- [x] TON Connect и `ton_proof` работают: партнер подключает кошелек, backend проверяет владение адресом, verified wallet используется для bridge, GLM Store и чтения on-chain баланса.
+- [x] `points_to_glm` работает end-to-end: 1C списывает баллы, hot-wallet отправляет GLM в подтвержденный TON-кошелек, settlement фиксирует TON tx, операция закрывается без ручного админа в нормальном сценарии.
+- [x] `glm_to_points` работает end-to-end: партнер отправляет GLM в treasury, watcher находит TON transfer, 1C начисляет баллы, auto-retry закрывает временные ошибки 1C.
+- [x] 1C spend-flow исправлен: рабочим источником для CryptoGLAME считается `К списанию`; старый путь, который ломал лоты формы карты, признан неактуальным.
+- [x] Bridge-domain слой готов: `glame_token_bridge_operations`, idempotency, statuses, TON tx, 1C status, reconciliation, admin actions по `bridge_operation_id`; legacy ledger остается audit trail, а не продуктовой моделью.
+- [x] GLM Store / Reward Store готов как online utility MVP: товары, услуги, фото, остатки `Осталось X шт.`, покупка за баллы 1C, TON checkout за GLM, fulfillment queue, cancel/refund flow.
+- [x] Telegram bot подключен: admin alerts, partner binding через одноразовый токен с сайта, broadcast партнерам, bridge/readiness escalation, low-balance alerts и ссылки на `https://portal.glamejewelry.ru/admin/crypto`.
+- [x] Admin UX разделен: реферальная программа остается в `/admin/referrals`, CryptoGLAME вынесен в `/admin/crypto`; из crypto убраны РМК, медиаматериалы и настройки отчислений.
+- [x] Treasury/hot-wallet monitoring готов: on-chain GLM/TON balances, editable thresholds, refill plan, fixed batch refill model (`alert < 5000 GLM`, пополнение на `5000 GLM`, TON gas до целевого уровня), manual TON Connect refill.
+- [x] Mainnet GLM Jetton выпущен; bank/treasury mint `10 000 000 GLM` выполнен; metadata опубликована; актуальная иконка `glm-token-icon-v3.png` подключена.
+- [x] External signer подключен через Cloudflare Worker; backend не должен хранить production hot-wallet seed; signer health/preflight и mainnet smoke-test `1 GLM` выполнены.
+- [x] Mainnet treasury/bank wallet и hot-wallet зафиксированы в readiness; hot-wallet пополнен рабочим запасом GLM/TON gas.
+- [x] Public landing `/glm` открыт без авторизации: описывает GLM Coin, tokenomics, риски, roadmap, офлайн-магазины GLAME, мобильное приложение, реферальные начисления GLM за покупки рефералов и связь с реальными баллами лояльности.
+- [x] Public policy pack готов в `/static/glm_policy`: token policy, risk disclosure, bridge rules, FAQ, operator runbook, production signer contract, metadata.
+- [x] Operational stats очищены от testnet-шумов через cutover: старые testnet/pilot операции остаются в audit trail, но не должны искажать рабочие GLM Effectiveness / Treasury Turnover.
 
-### Частично сделано
+### Неактуальное и закрытое
 
-- [~] TON claim/bridge реализован как автоматизированный pilot-flow: testnet Jetton deployed, первый реальный claim mint выполнен, затем модель изменена на перевод существующего GLM из treasury/банка; `points_to_glm` умеет auto-transfer из W5 hot-wallet после успешного 1С-списания, settlement проверяет tx hash через TON Center и поддерживает BOC/Jetton mint body либо обычный Jetton transfer body amount/recipient. Readiness показывает hot-wallet GLM/TON gas и treasury GLM/TON gas; production hot-wallet candidate и approval gate уже видны в readiness; остаток - secret manager/external signer, production treasury limits и production alerts.
-- [~] Admin GLM dashboard расширен: есть totals, claim queue, ledger, conversion, burn, emission cap, campaign, GLM segments и ledger-based effectiveness; еще нужна аналитика эффективности по продажам/марже.
-- [~] Release hold реализован вручную, batch-операцией и scheduler-ом по истекшему hold; admin-cancel комиссии, очередь refund candidates и controlled auto-apply уже корректируют GLM, но еще нужна более глубокая классификация доверенных статусов 1С.
-- [~] TON proof проверяет подпись по public key, полученному от TON Connect account. Следующий hardening-слой: извлекать public key из `walletStateInit` или on-chain wallet contract.
-- [x] Физический магазин исключен из прямого GLM-пилота; целевая модель для кассы - только `glm_to_points` bridge, затем списание бонусов 1С.
+- Старый пользовательский `claim/withdrawal` UI больше не является отдельным продуктовым действием. Для пользователя остаются понятные сценарии: `Баллы -> GLM`, `GLM -> баллы`, `оплата GLM`, `оплата баллами`.
+- Модель внутреннего GLM balance на платформе как источника доступных GLM закрыта. Доступный GLM читается из TON-кошелька; platform ledger нужен для заявок, холдов, аудита и reconciliation.
+- Testnet-only treasury/hot-wallet сценарии больше не являются целевыми для production. Они остаются историей пилота и инструментом регрессионных проверок.
+- Прямой GLM POS-код для физических магазинов исключен. Офлайн-магазины используют баллы 1C; GLM сначала переводится в баллы через `glm_to_points`.
+- Автоматический treasury auto-refill без подтверждения администратора не запускаем, пока treasury signer не вынесен в отдельный KMS/Vault/external signer с лимитами и approval-policy.
+- Обещания роста цены, buyback, гарантированного курса, ликвидности или USDT-обмена не используем в публичной коммуникации.
 
-### Состояние крупных блоков
+### Что осталось до полной реализации и публичного mainnet launch
 
-- [~] Redemption/burn механика работает через `redemption` и fulfillment queue; fulfillment пока ручной.
-- [x] Daily audit hash MVP: deterministic SHA-256 root по дневным GLM-транзакциям, предыдущему root hash и текущим account totals.
-- [x] TON Jetton contract: testnet package, metadata, pinned reference, env template, deploy checklists and testnet Jetton master deployed.
-- [~] On-chain treasury transfer в TON: treasury test mint, первый реальный claim mint и первый auto-transfer из treasury W5 подтверждены. Для новых пользовательских операций используется перевод существующего GLM из банка GLAME. Добавлены verification settlement endpoint, batch run, включенные background schedulers для settlement, auto-transfer и 1С retry, auto-transfer service, emergency override pause/resume; tx hash + decoded mint/transfer amount/recipient проверяются через TON Center/BOC decoder; добавлен transfer_notification/deposit decoder, partner TON Connect transfer request, admin tx-hash settlement UI, auto-watch для `glm_to_points` и security/readiness gate для hot-wallet signer. Testnet hot-wallet funded и operational; production hot-wallet candidate создан, но production/mainnet все еще требует secret manager/external signer и production monitoring.
-- [x] Treasury policy, token policy, public risk disclosure, bridge rules and KYC/AML draft pack.
-- [ ] P2P/marketplace GLM.
-- [~] Bridge ledger для `points_to_glm`, `glm_to_points`, `claim`, `redeem`: базово реализован через `glame_token_transactions`; отдельная bridge-domain модель/idempotency/reporting добавлена для exchange-направлений, reconciliation уже смотрит на `glame_token_bridge_operations` как primary source и legacy ledger как audit trail, readiness/operator UI показывают domain health и последние операции, action-кнопки переведены на `bridge_operation_id`. Базовые Telegram-уведомления, admin broadcast, automatic bridge alert escalation и on-chain treasury/hot-wallet balance reconciliation готовы; остаток - formal reports, UX-polish и production-grade signer/limits.
-- [~] 1C adapter: `glm_to_points` доведен до боевого сценария на testnet - TON deposit подтвержден, документ 1С создан и проведен (`НФ-00000050`), reconciliation чистый; добавлен auto-retry scheduler для временных сбоев начисления 1С после TON settlement. Для `points_to_glm` добавлен 1C spend payload, документ `СписанияБонусов`, feature-flag `ONEC_GLM_BRIDGE_SPEND_SYNC_ENABLED`, meta-аудит, admin repair endpoint, reconciliation-сигналы `onec_spend_*`, кнопки retry/manual/review в админке, hard gate `ONEC_GLM_BRIDGE_SPEND_REQUIRE_SUCCESS` и правильная отмена через распроведение исходного 1С-списания; остаток - formal idempotency/reconciliation report по всем 1С-документам.
-- [~] Reserve/lock для защиты от двойного списания при bridge, online checkout, marketplace и on-chain claim: row locks добавлены для ключевых операций, но watcher/marketplace еще требуют отдельного hardening.
-- [ ] GLM purchase: покупка GLM увеличивает GLM-баланс; бонусы 1С увеличиваются только после `glm_to_points`.
-- [ ] GLM transfer/P2P/DEX: внешние передачи меняют только владение GLM и не меняют 1С до bridge-in.
-- [~] Автоматическое списание GLM в online checkout по лимитам категорий: backend checkout готов, но офлайн-магазины должны использовать только баллы 1С после `glm_to_points`.
-- [~] KYC/AML draft готов; бухгалтерская модель для crypto payouts и legal approval еще нужны.
-- [~] Миграционные уведомления по историческим сгорающим бонусам и возможности bridge `points_to_glm`: Telegram-инфраструктура и broadcast в админке готовы; осталось подготовить тексты/сегменты и согласовать юридическую формулировку.
-- [ ] Расширенная аналитика эффективности GLM по продажам, марже, repeat purchase и влиянию GLM-кампаний на оборот.
+1. **Legal/accounting**
+   - [ ] финальная партнерская оферта и правила CryptoGLAME;
+   - [ ] accounting model для `points_to_glm`, `glm_to_points`, GLM Store, покупки баллов и возможных crypto payouts;
+   - [ ] KYC/AML правила для крупных операций и подозрительных on-chain сценариев;
+   - [ ] финальное legal approval без инвестиционных обещаний.
 
-### Ближайшее решение
+2. **Security / signer / treasury**
+   - [~] security review Jetton/treasury/signer/TON Connect workflow: checklist опубликован в `/static/glm_policy/security-review-checklist.md`, фактический security approval еще нужен;
+   - [ ] max per tx / daily cap / velocity limits для external signer;
+   - [x] two-step approval для крупных treasury/refill операций: крупный refill создает `refill_approval`, TON Connect payload выдается только после approved approval;
+   - [x] incident runbook/escalation policy: emergency pause, signer token rotation, Toncenter outage, balance gaps, refund/manual recovery и severity/time limits оформлены в `/static/glm_policy/operator-runbook.md` и `/static/glm_policy/production-escalation-policy.md`;
+   - [ ] проверить, что production runtime/logs/UI не раскрывают seed, private key, signer token, Toncenter key, Telegram token или 1C secrets.
 
-Продолжаем консервативный pilot, но фиксируем целевую архитектуру: `1С бонусы -> points_to_glm bridge -> GLM в TON-кошельке -> utility/DEX/P2P -> glm_to_points bridge -> 1С бонусы`.
+3. **Production operations**
+   - [x] go/no-go checklist в `/admin/crypto`: legal/security/treasury approvals, balances, signer health, 1C health, token verification package и bridge health собраны в единый launch-gate;
+   - [x] daily export/journal treasury turnover и bridge reconciliation: treasury turnover CSV export готов, bridge reconciliation CSV расширен summary/breakdown/issues для audit review;
+   - [ ] digest-режим Telegram escalation для warning/non-critical событий;
+   - [ ] final regression E2E на отдельном тестовом партнере перед включением широкой аудитории.
 
-До mainnet/legal/security approval не обещаем торговлю, ликвидность или курс. Текущий claim/withdrawal - это testnet/pilot-заявка на TON-исполнение через controlled treasury/hot-wallet flow, а не публичный криптовывод.
+4. **Public trust / token verification**
+   - [ ] отправить token verification / asset-list package, чтобы кошельки перестали помечать GLM как spam/unverified;
+   - [ ] public proof of ledger snapshots / audit hash page;
+   - [ ] финально вычитать landing `/glm`, policy, FAQ и bridge rules юридически.
 
-### Следующие приоритеты
-
-1. Подготовить UX-polish для админской CryptoGLAME-очереди: человекочитаемые статусы и фильтры для operator flow без внутренних `claim/ledger/manual`.
-2. Добавить digest-режим Telegram escalation для non-critical событий и раздельные severity thresholds.
-3. Подготовить controlled treasury -> hot-wallet refill approval: отдельная модель заявки, two-step approval и signer-mode без treasury seed в backend.
-4. Подготовить production hot-wallet/signer слой: production wallet уже зафиксирован как публичный candidate, но подпись должна идти только через KMS/Vault/external signer, с лимитами, daily cap, emergency disable и ротацией секретов.
-5. Расширить Telegram notification layer до полной схемы подписок: opt-in/opt-out, категории уведомлений, антиспам и шаблоны сообщений для разных событий.
-6. Возвраты и отмены заказов: расширить controlled auto-apply правилами доверенных статусов 1С и лимитами по сумме/периоду.
-7. Запустить коммуникационный пилот: через Telegram broadcast уведомить подключенных партнеров о CryptoGLAME/bridge, затем отдельной кампанией предложить клиентам сохранить сгорающие баллы через `points_to_glm` без обещаний роста цены.
-8. Расширенная аналитика эффективности GLM: связать ledger-based KPI с заказами, repeat purchase, маржей и оборотом после GLM-кампаний.
-9. Legal/security gate: финальная оферта, accounting model, security review Jetton/treasury workflow, mainnet go/no-go.
-10. Mainnet/DEX/P2P не запускать до legal/security/treasury approval.
-
-### Актуальный остаток работ после testnet-claim
-
-Коротко: базовый pilot уже доказал оба пути `баллы -> GLM в TON` и `GLM в TON -> баллы 1С`. Нормальный testnet flow уже автоматизирован через treasury/hot-wallet, TON settlement watcher и 1С auto-retry; до следующего продуктового шага нужно закрыть production-надежность, безопасность signer-а и reconciliation.
-
-Обязательно исправить/доделать перед расширением пилота:
-
-- TON settlement automation: endpoint проверки `tx_hash`, BOC/Jetton mint decoder и Jetton transfer decoder для amount/recipient, transfer_notification/deposit decoder для `glm_to_points`, partner TON Connect transfer request, admin deposit UI, batch run и background settlement watcher включены; дальше нужны сверка Jetton balance, внешние production alerts и escalation policy.
-- Настоящий `glm_to_points`: базовый testnet E2E подтвержден - пользователь отправил GLM в treasury, settlement проверил `transfer_notification`, bridge закрылся, 1С создала и провела документ начисления; добавлен 1С auto-retry scheduler для временных сбоев после TON settlement. Остаток: production alerts, auto-escalation повторных ошибок и финальная UX-полировка статусов "ожидает TON/проверяется/начислено".
-- Настоящий `points_to_glm` с 1С: первый TON mint уже подтвержден как proof-of-deploy, новые операции исполняются переводом существующего GLM из treasury/банка. Backend создает документ 1С `СписанияБонусов`, проверяет доступный баланс, имеет repair/retry endpoint, reconciliation по `onec_spend_sync_status`, processed-gate при `ONEC_GLM_BRIDGE_SPEND_REQUIRE_SUCCESS=true`, auto-transfer service, включенный scheduler и readiness breakdown по status. Остаток: создать отдельный production hot-wallet, положить туда ограниченный запас GLM/TON gas и вынести signer в безопасное хранение.
-- Bridge-domain модель: отдельная таблица `glame_token_bridge_operations`, backfill, readiness, domain health, reconciliation primary source, operator-витрина и action endpoints/buttons по `bridge_operation_id` уже готовы. Остаток - внешние уведомления/escalation policy и оставить legacy `glame_token_transactions` только как audit trail.
-- Online utility: оставить прямое GLM-использование только в онлайн-сценариях GLAME/партнера, GLM Store, сервисах и дропах; физический магазин обслуживается через `glm_to_points`.
-- Legal/security gate: финальная оферта, accounting model, security review Jetton/treasury workflow, treasury approval и решение mainnet go/no-go.
+5. **Product polish после launch gate**
+   - [ ] GLM purchase / покупка баллов лояльности с понятным spread и лимитами;
+   - [ ] расширенная аналитика эффективности GLM по продажам, марже, repeat purchase и реферальному обороту;
+   - [ ] opt-in/opt-out Telegram subscriptions для партнеров;
+   - [ ] UX-полировка спорных TON tx, refund и ручных repair-сценариев;
+   - [ ] DEX/P2P/listing strategy только после отдельного legal/security решения.
 
 ## 1. Цель проекта
 
@@ -488,8 +410,8 @@ GLAME не должен строить доходность проекта на 
 
 ### Этап 1. Off-chain GLM Ledger
 
-Срок: 1-2 недели  
-Статус: done для партнерского MVP.  
+Срок: 1-2 недели
+Статус: done для партнерского MVP.
 Цель: запустить безопасный внутренний учет GLM без блокчейн-вывода.
 
 Уже реализовано в MVP:
@@ -512,7 +434,7 @@ GLAME не должен строить доходность проекта на 
 
 ### Этап 2. Привилегии за GLM
 
-Срок: 2-4 недели  
+Срок: 2-4 недели
 Цель: дать токену реальную пользу внутри GLAME.
 
 Механики:
@@ -538,7 +460,7 @@ GLAME не должен строить доходность проекта на 
 
 ### Этап 3. Burn-механика
 
-Срок: 1 месяц после этапа 2  
+Срок: 1 месяц после этапа 2
 Цель: создать ограниченность и внутреннюю экономику.
 
 Возможные сценарии burn:
@@ -575,8 +497,8 @@ GLAME не должен строить доходность проекта на 
 
 ### Этап 4. On-chain Proof
 
-Срок: после стабилизации экономики  
-Статус: частично сделано через TON Connect `ton_proof`; daily audit hash MVP добавлен во внутренний GLAME ledger, публикация hash в блокчейн еще впереди.  
+Срок: после стабилизации экономики
+Статус: частично сделано через TON Connect `ton_proof`; daily audit hash MVP добавлен во внутренний GLAME ledger, публикация hash в блокчейн еще впереди.
 Цель: использовать блокчейн как аудит, не открывая свободный рынок.
 
 Механика:
@@ -593,8 +515,8 @@ GLAME не должен строить доходность проекта на 
 
 ### Этап 5. Tradable TON Jetton
 
-Срок: testnet pilot работает; mainnet - только после юридической и security-проверки  
-Статус: TON testnet Jetton deployed; первый real claim mint выполнен как proof-of-deploy; дальнейшие `points_to_glm` операции исполняются transfer-ом существующего GLM из treasury/банка через backend auto-transfer pilot.  
+Срок: controlled mainnet technical pilot готов; публичный запуск - только после legal/accounting/security/treasury approval
+Статус: TON testnet и mainnet Jetton deployed; primary bank mint `10 000 000 GLM` выполнен в treasury/bank wallet; `points_to_glm` исполняется переводом существующего GLM из hot-wallet через external signer, а не минтом под каждую заявку.
 Цель: выпустить полноценный on-chain `GLM`, который можно хранить в TON-кошельке, передавать, использовать внутри GLAME и обменивать через рыночную ликвидность.
 
 Приоритетная сеть:
@@ -628,7 +550,7 @@ GLAME не должен строить доходность проекта на 
 
 ### Этап 6. DEX-liquidity and market operations
 
-Срок: после on-chain пилота  
+Срок: после on-chain пилота
 Цель: дать GLM рыночную обращаемость без обещания фиксированного курса.
 
 Варианты ликвидности:
@@ -649,7 +571,7 @@ GLAME не должен строить доходность проекта на 
 
 ### Этап 7. Regulated crypto rewards
 
-Срок: только после юридической и бухгалтерской модели  
+Срок: только после юридической и бухгалтерской модели
 Цель: использовать GLM или поддерживаемую криптовалюту как один из вариантов партнерского вознаграждения.
 
 Варианты:
@@ -1154,7 +1076,7 @@ GLM можно использовать в сегментации:
 - [~] добавить `glm_to_points`: backend/API, partner request UI, TON Connect Jetton transfer request, treasury/sender fallback-инструкции, admin-processing queue, TON deposit settlement endpoint, admin tx-hash UI, background auto-watcher и 1С auto-retry готовы; нужен production monitoring и auto-escalation повторных ошибок.
 - [~] добавить продукт "покупка баллов лояльности": backend/API, partner UI, admin queue, spread, срок баллов и 1С document payload готовы; автоматическая 1С-проводка включается feature-flag `ONEC_GLM_BRIDGE_BONUS_SYNC_ENABLED`, нужен отдельный боевой тест продуктового сценария и финальная экономика spread.
 - [~] добавить `reserve/lock` перед bridge-операциями, checkout, marketplace и on-chain claim: DB row locks добавлены для account/bridge/claim/redemption; marketplace/on-chain watcher locks еще впереди;
-- [~] добавить reconciliation job только по bridge-операциям, treasury и 1С-документам: отдельная bridge-domain модель `glame_token_bridge_operations`, backfill, readiness, domain health, reconciliation primary source, CSV export, operator-витрина, action-кнопки по `bridge_operation_id` и TON treasury/hot-wallet balance reconciliation готовы; остаток - formal audit exports и production escalation policy;
+- [x] добавить reconciliation job только по bridge-операциям, treasury и 1С-документам: отдельная bridge-domain модель `glame_token_bridge_operations`, backfill, readiness, domain health, reconciliation primary source, CSV export, operator-витрина, action-кнопки по `bridge_operation_id`, TON treasury/hot-wallet balance reconciliation и formal audit CSV export готовы; остаток - production escalation policy;
 - [~] добавить audit report по расхождениям bridge и repair workflow: reconciliation report, Retry 1С, Manual doc, reviewed/legacy workflow, auto-retry 1С и bridge-domain report готовы; дальше нужны внешние уведомления/escalation policy и domain-action endpoints;
 - [x] оставить сгорание бонусных баллов 1С по действующим правилам;
 - [x] добавить CRM-сценарий: "баллы скоро сгорят - переведите их в GLM".
@@ -1180,13 +1102,16 @@ GLM можно использовать в сегментации:
 - [x] добавить TON watcher/settlement service: backend service, admin endpoint `/admin/glm-claims/{claim_id}/ton-settlement`, bridge deposit endpoint `/admin/glm-bridge/glm-to-points/{bridge_id}/ton-deposit`, partner TON Connect transfer request, admin deposit UI, batch endpoint `/admin/glm-ton-settlement/run` и включенный scheduler проверяют `tx_hash`, treasury transfer amount/recipient и deposit transfer_notification; `GLM -> баллы` testnet E2E выполнен, 1С auto-retry добавлен.
 - [ ] провести security review контракта.
 
-### Sprint 8 - TON mainnet, только после legal/security approval
+### Sprint 8 - TON mainnet controlled technical pilot
 
-- [ ] выпустить GLM Jetton в TON mainnet;
-- [ ] открыть on-chain claim для верифицированных партнеров;
-- [ ] создать ограниченную DEX liquidity pair `GLM/TON`;
-- [ ] затем рассмотреть пару `GLM/USDT`;
-- [ ] вести treasury-операции по утвержденному регламенту.
+- [x] выпустить GLM Jetton в TON mainnet;
+- [x] выполнить primary bank mint `10 000 000 GLM` в treasury/bank wallet;
+- [x] подключить production external signer без seed/private key в backend;
+- [x] выполнить smoke-test mainnet transfer на малой сумме;
+- [x] пополнить mainnet hot-wallet до рабочего GLM/TON gas запаса;
+- [ ] открыть публичные on-chain операции только после legal/accounting/security/treasury approvals;
+- [ ] создать DEX/liquidity/listing strategy отдельным legal/security gate без обещаний цены, роста, выкупа или ликвидности;
+- [ ] вести treasury-операции по утвержденному регламенту с лимитами, two-step approval и incident runbook.
 
 ### Sprint 9 - crypto payout track, отдельная legal/accounting model
 
@@ -1313,22 +1238,23 @@ GLM можно использовать в сегментации:
 3. Admin/security gate: GLAME включает TON-операции только verified-партнерам; mainnet заблокирован readiness-ом до legal/security/treasury approval.
 4. Pending TON operation: партнер создает заявку "баллы -> GLM в TON", backend списывает баллы в 1С, auto-transfer отправляет существующий GLM из treasury/hot-wallet, settlement фиксирует tx hash в ledger.
 
-Практический статус на 2026-07-04:
+Практический статус на 2026-07-06:
 
-- `points_to_glm`: рабочий testnet pilot, 1С spend обязателен, auto-transfer отправляет GLM из treasury/hot-wallet, settlement закрывает claim.
-- `glm_to_points`: рабочий testnet pilot, TON deposit watcher находит входящий GLM в treasury, 1С начисляет баллы, auto-retry повторяет начисление при временных сбоях.
-- Readiness: показывает queues, schedulers, 1C retry, auto-transfer emergency override, health по обоим bridge-направлениям, alerts, security warnings и mainnet blockers. После testnet liquidity rehearsal: status `ready_for_transfer`, hot-wallet около `5000 GLM / ~2 TON`, treasury около `9 995 350 GLM`, pending `points_to_glm = 0`, blockers `0`, auto-transfer/settlement/1C retry running.
-- Treasury/hot-wallet monitoring: добавлена on-chain сверка GLM/TON gas, admin endpoints, readiness-карточки, refill plan и редактируемые лимиты hot-wallet. Базовый operational target: держать hot-wallet не ниже `5000 GLM` и `0.5 TON`, целевой refill до `5000 GLM` и `2 TON`; при нехватке создается admin Telegram alert с action-ссылкой в readiness.
+- `points_to_glm`: проверен end-to-end. 1С spend обязателен, GLM отправляется из hot-wallet через external signer, settlement фиксирует TON tx и закрывает операцию.
+- `glm_to_points`: проверен end-to-end. TON deposit watcher находит входящий GLM в treasury, 1С начисляет баллы, auto-retry повторяет начисление при временных сбоях.
+- Readiness: показывает queues, schedulers, 1C retry, auto-transfer, signer health, treasury/hot-wallet balances, alerts, security warnings и production approval blockers. После mainnet liquidity setup: GLM Jetton deployed, treasury/bank содержит `10 000 000 GLM`, hot-wallet пополнен рабочим запасом, smoke-test `1 GLM` выполнен.
+- Treasury/hot-wallet monitoring: добавлена on-chain сверка GLM/TON gas, admin endpoints, readiness-карточки, refill plan и редактируемые лимиты hot-wallet. Базовый operational target: alert при hot-wallet ниже `5000 GLM` и `0.5 TON`, GLM refill выполняется fixed batch `5000 GLM`, TON gas доводится до `2 TON`; при нехватке создается admin Telegram alert с action-ссылкой в readiness.
+- Рабочая mainnet-статистика отделена от тестового audit trail: `TON_GLM_OPERATIONAL_STATS_START_AT` задает cutover-время, после которого `GLM Effectiveness` и `Treasury turnover` считают только рабочие операции текущей сети. Старые testnet/pilot транзакции остаются в базе для аудита, но не попадают в экономику рабочего режима.
 - Hot-wallet operational workflow: readiness теперь показывает понятный следующий шаг пополнения, суммы GLM/TON, source treasury, destination hot-wallet, ошибки достаточности treasury, последний Telegram alert и кнопки `Проверить балансы`/`Скопировать план`.
 - Операционный cleanup: старый canceled `points_to_glm`/1С issue больше не влияет на health; readiness должен показывать `Bridge health = OK` после deploy/restart.
 - Telegram: production webhook настроен; партнерская привязка защищена одноразовым токеном с сайта; админские уведомления проверены; broadcast партнерам добавлен в админку; automatic bridge/readiness escalation включен с cooldown. Low-balance refill warning усиливается до `critical`, если hot-wallet не восстановлен и пополнение не записано за заданное время. Admin action URL исправлен на `https://portal.glamejewelry.ru/admin/referrals`.
 - Админская CryptoGLAME-очередь: UI упрощен под реальные действия оператора без внутренних терминов `claim/bridge/manual`: `Баллы -> GLM`, `GLM -> баллы`, `TON-перевод`, `проверить TON`, `повторить 1С`, `внести документ`, `отменить списание 1С`. Сверка показывает понятные этапы вместо технических статусов.
-- Mainnet: production hot-wallet candidate address уже зафиксирован как публичный адрес для readiness. Mainnet заблокирован проверками `production_signer_missing`, `production_legal_approval_missing`, `production_security_approval_missing`, `production_treasury_approval_missing` до подключения безопасного signer-а без seed в env, legal/accounting/security approval и treasury policy approval. Seed, переданный в чат, нельзя использовать для production/mainnet.
+- Mainnet: GLM Jetton выпущен, bank mint `10 000 000 GLM` выполнен, production signer через Cloudflare Worker подключен и smoke-test на малой сумме пройден. Публичный режим остается заблокирован approval-gate до legal/accounting/security approval и treasury policy approval.
 
 Скорректированная рекомендация:
 
-1. Завершить bridge pilot:
-   - `points_to_glm` уже работает end-to-end в testnet через 1С spend + treasury auto-transfer;
+1. Завершить production hardening bridge:
+   - `points_to_glm` уже работает end-to-end через 1С spend + hot-wallet auto-transfer;
    - `glm_to_points` уже работает через TON deposit watcher + начисление баллов 1С + auto-retry;
    - action endpoints/buttons уже переведены на `bridge_operation_id`, чтобы оператор работал с нормализованной bridge-операцией, а не с legacy ledger transaction;
    - monitoring-шаг on-chain treasury balance reconciliation и low-balance Telegram alert добавлен;
@@ -1344,33 +1270,36 @@ GLM можно использовать в сегментации:
    - [x] treasury policy;
    - [x] KYC/AML draft для будущих on-chain/crypto payouts;
    - [ ] финальное legal/accounting approval.
-4. TON Jetton testnet уже запущен; следующий gate:
+4. TON Jetton mainnet уже запущен как controlled technical pilot; следующий gate:
    - security review;
-   - production hot-wallet и безопасный signer вместо env mnemonic;
+   - production hot-wallet и безопасный external signer уже подключены, но нужны лимиты и runbook;
    - TON watcher/settlement monitoring;
-   - production-grade TON treasury balance thresholds и escalation policy уже заложены в readiness; перед mainnet нужно только утвердить реальные лимиты и пополнить hot-wallet/treasury;
+   - production-grade TON treasury balance thresholds и escalation policy уже заложены в readiness; перед public launch нужно утвердить реальные лимиты и escalation-процедуру;
    - treasury policy approval;
-   - mainnet launch только без обещания цены и без гарантии выкупа.
+   - public mainnet launch только без обещания цены, роста, выкупа или ликвидности.
 5. Bridge `баллы -> GLM -> баллы` уже является ядром pilot; следующий крупный продуктовый трек - "покупка баллов лояльности", GLM purchase/top-up и экономика spread, потому что это влияет на бонусную нагрузку, маржу, оферту и клиентские расчеты.
 
 ## 22. Что делаем дальше
 
-Текущий статус на 2026-07-04: testnet-пилот работает, админские очереди и readiness уже показывают основные операционные состояния, Telegram-уведомления ведут в `https://portal.glamejewelry.ru/admin/referrals`.
+Текущий статус на 2026-07-06: controlled mainnet technical pilot готов. Админские очереди и readiness показывают основные операционные состояния, Telegram-уведомления ведут на `https://portal.glamejewelry.ru/admin/referrals` и `https://portal.glamejewelry.ru/admin/crypto`, CryptoGLAME вынесен в отдельный админ-раздел `/admin/crypto`.
 
-### Сверка плана с текущей реализацией на 2026-07-05
+### Сверка плана с текущей реализацией на 2026-07-06
 
 | Блок | Что реализовано | Статус | Что осталось |
 | --- | --- | --- | --- |
-| TON Connect / proof | Партнер подключает TON-кошелек, backend проверяет `ton_proof`, привязанный адрес используется для bridge и чтения GLM. | Готово для testnet pilot | Перед mainnet - повторная security-проверка wallet proof, домена manifest и session handling. |
-| GLM Jetton | Testnet Jetton deployed, metadata/icon подключены, treasury и hot-wallet видны в readiness. | Готово для testnet pilot | Mainnet deploy только после legal/security/treasury approval. |
-| `Баллы -> GLM` | 1C списывает баллы через отрицательное начисление, hot-wallet автоматически отправляет GLM, watcher закрывает TON tx. | Готово и проверено end-to-end | Держать auto-transfer в testnet, добавить production signer/KMS перед боевым режимом. |
+| TON Connect / proof | Партнер подключает TON-кошелек, backend проверяет `ton_proof`, привязанный адрес используется для bridge и чтения GLM. | Готово | Перед публичным запуском - повторная security-проверка wallet proof, домена manifest и session handling. |
+| GLM Jetton | Testnet Jetton deployed; mainnet Jetton deployed; metadata/icon подключены, treasury и hot-wallet видны в readiness. | Готово технически для controlled mainnet pilot | Публичный mainnet-режим только после legal/security/treasury approval. |
+| `Баллы -> GLM` | 1C списывает баллы через отрицательное начисление, hot-wallet автоматически отправляет GLM через external signer, watcher закрывает TON tx. | Готово и проверено end-to-end | Добавить max per tx/daily cap, replay/idempotency review и go/no-go ограничения перед публичным режимом. |
 | `GLM -> баллы` | Partner отправляет GLM в treasury, watcher находит deposit, 1C начисляет баллы, auto-retry повторяет временные 1C ошибки. | Готово и проверено end-to-end | Полировать UX статусов и operator runbook для спорных TON tx. |
-| Hot-wallet / treasury readiness | Балансы GLM/TON gas, лимиты, refill plan, Telegram alerts и ручное пополнение через TON Connect работают. | Готово для testnet operations | Автоматический refill не включать до безопасного treasury signer; пока refill остается admin-approved. |
+| Hot-wallet / treasury readiness | Балансы GLM/TON gas, лимиты, refill plan, Telegram alerts и ручное пополнение через TON Connect работают. GLM refill считается как fixed batch: ниже порога `5000 GLM` отправляем `5000 GLM`, чтобы не спамить мелкими пополнениями. | Готово для mainnet pilot operations | Автоматический refill treasury не включать до безопасного treasury signer; пока refill остается admin-approved. |
 | 1C reconciliation | Рабочий баланс считается как `sum(Начислено) - sum(КСписанию)` по активным движениям; платформа сверяется с `1C К списанию`, лоты формы карты - диагностика. | Готово для monitoring | Для старых тестовых документов не делать массовый repair; при необходимости - отдельный cleanup-runbook по конкретным документам. |
-| Reward Store / online utility | Витрина, admin CRUD, фото, остатки, покупка за баллы 1C, TON checkout за GLM и очередь выдачи реализованы. | MVP готов | Провести контрольный testnet-платеж товара за GLM и проверить `pending_ton_payment -> pending_fulfillment`; дописать FAQ/оферту. |
+| Reward Store / online utility | Витрина, admin CRUD, фото, остатки, покупка за баллы 1C, TON checkout за GLM, очередь выдачи и контрольный testnet-платеж до `fulfilled` реализованы. | MVP готов | Дописать FAQ/оферту и operator runbook для спорных оплат/refund. |
+| Treasury turnover | Admin-слой учитывает входящие GLM от GLM Store / `GLM -> баллы` / покупки баллов, исходящие refill в hot-wallet, refund-required обязательства, TON Connect refund и verified refund tx settlement по on-chain tx hash; добавлен CSV export для дневной/периодной выгрузки. | MVP готов | Расширить до полноценного журнала treasury policy с утвержденными регламентами. |
 | Telegram bot | Admin alerts, partner binding, broadcast и ссылки на `portal.glamejewelry.ru` подключены. | Готово для pilot | Добавить digest/подписки по типам событий после стабилизации основных потоков. |
+| Admin UX | Раздел `Партнеры` очищен от CryptoGLAME: там остались рефералы, рефоводы, выплаты, РМК, медиаматериалы и настройки начислений. CryptoGLAME вынесен в отдельный `/admin/crypto`; из него убраны партнерские блоки `Настройки отчислений`, `РМК`, `Медиаматериалы`. | Готово | Позже вынести общие React-компоненты из копии страницы, чтобы уменьшить технический долг. |
 | Экономика GLM | В плане зафиксированы комиссии, spread, utility store, покупка баллов и неинвестиционная формулировка без обещания роста. | Концепт + часть MVP | Принять финальные тарифы/spread и legal wording до публичного запуска. |
-| Mainnet / production | Readiness blockers и approval gate видны. | Заблокировано правильно | Нужны KMS/Vault/external signer, лимиты treasury, security review, legal/accounting approval. |
+| Публичный лендинг GLM | `/glm` открыт без авторизации, содержит utility-сценарии, tokenomics, roadmap, риски, фото офлайн-пространств GLAME, блок про мобильное приложение GLAME и объяснение связи GLM с реальными баллами 1C/покупками украшений/реферальными покупками. Jetton metadata переведена на фирменную coin icon v3. | Готово технически | Финальное legal wording перед широким продвижением и token trust review. |
+| Mainnet / production | Mainnet Jetton и bank mint выполнены, external signer подключен, hot-wallet пополнен, readiness blockers и approval gate видны. | Controlled technical pilot готов, public launch заблокирован правильно | Нужны финальные лимиты treasury, security review, legal/accounting approval и token verification/anti-spam пакет. |
 
 Обновление testnet liquidity rehearsal:
 
@@ -1413,18 +1342,62 @@ GLM можно использовать в сегментации:
    - [x] добавить покупку Reward Store за баллы 1С: списание баллов через исправленный OData spend-flow, очередь выдачи, возврат баллов при отмене/ошибке;
    - [x] добавить TON checkout для GLM Store: партнер подтверждает GLM transfer в treasury, watcher закрывает оплату, затем товар попадает в очередь выдачи;
    - [x] добавить доступное количество, фото товара и показ `Осталось X шт.` в партнерской витрине; при оформлении покупка резервирует 1 штуку;
-   - [ ] провести контрольный testnet-платеж GLM Store за товар и проверить переход `pending_ton_payment -> pending_fulfillment`;
+   - [x] провести контрольный testnet-платеж GLM Store за товар и проверить переход `pending_ton_payment -> pending_fulfillment -> fulfilled`;
+   - [x] добавить treasury turnover dashboard: входящие GLM от покупок/bridge, исходящие refill hot-wallet, refund-required обязательства, admin TON Connect refund и verified refund tx settlement;
    - [ ] зафиксировать правила списания GLM/баллов на партнерском сайте в оферте/FAQ;
    - продукт "покупка баллов лояльности" с GLM spread и лимитами.
 6. Подготовить production/mainnet gate:
-   - новый production hot-wallet без seed-фразы в env;
-   - безопасный signer: KMS/Vault/external signer;
-   - legal/accounting approval;
-   - security review Jetton/treasury/signer workflow;
-   - финальная treasury policy approval;
-   - mainnet только после снятия всех readiness blockers.
+   - [x] production hot-wallet создан и используется как signing wallet external signer-а без seed-фразы в backend;
+   - [x] mainnet treasury/bank wallet утвержден: `UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq` (bounceable `EQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_-0v`, raw `0:18f6e6f9e6243753d1bcafa87be0c93618f68d572f18909487906c95d7e1e7ff`);
+   - [x] readiness gate проверяет `production_signer_mode`, `production_legal_approved`, `production_security_approved`, `production_treasury_approved`;
+   - [x] безопасный signer: Cloudflare Worker external signer развернут отдельно от backend, backend runtime не хранит `TON_GLM_AUTO_TRANSFER_HOT_WALLET_MNEMONIC`, health проходит через `/api/referrals/admin/glm-production-signer/check`;
+   - [~] production treasury/hot-wallet policy: лимиты операций, daily/hourly cap, velocity limits, fixed-batch refill и emergency pause реализованы технически; осталось формальное treasury approval и роли доступа;
+   - [ ] legal/accounting approval;
+   - [~] security review Jetton/treasury/signer/TON Connect workflow: production checklist готов и выведен в `/admin/crypto`, нужен фактический sign-off;
+   - [ ] финальная treasury policy approval;
+   - [x] mainnet Jetton deploy + metadata/icon + первичный bank mint + smoke-test: Jetton master deployed `EQBaHSwImRBl25rWgCpG1is_g_fByAt-dT36APLnywC7v2fl`, фирменная иконка GLAME зафиксирована в `/static/glm_policy/glm-token-icon-v3.png`, `10 000 000 GLM` minted в treasury/bank wallet и on-chain подтверждены; `1 GLM` mainnet smoke-test через external signer выполнен;
+   - [ ] public mainnet launch только после снятия approval blockers.
 
-Следующая реализация в коде: провести контрольный GLM Store testnet checkout, закрыть operator UX выдачи/отмены товара и оформить публичные правила обмена. Полностью автоматический refill из treasury не включаем, пока treasury signer не вынесен в KMS/Vault/external signer с лимитами и approval-policy; иначе backend получил бы возможность самостоятельно тратить банк GLAME.
+### Что осталось до публичного mainnet launch
+
+Mainnet deploy и primary mint уже выполнены. Публичный режим должен оставаться заблокирован, пока не закрыты approval gates и production-контроли:
+
+1. **Signer / secrets**
+   - [x] убрать production hot-wallet seed-фразу из backend/runtime env;
+   - [x] подключить `TON_GLM_PRODUCTION_SIGNER_MODE=external_signer`: Cloudflare Worker signer задеплоен на `https://glame-ton-signer.takega.workers.dev`, `SIGNER_TOKEN`, hot-wallet mnemonic и Toncenter key записаны как Cloudflare secrets, backend env подключен;
+   - [x] настроить production signer endpoint/adapter: backend отправляет `glame_ton_jetton_transfer_intent_v1` без секретов; reference Cloudflare Worker signer добавлен в `signer/cloudflare-worker`, KV namespace подключен, health-check возвращает `ok`;
+   - [x] добавить безопасный signer health/preflight: `/api/referrals/admin/glm-production-signer/check` проверяет endpoint/auth без подписи и без секретов, UI показывает результат в `/admin/crypto`;
+   - [x] добавить подпись через внешний signer для `points_to_glm`: `points_to_glm` adapter и внешний signer готовы, Cloudflare signer обновлен на mainnet Jetton master, active backend env переключен на mainnet, smoke-test `1 GLM` из hot-wallet в treasury выполнен; treasury refill auto-sign остается запрещен, ручной mainnet refill через TON Connect включен;
+   - [x] добавить emergency disable/pause без деплоя: backend auto-transfer override останавливает очередь, Cloudflare signer получил KV-based `/admin/emergency-pause`, UI `/admin/crypto` умеет поставить/снять `Пауза signer`; резервный `EMERGENCY_PAUSED=true` остается break-glass через Cloudflare env.
+2. **Treasury controls**
+   - [x] утвердить mainnet treasury и hot-wallet адреса: treasury/bank wallet `UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq`, active hot-wallet/signing wallet `UQA5EmFpVIEJea3jgPdErJyH19lJHs9HUuarIvXbQpBz2Mok`; hot-wallet пополнен до рабочего запаса `9999 GLM` и примерно `1.997 TON`;
+   - [x] утвердить базовые hot-wallet refill limits: alert ниже `5000 GLM`, refill batch `5000 GLM`, TON gas минимум `0.5`, цель `2`;
+   - [x] max per tx / daily cap / hourly cap / velocity limits для external signer: Cloudflare Worker проверяет `MAX_AMOUNT_GLM`, `DAILY_LIMIT_GLM`, `HOURLY_LIMIT_GLM`, `MIN_SECONDS_BETWEEN_TRANSFERS`, хранит usage в KV и показывает лимиты/usage в `/health`;
+   - [x] сделать two-step approval для крупных refill/treasury transfers: backend создает `refill_approval`, UI показывает pending approval, второй админ approve/reject, и крупный TON Connect refill блокируется до approved approval;
+   - [x] включить daily export/journal для treasury turnover: `/api/referrals/admin/glm-treasury-turnover/export.csv` и кнопка `CSV export` в `/admin/crypto`;
+   - [ ] описать процедуру manual recovery/refund.
+3. **Legal / accounting / public wording**
+   - [~] финальная партнерская оферта и правила обмена: базовые публичные `Token policy`, `Risk disclosure`, `Bridge rules` и `FAQ` опубликованы в `/static/glm_policy`, добавлен публичный landing `/glm` с описанием utility, tokenomics, treasury-модели, рисков и входом на партнерский сайт; до mainnet нужен legal approval;
+   - [ ] accounting model для GLM Store, покупки баллов и bridge;
+   - [ ] финальный risk disclosure без обещаний цены, роста, выкупа или ликвидности;
+   - [ ] legal approval для on-chain utility.
+4. **Security review**
+   - [~] TON Connect proof/session/manifest review: критерии проверки зафиксированы в security checklist, нужен фактический review/sign-off;
+   - [x] Jetton master/wallet metadata review: имя, символ, decimals, фирменная иконка GLAME, публичный metadata URL, landing `https://partner.glamejewelry.ru/glm` и реальный mainnet master зафиксированы;
+   - [~] token verification / anti-spam package: подготовлен `contracts/ton/glm-jetton/ton-assets-verification`, включая `GLM.yaml`, JSON-entry и PR description; metadata указывает на фирменную иконку v3 и публичный landing; осталось отправить PR в wallet asset list и дождаться применения в кошельках.
+   - [x] проверка всех admin endpoints `require_admin`: добавлен статический audit `python3 scripts/security/check_referrals_admin_routes.py`, который парсит `backend/app/api/referrals.py` и падает при новом `/admin...` route без `Depends(require_admin())`;
+   - [x] проверка replay/idempotency для bridge/refund/store payment: добавлен admin endpoint `/api/referrals/admin/glm-replay-idempotency-audit` и кнопка `Replay audit` в production approvals; проверяет дубли TON tx hash между bridge/store/refund, processed bridge без TON tx, GLM Store paid без TON tx и refund sent/verified без TON tx;
+   - [~] секреты Telegram/TON/1C не должны попадать в логи и UI: signer health/pause responses теперь рекурсивно редактируются по ключам `token/secret/api_key/mnemonic/private_key/authorization/password`; нужен финальный grep/log review перед sign-off.
+5. **Operational readiness**
+   - [x] operator runbook: спорный tx, зависшая заявка, refund, 1C retry, refill;
+   - [x] monitoring/alerts для mainnet Toncenter outages и balance gaps: readiness/Telegram alerts работают, production escalation policy фиксирует severity/time limits и действия оператора;
+   - [ ] чистый E2E на отдельном партнере/минимальной сумме перед открытием публичного режима;
+   - [x] пополнить mainnet hot-wallet через admin TON Connect refill: hot-wallet получил GLM и TON gas из bank/treasury;
+   - [x] синхронизировать `TON_GLM_PRODUCTION_SIGNER_TOKEN` backend и Cloudflare `SIGNER_TOKEN`: signer token отдельный от `TONCENTER_API_KEY`, health возвращает `200/ok`;
+   - [x] mainnet smoke-test external signer transfer на минимальной сумме: `1 GLM` отправлен из hot-wallet в treasury;
+   - [x] go/no-go checklist в админке: `/admin/crypto` показывает единый статус `GO/Blocked`, signer limits, launch blockers и next steps; сами legal/security/treasury решения еще должны быть реально подтверждены.
+
+Публичные правила обмена/FAQ для партнерского сайта и operator runbook для спорных TON tx, refund и treasury операций оформлены в `/static/glm_policy` и выведены ссылками в партнерском CryptoGLAME и админском `/admin/crypto`. Production escalation policy добавлен: severity levels, time limits, Toncenter outage, balance gaps, stuck bridge states, GLM Store refunds, signer incidents и close-out criteria. Production signer adapter contract добавлен: backend умеет отправлять во внешний signer только transfer intent без seed/private key, readiness требует endpoint и approvals. Cloudflare Worker signer развернут: `https://glame-ton-signer.takega.workers.dev`, KV namespace настроен, hot-wallet mnemonic и Toncenter key записаны как Cloudflare secrets, Cloudflare signer обновлен на mainnet Jetton master. Mainnet GLM Jetton deployed, `10 000 000 GLM` minted в bank/treasury и on-chain подтверждены через Toncenter. Backend env переключен на mainnet master, mainnet treasury и signer hot-wallet. Mainnet hot-wallet пополнен через TON Connect, signer token синхронизирован отдельным секретом не равным Toncenter API key, minimal smoke-test `1 GLM` из hot-wallet в treasury выполнен. Hot-wallet refill теперь работает по модели fixed batch: alert ниже `5000 GLM`, пополнение на `5000 GLM`, чтобы не создавать мелкие повторы. External signer получил hard limits на стороне Cloudflare Worker: max per tx, daily cap, hourly cap и минимальная пауза между переводами с учетом usage в KV. Production approvals вынесены в `/admin/crypto` и сохраняются audit override-файлом. Go/no-go launch gate добавлен в readiness и UI: он агрегирует mainnet network, Jetton deploy, external signer, signer limits, hot-wallet/treasury balances, approvals, bridge health и token verification package. Emergency pause закрыт технически: backend auto-transfer можно остановить override-файлом, а Cloudflare signer - KV-паузой из `/admin/crypto` без redeploy. Two-step approval для крупных refill закрыт технически: крупный refill создает `refill_approval`, второй админ подтверждает или отклоняет его, TON Connect transaction не готовится без approved approval. Treasury turnover получил CSV export для операционной дневной выгрузки. Security review checklist опубликован в policy pack и выведен в `/admin/crypto`; он фиксирует TON Connect/proof, bridge replay/idempotency, external signer, treasury/refill, refunds и secret/log exposure criteria. Следующая реализация: закрыть реальные legal/security/treasury approval gates, выполнить финальную проверку token verification/anti-spam пакета и подготовить публичный mainnet launch. Полностью автоматический refill из treasury не включаем, пока treasury signer не вынесен в KMS/Vault/external signer с лимитами и approval-policy; иначе backend получил бы возможность самостоятельно тратить банк GLAME.
 
 Новый порядок тестирования после хаоса тестовых 1C-документов:
 

@@ -17,6 +17,10 @@
     "mint:status": "node scripts/mint-status.mjs",
     "deploy:handoff": "node scripts/prepare-deploy-handoff.mjs",
     "deploy:handoff:write": "node scripts/prepare-deploy-handoff.mjs --write",
+    "mainnet:prepare-deploy": "node scripts/prepare-mainnet-deploy.mjs --allow-mainnet true",
+    "mainnet:record-deploy": "node scripts/record-mainnet-deploy.mjs --allow-mainnet true",
+    "mainnet:prepare-mint": "node scripts/prepare-mainnet-mint.mjs --allow-mainnet true --allow-large true",
+    "mainnet:record-mint": "node scripts/record-mainnet-mint.mjs --allow-mainnet true",
     "prepare:claims": "node scripts/prepare-claim-plan.mjs",
     "prepare:claims:sample": "node scripts/prepare-claim-plan.mjs fixtures/pending-claims.sample.csv",
     "record:deploy": "node scripts/record-deploy.mjs"

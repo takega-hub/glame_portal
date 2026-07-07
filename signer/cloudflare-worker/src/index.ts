@@ -24,6 +24,8 @@ type Env = {
   FORWARD_NANOTON?: string;
   MAX_AMOUNT_GLM?: string;
   DAILY_LIMIT_GLM?: string;
+  HOURLY_LIMIT_GLM?: string;
+  MIN_SECONDS_BETWEEN_TRANSFERS?: string;
   EMERGENCY_PAUSED?: string;
 };
 
@@ -44,6 +46,7 @@ type TransferIntent = {
 };
 
 const SCHEMA = 'glame_ton_jetton_transfer_intent_v1';
+const EMERGENCY_PAUSE_KEY = 'emergency:pause';
 
 function json(data: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(data, null, 2), {
@@ -101,8 +104,29 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function hourKey(): string {
+  return new Date().toISOString().slice(0, 13);
+}
+
 function glmToBaseUnits(glm: number, decimals: number): bigint {
   return BigInt(Math.floor(glm * 10 ** decimals));
+}
+
+function baseUnitsToGlmString(value: bigint, decimals: number): string {
+  const divider = 10n ** BigInt(decimals);
+  const whole = value / divider;
+  const fraction = value % divider;
+  if (fraction === 0n) {
+    return whole.toString();
+  }
+  return `${whole}.${fraction.toString().padStart(decimals, '0').replace(/0+$/, '')}`;
+}
+
+function usageKey(env: Env, period: 'daily' | 'hourly' | 'last_transfer'): string {
+  const prefix = `${network(env)}:${env.TON_HOT_WALLET_ADDRESS}`;
+  if (period === 'daily') return `usage:${prefix}:daily:${todayKey()}`;
+  if (period === 'hourly') return `usage:${prefix}:hourly:${hourKey()}`;
+  return `usage:${prefix}:last_transfer`;
 }
 
 async function hotWallet(env: Env) {
@@ -130,42 +154,151 @@ async function hotWallet(env: Env) {
   return { keyPair, wallet };
 }
 
-async function checkDailyLimit(env: Env, amountBaseUnits: bigint, decimals: number): Promise<void> {
+async function signerLimitSnapshot(env: Env, decimals: number): Promise<Record<string, unknown>> {
+  const dailyKey = usageKey(env, 'daily');
+  const hourlyKey = usageKey(env, 'hourly');
+  const dailyUsed = BigInt((await env.SIGNER_KV.get(dailyKey)) || '0');
+  const hourlyUsed = BigInt((await env.SIGNER_KV.get(hourlyKey)) || '0');
+  const lastTransferAt = Number((await env.SIGNER_KV.get(usageKey(env, 'last_transfer'))) || '0');
+  const maxAmountGlm = parsePositiveNumber(env.MAX_AMOUNT_GLM, 1000);
+  const dailyLimitGlm = parsePositiveNumber(env.DAILY_LIMIT_GLM, 5000);
+  const hourlyLimitGlm = parsePositiveNumber(env.HOURLY_LIMIT_GLM, dailyLimitGlm);
+  const minSecondsBetweenTransfers = Math.max(0, Math.floor(Number(env.MIN_SECONDS_BETWEEN_TRANSFERS || '2') || 0));
+  return {
+    max_amount_glm: maxAmountGlm,
+    daily_limit_glm: dailyLimitGlm,
+    hourly_limit_glm: hourlyLimitGlm,
+    min_seconds_between_transfers: minSecondsBetweenTransfers,
+    daily_used_glm: baseUnitsToGlmString(dailyUsed, decimals),
+    hourly_used_glm: baseUnitsToGlmString(hourlyUsed, decimals),
+    last_transfer_at_unix: lastTransferAt || null,
+  };
+}
+
+async function checkTransferLimits(env: Env, amountBaseUnits: bigint, decimals: number): Promise<void> {
+  const nowUnix = Math.floor(Date.now() / 1000);
+  const maxAmountGlm = parsePositiveNumber(env.MAX_AMOUNT_GLM, 1000);
+  const maxAmountBaseUnits = glmToBaseUnits(maxAmountGlm, decimals);
+  if (amountBaseUnits > maxAmountBaseUnits) {
+    throw new Error(`amount exceeds per-transaction limit: ${amountBaseUnits}/${maxAmountBaseUnits} base units`);
+  }
+
   const dailyLimitGlm = parsePositiveNumber(env.DAILY_LIMIT_GLM, 5000);
   const dailyLimitBaseUnits = glmToBaseUnits(dailyLimitGlm, decimals);
-  const key = `daily:${todayKey()}`;
-  const current = BigInt((await env.SIGNER_KV.get(key)) || '0');
-  if (current + amountBaseUnits > dailyLimitBaseUnits) {
-    throw new Error(`daily limit exceeded: ${current + amountBaseUnits}/${dailyLimitBaseUnits} base units`);
+  const dailyCurrent = BigInt((await env.SIGNER_KV.get(usageKey(env, 'daily'))) || '0');
+  if (dailyCurrent + amountBaseUnits > dailyLimitBaseUnits) {
+    throw new Error(`daily limit exceeded: ${dailyCurrent + amountBaseUnits}/${dailyLimitBaseUnits} base units`);
+  }
+
+  const hourlyLimitGlm = parsePositiveNumber(env.HOURLY_LIMIT_GLM, dailyLimitGlm);
+  const hourlyLimitBaseUnits = glmToBaseUnits(hourlyLimitGlm, decimals);
+  const hourlyCurrent = BigInt((await env.SIGNER_KV.get(usageKey(env, 'hourly'))) || '0');
+  if (hourlyCurrent + amountBaseUnits > hourlyLimitBaseUnits) {
+    throw new Error(`hourly limit exceeded: ${hourlyCurrent + amountBaseUnits}/${hourlyLimitBaseUnits} base units`);
+  }
+
+  const minSecondsBetweenTransfers = Math.max(0, Math.floor(Number(env.MIN_SECONDS_BETWEEN_TRANSFERS || '2') || 0));
+  if (minSecondsBetweenTransfers > 0) {
+    const lastTransferAt = Number((await env.SIGNER_KV.get(usageKey(env, 'last_transfer'))) || '0');
+    if (lastTransferAt > 0 && nowUnix - lastTransferAt < minSecondsBetweenTransfers) {
+      throw new Error(`velocity limit exceeded: wait ${minSecondsBetweenTransfers - (nowUnix - lastTransferAt)} seconds`);
+    }
   }
 }
 
-async function recordDailyUsage(env: Env, amountBaseUnits: bigint): Promise<void> {
-  const key = `daily:${todayKey()}`;
-  const current = BigInt((await env.SIGNER_KV.get(key)) || '0');
-  await env.SIGNER_KV.put(key, String(current + amountBaseUnits), { expirationTtl: 60 * 60 * 48 });
+async function recordTransferUsage(env: Env, amountBaseUnits: bigint): Promise<void> {
+  const dailyKey = usageKey(env, 'daily');
+  const hourlyKey = usageKey(env, 'hourly');
+  const dailyCurrent = BigInt((await env.SIGNER_KV.get(dailyKey)) || '0');
+  const hourlyCurrent = BigInt((await env.SIGNER_KV.get(hourlyKey)) || '0');
+  await env.SIGNER_KV.put(dailyKey, String(dailyCurrent + amountBaseUnits), { expirationTtl: 60 * 60 * 48 });
+  await env.SIGNER_KV.put(hourlyKey, String(hourlyCurrent + amountBaseUnits), { expirationTtl: 60 * 60 * 3 });
+  await env.SIGNER_KV.put(usageKey(env, 'last_transfer'), String(Math.floor(Date.now() / 1000)), { expirationTtl: 60 * 60 * 48 });
+}
+
+async function emergencyPauseState(env: Env): Promise<{
+  paused: boolean;
+  reason?: string;
+  updated_at?: string;
+  updated_by?: string;
+  source: string;
+}> {
+  if (envBool(env.EMERGENCY_PAUSED)) {
+    return { paused: true, source: 'env' };
+  }
+  const raw = await env.SIGNER_KV.get(EMERGENCY_PAUSE_KEY);
+  if (!raw) {
+    return { paused: false, source: 'kv' };
+  }
+  try {
+    const payload = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      paused: Boolean(payload.paused),
+      reason: typeof payload.reason === 'string' ? payload.reason : undefined,
+      updated_at: typeof payload.updated_at === 'string' ? payload.updated_at : undefined,
+      updated_by: typeof payload.updated_by === 'string' ? payload.updated_by : undefined,
+      source: 'kv',
+    };
+  } catch {
+    return { paused: true, reason: 'invalid emergency pause KV payload', source: 'kv_error' };
+  }
 }
 
 async function handleHealth(request: Request, env: Env): Promise<Response> {
   const auth = requireAuth(request, env);
   if (auth) return auth;
+  const pause = await emergencyPauseState(env);
+  const decimals = Number(env.TON_GLM_DECIMALS || '9');
   return json({
-    status: envBool(env.EMERGENCY_PAUSED) ? 'paused' : 'ok',
+    status: pause.paused ? 'paused' : 'ok',
     mode: 'external_signer',
     network: network(env),
     wallet_address: env.TON_HOT_WALLET_ADDRESS,
     jetton_master_address_configured: Boolean(env.TON_GLM_JETTON_MASTER_ADDRESS),
-    limits_loaded: Boolean(env.MAX_AMOUNT_GLM && env.DAILY_LIMIT_GLM),
-    emergency_paused: envBool(env.EMERGENCY_PAUSED),
+    limits_loaded: Boolean(env.MAX_AMOUNT_GLM && env.DAILY_LIMIT_GLM && env.HOURLY_LIMIT_GLM),
+    limits: await signerLimitSnapshot(env, decimals),
+    emergency_paused: pause.paused,
+    emergency_pause_source: pause.source,
+    emergency_pause_reason: pause.reason || null,
+    emergency_pause_updated_at: pause.updated_at || null,
+    emergency_pause_updated_by: pause.updated_by || null,
     policy_version: '2026-07-05',
+  });
+}
+
+async function handleEmergencyPause(request: Request, env: Env): Promise<Response> {
+  const auth = requireAuth(request, env);
+  if (auth) return auth;
+  const payload = (await request.json()) as Record<string, unknown>;
+  const paused = Boolean(payload.paused);
+  const next = {
+    paused,
+    reason: typeof payload.reason === 'string' && payload.reason.trim() ? payload.reason.trim().slice(0, 500) : null,
+    updated_at: new Date().toISOString(),
+    updated_by: typeof payload.updated_by === 'string' && payload.updated_by.trim() ? payload.updated_by.trim().slice(0, 120) : 'backend',
+  };
+  await env.SIGNER_KV.put(EMERGENCY_PAUSE_KEY, JSON.stringify(next));
+  return json({
+    status: paused ? 'paused' : 'ok',
+    emergency_paused: paused,
+    emergency_pause_source: 'kv',
+    emergency_pause_reason: next.reason,
+    emergency_pause_updated_at: next.updated_at,
+    emergency_pause_updated_by: next.updated_by,
   });
 }
 
 async function handleTransfer(request: Request, env: Env): Promise<Response> {
   const auth = requireAuth(request, env);
   if (auth) return auth;
-  if (envBool(env.EMERGENCY_PAUSED)) {
-    return json({ status: 'error', error: 'signer paused' }, { status: 423 });
+  const pause = await emergencyPauseState(env);
+  if (pause.paused) {
+    return json({
+      status: 'error',
+      error: 'signer paused',
+      emergency_pause_source: pause.source,
+      emergency_pause_reason: pause.reason || null,
+    }, { status: 423 });
   }
 
   const intent = (await request.json()) as TransferIntent;
@@ -177,20 +310,15 @@ async function handleTransfer(request: Request, env: Env): Promise<Response> {
   if (!intent.destination_wallet_address) throw new Error('destination_wallet_address is required');
   if (!intent.query_id) throw new Error('query_id is required');
 
-  const decimals = Number(env.TON_GLM_DECIMALS || '9');
-  const amountBaseUnits = parsePositiveBigInt(intent.amount_base_units, 'amount_base_units');
-  const maxAmountGlm = parsePositiveNumber(env.MAX_AMOUNT_GLM, 1000);
-  const maxAmountBaseUnits = glmToBaseUnits(maxAmountGlm, decimals);
-  if (amountBaseUnits > maxAmountBaseUnits) {
-    throw new Error(`amount exceeds per-transaction limit: ${amountBaseUnits}/${maxAmountBaseUnits} base units`);
-  }
-  await checkDailyLimit(env, amountBaseUnits, decimals);
-
   const idempotencyKey = `query:${intent.query_id}`;
   const existing = await env.SIGNER_KV.get(idempotencyKey);
   if (existing) {
     return json(JSON.parse(existing));
   }
+
+  const decimals = Number(env.TON_GLM_DECIMALS || '9');
+  const amountBaseUnits = parsePositiveBigInt(intent.amount_base_units, 'amount_base_units');
+  await checkTransferLimits(env, amountBaseUnits, decimals);
 
   const client = new TonClient({
     endpoint: endpoint(env),
@@ -240,7 +368,7 @@ async function handleTransfer(request: Request, env: Env): Promise<Response> {
     ],
   });
 
-  await recordDailyUsage(env, amountBaseUnits);
+  await recordTransferUsage(env, amountBaseUnits);
   const response = {
     status: 'sent',
     request_id: intent.query_id,
@@ -259,6 +387,9 @@ export default {
       const url = new URL(request.url);
       if (request.method === 'GET' && url.pathname === '/health') {
         return await handleHealth(request, env);
+      }
+      if (request.method === 'POST' && url.pathname === '/admin/emergency-pause') {
+        return await handleEmergencyPause(request, env);
       }
       if (request.method === 'POST' && url.pathname === '/ton/jetton-transfer') {
         return await handleTransfer(request, env);

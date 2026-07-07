@@ -7,6 +7,7 @@ export function proxy(request: NextRequest) {
   if (
     isPartnerHost &&
     !request.nextUrl.pathname.startsWith('/referral') &&
+    !request.nextUrl.pathname.startsWith('/glm') &&
     !request.nextUrl.pathname.startsWith('/api') &&
     !request.nextUrl.pathname.startsWith('/docs') &&
     !request.nextUrl.pathname.startsWith('/static') &&

@@ -51,12 +51,15 @@ function runTsNode(script, args, cwd) {
 
 const args = parseArgs(process.argv.slice(2));
 const env = { ...loadDotEnv(path.resolve(rootDir, '.env')), ...process.env };
-const artifact = loadJson(path.resolve(rootDir, 'glm-jetton.testnet.json'));
+const network = String(args.network || env.TON_NETWORK || 'testnet').toLowerCase();
+const artifactFile = args.artifact || (network === 'mainnet' ? 'glm-jetton.mainnet.json' : 'glm-jetton.testnet.json');
+const artifact = loadJson(path.resolve(rootDir, artifactFile));
 const lock = loadJson(path.resolve(rootDir, 'reference.jetton-contract.lock.json'));
 const vendorPath = path.resolve(rootDir, lock.vendor_path || '');
 const jettonMasterAddress = args.jettonMasterAddress || env.TON_GLM_JETTON_MASTER_ADDRESS || artifact.contracts?.jetton_master_address;
 const destinationAddress = args.destination || env.TON_GLM_TEST_MINT_DESTINATION || env.TON_GLM_TREASURY_ADDRESS || artifact.contracts?.treasury_address;
 const decimals = Number.parseInt(String(artifact.token?.decimals ?? env.TON_GLM_DECIMALS ?? '9'), 10);
+const isTestnet = network !== 'mainnet';
 
 function formatUnits(value, precision) {
   const raw = BigInt(value);
@@ -74,13 +77,17 @@ if (!jettonMasterAddress || !destinationAddress) {
 }
 
 const probePath = path.resolve(vendorPath, 'scripts', '.glmMintStatusProbe.ts');
+const apiKey = env.TON_API_KEY || env.TONCENTER_API_KEY || '';
+
 fs.writeFileSync(probePath, `import { TonClient, Address } from '@ton/ton';
 import { JettonMinter } from '../wrappers/JettonMinter';
 import { JettonWallet } from '../wrappers/JettonWallet';
 
 async function main() {
-  const endpoint = process.env.TON_ENDPOINT || 'https://testnet.toncenter.com/api/v2/jsonRPC';
-  const client = new TonClient({ endpoint, apiKey: process.env.TON_API_KEY || undefined });
+  const network = process.env.TON_NETWORK || 'testnet';
+  const endpoint = process.env.TON_ENDPOINT || (network === 'mainnet' ? 'https://toncenter.com/api/v2/jsonRPC' : 'https://testnet.toncenter.com/api/v2/jsonRPC');
+  const isTestnet = network !== 'mainnet';
+  const client = new TonClient({ endpoint, apiKey: process.env.TON_API_KEY || process.env.TONCENTER_API_KEY || undefined });
   const minter = client.open(JettonMinter.createFromAddress(Address.parse(process.argv[2])));
   const destination = Address.parse(process.argv[3]);
   const walletAddress = await minter.getWalletAddress(destination);
@@ -89,12 +96,13 @@ async function main() {
   const balance = await wallet.getJettonBalance();
   console.log(JSON.stringify({
     ok: true,
+    network,
     jetton_master_address: process.argv[2],
     destination_address: process.argv[3],
-    jetton_wallet_address: walletAddress.toString({ testOnly: true }),
+    jetton_wallet_address: walletAddress.toString({ testOnly: isTestnet }),
     total_supply: data.totalSupply.toString(),
     destination_balance: balance.toString(),
-    admin_address: data.adminAddress?.toString({ testOnly: true }) || null,
+    admin_address: data.adminAddress?.toString({ testOnly: isTestnet }) || null,
   }, null, 2));
 }
 
@@ -105,6 +113,10 @@ main().catch((error) => {
 `, 'utf8');
 
 try {
+  process.env.TON_NETWORK = network;
+  if (apiKey && !process.env.TON_API_KEY) {
+    process.env.TON_API_KEY = apiKey;
+  }
   const status = runTsNode(probePath, [jettonMasterAddress, destinationAddress], vendorPath);
   console.log(JSON.stringify({
     ...status,

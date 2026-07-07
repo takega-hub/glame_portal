@@ -1,6 +1,6 @@
 {
   "schema": "glame_crypto_policy_index_v1",
-  "updated_at": "2026-07-02",
+  "updated_at": "2026-07-07",
   "documents": [
     {
       "code": "token_policy",
@@ -16,6 +16,31 @@
       "code": "bridge_rules",
       "title": "GLM Bridge Rules",
       "url": "/static/glm_policy/bridge-rules.md"
+    },
+    {
+      "code": "faq",
+      "title": "CryptoGLAME FAQ",
+      "url": "/static/glm_policy/faq.md"
+    },
+    {
+      "code": "operator_runbook",
+      "title": "CryptoGLAME Operator Runbook",
+      "url": "/static/glm_policy/operator-runbook.md"
+    },
+    {
+      "code": "production_escalation_policy",
+      "title": "CryptoGLAME Production Escalation Policy",
+      "url": "/static/glm_policy/production-escalation-policy.md"
+    },
+    {
+      "code": "production_signer_contract",
+      "title": "CryptoGLAME Production Signer Contract",
+      "url": "/static/glm_policy/production-signer-contract.md"
+    },
+    {
+      "code": "security_review_checklist",
+      "title": "CryptoGLAME Security Review Checklist",
+      "url": "/static/glm_policy/security-review-checklist.md"
     },
     {
       "code": "jetton_metadata",

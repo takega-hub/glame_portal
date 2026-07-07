@@ -14,6 +14,7 @@ from tonsdk.boc import Cell
 from tonsdk.utils import Address
 from sqlalchemy import desc, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.glame_token import GlameTokenBridgeOperation, GlameTokenTransaction, GlameTreasuryRefillCheck
 from app.services.glame_token_service import GlameTokenService, JETTON_TRANSFER_OP
@@ -206,29 +207,53 @@ class TonGlmTreasuryBalanceService:
         if not address:
             return {"status": "not_configured", "balance_ton": 0.0, "balance_nanoton": "0", "checked_at": checked_at}
         last_error: Exception | None = None
+        headers_options = [self._headers()]
+        if headers_options[0]:
+            headers_options.append({})
         for attempt in range(3):
-            try:
-                async with httpx.AsyncClient(timeout=12.0) as client:
-                    response = await client.get(
-                        f"{self._toncenter_v2_base()}/getAddressBalance",
-                        params={"address": address},
-                        headers=self._headers(),
-                    )
-                    response.raise_for_status()
-                payload = response.json()
-                raw = str(payload.get("result") or "0")
-                ton = Decimal(raw) / Decimal("1000000000")
-                return {
-                    "status": "ok",
-                    "source": "toncenter_v2",
-                    "balance_nanoton": raw,
-                    "balance_ton": _float_decimal(ton),
-                    "checked_at": checked_at,
-                }
-            except Exception as error:
-                last_error = error
-                if "429" not in str(error) or attempt == 2:
-                    break
+            for headers in headers_options:
+                try:
+                    async with httpx.AsyncClient(timeout=12.0) as client:
+                        response = await client.get(
+                            f"{self._toncenter_v2_base()}/getAddressBalance",
+                            params={"address": address},
+                            headers=headers,
+                        )
+                        response.raise_for_status()
+                    payload = response.json()
+                    raw = str(payload.get("result") or "0")
+                    ton = Decimal(raw) / Decimal("1000000000")
+                    return {
+                        "status": "ok",
+                        "source": "toncenter_v2",
+                        "balance_nanoton": raw,
+                        "balance_ton": _float_decimal(ton),
+                        "checked_at": checked_at,
+                    }
+                except httpx.HTTPStatusError as error:
+                    last_error = error
+                    if error.response.status_code in {401, 403} and headers:
+                        continue
+                    if "429" not in str(error) or attempt == 2:
+                        return {
+                            "status": "error",
+                            "source": "toncenter_v2",
+                            "balance_nanoton": "0",
+                            "balance_ton": 0.0,
+                            "checked_at": checked_at,
+                            "error": str(last_error) if last_error else "unknown_error",
+                        }
+                except Exception as error:
+                    last_error = error
+                    if "429" not in str(error) or attempt == 2:
+                        return {
+                            "status": "error",
+                            "source": "toncenter_v2",
+                            "balance_nanoton": "0",
+                            "balance_ton": 0.0,
+                            "checked_at": checked_at,
+                            "error": str(last_error) if last_error else "unknown_error",
+                        }
                 await asyncio.sleep(1.2 * (attempt + 1))
         return {
             "status": "error",
@@ -465,13 +490,15 @@ class TonGlmTreasuryBalanceService:
         treasury_ton = Decimal(str(treasury.get("ton_balance") or 0))
         glm_threshold = Decimal(str(config.get("hot_wallet_refill_glm_threshold") or 0))
         ton_threshold = Decimal(str(config.get("hot_wallet_refill_ton_threshold") or 0))
-        glm_target = Decimal(str(config.get("hot_wallet_refill_glm_target") or glm_threshold))
-        ton_target = Decimal(str(config.get("hot_wallet_refill_ton_target") or ton_threshold))
+        glm_refill_batch = Decimal(str(config.get("hot_wallet_refill_glm_target") or glm_threshold))
+        ton_refill_target = Decimal(str(config.get("hot_wallet_refill_ton_target") or ton_threshold))
         treasury_glm_buffer = Decimal(str(config.get("glm_buffer") or 0))
         treasury_ton_buffer = Decimal(str(config.get("ton_buffer") or 0))
 
-        refill_glm = max(Decimal("0"), glm_target - hot_glm) if hot_glm < glm_threshold else Decimal("0")
-        refill_ton = max(Decimal("0"), ton_target - hot_ton) if hot_ton < ton_threshold else Decimal("0")
+        # GLM refill is a fixed batch: when hot-wallet drops below the threshold,
+        # we send a full batch instead of topping up only the exact shortage.
+        refill_glm = max(Decimal("0"), glm_refill_batch) if hot_glm < glm_threshold else Decimal("0")
+        refill_ton = max(Decimal("0"), ton_refill_target - hot_ton) if hot_ton < ton_threshold else Decimal("0")
         required = refill_glm > 0 or refill_ton > 0
         errors: list[str] = []
         if refill_glm > 0 and treasury_glm < refill_glm + treasury_glm_buffer:
@@ -484,11 +511,27 @@ class TonGlmTreasuryBalanceService:
             status = "blocked"
         elif required:
             status = "ready"
+        approval_policy = TonGlmTreasuryBalanceService.two_step_refill_policy()
+        approval_required = bool(
+            required
+            and approval_policy.get("enabled")
+            and (
+                not approval_policy.get("mainnet_only")
+                or str(config.get("network") or "").strip() == "mainnet"
+            )
+            and (
+                refill_glm >= Decimal(str(approval_policy.get("glm_threshold") or 0))
+                or refill_ton >= Decimal(str(approval_policy.get("ton_threshold") or 0))
+            )
+        )
         return {
             "status": status,
             "checked_at": now,
             "required": required,
             "reason": "below_refill_threshold" if required else "hot_wallet_above_threshold",
+            "approval_required": approval_required,
+            "approval_reason": "two_step_required" if approval_required else None,
+            "approval_policy": approval_policy,
             "network": config.get("network"),
             "source_role": "treasury",
             "source_address": treasury.get("address"),
@@ -500,8 +543,10 @@ class TonGlmTreasuryBalanceService:
             "hot_wallet_ton_balance": _float_decimal(hot_ton),
             "treasury_glm_balance": _float_decimal(treasury_glm),
             "treasury_ton_balance": _float_decimal(treasury_ton),
-            "target_glm": _float_decimal(glm_target),
-            "target_ton": _float_decimal(ton_target),
+            "target_glm": _float_decimal(glm_refill_batch),
+            "target_ton": _float_decimal(ton_refill_target),
+            "target_mode_glm": "fixed_refill_batch",
+            "target_mode_ton": "top_up_to_target",
             "threshold_glm": _float_decimal(glm_threshold),
             "threshold_ton": _float_decimal(ton_threshold),
             "errors": errors,
@@ -549,7 +594,7 @@ class TonGlmTreasuryBalanceService:
             "alerts": alerts,
         }
 
-    async def prepare_refill_ton_connect_transaction(self) -> dict[str, Any]:
+    async def prepare_refill_ton_connect_transaction(self, *, approval_id: Any | None = None) -> dict[str, Any]:
         payload = await self.payload()
         plan = payload.get("refill_plan") if isinstance(payload.get("refill_plan"), dict) else {}
         config = payload.get("config") if isinstance(payload.get("config"), dict) else {}
@@ -563,13 +608,16 @@ class TonGlmTreasuryBalanceService:
             raise ValueError("Treasury или hot-wallet address не настроен")
 
         network = str(config.get("network") or os.getenv("TON_NETWORK", "testnet") or "testnet").strip()
-        if network != "testnet":
-            raise ValueError("TON Connect refill пока разрешен только для testnet pilot")
+        if network == "mainnet" and not _env_bool("TON_GLM_MAINNET_REFILL_TON_CONNECT_ENABLED", "false"):
+            raise ValueError("Mainnet TON Connect refill выключен: задайте TON_GLM_MAINNET_REFILL_TON_CONNECT_ENABLED=true")
+        if network not in {"testnet", "mainnet"}:
+            raise ValueError("TON Connect refill поддерживает только testnet/mainnet")
 
         refill_glm = Decimal(str(plan.get("refill_glm_amount") or 0))
         refill_ton = Decimal(str(plan.get("refill_ton_amount") or 0))
         if refill_glm <= 0 and refill_ton <= 0:
             raise ValueError("В refill plan нет суммы для отправки")
+        approval_payload = await self.validate_refill_approval(approval_id, plan=plan, config=config)
 
         messages: list[dict[str, str]] = []
         decimals = int(os.getenv("TON_GLM_DECIMALS", "9") or 9)
@@ -641,10 +689,11 @@ class TonGlmTreasuryBalanceService:
             "query_id": str(query_id),
             "transaction": {
                 "validUntil": valid_until,
-                "network": "-3",
+                "network": "-239" if network == "mainnet" else "-3",
                 "messages": messages,
             },
             "refill_plan": plan,
+            "approval": approval_payload,
             "treasury_balances": payload,
             "note": "Проверьте в кошельке, что отправитель - treasury GLAME, а получатель refill - hot-wallet GLAME.",
         }
@@ -719,6 +768,7 @@ class TonGlmTreasuryBalanceService:
             "comment": item.comment,
             "created_by": str(item.created_by) if item.created_by else None,
             "created_at": item.created_at.isoformat() if item.created_at else None,
+            "payload": item.payload or {},
         }
 
     async def refill_check_history(self, *, limit: int = 50) -> dict[str, Any]:
@@ -771,6 +821,141 @@ class TonGlmTreasuryBalanceService:
         }
 
     @staticmethod
+    def two_step_refill_policy() -> dict[str, Any]:
+        return {
+            "enabled": _env_bool("TON_GLM_REFILL_TWO_STEP_ENABLED", "true"),
+            "mainnet_only": _env_bool("TON_GLM_REFILL_TWO_STEP_MAINNET_ONLY", "true"),
+            "glm_threshold": _float_decimal(_decimal_env("TON_GLM_REFILL_TWO_STEP_GLM_THRESHOLD", "5000")),
+            "ton_threshold": _float_decimal(_decimal_env("TON_GLM_REFILL_TWO_STEP_TON_THRESHOLD", "2")),
+        }
+
+    @classmethod
+    def refill_requires_two_step(cls, plan: dict[str, Any], config: dict[str, Any]) -> bool:
+        policy = cls.two_step_refill_policy()
+        if not policy.get("enabled"):
+            return False
+        network = str(plan.get("network") or config.get("network") or "").strip()
+        if policy.get("mainnet_only") and network != "mainnet":
+            return False
+        refill_glm = Decimal(str(plan.get("refill_glm_amount") or 0))
+        refill_ton = Decimal(str(plan.get("refill_ton_amount") or 0))
+        return (
+            refill_glm >= Decimal(str(policy.get("glm_threshold") or 0))
+            or refill_ton >= Decimal(str(policy.get("ton_threshold") or 0))
+        )
+
+    async def create_refill_approval(
+        self,
+        *,
+        admin_user_id: Any,
+        comment: str | None = None,
+    ) -> GlameTreasuryRefillCheck:
+        payload = await self.payload()
+        plan = payload.get("refill_plan") if isinstance(payload.get("refill_plan"), dict) else {}
+        config = payload.get("config") if isinstance(payload.get("config"), dict) else {}
+        if plan.get("status") not in {"ready", "ok"} or not plan.get("required"):
+            raise ValueError("Refill plan не требует пополнения")
+        if not self.refill_requires_two_step(plan, config):
+            raise ValueError("Для текущего refill plan two-step approval не требуется")
+        item = await self.record_refill_check(
+            payload,
+            admin_user_id=admin_user_id,
+            event_type="refill_approval",
+            comment=(comment or "").strip() or "Refill approval requested.",
+        )
+        item.status = "pending"
+        item.reason = "two_step_required"
+        next_payload = dict(item.payload or {})
+        next_payload["approval"] = {
+            "status": "pending",
+            "requested_by": str(admin_user_id),
+            "requested_at": datetime.now(timezone.utc).isoformat(),
+            "policy": self.two_step_refill_policy(),
+        }
+        item.payload = next_payload
+        flag_modified(item, "payload")
+        await self.db.commit()
+        await self.db.refresh(item)
+        return item
+
+    async def decide_refill_approval(
+        self,
+        approval_id: Any,
+        *,
+        admin_user_id: Any,
+        approved: bool,
+        comment: str | None = None,
+    ) -> GlameTreasuryRefillCheck:
+        await self.ensure_refill_check_table()
+        item = (
+            await self.db.execute(
+                select(GlameTreasuryRefillCheck)
+                .where(GlameTreasuryRefillCheck.id == approval_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if item is None or item.event_type != "refill_approval":
+            raise ValueError("Refill approval не найден")
+        if item.status != "pending":
+            raise ValueError("Refill approval уже обработан")
+        if (
+            not _env_bool("TON_GLM_REFILL_TWO_STEP_ALLOW_SAME_ADMIN", "false")
+            and item.created_by
+            and str(item.created_by) == str(admin_user_id)
+        ):
+            raise ValueError("Two-step approval должен подтвердить другой администратор")
+        item.status = "approved" if approved else "rejected"
+        next_payload = dict(item.payload or {})
+        approval_payload = dict(next_payload.get("approval") or {})
+        approval_payload.update({
+            "status": item.status,
+            "decided_by": str(admin_user_id),
+            "decided_at": datetime.now(timezone.utc).isoformat(),
+            "decision_comment": (comment or "").strip() or None,
+        })
+        next_payload["approval"] = approval_payload
+        item.payload = next_payload
+        item.comment = (comment or item.comment or "").strip() or item.comment
+        flag_modified(item, "payload")
+        await self.db.commit()
+        await self.db.refresh(item)
+        return item
+
+    async def validate_refill_approval(
+        self,
+        approval_id: Any | None,
+        *,
+        plan: dict[str, Any],
+        config: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if not self.refill_requires_two_step(plan, config):
+            return None
+        if not approval_id:
+            raise ValueError("Для крупного refill нужен two-step approval")
+        await self.ensure_refill_check_table()
+        item = (
+            await self.db.execute(
+                select(GlameTreasuryRefillCheck)
+                .where(GlameTreasuryRefillCheck.id == approval_id)
+            )
+        ).scalar_one_or_none()
+        if item is None or item.event_type != "refill_approval":
+            raise ValueError("Refill approval не найден")
+        if item.status != "approved":
+            raise ValueError("Refill approval еще не подтвержден")
+        if str(item.network or "") != str(plan.get("network") or ""):
+            raise ValueError("Refill approval устарел: network отличается")
+        if str(item.treasury_address or "") != str(plan.get("source_address") or ""):
+            raise ValueError("Refill approval устарел: treasury address отличается")
+        if str(item.hot_wallet_address or "") != str(plan.get("destination_address") or ""):
+            raise ValueError("Refill approval устарел: hot-wallet address отличается")
+        if Decimal(str(item.refill_glm_amount or 0)) != Decimal(str(plan.get("refill_glm_amount") or 0)):
+            raise ValueError("Refill approval устарел: GLM сумма отличается")
+        if Decimal(str(item.refill_ton_amount or 0)) != Decimal(str(plan.get("refill_ton_amount") or 0)):
+            raise ValueError("Refill approval устарел: TON сумма отличается")
+        return self.refill_check_payload(item)
+
+    @staticmethod
     def alerts_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
         alerts: list[dict[str, Any]] = []
         critical_only = bool((payload.get("config") or {}).get("critical_only"))
@@ -814,7 +999,7 @@ class TonGlmTreasuryBalanceService:
                         f"{role}: GLM {glm_balance} / need {required_glm}; "
                         f"TON {ton_balance} / need {required_ton}; "
                         f"safe GLM capacity={wallet.get('safe_transfer_capacity_glm')}; "
-                        f"target GLM={wallet.get('refill_target_glm')}; reason={reason}; status={status}."
+                        f"GLM refill batch={wallet.get('refill_target_glm')}; reason={reason}; status={status}."
                     ),
                     "wallet": wallet,
                 }

@@ -157,6 +157,11 @@ type GlmTransaction = {
   onec_request_payload?: Record<string, any> | null;
   refunded_glm?: number | null;
   ton_refund_required?: boolean | null;
+  ton_refund_status?: string | null;
+  ton_refund_tx_hash?: string | null;
+  ton_refund_submitted_at?: string | null;
+  ton_refund_verified_at?: string | null;
+  ton_refund_verification?: Record<string, any> | null;
   loyalty_points_expires_at?: string | null;
   loyalty_points_expires_days?: number | null;
   sku?: string | null;
@@ -321,11 +326,44 @@ type GlmHotWalletRefillCheck = {
   created_at?: string | null;
 };
 
+type GlmTreasuryTurnover = {
+  status: string;
+  period_days: number;
+  since: string;
+  generated_at: string;
+  incoming_glm: number;
+  outgoing_glm: number;
+  net_glm: number;
+  refill_glm: number;
+  refill_ton: number;
+  refund_required_glm: number;
+  refund_required_count: number;
+  by_source: Record<string, { amount_glm?: number; count?: number }>;
+  treasury_balance?: { glm?: number | null; ton?: number | null };
+  hot_wallet_balance?: { glm?: number | null; ton?: number | null };
+  refill_plan?: Record<string, any>;
+  items: Array<{
+    id: string;
+    direction: 'incoming' | 'outgoing' | 'obligation';
+    source: string;
+    amount_glm: number;
+    amount_ton?: number | null;
+    status: string;
+    title?: string | null;
+    partner_name?: string | null;
+    partner_phone?: string | null;
+    tx_hash?: string | null;
+    comment?: string | null;
+    created_at?: string | null;
+  }>;
+};
+
 type TonConnectTransactionPayload = {
   status?: string;
   network?: string;
   source_address?: string;
   destination_address?: string;
+  amount_glm?: number;
   refill_glm_amount?: number;
   refill_ton_amount?: number;
   transaction: {
@@ -555,6 +593,10 @@ type GlmTonReadiness = {
     production_hot_wallet_address?: string | null;
     production_hot_wallet_bounceable?: string | null;
     production_hot_wallet_raw?: string | null;
+    production_treasury_address?: string | null;
+    production_treasury_bounceable?: string | null;
+    production_treasury_raw?: string | null;
+    production_treasury_ready?: boolean;
     production_candidate_ready?: boolean;
     production_ready?: boolean;
     production_signer_mode?: string | null;
@@ -837,6 +879,7 @@ const statusLabels: Record<string, string> = {
   blocked_policy: 'Требуется проверка',
   waiting_for_deposit: 'Ждет TON-перевод',
   wallet_request_prepared: 'Кошелек открыт',
+  submitted: 'Отправлено',
   tx_hash_present: 'TON tx найден',
   not_found: 'TON не найден',
   retry_onec: 'Повторить 1С',
@@ -861,6 +904,13 @@ const statusLabels: Record<string, string> = {
   treasury_ton_insufficient: 'В treasury недостаточно TON',
   balance_check: 'Проверка баланса',
   manual_refill: 'Ручное пополнение',
+  incoming: 'Входящий',
+  outgoing: 'Исходящий',
+  obligation: 'Обязательство',
+  glm_store: 'GLM Store',
+  hot_wallet_refill: 'Refill hot-wallet',
+  ton_refund_required: 'TON refund',
+  ton_refund: 'TON refund',
 };
 
 const mediaCategoryLabels: Record<string, string> = {
@@ -1008,7 +1058,6 @@ export default function AdminReferralsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [rewardMode, setRewardMode] = useState('');
-  const [tonStatus, setTonStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1023,6 +1072,7 @@ export default function AdminReferralsPage() {
   const [glmRedemptions, setGlmRedemptions] = useState<GlmTransaction[]>([]);
   const [glmRedemptionStatus, setGlmRedemptionStatus] = useState('pending_fulfillment');
   const [glmFulfillmentComment, setGlmFulfillmentComment] = useState('');
+  const [glmRedemptionRefundTxHash, setGlmRedemptionRefundTxHash] = useState('');
   const [glmToPointsBridges, setGlmToPointsBridges] = useState<GlmTransaction[]>([]);
   const [glmToPointsStatus, setGlmToPointsStatus] = useState('pending');
   const [glmToPointsValue, setGlmToPointsValue] = useState('');
@@ -1036,7 +1086,9 @@ export default function AdminReferralsPage() {
   const [hotWalletLimitResult, setHotWalletLimitResult] = useState<string | null>(null);
   const [hotWalletRefillResult, setHotWalletRefillResult] = useState<string | null>(null);
   const [hotWalletRefillTonResult, setHotWalletRefillTonResult] = useState<string | null>(null);
+  const [glmRedemptionTonRefundResult, setGlmRedemptionTonRefundResult] = useState<string | null>(null);
   const [hotWalletRefillChecks, setHotWalletRefillChecks] = useState<GlmHotWalletRefillCheck[]>([]);
+  const [glmTreasuryTurnover, setGlmTreasuryTurnover] = useState<GlmTreasuryTurnover | null>(null);
   const [hotWalletRefillForm, setHotWalletRefillForm] = useState({
     manual_glm_amount: '',
     manual_ton_amount: '',
@@ -1130,7 +1182,6 @@ export default function AdminReferralsPage() {
           search: search.trim() || undefined,
           status: status || undefined,
           reward_mode: rewardMode || undefined,
-          ton_status: tonStatus || undefined,
           limit: 100,
         },
       });
@@ -1342,6 +1393,13 @@ export default function AdminReferralsPage() {
     setHotWalletRefillChecks(response.data.items || []);
   }
 
+  async function loadGlmTreasuryTurnover() {
+    const response = await apiClient.get<GlmTreasuryTurnover>('/api/referrals/admin/glm-treasury-turnover', {
+      params: { days: 30, limit: 30 },
+    });
+    setGlmTreasuryTurnover(response.data);
+  }
+
   async function loadGlmAuditHashes() {
     const response = await apiClient.get<GlmAuditHashesResponse>('/api/referrals/admin/glm-audit-hashes', {
       params: { limit: 30 },
@@ -1495,46 +1553,11 @@ export default function AdminReferralsPage() {
     const timer = setTimeout(() => void loadPartners(true), search ? 400 : 0);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, status, rewardMode, tonStatus]);
+  }, [search, status, rewardMode]);
 
   useEffect(() => {
     void loadMediaMaterials();
     void loadRatePromotions();
-    void loadRewardStoreItems();
-  }, []);
-
-  useEffect(() => {
-    void loadGlmClaims();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [glmClaimStatus]);
-
-  useEffect(() => {
-    void loadGlmRedemptions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [glmRedemptionStatus]);
-
-  useEffect(() => {
-    void loadGlmToPointsBridges();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [glmToPointsStatus]);
-
-  useEffect(() => {
-    void loadGlmTransactions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [glmTxType, glmTxStatus]);
-
-  useEffect(() => {
-    void loadGlmDashboard();
-    void loadGlmEffectiveness();
-    void loadGlmSegments();
-    void loadGlmRefundCandidates();
-    void loadGlmToPointsBridges();
-    void loadGlmBridgeOperations();
-    void loadGlmBridgeReconciliation();
-    void loadGlmLoyaltyReconciliation();
-    void loadGlmTonReadiness();
-    void loadHotWalletRefillChecks();
-    void loadGlmAuditHashes();
   }, []);
 
   useEffect(() => {
@@ -1688,6 +1711,7 @@ export default function AdminReferralsPage() {
       setHotWalletRefillResult('Балансы treasury/hot-wallet пересчитаны');
       await loadGlmTonReadiness();
       await loadHotWalletRefillChecks();
+      await loadGlmTreasuryTurnover();
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || 'Не удалось проверить treasury/hot-wallet balances');
     } finally {
@@ -1710,6 +1734,7 @@ export default function AdminReferralsPage() {
       setHotWalletRefillForm({ manual_glm_amount: '', manual_ton_amount: '', ton_tx_hash: '', comment: '' });
       await loadGlmTonReadiness();
       await loadHotWalletRefillChecks();
+      await loadGlmTreasuryTurnover();
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || 'Не удалось записать пополнение hot-wallet');
     } finally {
@@ -1746,6 +1771,7 @@ export default function AdminReferralsPage() {
       setHotWalletRefillTonResult('TON Connect refill отправлен в кошелек. Запись пополнения добавлена, после подтверждения в сети нажмите “Проверить балансы”.');
       await loadGlmTonReadiness();
       await loadHotWalletRefillChecks();
+      await loadGlmTreasuryTurnover();
     } catch (e: any) {
       const message = String(e?.response?.data?.detail || e?.message || '');
       setHotWalletRefillTonResult(
@@ -1793,10 +1819,81 @@ export default function AdminReferralsPage() {
       await loadGlmEffectiveness();
       await loadGlmSegments();
       await loadGlmToPointsBridges();
+      await loadGlmTreasuryTurnover();
       await loadPartners(true);
       if (selected?.member.id) await loadPartner(selected.member.id);
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || 'Не удалось обработать GLM Store заказ');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function refundGlmRedemptionInWallet(item: GlmTransaction) {
+    setSaving(true);
+    setError(null);
+    setGlmRedemptionTonRefundResult(null);
+    try {
+      if (!tonWallet) {
+        setGlmRedemptionTonRefundResult('Подключите treasury-кошелек GLAME, затем повторите refund.');
+        openTonConnectModal();
+        setSaving(false);
+        return;
+      }
+      setGlmRedemptionTonRefundResult('Готовим TON refund из treasury...');
+      const response = await apiClient.post<TonConnectTransactionPayload>(`/api/referrals/admin/glm-redemptions/${item.id}/ton-refund-transaction`);
+      const payload = response.data;
+      if (payload.transaction?.from && tonWallet.account.address !== payload.transaction.from) {
+        setGlmRedemptionTonRefundResult(`Проверьте кошелек: нужен treasury ${payload.transaction.from}, сейчас подключен ${tonWallet.account.address}.`);
+      }
+      setGlmRedemptionTonRefundResult('Откройте кошелек и подтвердите возврат GLM покупателю.');
+      await tonConnectUI.sendTransaction(payload.transaction);
+      await apiClient.post(`/api/referrals/admin/glm-redemptions/${item.id}/ton-refund-record`, {
+        tx_hash: null,
+        comment: `TON Connect refund submitted from admin for ${payload.amount_glm || Math.abs(item.amount || 0)} GLM.`,
+      });
+      setGlmRedemptionTonRefundResult('TON refund отправлен в кошелек. Обязательство закрыто как submitted; tx hash можно добавить позже вручную в audit.');
+      await loadGlmRedemptions();
+      await loadGlmTreasuryTurnover();
+      await loadGlmDashboard();
+    } catch (e: any) {
+      const message = String(e?.response?.data?.detail || e?.message || '');
+      setGlmRedemptionTonRefundResult(
+        message.toLowerCase().includes('insufficient')
+          ? 'В treasury-кошельке не хватает testnet TON gas для комиссии refund.'
+          : message || 'Не удалось отправить TON refund'
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function settleGlmRedemptionTonRefund(item: GlmTransaction) {
+    const txHash = glmRedemptionRefundTxHash.trim();
+    if (!txHash) {
+      setGlmRedemptionTonRefundResult('Вставьте TON refund tx hash, затем нажмите «Проверить refund».');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setGlmRedemptionTonRefundResult(null);
+    try {
+      const response = await apiClient.post(`/api/referrals/admin/glm-redemptions/${item.id}/ton-refund-settlement`, {
+        tx_hash: txHash,
+        comment: glmFulfillmentComment.trim() || null,
+        require_verified: true,
+      });
+      if (response.data?.status === 'verified') {
+        setGlmRedemptionTonRefundResult('TON refund проверен в сети: сумма и получатель совпали.');
+        setGlmRedemptionRefundTxHash('');
+      } else {
+        setGlmRedemptionTonRefundResult(`Refund пока не подтвержден: ${response.data?.verification?.status || response.data?.status || 'unknown'}`);
+      }
+      await loadGlmRedemptions();
+      await loadGlmTreasuryTurnover();
+      await loadGlmDashboard();
+    } catch (e: any) {
+      setGlmRedemptionTonRefundResult(e?.response?.data?.detail || e?.message || 'Не удалось проверить TON refund');
     } finally {
       setSaving(false);
     }
@@ -2283,13 +2380,11 @@ export default function AdminReferralsPage() {
 
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
 
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Metric title="Партнеров" value={`${totals.partners_total}`} />
         <Metric title="Активных" value={`${totals.partners_active}`} />
         <Metric title="Заявок на деньги" value={`${totals.cash_pending}`} />
         <Metric title="К выплате" value={money(totals.payouts_pending_kopecks)} />
-        <Metric title="TON verified" value={`${totals.ton_verified || 0}`} />
-        <Metric title="GLM в TON" value={`${totals.glm_claim_enabled || 0}`} />
       </div>
 
       <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
@@ -2424,17 +2519,6 @@ export default function AdminReferralsPage() {
       </section>
 
       <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">GLM POS</div>
-        <div className="mt-1 text-lg font-semibold text-slate-900">Проверить GLM-код в магазине</div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-          <input value={glmPosCode} onChange={(event) => setGlmPosCode(event.target.value.toUpperCase())} placeholder="GLM-XXXXXXXXXX" className="rounded-md border border-slate-300 px-3 py-2 text-sm uppercase" />
-          <button onClick={() => void lookupGlmPosCode()} disabled={saving} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">Проверить</button>
-        </div>
-        {glmPosResult ? <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{glmPosResult}</div> : null}
-        <p className="mt-3 text-xs text-slate-500">Пилотный режим: код подтверждает GLM-аккаунт и доступный balance; списание проводится через GLM Store/redemption или админскую корректировку.</p>
-      </section>
-
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
         <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Медиаматериалы</div>
         <div className="mt-1 text-lg font-semibold text-slate-900">Материалы для кабинета партнера</div>
         <div className="mt-4 grid gap-3 lg:grid-cols-[1.1fr_0.8fr_1.2fr_0.45fr]">
@@ -2478,1112 +2562,6 @@ export default function AdminReferralsPage() {
         </div>
       </section>
 
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">GLM Effectiveness</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Экономика использования CryptoGLAME</div>
-          </div>
-          <button onClick={() => void loadGlmEffectiveness()} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <Metric title="Redemption conversion" value={`${glmEffectiveness?.redemption_conversion_percent || 0}%`} hint={`${glmEffectiveness?.redeemers_count || 0} из ${glmEffectiveness?.accounts_total || 0} accounts`} />
-          <Metric title="Burn ratio" value={`${glmEffectiveness?.burn_ratio_percent || 0}%`} hint={`${glmEffectiveness?.lifetime_burned_total || 0} / ${glmEffectiveness?.lifetime_earned_total || 0} GLM`} />
-          <Metric title="Store usage" value={`${glmEffectiveness?.redemption_total || 0} GLM`} hint={`${glmEffectiveness?.redemption_count || 0} заказов`} />
-          <Metric title="Points→GLM" value={`${glmEffectiveness?.conversion_total || 0} GLM`} hint={`${glmEffectiveness?.conversion_accounts || 0} accounts`} />
-          <Metric title="Ready to spend" value={`${glmEffectiveness?.ready_to_redeem_count || 0}`} hint={`${glmEffectiveness?.active_balance_accounts || 0} с балансом`} />
-          <Metric title="Need activation" value={`${glmEffectiveness?.high_balance_no_redemption_count || 0}`} hint={`из ${glmEffectiveness?.high_balance_count || 0} high-balance`} />
-        </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[0.75fr_1.25fr]">
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Текущий месяц</div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-              <Metric title="Earn" value={`${glmEffectiveness?.monthly_earn_total || 0} GLM`} />
-              <Metric title="Points→GLM" value={`${glmEffectiveness?.monthly_conversion_total || 0} GLM`} />
-              <Metric title="Redeemed" value={`${glmEffectiveness?.monthly_redemption_total || 0} GLM`} />
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Категории списаний</div>
-              <div className="mt-3 space-y-2">
-                {(glmEffectiveness?.redemption_by_category || []).map((item) => (
-                  <div key={item.category} className="flex items-center justify-between gap-3 rounded border border-slate-200 bg-white p-3 text-sm">
-                    <span className="truncate font-medium text-slate-900">{item.category}</span>
-                    <span className="shrink-0 text-slate-600">{item.amount} GLM · {item.count}</span>
-                  </div>
-                ))}
-                {!(glmEffectiveness?.redemption_by_category || []).length ? <div className="text-sm text-slate-500">Списаний GLM Store пока нет</div> : null}
-              </div>
-            </div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Топ товаров GLM Store</div>
-              <div className="mt-3 space-y-2">
-                {(glmEffectiveness?.top_redemption_items || []).map((item) => (
-                  <div key={item.sku} className="rounded border border-slate-200 bg-white p-3 text-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-slate-900">{item.title || item.sku}</div>
-                        <div className="mt-1 break-all text-xs text-slate-500">{item.sku}</div>
-                      </div>
-                      <div className="shrink-0 text-right text-slate-600">{item.amount} GLM<div className="mt-1 text-xs text-slate-400">{item.count} шт.</div></div>
-                    </div>
-                  </div>
-                ))}
-                {!(glmEffectiveness?.top_redemption_items || []).length ? <div className="text-sm text-slate-500">Топ появится после первых списаний</div> : null}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">GLM Refund Control</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Кандидаты на отмену GLM по возвратам</div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => void autoApplyGlmRefundCandidates(true)} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Dry run</button>
-            <button onClick={() => void autoApplyGlmRefundCandidates(false)} disabled={saving} className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-60">Auto-apply</button>
-            <button onClick={() => void loadGlmRefundCandidates()} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-          </div>
-        </div>
-        {glmRefundAutoApplyResult ? <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{glmRefundAutoApplyResult}</div> : null}
-        <div className="mt-4">
-          <DataTable
-            headers={['Дата', 'Партнер', 'Причина', 'Комиссия', 'GLM', 'Источник', 'Действие']}
-            rows={glmRefundCandidates.map((item) => [
-              dateRu(item.created_at),
-              <div key={`partner-${item.commission_id}`}>
-                <div className="font-medium text-slate-900">{item.partner_name || 'Партнер GLAME'}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.partner_phone || '—'}</div>
-              </div>,
-              <div key={`signals-${item.commission_id}`} className="space-y-1">
-                {(item.signals || []).map((signal) => <Badge key={`${item.commission_id}-${signal}`} value={signal} />)}
-              </div>,
-              item.reward_mode === 'cash' ? money(item.commission_amount_kopecks) : `${item.points || 0} баллов`,
-              item.glm_amount ? `${item.glm_amount} GLM · ${item.glm_status || '—'}${item.auto_apply_eligible ? ' · auto' : ''}` : '—',
-              item.order_id ? `order ${item.order_status || '—'}` : item.purchase_id ? `purchase ${item.purchase_total_amount ?? '—'}` : '—',
-              <button key={`refund-${item.commission_id}`} disabled={saving} onClick={() => void cancelReferralCommission(item.commission_id, item.member_id)} className="rounded border border-red-200 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50">Отменить GLM</button>,
-            ])}
-          />
-          {!glmRefundCandidates.length ? <div className="mt-3 text-sm text-slate-500">Кандидатов на возврат GLM сейчас нет</div> : null}
-        </div>
-      </section>
-
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Bonus expiry</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">CRM: сгорающие баллы {'->'} GLM</div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[0.8fr_auto_auto_auto]">
-            <select value={bonusExpiryDays} onChange={(event) => setBonusExpiryDays(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="7">7 дней</option>
-              <option value="30">30 дней</option>
-              <option value="60">60 дней</option>
-              <option value="90">90 дней</option>
-            </select>
-            <button onClick={() => void loadBonusExpiryAudience()} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-            <a href={`/api/referrals/admin/bonus-expiry-audience.csv?days=${bonusExpiryDays}&limit=1000`} className="inline-flex items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">CSV</a>
-            <button onClick={() => void createBonusExpiryDrafts()} disabled={saving || !bonusExpiryAudience.length} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">Создать drafts</button>
-          </div>
-        </div>
-        {bonusExpiryDraftResult ? <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{bonusExpiryDraftResult}</div> : null}
-        <div className="mt-4">
-          <DataTable
-            headers={['Клиент', 'Баланс 1С', 'Сгорает', 'Ближайшая дата', 'Текст points_to_glm']}
-            rows={bonusExpiryAudience.map((item) => [
-              <div key={`client-${item.user_id}`}>
-                <div className="font-medium text-slate-900">{item.full_name || 'Клиент GLAME'}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.phone || item.email || '—'}</div>
-              </div>,
-              `${item.loyalty_points || 0} баллов`,
-              <div key={`exp-${item.user_id}`} className="text-sm text-slate-700">
-                <div>{item.expiring_points || 0} баллов</div>
-                <div className="mt-1 text-xs text-slate-500">{item.lots_count || 0} начислений</div>
-              </div>,
-              dateRu(item.nearest_expiry),
-              <div key={`msg-${item.user_id}`} className="max-w-[360px] text-xs leading-5 text-slate-600">{item.campaign_message}</div>,
-            ])}
-          />
-        </div>
-      </section>
-
-      <section id="ton-readiness" className="rounded-md border border-slate-200 bg-white p-5 shadow-sm scroll-mt-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">TON Testnet Readiness</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Готовность GLM treasury transfer workflow</div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => void runGlmTonAutoTransfer()} disabled={saving || !glmTonReadiness?.auto_transfer?.ready} className="rounded-md border border-emerald-200 px-4 py-2 text-sm font-medium text-emerald-700 disabled:opacity-50">Запустить auto-transfer</button>
-            <button onClick={() => void setGlmTonAutoTransferOverride(false)} disabled={saving || glmTonReadiness?.auto_transfer?.override?.enabled === false} className="rounded-md border border-rose-200 px-4 py-2 text-sm font-medium text-rose-700 disabled:opacity-50">Пауза auto-transfer</button>
-            <button onClick={() => void setGlmTonAutoTransferOverride(true)} disabled={saving || glmTonReadiness?.auto_transfer?.override?.enabled === true} className="rounded-md border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700 disabled:opacity-50">Включить auto-transfer</button>
-            <button onClick={() => void loadGlmTonReadiness()} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Проверить</button>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-12">
-          <Metric title="Status" value={label(glmTonReadiness?.status)} />
-          <Metric title="Network" value={String(glmTonReadiness?.policy?.network || 'testnet')} />
-          <Metric title="Jetton" value={label(glmTonReadiness?.artifact?.deployment_status || glmTonReadiness?.policy?.status || 'missing')} />
-          <Metric title="Hot-wallet GLM" value={`${glmHotWalletBalance?.glm_balance ?? '—'}`} hint={`need ${glmHotWalletBalance?.required_glm ?? '—'} · ${label(glmHotWalletBalance?.status)}`} />
-          <Metric title="Hot-wallet TON gas" value={`${glmHotWalletBalance?.ton_balance ?? '—'}`} hint={`need ${glmHotWalletBalance?.required_ton ?? '—'} · ${label(glmHotWalletBalance?.status)}`} />
-          <Metric title="Hot safe GLM" value={`${glmHotWalletBalance?.safe_transfer_capacity_glm ?? '—'}`} hint={`threshold ${glmHotWalletBalance?.refill_threshold_glm ?? '—'}`} />
-          <Metric title="Hot refill target" value={`${glmHotWalletBalance?.refill_target_glm ?? '—'} GLM`} hint={`${glmHotWalletBalance?.refill_target_ton ?? '—'} TON gas`} />
-          <Metric title="Treasury GLM" value={`${glmTreasuryBalance?.glm_balance ?? '—'}`} hint={`need ${glmTreasuryBalance?.required_glm ?? '—'} · ${label(glmTreasuryBalance?.status)}`} />
-          <Metric title="Treasury TON gas" value={`${glmTreasuryBalance?.ton_balance ?? '—'}`} hint={`need ${glmTreasuryBalance?.required_ton ?? '—'} · ${label(glmTreasuryBalance?.status)}`} />
-          <Metric title="Баллы→GLM" value={`${glmTonReadiness?.pending_claims?.count || 0}`} hint={`${glmTonReadiness?.pending_claims?.amount_glm || 0} GLM`} />
-          <Metric title="Б→GLM не начато" value={`${glmTonReadiness?.pending_claims?.auto_transfer_status_counts?.not_started || 0}`} />
-          <Metric title="Б→GLM ждут TON" value={`${glmTonReadiness?.pending_claims?.auto_transfer_status_counts?.sent_waiting_settlement || 0}`} />
-          <Metric title="Б→GLM блок" value={`${sumStatusCounts(glmTonReadiness?.pending_claims?.auto_transfer_status_counts, (status) => status.startsWith('blocked_'))}`} />
-          <Metric title="Б→GLM health" value={glmTonReadiness?.pending_claims?.auto_transfer_health?.needs_attention ? 'Attention' : 'OK'} hint={`${glmTonReadiness?.pending_claims?.auto_transfer_health?.oldest_pending_age_minutes || 0} мин`} />
-          <Metric title="Б→GLM нет GLM" value={`${glmTonReadiness?.pending_claims?.auto_transfer_health?.blocked_amount_glm || 0}`} hint={`${glmTonReadiness?.pending_claims?.auto_transfer_health?.waiting_settlement_amount_glm || 0} ждут TON`} />
-          <Metric title="GLM→баллы" value={`${glmTonReadiness?.pending_glm_to_points?.count || 0}`} hint={`${glmTonReadiness?.pending_glm_to_points?.amount_glm || 0} GLM`} />
-          <Metric title="GLM→Б ждут TON" value={`${(glmTonReadiness?.pending_glm_to_points?.deposit_status_counts?.waiting_for_deposit || 0) + (glmTonReadiness?.pending_glm_to_points?.deposit_status_counts?.not_started || 0) + (glmTonReadiness?.pending_glm_to_points?.deposit_status_counts?.wallet_request_prepared || 0)}`} />
-          <Metric title="GLM→Б TON найден" value={`${glmTonReadiness?.pending_glm_to_points?.deposit_status_counts?.tx_hash_present || 0}`} />
-          <Metric title="GLM→Б health" value={glmTonReadiness?.pending_glm_to_points?.health?.needs_attention ? 'Attention' : 'OK'} hint={`${glmTonReadiness?.pending_glm_to_points?.health?.oldest_pending_age_minutes || 0} мин`} />
-          <Metric title="GLM→Б 1C issue" value={`${glmTonReadiness?.pending_glm_to_points?.health?.onec_issue_count || 0}`} hint={`${glmTonReadiness?.pending_glm_to_points?.health?.tx_found_amount_glm || 0} GLM tx`} />
-          <Metric title="Операции" value={`${glmTonReadiness?.bridge_operations?.count || 0}`} hint={`${glmTonReadiness?.bridge_operations?.amount_glm || 0} GLM`} />
-          <Metric title="Нет операции" value={`${glmTonReadiness?.bridge_operations?.missing_domain_count || 0}`} />
-          <Metric title="Сверка health" value={glmTonReadiness?.bridge_operations?.health?.needs_attention ? 'Attention' : 'OK'} hint={`${glmTonReadiness?.bridge_operations?.health?.oldest_pending_age_minutes || 0} мин`} />
-          <Metric title="TON/1C проблемы" value={`${glmTonReadiness?.bridge_operations?.health?.ton_waiting_count || 0}/${glmTonReadiness?.bridge_operations?.health?.onec_issue_count || 0}`} hint="TON / 1C" />
-          <Metric title="Blockers" value={`${glmTonReadiness?.blockers?.length || 0}`} />
-          <Metric title="Auto-transfer" value={label(glmTonReadiness?.schedulers?.ton_auto_transfer?.status || '—')} hint={glmTonReadiness?.schedulers?.ton_auto_transfer?.enabled ? 'enabled' : 'disabled'} />
-          <Metric title="Settlement" value={label(glmTonReadiness?.schedulers?.ton_settlement?.status || '—')} hint={glmTonReadiness?.schedulers?.ton_settlement?.enabled ? 'enabled' : 'disabled'} />
-          <Metric title="1C retry" value={label(glmTonReadiness?.schedulers?.onec_bridge_retry?.status || '—')} hint={glmTonReadiness?.schedulers?.onec_bridge_retry?.enabled ? 'включен' : 'выключен'} />
-          <Metric title="Security" value={glmTonReadiness?.security?.mainnet_ready ? 'Mainnet ready' : 'Pilot only'} hint={`${(glmTonReadiness?.security?.warnings || []).length + (glmTonReadiness?.security?.mainnet_blockers || []).length} notes`} />
-          <Metric title="Prod wallet" value={glmTonReadiness?.security?.production_candidate_ready ? 'Candidate' : 'Missing'} hint={label(glmTonReadiness?.security?.production_signer_mode || 'not configured')} />
-          <Metric title="Prod approvals" value={glmTonReadiness?.security?.production_approvals_ready ? 'Ready' : 'Pending'} hint={`${[
-            glmTonReadiness?.security?.production_legal_approved ? 'legal' : null,
-            glmTonReadiness?.security?.production_security_approved ? 'security' : null,
-            glmTonReadiness?.security?.production_treasury_approved ? 'treasury' : null,
-          ].filter(Boolean).length}/3`} />
-          <Metric title="Batch" value={`${glmTonReadiness?.schedulers?.ton_auto_transfer?.batch_limit || 0}`} hint={`${glmTonReadiness?.schedulers?.ton_auto_transfer?.interval_minutes || 0} мин`} />
-          <Metric title="Mainnet" value={glmTonReadiness?.policy?.mainnet_enabled ? 'Enabled' : 'Blocked'} />
-        </div>
-        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hot-wallet limits</div>
-              <div className="mt-1 text-sm text-slate-600">
-                Сейчас доступно безопасно: {glmHotWalletBalance?.safe_transfer_capacity_glm ?? '—'} GLM · {glmHotWalletBalance?.safe_transfer_capacity_ton ?? '—'} TON gas
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={() => void checkTreasuryBalances()} disabled={saving} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-60">Проверить балансы</button>
-              <button onClick={() => void saveHotWalletLimits()} disabled={saving} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-60">Сохранить лимиты</button>
-            </div>
-          </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              GLM минимум
-              <input
-                value={hotWalletLimitForm.hot_wallet_refill_glm_threshold}
-                onChange={(event) => setHotWalletLimitForm((prev) => ({ ...prev, hot_wallet_refill_glm_threshold: event.target.value }))}
-                className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900"
-                inputMode="decimal"
-              />
-            </label>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              TON gas минимум
-              <input
-                value={hotWalletLimitForm.hot_wallet_refill_ton_threshold}
-                onChange={(event) => setHotWalletLimitForm((prev) => ({ ...prev, hot_wallet_refill_ton_threshold: event.target.value }))}
-                className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900"
-                inputMode="decimal"
-              />
-            </label>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              GLM цель
-              <input
-                value={hotWalletLimitForm.hot_wallet_refill_glm_target}
-                onChange={(event) => setHotWalletLimitForm((prev) => ({ ...prev, hot_wallet_refill_glm_target: event.target.value }))}
-                className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900"
-                inputMode="decimal"
-              />
-            </label>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              TON gas цель
-              <input
-                value={hotWalletLimitForm.hot_wallet_refill_ton_target}
-                onChange={(event) => setHotWalletLimitForm((prev) => ({ ...prev, hot_wallet_refill_ton_target: event.target.value }))}
-                className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900"
-                inputMode="decimal"
-              />
-            </label>
-          </div>
-          <div className="mt-4 rounded-md border border-slate-200 bg-white p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Операционный план пополнения</div>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span className="text-lg font-semibold text-slate-900">{label(hotWalletRefillPlan?.status || '—')}</span>
-                  <Badge value={hotWalletRefillPlan?.reason || '—'} />
-                </div>
-                <div className="mt-1 text-sm text-slate-600">
-                  {hotWalletRefillPlan?.required
-                    ? `Hot-wallet ниже целевого остатка. Нужно долить: ${hotWalletRefillPlan.refill_glm_amount || 0} GLM · ${hotWalletRefillPlan.refill_ton_amount || 0} TON gas`
-                    : 'Пополнение не требуется по текущим лимитам.'}
-                </div>
-                <div className="mt-2 text-xs leading-5 text-slate-500">
-                  {hotWalletRefillPlan?.status === 'blocked'
-                    ? 'Сначала пополните treasury или уменьшите целевой refill. Hot-wallet нельзя довести до цели из текущего treasury-баланса.'
-                    : hotWalletRefillPlan?.status === 'ready'
-                      ? 'Следующий шаг: долить указанное количество GLM/TON из treasury на hot-wallet и нажать “Проверить балансы”. Это не очередь пользовательских заявок.'
-                      : 'Следующий шаг не требуется: hot-wallet выше заданных лимитов.'}
-                </div>
-                {hotWalletLatestAlert?.last_sent_at ? (
-                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    Последний Telegram alert: {dateRu(hotWalletLatestAlert.last_sent_at)} · {hotWalletLatestAlert.message || 'low-balance alert'}
-                  </div>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <TonConnectButton />
-                <button onClick={() => void confirmHotWalletRefillInWallet()} disabled={saving || hotWalletRefillPlan?.status !== 'ready'} className="rounded-md border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 disabled:opacity-60">Пополнить через TON Connect</button>
-                <button onClick={() => void copyHotWalletRefillPlan()} disabled={saving || !hotWalletRefillPlan} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Скопировать план</button>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
-              <Metric title="Долить GLM в hot-wallet" value={`${hotWalletRefillPlan?.refill_glm_amount ?? '—'}`} hint={`целевой остаток ${hotWalletRefillPlan?.target_glm ?? '—'}`} />
-              <Metric title="Долить TON gas" value={`${hotWalletRefillPlan?.refill_ton_amount ?? '—'}`} hint={`целевой остаток ${hotWalletRefillPlan?.target_ton ?? '—'}`} />
-              <Metric title="Treasury GLM" value={`${hotWalletRefillPlan?.treasury_glm_balance ?? '—'}`} hint={(hotWalletRefillPlan?.errors || []).includes('treasury_glm_insufficient') ? 'недостаточно' : 'доступно'} />
-              <Metric title="Treasury TON" value={`${hotWalletRefillPlan?.treasury_ton_balance ?? '—'}`} hint={(hotWalletRefillPlan?.errors || []).includes('treasury_ton_insufficient') ? 'недостаточно' : 'доступно'} />
-            </div>
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              <div className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Откуда отправлять</div>
-                <div className="mt-2 break-all font-mono text-xs">{hotWalletRefillPlan?.source_address || '—'}</div>
-                <div className="mt-2 text-xs text-slate-500">Treasury/deposit wallet GLAME</div>
-                {hotWalletRefillPlan?.source_address ? (
-                  <button onClick={() => void navigator.clipboard.writeText(hotWalletRefillPlan.source_address || '')} className="mt-2 rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700">Скопировать адрес</button>
-                ) : null}
-              </div>
-              <div className="rounded-md border border-slate-200 p-3 text-sm text-slate-700">
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Куда пополнить</div>
-                <div className="mt-2 break-all font-mono text-xs">{hotWalletRefillPlan?.destination_address || '—'}</div>
-                <div className="mt-2 text-xs text-slate-500">Hot-wallet для автоматических Баллы → GLM переводов</div>
-                {hotWalletRefillPlan?.destination_address ? (
-                  <button onClick={() => void navigator.clipboard.writeText(hotWalletRefillPlan.destination_address || '')} className="mt-2 rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700">Скопировать адрес</button>
-                ) : null}
-              </div>
-            </div>
-            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-              <div className="font-semibold text-slate-800">После перевода</div>
-              <div>1. Дождаться появления TON-транзакции в кошельке.</div>
-              <div>2. Нажать “Проверить балансы”.</div>
-              <div>3. Если статус стал OK/готово, auto-transfer продолжит отправлять Баллы → GLM заявки автоматически.</div>
-            </div>
-            <div className="mt-4 rounded-md border border-slate-200 bg-white p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Записать ручное пополнение</div>
-              <div className="mt-3 grid gap-2 lg:grid-cols-[0.7fr_0.7fr_1.1fr_1.3fr_auto]">
-                <input
-                  value={hotWalletRefillForm.manual_glm_amount}
-                  onChange={(event) => setHotWalletRefillForm((prev) => ({ ...prev, manual_glm_amount: event.target.value.replace(/[^\d.]/g, '') }))}
-                  placeholder="GLM отправлено"
-                  inputMode="decimal"
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-                />
-                <input
-                  value={hotWalletRefillForm.manual_ton_amount}
-                  onChange={(event) => setHotWalletRefillForm((prev) => ({ ...prev, manual_ton_amount: event.target.value.replace(/[^\d.]/g, '') }))}
-                  placeholder="TON отправлено"
-                  inputMode="decimal"
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-                />
-                <input
-                  value={hotWalletRefillForm.ton_tx_hash}
-                  onChange={(event) => setHotWalletRefillForm((prev) => ({ ...prev, ton_tx_hash: event.target.value }))}
-                  placeholder="TON tx hash"
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-                />
-                <input
-                  value={hotWalletRefillForm.comment}
-                  onChange={(event) => setHotWalletRefillForm((prev) => ({ ...prev, comment: event.target.value }))}
-                  placeholder="Комментарий"
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-                />
-                <button onClick={() => void recordHotWalletRefill()} disabled={saving || (!hotWalletRefillForm.manual_glm_amount && !hotWalletRefillForm.manual_ton_amount && !hotWalletRefillForm.ton_tx_hash.trim())} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Записать</button>
-              </div>
-            </div>
-            {(hotWalletRefillPlan?.errors || []).length > 0 ? (
-              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                {(hotWalletRefillPlan?.errors || []).map((item) => label(item)).join(', ')}
-              </div>
-            ) : null}
-          </div>
-          {hotWalletRefillResult && <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{hotWalletRefillResult}</div>}
-          {hotWalletRefillTonResult && <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">{hotWalletRefillTonResult}</div>}
-          {hotWalletLimitResult && <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{hotWalletLimitResult}</div>}
-          {(glmTonReadiness?.treasury_balances?.alerts || []).length > 0 && (
-            <div className="mt-3 space-y-2">
-              {(glmTonReadiness?.treasury_balances?.alerts || []).map((alert) => (
-                <div key={`${alert.code}-${alert.message}`} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  <span className="font-semibold">{label(alert.code)}</span>: {alert.message}
-                </div>
-              ))}
-            </div>
-          )}
-          {hotWalletRefillChecks.length > 0 ? (
-            <div className="mt-4 rounded-md border border-slate-200 bg-white p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Журнал hot-wallet</div>
-                  <div className="mt-1 text-sm text-slate-600">Последние проверки баланса и ручные пополнения.</div>
-                </div>
-                <button onClick={() => void loadHotWalletRefillChecks()} disabled={saving} className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-              </div>
-              <div className="mt-3">
-                <DataTable
-                  headers={['Дата', 'Тип', 'Статус', 'План', 'Факт', 'Балансы', 'Tx / комментарий']}
-                  rows={hotWalletRefillChecks.slice(0, 10).map((item) => [
-                    dateRu(item.created_at),
-                    label(item.event_type),
-                    <div key={`refill-status-${item.id}`} className="max-w-[180px]">
-                      <Badge value={item.status} />
-                      <div className="mt-1 text-xs text-slate-500">{label(item.reason)}</div>
-                    </div>,
-                    <div key={`refill-plan-${item.id}`} className="text-xs leading-5 text-slate-600">
-                      <div>{item.refill_glm_amount ?? 0} GLM</div>
-                      <div>{item.refill_ton_amount ?? 0} TON</div>
-                    </div>,
-                    <div key={`refill-manual-${item.id}`} className="text-xs leading-5 text-slate-600">
-                      <div>{item.manual_glm_amount ?? 0} GLM</div>
-                      <div>{item.manual_ton_amount ?? 0} TON</div>
-                    </div>,
-                    <div key={`refill-balances-${item.id}`} className="text-xs leading-5 text-slate-600">
-                      <div>hot: {item.hot_wallet_glm_balance ?? '—'} GLM / {item.hot_wallet_ton_balance ?? '—'} TON</div>
-                      <div>treasury: {item.treasury_glm_balance ?? '—'} GLM / {item.treasury_ton_balance ?? '—'} TON</div>
-                    </div>,
-                    <div key={`refill-comment-${item.id}`} className="max-w-[300px] break-all text-xs leading-5 text-slate-600">
-                      <div>{item.ton_tx_hash || '—'}</div>
-                      <div className="mt-1 text-slate-500">{item.comment || (item.errors || []).map((entry) => label(entry)).join(', ') || '—'}</div>
-                    </div>,
-                  ])}
-                />
-              </div>
-            </div>
-          ) : null}
-        </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Deployment artifact</div>
-            <div className="mt-3 space-y-2 text-xs text-slate-600">
-              <div className="break-all">master: {glmTonReadiness?.artifact?.jetton_master_address || glmTonReadiness?.policy?.jetton_master_address || '—'}</div>
-              <div className="break-all">treasury: {glmTonReadiness?.artifact?.treasury_address || glmTonReadiness?.policy?.treasury_address || '—'}</div>
-              <div className="break-all">deploy tx: {glmTonReadiness?.artifact?.deploy_tx_hash || '—'}</div>
-              <div className="border-t border-slate-200 pt-2">
-                <div className="uppercase tracking-wide text-slate-500">Reference</div>
-                <div className="mt-1 break-all">repo: {glmTonReadiness?.reference?.repo || '—'}</div>
-                <div className="break-all">commit: {glmTonReadiness?.reference?.actual_commit || glmTonReadiness?.reference?.expected_commit || '—'}</div>
-                <div>vendor: {glmTonReadiness?.reference?.vendor_exists ? 'ready' : 'missing'} · {glmTonReadiness?.reference?.matches_lock ? 'matches lock' : 'not verified'}</div>
-              </div>
-              {glmTonReadiness?.policy?.metadata_url ? <a href={glmTonReadiness.policy.metadata_url} target="_blank" rel="noreferrer" className="inline-block text-blue-700">Jetton metadata</a> : null}
-            </div>
-            <div className="mt-5 border-t border-slate-200 pt-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Next steps</div>
-              <div className="mt-3 space-y-2 text-xs leading-5 text-slate-600">
-                {(glmTonReadiness?.next_steps || []).map((step, index) => (
-                  <div key={`ton-step-${index}`}>{index + 1}. {step}</div>
-                ))}
-                {!(glmTonReadiness?.next_steps || []).length ? <div>Нет активных шагов</div> : null}
-              </div>
-            </div>
-            <div className="mt-5 border-t border-slate-200 pt-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Commands</div>
-              <div className="mt-3 space-y-2 text-xs text-slate-600">
-                {Object.entries(glmTonReadiness?.commands || {}).map(([key, command]) => (
-                  <div key={key}>
-                    <div className="uppercase tracking-wide text-slate-500">{key}</div>
-                    <div className="mt-1 break-all rounded border border-slate-200 bg-white p-2 font-mono">{command}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <DataTable
-            headers={['Check', 'Status', 'Message']}
-            rows={(glmTonReadiness?.checks || []).map((item) => [
-              item.code,
-              <Badge key={`ton-check-${item.code}`} value={item.ok ? 'processed' : 'pending'} />,
-              <div key={`ton-message-${item.code}`} className="max-w-[420px] text-xs leading-5 text-slate-600">{item.message}</div>,
-            ])}
-          />
-        </div>
-        {(glmTonReadiness?.alerts || []).length ? (
-          <div className="mt-4">
-            <DataTable
-              headers={['Alert', 'Status', 'Message']}
-              rows={(glmTonReadiness?.alerts || []).map((item) => [
-                item.code,
-                <Badge key={`readiness-alert-${item.code}`} value={item.severity === 'critical' ? 'failed' : item.severity === 'warning' ? 'pending' : 'processed'} />,
-                <div key={`readiness-alert-message-${item.code}`} className="max-w-[680px] text-xs leading-5 text-slate-600">{item.message}</div>,
-              ])}
-            />
-          </div>
-        ) : null}
-        {((glmTonReadiness?.security?.warnings || []).length || (glmTonReadiness?.security?.mainnet_blockers || []).length) ? (
-          <div className="mt-4">
-            <DataTable
-              headers={['Security', 'Status', 'Message']}
-              rows={[
-                ...(glmTonReadiness?.security?.warnings || []).map((item) => [
-                  item.code,
-                  <Badge key={`security-warning-${item.code}`} value={item.severity === 'blocker' ? 'failed' : 'pending'} />,
-                  <div key={`security-warning-message-${item.code}`} className="max-w-[680px] text-xs leading-5 text-slate-600">{item.message}</div>,
-                ]),
-                ...(glmTonReadiness?.security?.mainnet_blockers || []).map((item) => [
-                  item.code,
-                  <Badge key={`security-blocker-${item.code}`} value="failed" />,
-                  <div key={`security-blocker-message-${item.code}`} className="max-w-[680px] text-xs leading-5 text-slate-600">{item.message}</div>,
-                ]),
-              ]}
-            />
-          </div>
-        ) : null}
-        {(glmTonReadiness?.pending_claims?.sample || []).length ? (
-          <div className="mt-4">
-            <DataTable
-              headers={['Заявка Баллы→GLM', 'GLM', '1С', 'TON', 'Tx hash']}
-              rows={(glmTonReadiness?.pending_claims?.sample || []).map((item) => [
-                <div key={`claim-${item.id}`} className="max-w-[220px] break-all text-xs">{item.id}</div>,
-                `${item.amount_glm || 0}`,
-                label(item.onec_spend_sync_status),
-                label(item.auto_transfer_status),
-                item.tx_hash ? <div key={`hash-${item.id}`} className="max-w-[260px] break-all text-xs">{item.tx_hash}</div> : '—',
-              ])}
-            />
-          </div>
-        ) : null}
-        {(glmTonReadiness?.pending_glm_to_points?.sample || []).length ? (
-          <div className="mt-4">
-            <DataTable
-              headers={['Заявка GLM→баллы', 'GLM', 'Баллы', 'TON', '1C']}
-              rows={(glmTonReadiness?.pending_glm_to_points?.sample || []).map((item) => [
-                <div key={`bridge-${item.id}`} className="max-w-[220px] break-all text-xs">{item.id}</div>,
-                `${item.amount_glm || 0}`,
-                `${item.target_points || item.amount_glm || 0}`,
-                <div key={`deposit-${item.id}`} className="max-w-[260px] break-all text-xs">
-                  <div>{label(item.ton_deposit_status || item.last_lookup_status)}</div>
-                  {item.deposit_tx_hash ? <div className="mt-1 text-slate-500">{item.deposit_tx_hash}</div> : null}
-                </div>,
-                label(item.onec_sync_status),
-              ])}
-            />
-          </div>
-        ) : null}
-      </section>
-
-      <section id="glm-claims" className="rounded-md border border-slate-200 bg-white p-5 shadow-sm scroll-mt-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">CryptoGLAME</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Очередь Баллы → GLM в TON</div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[0.7fr_1fr_1fr_auto_auto]">
-            <select value={glmClaimStatus} onChange={(event) => setGlmClaimStatus(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="pending">Ожидают</option>
-              <option value="processed">Обработаны</option>
-              <option value="failed">Ошибка</option>
-              <option value="canceled">Отменены</option>
-            </select>
-            <input value={glmClaimTxHash} onChange={(event) => setGlmClaimTxHash(event.target.value)} placeholder="TON tx hash" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-            <input value={glmClaimComment} onChange={(event) => setGlmClaimComment(event.target.value)} placeholder="Комментарий" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-            <a href={`/api/referrals/admin/glm-claims/ton-operator.csv?status=${glmClaimStatus || 'pending'}&limit=1000`} className="inline-flex items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">TON CSV</a>
-            <button onClick={() => void loadGlmClaims()} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">Баллы уже списаны в 1С, дальше GLM отправляются из hot-wallet в подтвержденный TON-кошелек партнера.</p>
-        <div className="mt-4">
-          <DataTable
-            headers={['Партнер', 'Сумма', 'Кошелек', 'Статус', 'Создана', 'Tx hash', 'Действия']}
-            rows={glmClaims.map((claim) => {
-              const stage = pointsToGlmStage(claim);
-              return [
-                <div key={`partner-${claim.id}`}>
-                  <div className="font-medium text-slate-900">{claim.partner_name || 'Партнер GLAME'}</div>
-                  <div className="mt-1 text-xs text-slate-500">{claim.partner_phone || '—'} · {claim.wallet_app || 'TON wallet'}</div>
-                </div>,
-                `${claim.amount} GLM`,
-                <div key={`wallet-${claim.id}`} className="max-w-[260px] break-all text-xs">{claim.wallet_address || '—'}</div>,
-                <div key={`status-${claim.id}`} className="max-w-[220px]">
-                  <Badge value={stage.value} />
-                  <div className="mt-1 text-xs text-slate-500">{stage.label}</div>
-                  <div className="mt-1 text-xs text-slate-400">{stage.detail}</div>
-                </div>,
-                dateRu(claim.created_at),
-                claim.tx_hash ? <div key={`tx-${claim.id}`} className="max-w-[220px] break-all text-xs">{claim.tx_hash}</div> : '—',
-                <div key={`actions-${claim.id}`} className="flex flex-wrap gap-2">
-                  <button disabled={saving || claim.status !== 'pending' || !glmClaimTxHash.trim()} onClick={() => void updateGlmClaim(claim.id, 'processed', claim.bridge_operation_id)} className="rounded border border-emerald-200 px-3 py-2 text-xs font-medium text-emerald-700 disabled:opacity-50">Подтвердить TON</button>
-                  <button disabled={saving || claim.status !== 'pending'} onClick={() => void updateGlmClaim(claim.id, 'failed', claim.bridge_operation_id)} className="rounded border border-red-200 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50">Ошибка</button>
-                  <button disabled={saving || claim.status !== 'pending'} onClick={() => void updateGlmClaim(claim.id, 'canceled', claim.bridge_operation_id)} className="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50">Отменить</button>
-                </div>,
-              ];
-            })}
-          />
-        </div>
-      </section>
-
-      <section id="glm-to-points" className="rounded-md border border-slate-200 bg-white p-5 shadow-sm scroll-mt-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">CryptoGLAME</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Очередь GLM -&gt; баллы 1С</div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[0.75fr_0.75fr_1fr_1fr_auto]">
-            <select value={glmToPointsStatus} onChange={(event) => setGlmToPointsStatus(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="pending">Ожидают</option>
-              <option value="processed">Обработаны</option>
-              <option value="failed">Ошибка</option>
-              <option value="canceled">Отменены</option>
-            </select>
-            <input value={glmToPointsValue} onChange={(event) => setGlmToPointsValue(event.target.value.replace(/[^\d]/g, ''))} placeholder="Баллы" inputMode="numeric" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-            <input value={glmToPointsDocument} onChange={(event) => setGlmToPointsDocument(event.target.value)} placeholder="Документ 1С" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-            <input value={glmToPointsComment} onChange={(event) => setGlmToPointsComment(event.target.value)} placeholder="Комментарий" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-            <button onClick={() => { void loadGlmToPointsBridges(); void loadGlmBridgeReconciliation(); }} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">
-          Партнер отправляет GLM из подтвержденного TON-кошелька в GLAME. После проверки TON-перевода платформа начисляет баллы в 1С.
-        </p>
-        <div className="mt-4">
-          <DataTable
-            headers={['Партнер', 'GLM', 'Баллы', 'TON-перевод', 'Статус', 'Документ / комментарий', 'Действия']}
-            rows={glmToPointsBridges.map((item) => {
-              const stage = glmToPointsStage(item);
-              return [
-                <div key={`partner-${item.id}`}>
-                  <div className="font-medium text-slate-900">{item.partner_name || 'Партнер GLAME'}</div>
-                  <div className="mt-1 text-xs text-slate-500">{item.partner_phone || '—'}</div>
-                </div>,
-                `${Math.abs(item.amount || 0)} GLM`,
-                <div key={`points-${item.id}`} className="text-sm text-slate-700">
-                  <div>{item.processed_points || item.target_points || Math.abs(item.amount || 0)} баллов</div>
-                  <div className="mt-1 text-xs text-slate-500">{label(item.reason)}</div>
-                  {item.refunded_glm ? <div className="mt-1 text-xs text-slate-500">возврат {item.refunded_glm} GLM</div> : null}
-                </div>,
-                <div key={`deposit-${item.id}`} className="max-w-[300px] text-xs leading-5 text-slate-600">
-                  <div className="break-all">от: {item.expected_ton_sender_address || '—'}</div>
-                  <div className="break-all">GLAME: {item.treasury_address || '—'}</div>
-                  {item.deposit_tx_hash ? <div className="break-all text-emerald-700">TON tx: {item.deposit_tx_hash}</div> : null}
-                  {item.ton_deposit_verification?.verified ? <div className="text-emerald-700">TON проверен</div> : null}
-                </div>,
-                <div key={`status-${item.id}`} className="max-w-[220px]">
-                  <Badge value={stage.value} />
-                  <div className="mt-1 text-xs text-slate-500">{stage.label}</div>
-                  <div className="mt-1 text-xs text-slate-400">{stage.detail}</div>
-                </div>,
-                <div key={`doc-${item.id}`} className="max-w-[260px]">
-                  <div className="text-xs text-slate-500">создана: {dateRu(item.created_at)}</div>
-                  <div className="break-all text-xs text-slate-600">{item.onec_document_id || item.source_id || '—'}</div>
-                  <div className="mt-1 text-xs text-slate-500">{item.admin_comment || item.description || '—'}</div>
-                  {item.onec_sync_status ? <div className="mt-1 text-xs text-slate-500">1С: {label(item.onec_sync_status)}</div> : null}
-                  {item.onec_sync_error ? <div className="mt-1 text-xs text-red-600">{item.onec_sync_error}</div> : null}
-                  {item.loyalty_points_expires_at ? <div className="mt-1 text-xs text-slate-500">баллы до {dateRu(item.loyalty_points_expires_at)}</div> : null}
-                </div>,
-                <div key={`actions-${item.id}`} className="flex max-w-[260px] flex-wrap gap-2">
-                  <input
-                    value={glmToPointsDepositHashes[item.id] || ''}
-                    onChange={(event) => setGlmToPointsDepositHashes((current) => ({ ...current, [item.id]: event.target.value }))}
-                    placeholder="TON tx hash"
-                    className="w-full rounded border border-slate-300 px-3 py-2 text-xs"
-                  />
-                  <button disabled={saving || item.status !== 'pending' || !(glmToPointsDepositHashes[item.id] || '').trim()} onClick={() => void settleGlmToPointsBridgeDeposit(item.id, item.bridge_operation_id)} className="rounded border border-emerald-200 px-3 py-2 text-xs font-medium text-emerald-700 disabled:opacity-50">Проверить TON</button>
-                  <button disabled={saving || item.status !== 'pending'} onClick={() => void updateGlmToPointsBridge(item.id, 'processed', item.bridge_operation_id)} className="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50">Начислено</button>
-                  <button disabled={saving || item.status !== 'pending'} onClick={() => void updateGlmToPointsBridge(item.id, 'failed', item.bridge_operation_id)} className="rounded border border-red-200 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50">Ошибка</button>
-                  <button disabled={saving || item.status !== 'pending'} onClick={() => void updateGlmToPointsBridge(item.id, 'canceled', item.bridge_operation_id)} className="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50">Отменить</button>
-                  <button disabled={saving || item.status !== 'processed'} onClick={() => void repairGlmBridge(item.id, 'retry_onec', item.bridge_operation_id)} className="rounded border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 disabled:opacity-50">Повторить 1С</button>
-                  <button disabled={saving || item.status !== 'processed' || !glmToPointsDocument.trim()} onClick={() => void repairGlmBridge(item.id, 'record_manual_document', item.bridge_operation_id)} className="rounded border border-amber-200 px-3 py-2 text-xs font-medium text-amber-700 disabled:opacity-50">Внести документ</button>
-                </div>,
-              ];
-            })}
-          />
-        </div>
-      </section>
-
-      <section id="glm-bridge-reconciliation" className="rounded-md border border-slate-200 bg-white p-5 shadow-sm scroll-mt-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">CryptoGLAME</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Сверка TON-переводов и 1С</div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <a href="/api/referrals/admin/glm-bridge/reconciliation.csv?stale_hours=48&limit=500" className="inline-flex items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">CSV</a>
-            <button onClick={() => { void loadGlmBridgeOperations(); void loadGlmBridgeReconciliation(); void loadGlmLoyaltyReconciliation(); }} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Пересчитать</button>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-12">
-          <Metric title="Проверено операций" value={`${glmBridgeReconciliation?.checked_bridge_operations ?? 0}`} hint={`${glmBridgeReconciliation?.bridge_operations_total ?? 0} всего`} />
-          <Metric title="Нет записи операции" value={`${glmBridgeReconciliation?.bridge_operations_missing_domain_count ?? 0}`} hint={label(glmBridgeReconciliation?.bridge_operations_source || 'internal')} />
-          <Metric title="Проблемы операций" value={`${glmBridgeReconciliation?.bridge_operations_consistency_issue_count ?? 0}`} hint={`${glmBridgeReconciliation?.bridge_operations_stale_pending_count || 0} зависли`} />
-          <Metric title="Проверено ledger" value={`${glmBridgeReconciliation?.checked_total_transactions ?? glmBridgeReconciliation?.checked_bridge_transactions ?? 0}`} hint={`${glmBridgeReconciliation?.checked_points_to_glm_transactions || 0} Баллы→GLM`} />
-          <Metric title="GLM→баллы ждут" value={`${glmBridgeReconciliation?.pending_count || 0}`} hint={`${glmBridgeReconciliation?.pending_reserved_glm || 0} GLM`} />
-          <Metric title="GLM→баллы готово" value={`${glmBridgeReconciliation?.processed_count || 0}`} hint={`${glmBridgeReconciliation?.processed_points || 0} баллов`} />
-          <Metric title="Баллы→GLM ждут" value={`${glmBridgeReconciliation?.points_to_glm_pending_count || 0}`} />
-          <Metric title="Баллы→GLM готово" value={`${glmBridgeReconciliation?.points_to_glm_processed_count || 0}`} />
-          <Metric title="Баллы→GLM отменено" value={`${glmBridgeReconciliation?.points_to_glm_canceled_count || 0}`} />
-          <Metric title="Ждет TON" value={`${glmBridgeReconciliation?.ton_sent_waiting_count || 0}`} />
-          <Metric title="Проблемы 1С" value={`${(glmBridgeReconciliation?.onec_failed_count || 0) + (glmBridgeReconciliation?.onec_spend_failed_count || 0) + (glmBridgeReconciliation?.onec_cancel_spend_failed_count || 0)}`} />
-          <Metric title="Нет TON tx" value={`${glmBridgeReconciliation?.ton_processed_without_tx_count || 0}`} />
-          <Metric title="Всего проблем" value={`${glmBridgeReconciliation?.issues_count || 0}`} hint={glmBridgeReconciliation?.generated_at ? dateRu(glmBridgeReconciliation.generated_at) : undefined} />
-        </div>
-        <div className="mt-6 rounded-md border border-slate-200 p-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">1С bonus reconciliation</div>
-              <div className="mt-1 text-sm text-slate-600">
-                Платформа vs 1С к списанию vs начисленные лоты формы карты.
-              </div>
-            </div>
-            <div className="grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
-              <div>Проверено: <span className="font-semibold text-slate-900">{glmLoyaltyReconciliation?.checked ?? 0}</span></div>
-              <div>Строк: <span className="font-semibold text-slate-900">{glmLoyaltyReconciliation?.count ?? 0}</span></div>
-              <div>Проблем: <span className="font-semibold text-slate-900">{glmLoyaltyReconciliation?.issues_count ?? 0}</span></div>
-            </div>
-          </div>
-          <div className="mt-4">
-            <DataTable
-              headers={['Статус', 'Партнер', 'Платформа', '1С к списанию', '1С лоты', 'Δ платформа/1С', 'Δ к списанию/лоты', 'Комментарий']}
-              rows={(glmLoyaltyReconciliation?.items || []).slice(0, 20).map((item) => [
-                <Badge key={`loyalty-status-${item.member_id}`} value={item.status === 'ok' ? 'processed' : item.status === 'warning' ? 'pending' : 'failed'} />,
-                <div key={`loyalty-partner-${item.member_id}`}>
-                  <div className="font-medium text-slate-900">{item.partner_name || 'Партнер GLAME'}</div>
-                  <div className="mt-1 text-xs text-slate-500">{item.partner_phone || item.discount_card_number || '—'}</div>
-                </div>,
-                `${item.platform_points ?? 0}`,
-                item.onec_working_balance ?? '—',
-                item.onec_lots_balance ?? '—',
-                item.platform_vs_working_delta ?? '—',
-                item.working_vs_lots_delta ?? '—',
-                <div key={`loyalty-note-${item.member_id}`} className="max-w-[360px] text-xs leading-5 text-slate-600">
-                  {item.errors?.length ? item.errors.join('; ') : item.status === 'ok' ? 'Остатки совпадают' : item.status === 'warning' ? 'Диагностика: лоты 1С отличаются от рабочего остатка, repair отключен' : 'Платформа отличается от 1С'}
-                </div>,
-              ])}
-            />
-          </div>
-        </div>
-        <div className="mt-4">
-          <DataTable
-            headers={['Направление', 'Этап', 'Партнер', 'GLM', 'Баллы', 'TON', '1С', 'Операция']}
-            rows={(glmBridgeOperations || []).slice(0, 20).map((item) => {
-              const stage = item.direction === 'glm_to_points' ? glmToPointsStage(item) : pointsToGlmStage(item);
-              return [
-                bridgeDirectionLabel(item.direction),
-                <div key={`bridge-op-status-${item.id}`} className="max-w-[220px]">
-                  <Badge value={stage.value} />
-                  <div className="mt-1 text-xs text-slate-500">{stage.label}</div>
-                  <div className="mt-1 text-xs text-slate-400">{stage.detail}</div>
-                </div>,
-                <div key={`bridge-op-partner-${item.id}`}>
-                  <div className="font-medium text-slate-900">{item.partner_name || 'Партнер GLAME'}</div>
-                  <div className="mt-1 text-xs text-slate-500">{item.partner_phone || '—'}</div>
-                </div>,
-                `${item.glm_amount || 0}`,
-                `${item.points_amount || 0}`,
-                <div key={`bridge-op-ton-${item.id}`} className="max-w-[260px] break-all text-xs">
-                  <div>{label(item.ton_status)}</div>
-                  {item.ton_tx_hash ? <div className="mt-1 text-slate-500">{item.ton_tx_hash}</div> : null}
-                </div>,
-                <div key={`bridge-op-onec-${item.id}`} className="max-w-[220px] break-all text-xs">
-                  <div>{label(item.onec_status)}</div>
-                  {item.onec_document_id ? <div className="mt-1 text-slate-500">{item.onec_document_id}</div> : null}
-                </div>,
-                <div key={`bridge-op-id-${item.id}`} className="max-w-[220px] break-all text-xs">
-                  <div>{item.id}</div>
-                  <div className="mt-1 text-slate-500">{dateRu(item.updated_at || item.created_at)}</div>
-                </div>,
-              ];
-            })}
-          />
-        </div>
-        <div className="mt-4">
-          <DataTable
-            headers={['Важность', 'Операция', 'Проблема', 'ID операции', 'Транзакция', 'Документ 1С', 'TON', 'Сообщение', 'Действие']}
-            rows={(glmBridgeReconciliation?.issues || []).map((item, index) => [
-              <Badge key={`severity-${index}`} value={item.severity === 'error' ? 'failed' : item.severity === 'warn' ? 'pending' : 'processed'} />,
-              bridgeDirectionLabel(item.operation),
-              label(item.code),
-              item.bridge_operation_id ? <div key={`op-${index}`} className="max-w-[180px] break-all text-xs">{item.bridge_operation_id}</div> : '—',
-              item.transaction_id ? <div key={`tx-${index}`} className="max-w-[220px] break-all text-xs">{item.transaction_id}</div> : '—',
-              item.onec_document_id ? <div key={`onec-${index}`} className="max-w-[180px] break-all text-xs">{item.onec_document_id}</div> : '—',
-              <div key={`ton-${index}`} className="max-w-[220px] break-all text-xs">
-                <div>{label(item.ton_status)}</div>
-                {item.ton_tx_hash ? <div className="mt-1 text-slate-500">{item.ton_tx_hash}</div> : null}
-              </div>,
-              <div key={`msg-${index}`} className="max-w-[420px] text-xs leading-5 text-slate-600">{item.message}</div>,
-              item.transaction_id ? (
-                <div key={`action-${index}`} className="flex max-w-[300px] flex-wrap gap-2">
-                  {item.code === 'ton_sent_waiting_settlement' ? (
-                    <button
-                      disabled={saving}
-                      onClick={() => void runGlmBridgeIssueAction(item.transaction_id!, 'settle_ton_transfer', item.code, item.bridge_operation_id)}
-                      className="rounded border border-emerald-200 px-3 py-2 text-xs font-medium text-emerald-700 disabled:opacity-50"
-                    >
-                      Проверить TON
-                    </button>
-                  ) : null}
-                  {item.code === 'closed_points_to_glm_without_1c_spend_unpost' ? (
-                    <button
-                      disabled={saving}
-                      onClick={() => void runGlmBridgeIssueAction(item.transaction_id!, 'cancel_onec_spend', item.code, item.bridge_operation_id)}
-                      className="rounded border border-red-200 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50"
-                    >
-                      Отменить списание 1С
-                    </button>
-                  ) : null}
-                  {item.code === 'processed_points_to_glm_without_1c_spend' ? (
-                    <button
-                      disabled={saving}
-                      onClick={() => void runGlmBridgeIssueAction(item.transaction_id!, 'mark_legacy_manual', item.code, item.bridge_operation_id)}
-                      className="rounded border border-amber-200 px-3 py-2 text-xs font-medium text-amber-700 disabled:opacity-50"
-                    >
-                      Закрыть как проверенное
-                    </button>
-                  ) : null}
-                  {item.code.startsWith('onec_spend_') ? (
-                    <>
-                      <button
-                        disabled={saving}
-                        onClick={() => void repairPointsToGlmSpend(item.transaction_id!, 'retry_onec_spend', item.bridge_operation_id)}
-                        className="rounded border border-blue-200 px-3 py-2 text-xs font-medium text-blue-700 disabled:opacity-50"
-                      >
-                        Повторить 1С
-                      </button>
-                      <button
-                        disabled={saving || !glmToPointsDocument.trim()}
-                        onClick={() => void repairPointsToGlmSpend(item.transaction_id!, 'record_manual_spend_document', item.bridge_operation_id)}
-                        className="rounded border border-amber-200 px-3 py-2 text-xs font-medium text-amber-700 disabled:opacity-50"
-                      >
-                        Внести списание 1С
-                      </button>
-                    </>
-                  ) : null}
-                  <button
-                    disabled={saving}
-                    onClick={() => void runGlmBridgeIssueAction(item.transaction_id!, 'mark_reviewed', item.code, item.bridge_operation_id)}
-                    className="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50"
-                  >
-                    Проверено
-                  </button>
-                </div>
-              ) : '—',
-            ])}
-          />
-        </div>
-      </section>
-
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">GLM Audit Hash</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Ежедневный hash GLM ledger</div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[0.8fr_auto_auto_auto]">
-            <input type="date" value={glmAuditDate} onChange={(event) => setGlmAuditDate(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-            <button onClick={() => void generateGlmAuditHash()} disabled={saving || !glmAuditDate} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">Сформировать</button>
-            <button onClick={() => void publishGlmAuditHash()} disabled={saving || !glmAuditDate} className="rounded-md border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 disabled:opacity-60">Опубликовать</button>
-            <button onClick={() => void loadGlmAuditHashes()} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-          </div>
-        </div>
-        {glmAuditResult ? <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{glmAuditResult}</div> : null}
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <a href="/api/referrals/glm-audit-hashes/public" target="_blank" rel="noreferrer" className="rounded border border-slate-300 px-3 py-2 text-slate-700">Public API</a>
-          <a href="/static/glm_audit_journal/index.json" target="_blank" rel="noreferrer" className="rounded border border-slate-300 px-3 py-2 text-slate-700">Journal JSON</a>
-          <a href="/static/glm_audit_journal/glame-audit-hashes.jsonl" target="_blank" rel="noreferrer" className="rounded border border-slate-300 px-3 py-2 text-slate-700">Journal JSONL</a>
-        </div>
-        <div className="mt-4">
-          <DataTable
-            headers={['Дата', 'Root hash', 'Previous', 'Tx', 'Accounts', 'Totals', 'Статус', 'Public']}
-            rows={glmAuditHashes.map((item) => [
-              dateRu(item.audit_date),
-              <div key={`root-${item.id}`} className="max-w-[280px] break-all font-mono text-xs">{item.root_hash}</div>,
-              item.previous_root_hash ? <div key={`prev-${item.id}`} className="max-w-[180px] break-all font-mono text-xs">{item.previous_root_hash}</div> : '—',
-              item.transactions_count,
-              item.accounts_count,
-              <div key={`totals-${item.id}`} className="text-xs leading-5 text-slate-600">
-                <div>balance: {item.balance_total} GLM</div>
-                <div>hold: {item.hold_total} GLM</div>
-                <div>earned: {item.lifetime_earned_total} GLM</div>
-                <div>burned: {item.lifetime_burned_total} GLM</div>
-              </div>,
-              <Badge key={`status-${item.id}`} value={item.public_status} />,
-              item.public_reference ? <a key={`public-${item.id}`} href={item.public_reference} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-700">Открыть</a> : '—',
-            ])}
-          />
-        </div>
-      </section>
-
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">GLM Store</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Очередь выдачи товаров и сервисов</div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[0.8fr_1fr_auto]">
-            <select value={glmRedemptionStatus} onChange={(event) => setGlmRedemptionStatus(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="pending_ton_payment">Ждет TON-оплату</option>
-              <option value="pending_fulfillment">На сборке</option>
-              <option value="fulfilled">Выдано</option>
-              <option value="failed">Ошибка</option>
-              <option value="canceled">Отменено</option>
-            </select>
-            <input value={glmFulfillmentComment} onChange={(event) => setGlmFulfillmentComment(event.target.value)} placeholder="Комментарий выдачи" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-            <button onClick={() => void loadGlmRedemptions()} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-          </div>
-        </div>
-        <div className="mt-4">
-          <DataTable
-            headers={['Партнер', 'Товар', 'Сумма', 'Статус', 'Создан', 'Комментарий', 'Действия']}
-            rows={glmRedemptions.map((item) => [
-              <div key={`partner-${item.id}`}>
-                <div className="font-medium text-slate-900">{item.partner_name || 'Партнер GLAME'}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.partner_phone || '—'}</div>
-              </div>,
-              <div key={`item-${item.id}`}>
-                <div className="font-medium text-slate-900">{item.item_title || item.sku || 'GLM Store item'}</div>
-                <div className="mt-1 break-all text-xs text-slate-500">{item.sku || '—'}</div>
-              </div>,
-              item.payment_method === 'loyalty_points'
-                ? `${item.price_points || 0} баллов`
-                : `${Math.abs(item.amount || item.price_glm || 0)} GLM`,
-              <Badge key={`status-${item.id}`} value={item.status} />,
-              dateRu(item.created_at),
-              item.ton_refund_required
-                ? 'Нужен ручной TON refund из treasury'
-                : item.admin_comment || item.delivery_note || item.ton_deposit_status || item.onec_spend_sync_error || item.onec_spend_sync_status || '—',
-              <div key={`actions-${item.id}`} className="flex flex-wrap gap-2">
-                <button disabled={saving || item.status !== 'pending_fulfillment'} onClick={() => void updateGlmRedemption(item.id, 'fulfilled')} className="rounded border border-emerald-200 px-3 py-2 text-xs font-medium text-emerald-700 disabled:opacity-50">Исполнено</button>
-                <button disabled={saving || item.status !== 'pending_fulfillment'} onClick={() => void updateGlmRedemption(item.id, 'canceled')} className="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50">{item.payment_method === 'ton_glm' ? 'Отмена' : 'Отмена + возврат'}</button>
-                <button disabled={saving || item.status !== 'pending_fulfillment'} onClick={() => void updateGlmRedemption(item.id, 'failed')} className="rounded border border-red-200 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50">{item.payment_method === 'ton_glm' ? 'Ошибка' : 'Ошибка + возврат'}</button>
-              </div>,
-            ])}
-          />
-        </div>
-      </section>
-
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">GLM AI segments</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Готовые аудитории для CRM-кампаний</div>
-          </div>
-          <button onClick={() => void loadGlmSegments()} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-        </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          {glmSegments.map((segment) => (
-            <div key={segment.code} className="rounded-md border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-slate-900">{segment.title}</div>
-                  <div className="mt-1 text-xs leading-5 text-slate-500">{segment.description}</div>
-                </div>
-                <div className="rounded border border-slate-200 bg-white px-3 py-1 text-sm font-semibold text-slate-700">{segment.count}</div>
-              </div>
-              <div className="mt-3 space-y-2">
-                {(segment.items || []).slice(0, 5).map((item) => (
-                  <div key={`${segment.code}-${item.member_id}`} className="rounded border border-slate-200 bg-white p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-slate-900">{item.partner_name || 'Партнер GLAME'}</div>
-                        <div className="mt-1 text-xs text-slate-500">{item.partner_phone || '—'}</div>
-                      </div>
-                      <div className="text-right text-xs text-slate-600">
-                        <div>{item.balance} GLM</div>
-                        <div className="mt-1 text-slate-400">{item.tier || 'GLM Start'}{item.to_next ? ` · ${item.to_next} до next` : ''}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {!(segment.items || []).length ? <div className="text-sm text-slate-500">Аудитория пока пустая</div> : null}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">Reward Store</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Товары за бонусы и GLM</div>
-            <div className="mt-1 text-sm text-slate-500">Добавление, цена в баллах/GLM, статус витрины и архив.</div>
-          </div>
-          <button onClick={resetRewardStoreForm} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Новый товар</button>
-        </div>
-
-        <div className="mt-4 grid gap-3 xl:grid-cols-12">
-          <input value={rewardStoreForm.sku} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, sku: event.target.value }))} placeholder="SKU" className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-2" />
-          <input value={rewardStoreForm.title} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Название" className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-3" />
-          <select value={rewardStoreForm.category} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, category: event.target.value }))} className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-2">
-            <option value="branded_goods">Товар</option>
-            <option value="limited_goods">Лимитка</option>
-            <option value="service">Сервис</option>
-            <option value="access_pass">Доступ</option>
-            <option value="other">Другое</option>
-          </select>
-          <select value={rewardStoreForm.status} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, status: event.target.value, is_active: event.target.value !== 'archived' }))} className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-2">
-            <option value="available">Доступен</option>
-            <option value="limited">Лимитирован</option>
-            <option value="draft">Черновик</option>
-            <option value="sold_out">Нет в наличии</option>
-            <option value="archived">Архив</option>
-          </select>
-          <input value={rewardStoreForm.price_glm} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, price_glm: event.target.value.replace(/\D/g, '') }))} placeholder="Цена GLM" className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-1" />
-          <input value={rewardStoreForm.price_points} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, price_points: event.target.value.replace(/\D/g, '') }))} placeholder="Баллы" className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-1" />
-          <input value={rewardStoreForm.quantity_available} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, quantity_available: event.target.value.replace(/\D/g, '') }))} placeholder="Остаток, шт." className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-1" />
-          <input value={rewardStoreForm.sort_order} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, sort_order: event.target.value.replace(/\D/g, '') }))} placeholder="Сорт." className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-1" />
-          <textarea value={rewardStoreForm.description} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Описание" className="min-h-20 rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-7" />
-          <input value={rewardStoreForm.inventory_status} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, inventory_status: event.target.value }))} placeholder="Метка: pilot_batch / limited / service" className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-2" />
-          <label className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 xl:col-span-1">
-            <input type="checkbox" checked={rewardStoreForm.is_active} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, is_active: event.target.checked }))} />
-            Активен
-          </label>
-          <button onClick={() => void saveRewardStoreItem()} disabled={saving || !rewardStoreForm.sku.trim() || !rewardStoreForm.title.trim()} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 xl:col-span-1">
-            {rewardStoreEditingId ? 'Сохранить' : 'Добавить'}
-          </button>
-          <input value={rewardStoreForm.image_url} onChange={(event) => setRewardStoreForm((prev) => ({ ...prev, image_url: event.target.value }))} placeholder="URL фото" className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-5" />
-          <input id="reward-store-image-file" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setRewardStoreImageFile(event.target.files?.[0] || null)} className="rounded-md border border-slate-300 px-3 py-2 text-sm xl:col-span-4" />
-          <button onClick={() => void uploadRewardStoreImage()} disabled={saving || !rewardStoreImageFile} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60 xl:col-span-2">
-            Загрузить фото
-          </button>
-          {rewardStoreForm.image_url ? (
-            <div className="flex items-center gap-3 rounded-md border border-slate-200 bg-slate-50 p-2 xl:col-span-1">
-              <img src={rewardStoreForm.image_url} alt="" className="h-12 w-12 rounded object-cover" />
-            </div>
-          ) : null}
-        </div>
-        {rewardStoreResult ? <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{rewardStoreResult}</div> : null}
-
-        <div className="mt-4">
-          <DataTable
-            headers={['Товар', 'SKU', 'Цена', 'Категория', 'Остаток', 'Статус', 'Сорт.', 'Действия']}
-            rows={rewardStoreItems.map((item) => [
-              <div key={`title-${item.id}`} className="max-w-[320px]">
-                <div className="flex items-start gap-3">
-                  {item.image_url ? <img src={item.image_url} alt="" className="h-14 w-14 rounded border border-slate-200 object-cover" /> : null}
-                  <div>
-                    <div className="font-medium text-slate-900">{item.title}</div>
-                    <div className="mt-1 line-clamp-2 text-xs text-slate-500">{item.description || '—'}</div>
-                  </div>
-                </div>
-              </div>,
-              item.sku,
-              <div key={`price-${item.id}`} className="text-sm">
-                <div>{item.price_glm ? `${item.price_glm} GLM` : 'GLM —'}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.price_points ? `${item.price_points} баллов` : 'Баллы —'}</div>
-              </div>,
-              <div key={`cat-${item.id}`} className="text-sm">
-                <div>{item.category}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.inventory_status}</div>
-              </div>,
-              item.quantity_available === null || item.quantity_available === undefined ? '—' : `${item.quantity_available} шт.`,
-              <Badge key={`status-${item.id}`} value={item.is_active ? item.status : 'archived'} />,
-              item.sort_order,
-              <div key={`actions-${item.id}`} className="flex flex-wrap gap-2">
-                <button onClick={() => editRewardStoreItem(item)} disabled={saving} className="rounded border border-slate-300 px-3 py-1 text-xs text-slate-700 disabled:opacity-60">Изменить</button>
-                {item.is_active ? (
-                  <button onClick={() => void setRewardStoreItemArchived(item, true)} disabled={saving} className="rounded border border-amber-300 px-3 py-1 text-xs text-amber-700 disabled:opacity-60">Архив</button>
-                ) : (
-                  <button onClick={() => void setRewardStoreItemArchived(item, false)} disabled={saving} className="rounded border border-emerald-300 px-3 py-1 text-xs text-emerald-700 disabled:opacity-60">Вернуть</button>
-                )}
-              </div>,
-            ])}
-          />
-        </div>
-      </section>
-
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">GLM Ledger</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Журнал и выпуск истекшего hold</div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[0.8fr_0.8fr_auto_auto]">
-            <select value={glmTxType} onChange={(event) => setGlmTxType(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">Все типы</option>
-              <option value="earn">Начисления</option>
-              <option value="release">Доступно после холда</option>
-              <option value="claim">Баллы → GLM</option>
-              <option value="adjustment">Корректировки</option>
-              <option value="redemption">GLM Store</option>
-              <option value="conversion">Баллы → GLM</option>
-              <option value="reversal">Возвраты GLM</option>
-            </select>
-            <select value={glmTxStatus} onChange={(event) => setGlmTxStatus(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">Все статусы</option>
-              <option value="hold">Холд</option>
-              <option value="available">Доступно</option>
-              <option value="pending">На проверке</option>
-              <option value="processed">Обработано</option>
-              <option value="pending_ton_payment">Ждет TON-оплату</option>
-              <option value="pending_fulfillment">На сборке</option>
-              <option value="fulfilled">Выдано</option>
-              <option value="failed">Ошибка</option>
-              <option value="canceled">Отменено</option>
-            </select>
-            <button onClick={() => void releaseDueGlmHolds()} disabled={saving} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">Выпустить hold</button>
-            <button onClick={() => { void loadGlmTransactions(); void loadGlmDashboard(); void loadGlmEffectiveness(); void loadGlmSegments(); void loadGlmRefundCandidates(); void loadGlmToPointsBridges(); }} disabled={saving} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60">Обновить</button>
-          </div>
-        </div>
-        {glmReleaseResult ? <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{glmReleaseResult}</div> : null}
-        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-10">
-          <Metric title="GLM accounts" value={`${glmDashboard?.accounts_total || 0}`} />
-          <Metric title="Balance" value={`${glmDashboard?.balance_total || 0} GLM`} />
-          <Metric title="Hold" value={`${glmDashboard?.hold_total || 0} GLM`} hint={`${glmDashboard?.due_hold_total || 0} GLM due`} />
-          <Metric title="Earn month" value={`${glmDashboard?.monthly_earn_total || 0} GLM`} />
-          <Metric title="Emission cap" value={`${glmDashboard?.monthly_referral_emission_percent || 0}%`} hint={`${glmDashboard?.monthly_referral_emission_remaining || 0} GLM left`} />
-          <Metric title="Campaign" value={glmDashboard?.referral_campaign?.active ? `x${glmDashboard.referral_campaign.multiplier}` : 'Base'} hint={glmDashboard?.referral_campaign?.active ? glmDashboard.referral_campaign.name : '1 GLM / 1 ₽'} />
-          <Metric title="Real-backed" value={`${glmDashboard?.real_turnover_backed_percent || 0}%`} hint={`${glmDashboard?.real_turnover_backed_total || 0} GLM referral`} />
-          <Metric title="Points→GLM" value={`${glmDashboard?.conversion_total || 0} GLM`} hint="из бонусных баллов" />
-          <Metric title="Store burn" value={`${glmDashboard?.redemption_total || 0} GLM`} hint={`${glmDashboard?.burned_total || 0} GLM burned`} />
-          <Metric title="Ждет отправки в TON" value={`${glmDashboard?.pending_claim_total || 0} GLM`} hint={`${glmDashboard?.pending_claim_count || 0} заявок`} />
-        </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Топ партнеров по GLM</div>
-            <div className="mt-3 space-y-2">
-              {(glmDashboard?.top_partners || []).slice(0, 6).map((item) => (
-                <div key={item.member_id} className="rounded border border-slate-200 bg-white p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-slate-900">{item.partner_name || 'Партнер GLAME'}</div>
-                      <div className="mt-1 text-xs text-slate-500">{item.partner_phone || '—'}</div>
-                    </div>
-                    <div className="text-right text-xs text-slate-600">
-                      <div>{item.balance} GLM</div>
-                      <div className="mt-1 text-slate-400">hold {item.hold_balance}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {!(glmDashboard?.top_partners || []).length ? <div className="text-sm text-slate-500">GLM-аккаунтов пока нет</div> : null}
-            </div>
-          </div>
-          <div>
-            <DataTable
-              headers={['Дата', 'Партнер', 'Тип', 'Статус', 'Сумма', 'Баланс', 'Причина']}
-              rows={glmTransactions.map((tx) => [
-                dateRu(tx.created_at),
-                <div key={`partner-${tx.id}`}>
-                  <div className="font-medium text-slate-900">{tx.partner_name || 'Партнер GLAME'}</div>
-                  <div className="mt-1 text-xs text-slate-500">{tx.partner_phone || '—'}</div>
-                </div>,
-                <Badge key={`type-${tx.id}`} value={tx.type} />,
-                <Badge key={`status-${tx.id}`} value={tx.status} />,
-                `${tx.amount} GLM`,
-                <div key={`balance-${tx.id}`} className="text-xs text-slate-600">balance {tx.balance_after} · hold {tx.hold_balance_after}</div>,
-                <div key={`reason-${tx.id}`} className="max-w-[260px]">
-                  <div className="text-sm text-slate-700">{tx.reason || tx.source || '—'}</div>
-                  <div className="mt-1 break-all text-xs text-slate-500">{tx.tx_hash || tx.source_id || tx.description || '—'}</div>
-                </div>,
-              ])}
-            />
-          </div>
-        </div>
-      </section>
-
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
         <section className="min-w-0 rounded-md border border-slate-200 bg-white p-4 shadow-sm">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -3599,13 +2577,6 @@ export default function AdminReferralsPage() {
               <option value="points">Баллы</option>
               <option value="cash">Деньги</option>
             </select>
-            <select value={tonStatus} onChange={(event) => setTonStatus(event.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-              <option value="">Все TON</option>
-              <option value="verified">TON подтвержден</option>
-              <option value="linked">Ручная привязка</option>
-              <option value="claim_enabled">GLM в TON разрешен</option>
-              <option value="missing">Без кошелька</option>
-            </select>
           </div>
 
           <div className="mt-4 max-h-[720px] space-y-2 overflow-auto pr-1">
@@ -3613,8 +2584,6 @@ export default function AdminReferralsPage() {
             {!loading && !partners.length ? <div className="p-6 text-center text-sm text-slate-500">Партнеры не найдены</div> : null}
             {partners.map((partner) => {
               const active = selected?.member.id === partner.member.id;
-              const wallet = partner.member.crypto_wallet;
-              const tonVerified = wallet?.status === 'verified';
               return (
                 <button key={partner.member.id} onClick={() => void loadPartner(partner.member.id)} className={`w-full rounded-md border p-4 text-left transition ${active ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:border-slate-400'}`}>
                   <div className="flex items-start justify-between gap-3">
@@ -3624,15 +2593,11 @@ export default function AdminReferralsPage() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <Badge value={partner.member.status} />
-                      <span className={`inline-flex rounded border px-2 py-1 text-xs font-medium ${tonVerified ? 'border-sky-200 bg-sky-50 text-sky-700' : wallet?.status ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-50 text-slate-500'}`}>
-                        {tonVerified ? 'TON подтвержден' : wallet?.status === 'linked' ? 'TON вручную' : 'Нет TON'}
-                      </span>
                     </div>
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-600">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                     <div><span className="block text-slate-400">Режим</span>{partner.member.reward_mode === 'cash' ? 'Деньги' : 'Баллы'}</div>
                     <div><span className="block text-slate-400">Оборот</span>{money(partner.summary.referral_revenue)}</div>
-                    <div><span className="block text-slate-400">GLM в TON</span>{wallet?.glm_claim_enabled ? 'Разрешен' : 'Нет'}</div>
                   </div>
                 </button>
               );
@@ -3667,84 +2632,6 @@ export default function AdminReferralsPage() {
                   <Metric title="Покупки" value={`${selectedSummary.purchases}`} />
                   <Metric title="Оборот" value={money(selectedSummary.referral_revenue)} />
                   <Metric title={selected.member.reward_mode === 'cash' ? 'Комиссия' : 'Баллы'} value={selected.member.reward_mode === 'cash' ? money(selectedSummary.approved_commission + selectedSummary.accrued_in_1c) : `${selectedSummary.posted_points}`} />
-                </div>
-              </div>
-
-              <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-slate-900">TON-кошелек / GLM в TON</h3>
-                    <p className="mt-1 text-sm text-slate-500">Перевод GLM в TON включается только для кошельков, подтвержденных через TON Connect ton_proof.</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge value={selectedWallet?.status || 'missing'} />
-                    <Badge value={selectedWallet?.glm_claim_enabled ? 'claim_enabled' : 'pending'} />
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-3 text-sm md:grid-cols-2">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">GLM balance</div>
-                    <div className="mt-1 text-slate-900">{selected.token?.balance || 0} GLM · hold {selected.token?.hold_balance || 0} GLM</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Ждет отправки в TON</div>
-                    <div className="mt-1 text-slate-900">{selected.token?.pending_claim ? `${selected.token?.pending_claim_amount || 0} GLM` : 'Нет'}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Адрес</div>
-                    <div className="mt-1 break-all text-slate-900">{selectedWallet?.address || '—'}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Wallet app</div>
-                    <div className="mt-1 text-slate-900">{selectedWallet?.wallet_app || selectedWallet?.label || '—'}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Proof</div>
-                    <div className="mt-1 text-slate-900">{selectedWallet?.verification || '—'} · {dateRu(selectedWallet?.verified_at)}</div>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">GLM в TON</div>
-                    <div className="mt-1 text-slate-900">{selectedWallet?.glm_claim_enabled ? `Разрешен · ${dateRu(selectedWallet?.glm_claim_updated_at)}` : 'Не разрешен'}</div>
-                  </div>
-                </div>
-                {selectedWallet?.glm_claim_comment ? <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">{selectedWallet.glm_claim_comment}</div> : null}
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    disabled={saving || selectedWallet?.status !== 'verified' || !!selectedWallet?.glm_claim_enabled}
-                    onClick={() => void setGlmClaimAccess(true)}
-                    className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-                  >
-                    Разрешить GLM в TON
-                  </button>
-                  <button
-                    disabled={saving || !selectedWallet?.glm_claim_enabled}
-                    onClick={() => void setGlmClaimAccess(false)}
-                    className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50"
-                  >
-                    Отключить GLM в TON
-                  </button>
-                  <button
-                    disabled={saving || !selected.token?.hold_balance}
-                    onClick={() => void releaseGlmHold()}
-                    className="rounded-md border border-emerald-200 px-4 py-2 text-sm font-medium text-emerald-700 disabled:opacity-50"
-                  >
-                    Перевести hold в balance
-                  </button>
-                </div>
-                <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-sm font-semibold text-slate-900">Ручная корректировка GLM balance</div>
-                  <div className="mt-3 grid gap-3 lg:grid-cols-[0.7fr_0.7fr_1fr]">
-                    <select value={glmAdjustDirection} onChange={(event) => setGlmAdjustDirection(event.target.value as 'credit' | 'debit')} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
-                      <option value="credit">Начислить</option>
-                      <option value="debit">Списать</option>
-                    </select>
-                    <input value={glmAdjustAmount} onChange={(event) => setGlmAdjustAmount(event.target.value)} placeholder="Сумма GLM" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-                    <input value={glmAdjustReason} onChange={(event) => setGlmAdjustReason(event.target.value)} placeholder="Причина, обязательно" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-                  </div>
-                  <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
-                    <input value={glmAdjustComment} onChange={(event) => setGlmAdjustComment(event.target.value)} placeholder="Комментарий для audit trail" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
-                    <button disabled={saving} onClick={() => void adjustGlmBalance()} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">Сохранить корректировку</button>
-                  </div>
                 </div>
               </div>
 
@@ -3860,14 +2747,13 @@ export default function AdminReferralsPage() {
                     <input value={commissionCancelComment} onChange={(event) => setCommissionCancelComment(event.target.value)} placeholder="Комментарий к отмене/возврату" className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
                   </div>
                   <DataTable
-                    headers={['Дата', 'База', 'Ставка', 'Вознаграждение', 'Статус', 'GLM', '1С', 'Действия']}
+                    headers={['Дата', 'База', 'Ставка', 'Вознаграждение', 'Статус', '1С', 'Действия']}
                     rows={(selected.commissions || []).map((item) => [
                       dateRu(item.date),
                       money(item.base),
                       `${item.rate || 0}%`,
                       item.reward_mode === 'cash' ? money(item.amount) : `${item.points || 0} баллов`,
                       <Badge key={`status-${item.id}`} value={item.status} />,
-                      item.glm?.amount ? `${item.glm.amount} GLM · ${item.glm.status || '—'}` : '—',
                       item.onec_document_id || item.onec_sync_status || '—',
                       <button key={`cancel-${item.id}`} disabled={saving || item.status === 'canceled'} onClick={() => void cancelReferralCommission(item.id)} className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 disabled:opacity-50">Отменить</button>,
                     ])}
