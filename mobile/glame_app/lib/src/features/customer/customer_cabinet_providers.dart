@@ -10,12 +10,16 @@ final customerCabinetApiProvider = Provider<CustomerCabinetApi>((ref) {
 final customerProfileProvider = FutureProvider<Map<String, dynamic>>((
   ref,
 ) async {
+  final auth = ref.watch(authControllerProvider);
+  if (auth.user == null) return const <String, dynamic>{};
   return ref.watch(customerCabinetApiProvider).getProfile();
 });
 
 final customerLoyaltyProvider = FutureProvider<Map<String, dynamic>>((
   ref,
 ) async {
+  final auth = ref.watch(authControllerProvider);
+  if (auth.user == null) return const <String, dynamic>{};
   return ref.watch(customerCabinetApiProvider).getLoyalty();
 });
 

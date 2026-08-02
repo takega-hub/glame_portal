@@ -1317,7 +1317,7 @@ class _LookStitchEditorialCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AspectRatio(
-              aspectRatio: 4 / 5,
+              aspectRatio: 3 / 4,
               child: image != null && image.isNotEmpty
                   ? CachedNetworkImage(
                       imageUrl: image,
@@ -1735,7 +1735,9 @@ class _LookEditorialCardState extends ConsumerState<_LookEditorialCard> {
         _showSnack(cartState.error!);
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.removeCurrentSnackBar();
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
             lookId.isEmpty
@@ -1747,7 +1749,10 @@ class _LookEditorialCardState extends ConsumerState<_LookEditorialCard> {
           action: SnackBarAction(
             label: 'ПЕРЕЙТИ',
             textColor: GlameColors.gold,
-            onPressed: () => context.go('/home?tab=3'),
+            onPressed: () {
+              messenger.removeCurrentSnackBar();
+              context.go('/home?tab=3');
+            },
           ),
         ),
       );
@@ -1945,7 +1950,7 @@ class _LookInstagramCardState extends ConsumerState<_LookInstagramCard> {
               onTap: () => _openMediaViewer(images, heroPrefix: heroPrefix),
               onDoubleTap: _handleDoubleTapLike,
               child: AspectRatio(
-                aspectRatio: 1,
+                aspectRatio: 3 / 4,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -3381,7 +3386,7 @@ class _LookProductTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
-            aspectRatio: 0.9,
+            aspectRatio: 3 / 4,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(14),
               child: image == null
@@ -3465,7 +3470,7 @@ class _LookFeedProductCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 1,
+              aspectRatio: 3 / 4,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: image == null

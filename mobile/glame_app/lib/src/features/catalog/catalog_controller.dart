@@ -23,6 +23,7 @@ class CatalogState {
   final String? sort;
   final String? search;
   final bool inStockOnly;
+  final String? storeId;
 
   const CatalogState({
     required this.items,
@@ -44,6 +45,7 @@ class CatalogState {
     required this.sort,
     required this.search,
     required this.inStockOnly,
+    required this.storeId,
   });
 
   factory CatalogState.initial() {
@@ -67,6 +69,7 @@ class CatalogState {
       sort: null,
       search: null,
       inStockOnly: false,
+      storeId: null,
     );
   }
 
@@ -90,6 +93,7 @@ class CatalogState {
     String? sort,
     String? search,
     bool? inStockOnly,
+    String? storeId,
   }) {
     return CatalogState(
       items: items ?? this.items,
@@ -111,6 +115,7 @@ class CatalogState {
       sort: sort ?? this.sort,
       search: search ?? this.search,
       inStockOnly: inStockOnly ?? this.inStockOnly,
+      storeId: storeId ?? this.storeId,
     );
   }
 }
@@ -122,6 +127,7 @@ final catalogControllerProvider =
 
 class CatalogController extends StateNotifier<CatalogState> {
   final HomeApi api;
+  int _requestSerial = 0;
 
   static const pageSize = 24;
 
@@ -130,12 +136,12 @@ class CatalogController extends StateNotifier<CatalogState> {
   }
 
   Future<void> setCategory(String? category) async {
-    final next = (category ?? '').trim();
+    final next = _normCategory(category);
     state = CatalogState(
       items: [],
       total: 0,
       loading: false,
-      category: next.isEmpty ? null : next,
+      category: next,
       hasMore: true,
       error: null,
       oneColumn: state.oneColumn,
@@ -151,6 +157,7 @@ class CatalogController extends StateNotifier<CatalogState> {
       sort: state.sort,
       search: state.search,
       inStockOnly: state.inStockOnly,
+      storeId: state.storeId,
     );
     await refresh();
   }
@@ -159,6 +166,7 @@ class CatalogController extends StateNotifier<CatalogState> {
     String? category,
     String? search,
     String? brand,
+    String? storeId,
   }) async {
     final nextCategory = (category ?? '').trim();
     final nextSearch = (search ?? '').trim();
@@ -167,7 +175,7 @@ class CatalogController extends StateNotifier<CatalogState> {
       items: [],
       total: 0,
       loading: false,
-      category: nextCategory.isEmpty ? null : nextCategory,
+      category: _normCategory(nextCategory),
       hasMore: true,
       error: null,
       oneColumn: state.oneColumn,
@@ -182,7 +190,8 @@ class CatalogController extends StateNotifier<CatalogState> {
       color: null,
       sort: null,
       search: nextSearch.isEmpty ? null : nextSearch,
-      inStockOnly: state.inStockOnly,
+      inStockOnly: _norm(storeId) != null,
+      storeId: _norm(storeId),
     );
     await refresh();
   }
@@ -224,6 +233,7 @@ class CatalogController extends StateNotifier<CatalogState> {
       sort: _norm(sort),
       search: state.search,
       inStockOnly: inStockOnly ?? state.inStockOnly,
+      storeId: state.storeId,
     );
     await refresh();
   }
@@ -250,6 +260,7 @@ class CatalogController extends StateNotifier<CatalogState> {
       sort: state.sort,
       search: next.isEmpty ? null : next,
       inStockOnly: state.inStockOnly,
+      storeId: state.storeId,
     );
     await refresh();
   }
@@ -266,7 +277,7 @@ class CatalogController extends StateNotifier<CatalogState> {
   }
 
   Future<void> refresh() async {
-    if (state.loading) return;
+    final requestSerial = ++_requestSerial;
     state = state.copyWith(loading: true, error: null);
     try {
       final raw = await api.getProductsPaged(
@@ -275,7 +286,7 @@ class CatalogController extends StateNotifier<CatalogState> {
         category: state.category,
         brand: state.brand,
         search: state.search,
-        inStock: state.inStockOnly ? true : null,
+        inStock: state.inStockOnly || state.storeId != null ? true : null,
         hasImages: true,
         priceMin: state.priceMin,
         priceMax: state.priceMax,
@@ -286,6 +297,7 @@ class CatalogController extends StateNotifier<CatalogState> {
         tipZamka: state.tipZamka,
         color: state.color,
         sort: state.sort,
+        storeId: state.storeId,
       );
       final itemsRaw = raw['items'];
       final total = raw['total'];
@@ -298,6 +310,7 @@ class CatalogController extends StateNotifier<CatalogState> {
       final totalInt = total is int
           ? total
           : (total is num ? total.toInt() : items.length);
+      if (requestSerial != _requestSerial) return;
       state = state.copyWith(
         items: items,
         total: totalInt,
@@ -305,6 +318,7 @@ class CatalogController extends StateNotifier<CatalogState> {
         loading: false,
       );
     } catch (_) {
+      if (requestSerial != _requestSerial) return;
       state = state.copyWith(
         loading: false,
         error: 'Не удалось загрузить каталог',
@@ -314,6 +328,7 @@ class CatalogController extends StateNotifier<CatalogState> {
 
   Future<void> loadMore() async {
     if (state.loading || !state.hasMore) return;
+    final requestSerial = ++_requestSerial;
     state = state.copyWith(loading: true, error: null);
     try {
       final raw = await api.getProductsPaged(
@@ -322,7 +337,7 @@ class CatalogController extends StateNotifier<CatalogState> {
         category: state.category,
         brand: state.brand,
         search: state.search,
-        inStock: state.inStockOnly ? true : null,
+        inStock: state.inStockOnly || state.storeId != null ? true : null,
         hasImages: true,
         priceMin: state.priceMin,
         priceMax: state.priceMax,
@@ -333,6 +348,7 @@ class CatalogController extends StateNotifier<CatalogState> {
         tipZamka: state.tipZamka,
         color: state.color,
         sort: state.sort,
+        storeId: state.storeId,
       );
       final itemsRaw = raw['items'];
       final total = raw['total'];
@@ -346,6 +362,7 @@ class CatalogController extends StateNotifier<CatalogState> {
           ? total
           : (total is num ? total.toInt() : state.total);
       final merged = [...state.items, ...add];
+      if (requestSerial != _requestSerial) return;
       state = state.copyWith(
         items: merged,
         total: totalInt,
@@ -353,6 +370,7 @@ class CatalogController extends StateNotifier<CatalogState> {
         loading: false,
       );
     } catch (_) {
+      if (requestSerial != _requestSerial) return;
       state = state.copyWith(
         loading: false,
         error: 'Не удалось загрузить ещё товары',
@@ -364,4 +382,12 @@ class CatalogController extends StateNotifier<CatalogState> {
 String? _norm(String? value) {
   final next = (value ?? '').trim();
   return next.isEmpty ? null : next;
+}
+
+String? _normCategory(String? value) {
+  final next = _norm(value);
+  if (next == null) return null;
+  final normalized = next.toLowerCase();
+  if (normalized == 'все' || normalized == 'all') return null;
+  return next;
 }

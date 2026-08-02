@@ -80,76 +80,74 @@ class _WishlistContent extends StatelessWidget {
     final visibleProductIds = productIds.take(4).toList(growable: false);
     final visibleLooks = favoriteLooks.take(8).toList(growable: false);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 24, 18, 28),
+    if (!isLoggedIn) {
+      return _MyStyleScaffoldList(
+        greeting: greeting,
+        children: [
+          _MyStyleLoginPanel(
+            onLogin: () =>
+                context.go('/login?next=${Uri.encodeComponent('/home?tab=2')}'),
+            onRegister: () => context.go(
+              '/auth/register?next=${Uri.encodeComponent('/home?tab=2')}',
+            ),
+          ),
+          const SizedBox(height: 34),
+          const _MyStyleSectionHeader(title: 'Личное пространство'),
+          const SizedBox(height: 14),
+          const _MyStyleHint(
+            'Войдите, чтобы сохранять украшения, собирать свои образы и обсуждать их со стилистом GLAME.',
+          ),
+        ],
+      );
+    }
+
+    return _MyStyleScaffoldList(
+      greeting: greeting,
       children: [
-        const Text(
-          'Мой стиль',
-          style: TextStyle(
-            fontSize: 34,
-            height: 1,
-            fontWeight: FontWeight.w500,
-            color: GlameColors.whiteGlame,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          greeting,
-          style: const TextStyle(
-            fontSize: 13,
-            height: 1.35,
-            color: GlameColors.coldLightGray,
-          ),
-        ),
-        const SizedBox(height: 22),
-        FilledButton(
-          onPressed: () {
-            final targetRoute = buildStylistChatRoute(
-              initialMessage:
-                  'Хочу обсудить избранные украшения и собрать образ со стилистом GLAME.',
-              source: 'my_style',
-              scenario: 'live_stylist',
-              favoriteProductIds: productIds,
-            );
-            if (!isLoggedIn) {
-              context.push('/login?next=${Uri.encodeComponent(targetRoute)}');
-              return;
-            }
-            showStylistContactSheet(
-              context,
-              initialMessage:
-                  'Хочу обсудить избранные украшения и собрать образ со стилистом GLAME.',
-              source: 'my_style',
-              scenario: 'live_stylist',
-              favoriteProductIds: productIds,
-            );
-          },
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(32),
-            backgroundColor: GlameColors.whiteGlame,
-            foregroundColor: GlameColors.nearBlack,
-            shape: const RoundedRectangleBorder(),
-            padding: EdgeInsets.zero,
-          ),
-          child: const Text(
-            'ОБСУДИТЬ СО СТИЛИСТОМ',
-            style: TextStyle(fontSize: 10, letterSpacing: 0.8),
-          ),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton(
-          onPressed: () => context.push('/look-builder'),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(32),
-            foregroundColor: GlameColors.whiteGlame,
-            side: const BorderSide(color: GlameColors.whiteGlame),
-            shape: const RoundedRectangleBorder(),
-            padding: EdgeInsets.zero,
-          ),
-          child: const Text(
-            'СОЗДАТЬ СВОЙ ОБРАЗ',
-            style: TextStyle(fontSize: 10, letterSpacing: 0.8),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _MyStyleActionPanel(
+                index: '01',
+                icon: Icons.forum_outlined,
+                title: 'Обсудить со\nстилистом',
+                subtitle: 'Избранное и образ',
+                onTap: () {
+                  final targetRoute = buildStylistChatRoute(
+                    initialMessage:
+                        'Хочу обсудить избранные украшения и собрать образ со стилистом GLAME.',
+                    source: 'my_style',
+                    scenario: 'live_stylist',
+                    favoriteProductIds: productIds,
+                  );
+                  if (!isLoggedIn) {
+                    context.push(
+                      '/login?next=${Uri.encodeComponent(targetRoute)}',
+                    );
+                    return;
+                  }
+                  showStylistContactSheet(
+                    context,
+                    initialMessage:
+                        'Хочу обсудить избранные украшения и собрать образ со стилистом GLAME.',
+                    source: 'my_style',
+                    scenario: 'live_stylist',
+                    favoriteProductIds: productIds,
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _MyStyleActionPanel(
+                index: '02',
+                icon: Icons.auto_awesome_outlined,
+                title: 'Создать свой\nобраз',
+                subtitle: 'Собрать комплект',
+                onTap: () => context.push('/look-builder'),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 34),
         _MyStyleSectionHeader(
@@ -207,42 +205,120 @@ class _WishlistContent extends StatelessWidget {
                   _MyStyleLookCard(row: visibleLooks[index]),
             ),
           ),
-        const SizedBox(height: 34),
-        const _MyStyleSectionHeader(title: 'Рекомендации'),
-        const SizedBox(height: 14),
-        InkWell(
-          onTap: () => context.go('/home?tab=3'),
-          child: Container(
-            height: 74,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1A1C1E),
-              border: Border.all(color: GlameColors.borderGray),
-            ),
-            child: const Row(
-              children: [
-                Icon(
-                  Icons.auto_awesome_outlined,
-                  color: GlameColors.whiteGlame,
-                  size: 22,
-                ),
-                SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    'Подобрать украшения под ваш стиль',
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.2,
-                      color: GlameColors.whiteGlame,
-                    ),
-                  ),
-                ),
-                Icon(Icons.arrow_forward, color: GlameColors.whiteGlame),
-              ],
-            ),
+      ],
+    );
+  }
+}
+
+class _MyStyleScaffoldList extends StatelessWidget {
+  final String greeting;
+  final List<Widget> children;
+
+  const _MyStyleScaffoldList({required this.greeting, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 24, 18, 28),
+      children: [
+        const Text(
+          'Мой стиль',
+          style: TextStyle(
+            fontSize: 34,
+            height: 1,
+            fontWeight: FontWeight.w500,
+            color: GlameColors.whiteGlame,
           ),
         ),
+        const SizedBox(height: 8),
+        Text(
+          greeting,
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.35,
+            color: GlameColors.coldLightGray,
+          ),
+        ),
+        const SizedBox(height: 22),
+        ...children,
       ],
+    );
+  }
+}
+
+class _MyStyleLoginPanel extends StatelessWidget {
+  final VoidCallback onLogin;
+  final VoidCallback onRegister;
+
+  const _MyStyleLoginPanel({required this.onLogin, required this.onRegister});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1C1E),
+        border: Border.all(color: GlameColors.borderGray),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'ВОЙТИ ИЛИ\nЗАРЕГИСТРИРОВАТЬСЯ',
+                  style: TextStyle(
+                    fontSize: 19,
+                    height: 1.08,
+                    letterSpacing: 0.4,
+                    color: GlameColors.whiteGlame,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_forward, color: GlameColors.whiteGlame),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Сохраняйте украшения, собирайте свои образы и обращайтесь к стилисту.',
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.35,
+              color: GlameColors.coldLightGray,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: onLogin,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: GlameColors.whiteGlame,
+                    foregroundColor: GlameColors.nearBlack,
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: const Text('Войти'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onRegister,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: GlameColors.whiteGlame,
+                    side: const BorderSide(color: GlameColors.borderGray),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: const Text('Регистрация'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -295,6 +371,98 @@ class _MyStyleSectionHeader extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _MyStyleActionPanel extends StatelessWidget {
+  final String index;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _MyStyleActionPanel({
+    required this.index,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFF1A1C1E),
+      shape: const RoundedRectangleBorder(
+        side: BorderSide(color: GlameColors.borderGray),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 94,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 11, 10, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      index,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        height: 1,
+                        letterSpacing: 0.8,
+                        color: GlameColors.coldLightGray,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(icon, size: 17, color: GlameColors.whiteGlame),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  title.toUpperCase(),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    height: 1.12,
+                    letterSpacing: 0.5,
+                    color: GlameColors.whiteGlame,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          height: 1,
+                          color: GlameColors.coldLightGray,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Icon(
+                      Icons.arrow_forward,
+                      size: 15,
+                      color: GlameColors.whiteGlame,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

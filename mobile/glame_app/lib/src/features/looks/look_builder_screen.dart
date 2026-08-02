@@ -535,7 +535,7 @@ class _CanvasSection extends StatelessWidget {
             child: Column(
               children: [
                 AspectRatio(
-                  aspectRatio: 1.28,
+                  aspectRatio: 3 / 4,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -1234,7 +1234,7 @@ class _LookBuilderBottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasBottomInset = MediaQuery.of(context).padding.bottom > 0;
-    final bottomAir = hasBottomInset ? 6.0 : 0.0;
+    final bottomAir = hasBottomInset ? 4.0 : 0.0;
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -1247,22 +1247,35 @@ class _LookBuilderBottomBar extends StatelessWidget {
           padding: EdgeInsets.only(bottom: bottomAir),
           child: Row(
             children: [
-              _BuilderBottomHome(onTap: () => context.go('/home')),
               _BuilderBottomItem(
+                label: '',
+                semanticsLabel: 'Главная',
+                assetIcon: GlameAssets.sign,
+                onTap: () => context.go('/home'),
+              ),
+              _BuilderBottomItem(
+                icon: Icons.circle_outlined,
                 label: 'Украшения',
+                semanticsLabel: 'Украшения',
                 onTap: () => context.go('/home?tab=1'),
               ),
               _BuilderBottomItem(
+                icon: Icons.auto_awesome_outlined,
                 label: 'Мой стиль',
+                semanticsLabel: 'Мой стиль',
                 selected: true,
                 onTap: () => context.go('/home?tab=2'),
               ),
               _BuilderBottomItem(
+                icon: Icons.horizontal_rule,
                 label: 'Подбор',
+                semanticsLabel: 'Подбор',
                 onTap: () => context.go('/home?tab=3'),
               ),
               _BuilderBottomItem(
+                icon: Icons.person_outline,
                 label: 'Профиль',
+                semanticsLabel: 'Профиль',
                 onTap: () => context.go('/home?tab=4'),
               ),
             ],
@@ -1273,58 +1286,69 @@ class _LookBuilderBottomBar extends StatelessWidget {
   }
 }
 
-class _BuilderBottomHome extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _BuilderBottomHome({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 64,
-      child: InkWell(
-        onTap: onTap,
-        child: Center(
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: Opacity(
-              opacity: 0.64,
-              child: Image.asset(GlameAssets.sign, fit: BoxFit.contain),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _BuilderBottomItem extends StatelessWidget {
+  final IconData? icon;
+  final String? assetIcon;
   final String label;
+  final String semanticsLabel;
   final bool selected;
   final VoidCallback onTap;
 
   const _BuilderBottomItem({
+    this.icon,
+    this.assetIcon,
     required this.label,
+    required this.semanticsLabel,
     this.selected = false,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = selected
+        ? GlameColors.textPrimary
+        : GlameColors.textSecondary;
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Center(
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected
-                  ? GlameColors.textPrimary
-                  : GlameColors.textSecondary,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: semanticsLabel,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 4),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (assetIcon != null)
+                  SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: Image.asset(
+                      assetIcon!,
+                      fit: BoxFit.contain,
+                      color: color,
+                    ),
+                  )
+                else
+                  Icon(icon, size: 24, color: color),
+                const SizedBox(height: 3),
+                SizedBox(
+                  height: 14,
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      height: 1,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

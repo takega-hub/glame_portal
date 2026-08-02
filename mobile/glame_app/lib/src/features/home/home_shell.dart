@@ -27,6 +27,9 @@ class HomeShell extends ConsumerStatefulWidget {
   final int initialTab;
   final String? initialCategory;
   final String? initialSearch;
+  final String? initialCatalogStoreId;
+  final String? initialCatalogStoreTitle;
+  final String? initialCatalogStoreSlug;
   final String? initialLookFilter;
 
   const HomeShell({
@@ -34,6 +37,9 @@ class HomeShell extends ConsumerStatefulWidget {
     this.initialTab = 0,
     this.initialCategory,
     this.initialSearch,
+    this.initialCatalogStoreId,
+    this.initialCatalogStoreTitle,
+    this.initialCatalogStoreSlug,
     this.initialLookFilter,
   });
 
@@ -46,6 +52,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   int index = 0;
   String? catalogCategory;
   String? catalogSearch;
+  String? catalogStoreId;
+  String? catalogStoreTitle;
+  String? catalogStoreSlug;
   String? lookFilter;
 
   @override
@@ -54,6 +63,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     index = widget.initialTab.clamp(0, 11);
     catalogCategory = _normalizeCategory(widget.initialCategory);
     catalogSearch = _normalizeSearch(widget.initialSearch);
+    catalogStoreId = _normalizeSearch(widget.initialCatalogStoreId);
+    catalogStoreTitle = _normalizeSearch(widget.initialCatalogStoreTitle);
+    catalogStoreSlug = _normalizeSearch(widget.initialCatalogStoreSlug);
     lookFilter = _normalizeLookFilter(widget.initialLookFilter);
   }
 
@@ -70,6 +82,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     }
     if (oldWidget.initialSearch != widget.initialSearch) {
       setState(() => catalogSearch = _normalizeSearch(widget.initialSearch));
+    }
+    if (oldWidget.initialCatalogStoreId != widget.initialCatalogStoreId) {
+      setState(
+        () => catalogStoreId = _normalizeSearch(widget.initialCatalogStoreId),
+      );
+    }
+    if (oldWidget.initialCatalogStoreTitle != widget.initialCatalogStoreTitle) {
+      setState(
+        () => catalogStoreTitle = _normalizeSearch(
+          widget.initialCatalogStoreTitle,
+        ),
+      );
+    }
+    if (oldWidget.initialCatalogStoreSlug != widget.initialCatalogStoreSlug) {
+      setState(
+        () =>
+            catalogStoreSlug = _normalizeSearch(widget.initialCatalogStoreSlug),
+      );
     }
     if (oldWidget.initialLookFilter != widget.initialLookFilter) {
       setState(
@@ -88,6 +118,21 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final isHeroHome = index == 0;
     final darkHeader = _usesDarkHeader(index);
     final headerHeight = isDesktop ? 96.0 : (darkHeader ? 88.0 : 74.0);
+    Future<void> logoutAndRefresh() async {
+      await controller.logout();
+      ref.invalidate(customerProfileProvider);
+      ref.invalidate(customerLoyaltyProvider);
+      ref.invalidate(customerOrdersProvider);
+      ref.invalidate(customerFavoriteLooksProvider);
+      ref.invalidate(customerFavoriteProductsProvider);
+      ref.invalidate(customerPurchaseHistoryProvider);
+      ref.invalidate(customerGiftCertificatesProvider);
+      ref.invalidate(customerSavedLooksProvider);
+      ref.invalidate(stylistChatMessagesProvider);
+      ref.invalidate(stylistChatStatusProvider);
+      if (!mounted) return;
+      setState(() => index = 4);
+    }
 
     final page = index == 3
         ? const SizedBox.shrink()
@@ -96,7 +141,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             index: index,
             isLoggedIn: isLoggedIn,
             email: auth.user?.email,
-            onLogout: controller.logout,
+            onLogout: logoutAndRefresh,
           );
 
     final body = isHeroHome
@@ -110,12 +155,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   index = 11;
                   catalogCategory = null;
                   catalogSearch = null;
+                  catalogStoreId = null;
+                  catalogStoreTitle = null;
+                  catalogStoreSlug = null;
                   lookFilter = null;
                 }),
                 onSearchTap: () => setState(() {
                   index = 1;
                   catalogCategory = null;
                   catalogSearch = null;
+                  catalogStoreId = null;
+                  catalogStoreTitle = null;
+                  catalogStoreSlug = null;
                   lookFilter = null;
                 }),
               ),
@@ -166,8 +217,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         },
         onLogout: () async {
           Navigator.of(context).pop();
-          await controller.logout();
-          setState(() => index = 0);
+          await logoutAndRefresh();
         },
       ),
       body: body,
@@ -188,12 +238,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   }
 
   void _selectTab(int nextIndex) {
+    if (nextIndex == 6) {
+      context.go(
+        Uri(
+          path: '/home',
+          queryParameters: {'tab': '1', 'category': 'Новинки'},
+        ).toString(),
+      );
+      return;
+    }
     final nextRoute = nextIndex == 0 ? '/home' : '/home?tab=$nextIndex';
     if (GoRouterState.of(context).uri.toString() == nextRoute) {
       setState(() {
         index = nextIndex;
         catalogCategory = null;
         catalogSearch = null;
+        catalogStoreId = null;
+        catalogStoreTitle = null;
+        catalogStoreSlug = null;
         lookFilter = null;
       });
       return;
@@ -213,6 +275,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       return CatalogScreen(
         initialCategory: catalogCategory,
         initialSearch: catalogSearch,
+        initialStoreId: catalogStoreId,
+        initialStoreTitle: catalogStoreTitle,
+        storeBackRoute: catalogStoreId == null
+            ? null
+            : catalogStoreSlug == null
+            ? '/spaces'
+            : '/spaces/$catalogStoreSlug',
       );
     }
     if (index == 2) return const WishlistScreen();
@@ -233,18 +302,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     if (index == 4) {
       return isLoggedIn
           ? _Profile(email: email, onLogout: onLogout)
-          : _LoginRequired(
-              title: 'Профиль',
-              subtitle: 'Войдите, чтобы открыть личный кабинет',
+          : _GuestProfile(
               onLogin: () => context.go(
                 '/login?next=${Uri.encodeComponent('/home?tab=4')}',
               ),
-              dark: true,
+              onRegister: () => context.go(
+                '/auth/register?next=${Uri.encodeComponent('/home?tab=4')}',
+              ),
             );
     }
     if (index == 5) return LooksScreen(initialFilter: lookFilter);
     if (index == 6) {
-      return const CatalogScreen(title: 'НОВИНКИ', initialCategory: 'NEW');
+      return const CatalogScreen(title: 'НОВИНКИ', initialCategory: 'Новинки');
     }
     if (index == 8) {
       return const GiftCertificateScreen();
@@ -312,7 +381,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   static String? _normalizeCategory(String? category) {
     final next = (category ?? '').trim();
-    return next.isEmpty ? null : next;
+    if (next.isEmpty) return null;
+    final normalized = next.toLowerCase();
+    if (normalized == 'все' || normalized == 'all') return null;
+    return next;
   }
 
   static String? _normalizeSearch(String? search) {
@@ -1144,6 +1216,189 @@ class _StaticInfoScreen extends StatelessWidget {
   }
 }
 
+class _GuestProfile extends StatelessWidget {
+  final VoidCallback onLogin;
+  final VoidCallback onRegister;
+
+  const _GuestProfile({required this.onLogin, required this.onRegister});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlamePage(
+      dark: true,
+      safeTop: false,
+      padding: EdgeInsets.zero,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(28, 40, 28, 28),
+        children: [
+          const Text(
+            'ПРОФИЛЬ',
+            style: TextStyle(
+              fontSize: 32,
+              height: 1.05,
+              color: GlameColors.whiteGlame,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 18),
+          _GuestProfileAuthCard(onLogin: onLogin, onRegister: onRegister),
+          const SizedBox(height: 26),
+          _ProfileActionList(
+            actions: [
+              _ProfileAction(
+                label: 'Новости',
+                onTap: () => context.push('/profile/news'),
+              ),
+              _ProfileAction(
+                label: 'Клиентам',
+                onTap: () => context.push('/clients'),
+              ),
+              _ProfileAction(label: 'Партнерам', onTap: _openPartnerSite),
+              _ProfileAction(
+                label: 'Пространства',
+                onTap: () => context.go('/home?tab=10'),
+              ),
+              _ProfileAction(
+                label: 'Подарочный сертификат',
+                onTap: () => context.go('/home?tab=8'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Личные заказы, избранное, бонусы и обращения к стилисту появятся после входа.',
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.45,
+              color: GlameColors.steelGray,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GuestProfileAuthCard extends StatelessWidget {
+  final VoidCallback onLogin;
+  final VoidCallback onRegister;
+
+  const _GuestProfileAuthCard({
+    required this.onLogin,
+    required this.onRegister,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: GlameColors.graphite.withValues(alpha: 0.46),
+        border: Border.all(color: GlameColors.borderGray),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -42,
+            top: -34,
+            child: Text(
+              'G',
+              style: TextStyle(
+                fontSize: 164,
+                height: 1,
+                color: GlameColors.whiteGlame.withValues(alpha: 0.035),
+                fontWeight: FontWeight.w300,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ВОЙТИ ИЛИ ЗАРЕГИСТРИРОВАТЬСЯ',
+                            style: TextStyle(
+                              fontSize: 18,
+                              height: 1.28,
+                              color: GlameColors.whiteGlame,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          SizedBox(height: 10),
+                          Text(
+                            'Сохраняйте избранное, отслеживайте заказы и используйте бонусы GLAME.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.4,
+                              color: GlameColors.coldLightGray,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 18),
+                    IconButton(
+                      onPressed: onLogin,
+                      icon: const Icon(Icons.arrow_forward, size: 28),
+                      color: GlameColors.whiteGlame,
+                      tooltip: 'Войти',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          onPressed: onLogin,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: GlameColors.whiteGlame,
+                            foregroundColor: GlameColors.nearBlack,
+                            shape: const RoundedRectangleBorder(),
+                          ),
+                          child: const Text('Войти'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: onRegister,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: GlameColors.whiteGlame,
+                            side: const BorderSide(
+                              color: GlameColors.borderGray,
+                            ),
+                            shape: const RoundedRectangleBorder(),
+                          ),
+                          child: const Text('Регистрация'),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Profile extends ConsumerWidget {
   final String? email;
   final Future<void> Function() onLogout;
@@ -1196,6 +1451,12 @@ class _Profile extends ConsumerWidget {
                         profile['preferred_delivery'] as Map,
                       )
                     : <String, dynamic>{};
+                final deliveryAddresses = profile['delivery_addresses'] is List
+                    ? (profile['delivery_addresses'] as List)
+                          .whereType<Map>()
+                          .map((x) => Map<String, dynamic>.from(x))
+                          .toList()
+                    : <Map<String, dynamic>>[];
                 final displayName = fullName?.isNotEmpty == true
                     ? fullName!
                     : 'Покупатель GLAME';
@@ -1239,6 +1500,10 @@ class _Profile extends ConsumerWidget {
                           onTap: () => context.go('/home?tab=2'),
                         ),
                         _ProfileAction(
+                          label: 'Новости',
+                          onTap: () => context.push('/profile/news'),
+                        ),
+                        _ProfileAction(
                           label: 'Обращения к стилисту',
                           onTap: () => showStylistContactSheet(
                             context,
@@ -1247,11 +1512,12 @@ class _Profile extends ConsumerWidget {
                           ),
                         ),
                         _ProfileAction(
-                          label: 'Настройки доставки',
-                          onTap: () => _editPreferredDelivery(
+                          label: 'Мои адреса',
+                          onTap: () => _showDeliveryAddressesDialog(
                             context: context,
                             ref: ref,
-                            currentDelivery: preferredDelivery,
+                            preferredDelivery: preferredDelivery,
+                            deliveryAddresses: deliveryAddresses,
                           ),
                         ),
                         _ProfileAction(
@@ -1259,7 +1525,7 @@ class _Profile extends ConsumerWidget {
                           onTap: () => context.push('/clients'),
                         ),
                         _ProfileAction(
-                          label: 'Стать партнером',
+                          label: 'Партнерам',
                           onTap: _openPartnerSite,
                         ),
                       ],
@@ -1285,10 +1551,108 @@ class _Profile extends ConsumerWidget {
     );
   }
 
+  Future<void> _showDeliveryAddressesDialog({
+    required BuildContext context,
+    required WidgetRef ref,
+    required Map<String, dynamic> preferredDelivery,
+    required List<Map<String, dynamic>> deliveryAddresses,
+  }) async {
+    final addresses = _mergeDeliveryAddresses(
+      preferredDelivery,
+      deliveryAddresses,
+    );
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, modalSetState) {
+          Future<void> save({
+            required Map<String, dynamic> preferred,
+            required List<Map<String, dynamic>> list,
+          }) async {
+            await ref
+                .read(customerCabinetApiProvider)
+                .updateProfile(
+                  preferredDelivery: preferred,
+                  deliveryAddresses: list,
+                );
+            ref.invalidate(customerProfileProvider);
+          }
+
+          return AlertDialog(
+            title: const Text('Мои адреса'),
+            content: SizedBox(
+              width: 520,
+              child: addresses.isEmpty
+                  ? const Text('Добавьте удобный способ доставки.')
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final delivery in addresses)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(_deliveryTitle(delivery)),
+                            subtitle: Text(_deliverySubtitle(delivery)),
+                            trailing: IconButton(
+                              tooltip: 'Удалить',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () async {
+                                final key = _deliveryIdentityKey(delivery);
+                                addresses.removeWhere(
+                                  (x) => _deliveryIdentityKey(x) == key,
+                                );
+                                final nextPreferred = addresses.isNotEmpty
+                                    ? addresses.first
+                                    : <String, dynamic>{};
+                                modalSetState(() {});
+                                await save(
+                                  preferred: nextPreferred,
+                                  list: addresses,
+                                );
+                              },
+                            ),
+                            onTap: () async {
+                              final key = _deliveryIdentityKey(delivery);
+                              addresses.removeWhere(
+                                (x) => _deliveryIdentityKey(x) == key,
+                              );
+                              addresses.insert(0, delivery);
+                              modalSetState(() {});
+                              await save(preferred: delivery, list: addresses);
+                            },
+                          ),
+                      ],
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Закрыть'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  Navigator.of(dialogContext).pop();
+                  await _editPreferredDelivery(
+                    context: context,
+                    ref: ref,
+                    currentDelivery: const <String, dynamic>{},
+                    currentAddresses: addresses,
+                  );
+                },
+                child: const Text('Добавить'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _editPreferredDelivery({
     required BuildContext context,
     required WidgetRef ref,
     required Map<String, dynamic> currentDelivery,
+    List<Map<String, dynamic>> currentAddresses =
+        const <Map<String, dynamic>>[],
   }) async {
     String method =
         (currentDelivery['method'] ?? currentDelivery['type'] ?? 'pickup')
@@ -1932,9 +2296,13 @@ class _Profile extends ConsumerWidget {
 
     if (!context.mounted) return;
     try {
+      final nextAddresses = _mergeDeliveryAddresses(delivery, currentAddresses);
       await ref
           .read(customerCabinetApiProvider)
-          .updateProfile(preferredDelivery: delivery);
+          .updateProfile(
+            preferredDelivery: delivery,
+            deliveryAddresses: nextAddresses,
+          );
       ref.invalidate(customerProfileProvider);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2129,6 +2497,57 @@ double? _deliveryDouble(Object? value) {
   final text = value?.toString().trim();
   if (text == null || text.isEmpty) return null;
   return double.tryParse(text.replaceAll(',', '.'));
+}
+
+List<Map<String, dynamic>> _mergeDeliveryAddresses(
+  Map<String, dynamic> preferred,
+  List<Map<String, dynamic>> addresses,
+) {
+  final result = <Map<String, dynamic>>[];
+  void add(Map<String, dynamic> item) {
+    if (item.isEmpty) return;
+    final clean = Map<String, dynamic>.from(item)..remove('save_to_profile');
+    final key = _deliveryIdentityKey(clean);
+    result.removeWhere((x) => _deliveryIdentityKey(x) == key);
+    result.add(clean);
+  }
+
+  add(preferred);
+  for (final address in addresses) {
+    add(address);
+  }
+  return result.take(12).toList();
+}
+
+String _deliveryIdentityKey(Map<String, dynamic> delivery) {
+  var method = (delivery['method'] ?? delivery['type'] ?? '')
+      .toString()
+      .trim()
+      .toLowerCase();
+  if (method == 'cdek') method = 'pvz';
+  if (method == 'pickup') {
+    return 'pickup:${delivery['store_id'] ?? delivery['store_name'] ?? delivery['address'] ?? ''}';
+  }
+  return 'pvz:${delivery['pvz_code'] ?? delivery['address'] ?? ''}';
+}
+
+String _deliveryTitle(Map<String, dynamic> delivery) {
+  final method = (delivery['method'] ?? delivery['type'] ?? '')
+      .toString()
+      .trim()
+      .toLowerCase();
+  if (method == 'pickup') {
+    return _deliveryValue(delivery['store_name']) ?? 'Самовывоз GLAME';
+  }
+  return _deliveryValue(delivery['pvz_name']) ?? 'Пункт выдачи СДЭК';
+}
+
+String _deliverySubtitle(Map<String, dynamic> delivery) {
+  final city = _deliveryValue(delivery['city'] ?? delivery['city_name']);
+  final address = _deliveryValue(delivery['address']);
+  final code = _deliveryValue(delivery['pvz_code']);
+  final parts = <String>[?city, ?address, if (code != null) 'Код $code'];
+  return parts.isEmpty ? 'Адрес не указан' : parts.join(', ');
 }
 
 class _ProfileStitchHero extends StatelessWidget {
@@ -3176,13 +3595,11 @@ class _LoginRequired extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onLogin;
-  final bool dark;
 
   const _LoginRequired({
     required this.title,
     required this.subtitle,
     required this.onLogin,
-    this.dark = false,
   });
 
   @override
@@ -3194,7 +3611,7 @@ class _LoginRequired extends StatelessWidget {
       note: 'После входа Вы вернетесь к этому разделу.',
       noteIcon: Icons.lock_outline,
       onLogin: onLogin,
-      dark: dark,
+      dark: true,
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,44 +15,62 @@ import '../home/home_providers.dart';
 const String _homeBlock5BackgroundAsset =
     'assets/images/home/glame_home_block5_background_underlay.png';
 
-class HomeSpacesBlock extends ConsumerWidget {
+class HomeSpacesBlock extends ConsumerStatefulWidget {
   final double? viewportHeight;
 
   const HomeSpacesBlock({super.key, this.viewportHeight});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeSpacesBlock> createState() => _HomeSpacesBlockState();
+}
+
+class _HomeSpacesBlockState extends ConsumerState<HomeSpacesBlock> {
+  late final PageController _pageController;
+  Timer? _autoTimer;
+  int _currentPage = 0;
+  int _slideCount = 0;
+  bool _isUserInteracting = false;
+  static const _autoDelay = Duration(seconds: 5);
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _autoTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final storesAsync = ref.watch(homeStoresProvider);
     final spaces = storesAsync.maybeWhen(
       data: _parseSpaces,
       orElse: () => _fallbackSpaces,
     );
     final items = spaces.isEmpty ? _fallbackSpaces : spaces;
-    final compact = viewportHeight != null;
-    final targetHeight = viewportHeight;
+    _syncAutoScroll(items.length);
+    final compact = widget.viewportHeight != null;
+    final targetHeight = widget.viewportHeight;
     final topBarBottom =
         MediaQuery.of(context).padding.top +
         GlameUi.heroTopOffset +
         GlameUi.heroTopBarHeight;
-    final topPadding = compact ? topBarBottom + 26.0 : 70.0;
-    final bottomPadding = compact ? 14.0 : 42.0;
-    final cardGap = compact ? 8.0 : 26.0;
-    final headerHeight = compact ? 50.0 : 110.0;
-    final headerGap = compact ? 14.0 : 44.0;
-    final cardCount = items.isEmpty ? 1 : items.length;
-    final availableHeight =
-        (targetHeight ?? 860) -
-        topPadding -
-        bottomPadding -
-        headerHeight -
-        headerGap -
-        (cardGap * (cardCount - 1));
-    final cardHeight = compact
-        ? (availableHeight / cardCount).clamp(168.0, 258.0)
-        : (availableHeight / cardCount).clamp(300.0, 420.0);
+    final topPadding = compact ? topBarBottom + 20.0 : 74.0;
+    final bottomPadding = compact ? 22.0 : 54.0;
+    final horizontalPadding = compact ? 22.0 : 32.0;
+    final headerGap = compact ? 16.0 : 28.0;
+    final viewport = MediaQuery.of(context).size;
+    final height = targetHeight ?? viewport.height.clamp(760.0, 920.0);
+    final cardHeight = (height - topPadding - bottomPadding - 92 - headerGap)
+        .clamp(compact ? 520.0 : 560.0, height);
 
     return Container(
-      height: targetHeight,
+      height: height,
       width: double.infinity,
       color: GlameColors.nearBlack,
       child: Stack(
@@ -68,11 +88,16 @@ class HomeSpacesBlock extends ConsumerWidget {
             ),
           ),
           Padding(
-            padding: EdgeInsets.fromLTRB(24, topPadding, 24, bottomPadding),
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              topPadding,
+              horizontalPadding,
+              bottomPadding,
+            ),
             child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
+                constraints: const BoxConstraints(maxWidth: 860),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -82,13 +107,44 @@ class HomeSpacesBlock extends ConsumerWidget {
                       cities: items.map((item) => item.city).toList(),
                     ),
                     SizedBox(height: headerGap),
-                    for (var i = 0; i < items.length; i++) ...[
-                      _HomeSpaceCard(
-                        space: items[i],
-                        compact: compact,
-                        forcedHeight: cardHeight,
+                    Expanded(
+                      child: SizedBox(
+                        height: cardHeight,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Listener(
+                              onPointerDown: (_) => _pauseAutoScroll(),
+                              onPointerUp: (_) => _resumeAutoScroll(),
+                              onPointerCancel: (_) => _resumeAutoScroll(),
+                              child: PageView.builder(
+                                controller: _pageController,
+                                itemCount: items.length,
+                                onPageChanged: (index) {
+                                  if (!mounted) return;
+                                  setState(() => _currentPage = index);
+                                  _scheduleAutoScroll();
+                                },
+                                itemBuilder: (context, index) {
+                                  return _HomeSpaceSlideCard(
+                                    space: items[index],
+                                    compact: compact,
+                                    pageIndex: index,
+                                    pageCount: items.length,
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      if (i != items.length - 1) SizedBox(height: cardGap),
+                    ),
+                    if (items.length > 1) ...[
+                      const SizedBox(height: 16),
+                      _SpacesSliderIndicator(
+                        currentIndex: _currentPage.clamp(0, items.length - 1),
+                        count: items.length,
+                      ),
                     ],
                   ],
                 ),
@@ -98,6 +154,42 @@ class HomeSpacesBlock extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  void _syncAutoScroll(int count) {
+    if (_slideCount == count) return;
+    _slideCount = count;
+    if (_currentPage >= count && count > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _currentPage = count - 1);
+      });
+    }
+    _scheduleAutoScroll();
+  }
+
+  void _scheduleAutoScroll() {
+    _autoTimer?.cancel();
+    if (_slideCount <= 1 || _isUserInteracting) return;
+    _autoTimer = Timer(_autoDelay, () {
+      if (!mounted || !_pageController.hasClients) return;
+      final next = (_currentPage + 1) % _slideCount;
+      _pageController.animateToPage(
+        next,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  void _pauseAutoScroll() {
+    _isUserInteracting = true;
+    _autoTimer?.cancel();
+  }
+
+  void _resumeAutoScroll() {
+    _isUserInteracting = false;
+    _scheduleAutoScroll();
   }
 }
 
@@ -256,6 +348,7 @@ class SpaceDetailScreen extends ConsumerWidget {
                           const SizedBox(height: 28),
                           _SpaceCtaButton(
                             label: 'Вернуться к пространствам',
+                            leadingIcon: Icons.arrow_back,
                             palette: palette,
                             onPressed: () => context.go('/spaces'),
                           ),
@@ -338,14 +431,8 @@ String _citySummary(List<String>? cities) {
 
 class _HomeSpaceCard extends StatelessWidget {
   final _SpaceStoreData space;
-  final bool compact;
-  final double? forcedHeight;
 
-  const _HomeSpaceCard({
-    required this.space,
-    this.compact = false,
-    this.forcedHeight,
-  });
+  const _HomeSpaceCard({required this.space});
 
   @override
   Widget build(BuildContext context) {
@@ -366,43 +453,31 @@ class _HomeSpaceCard extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final narrow = constraints.maxWidth < 560;
-            final homeCard = forcedHeight != null;
-            final cardHeight = forcedHeight ?? (narrow ? 406.0 : 392.0);
-            final compactCard = compact || cardHeight < 280;
-            final citySize = compactCard ? 18.0 : (narrow ? 28.0 : 33.0);
-            final addressSize = compactCard ? 10.5 : (narrow ? 14.0 : 16.0);
-            final descriptionSize = compactCard ? 9.5 : (narrow ? 13.0 : 15.0);
-            final verticalGap = compactCard ? 8.0 : (narrow ? 24.0 : 34.0);
-            final textPadding = compactCard
-                ? const EdgeInsets.fromLTRB(12, 10, 8, 10)
-                : narrow
+            final cardHeight = narrow ? 406.0 : 392.0;
+            final citySize = narrow ? 28.0 : 33.0;
+            final addressSize = narrow ? 14.0 : 16.0;
+            final descriptionSize = narrow ? 13.0 : 15.0;
+            final verticalGap = narrow ? 24.0 : 34.0;
+            final textPadding = narrow
                 ? const EdgeInsets.fromLTRB(20, 24, 14, 22)
                 : const EdgeInsets.fromLTRB(28, 32, 18, 28);
-            final ctaWidth = compactCard ? 118.0 : (narrow ? 154.0 : 176.0);
-            final cardImageUrl = forcedHeight == null
-                ? space.cardImageUrl
-                : _homeCardImageForSpace(space);
+            final ctaWidth = narrow ? 154.0 : 176.0;
+            final cardImageUrl = space.cardImageUrl;
 
             return SizedBox(
               width: double.infinity,
               height: cardHeight,
               child: Material(
-                color: homeCard
-                    ? GlameColors.graphite.withValues(alpha: 0.72)
-                    : Colors.white.withValues(alpha: 0.72),
+                color: Colors.white.withValues(alpha: 0.72),
                 child: Container(
                   decoration: BoxDecoration(
-                    border: Border.all(
-                      color: homeCard
-                          ? GlameColors.borderGray
-                          : const Color(0xFFC7C9CB),
-                    ),
+                    border: Border.all(color: const Color(0xFFC7C9CB)),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
-                        flex: compactCard ? 46 : (narrow ? 43 : 39),
+                        flex: narrow ? 43 : 39,
                         child: Padding(
                           padding: textPadding,
                           child: Column(
@@ -416,68 +491,47 @@ class _HomeSpaceCard extends StatelessWidget {
                                   fontSize: citySize,
                                   height: 1.08,
                                   letterSpacing: 0,
-                                  color: homeCard
-                                      ? GlameColors.whiteGlame
-                                      : GlameColors.graphite,
+                                  color: GlameColors.graphite,
                                   fontWeight: FontWeight.w300,
                                 ),
                               ),
                               SizedBox(height: verticalGap),
                               Text(
                                 copy.cardAddressLines.join('\n'),
-                                maxLines: compactCard ? 3 : null,
-                                overflow: compactCard
-                                    ? TextOverflow.ellipsis
-                                    : TextOverflow.visible,
+                                overflow: TextOverflow.visible,
                                 style: TextStyle(
                                   fontSize: addressSize,
-                                  height: compactCard ? 1.25 : 1.45,
-                                  color: homeCard
-                                      ? GlameColors.coldLightGray
-                                      : GlameColors.graphite,
+                                  height: 1.45,
+                                  color: GlameColors.graphite,
                                   fontWeight: FontWeight.w300,
                                 ),
                               ),
-                              SizedBox(
-                                height: compactCard ? 10 : (narrow ? 22 : 30),
-                              ),
-                              if (compactCard) const SizedBox(height: 0),
+                              SizedBox(height: narrow ? 22 : 30),
                               Container(
-                                width: compactCard ? 28 : 36,
+                                width: 36,
                                 height: 1,
-                                color: homeCard
-                                    ? GlameColors.borderGray
-                                    : GlameColors.graphite,
+                                color: GlameColors.graphite,
                               ),
                               const Spacer(),
                               Text(
                                 copy.cardDescriptionLines.join('\n'),
-                                maxLines: compactCard ? 2 : null,
-                                overflow: compactCard
-                                    ? TextOverflow.ellipsis
-                                    : TextOverflow.visible,
+                                overflow: TextOverflow.visible,
                                 style: TextStyle(
                                   fontSize: descriptionSize,
-                                  height: compactCard ? 1.22 : 1.35,
-                                  color: homeCard
-                                      ? GlameColors.steelGray
-                                      : GlameColors.graphite,
+                                  height: 1.35,
+                                  color: GlameColors.graphite,
                                   fontWeight: FontWeight.w300,
                                 ),
                               ),
-                              SizedBox(
-                                height: compactCard ? 8 : (narrow ? 18 : 24),
-                              ),
+                              SizedBox(height: narrow ? 18 : 24),
                               SizedBox(
                                 width: ctaWidth,
                                 child: Container(
-                                  height: compactCard ? 28 : (narrow ? 40 : 44),
+                                  height: narrow ? 40 : 44,
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     border: Border.all(
-                                      color: homeCard
-                                          ? GlameColors.whiteGlame
-                                          : GlameColors.graphite,
+                                      color: GlameColors.graphite,
                                     ),
                                   ),
                                   padding: const EdgeInsets.symmetric(
@@ -486,13 +540,9 @@ class _HomeSpaceCard extends StatelessWidget {
                                   child: Text(
                                     'Смотреть пространство',
                                     style: TextStyle(
-                                      fontSize: compactCard
-                                          ? 8.5
-                                          : (narrow ? 12 : 13),
+                                      fontSize: narrow ? 12 : 13,
                                       height: 1,
-                                      color: homeCard
-                                          ? GlameColors.whiteGlame
-                                          : GlameColors.graphite,
+                                      color: GlameColors.graphite,
                                       fontWeight: FontWeight.w300,
                                     ),
                                   ),
@@ -503,7 +553,7 @@ class _HomeSpaceCard extends StatelessWidget {
                         ),
                       ),
                       Expanded(
-                        flex: compactCard ? 54 : (narrow ? 57 : 61),
+                        flex: narrow ? 57 : 61,
                         child: ClipRect(
                           child: _NetworkStoreImage(url: cardImageUrl),
                         ),
@@ -520,14 +570,194 @@ class _HomeSpaceCard extends StatelessWidget {
   }
 }
 
-String? _homeCardImageForSpace(_SpaceStoreData space) {
-  if (space.slug == 'yalta') {
-    return 'assets/images/home/glame_block5_yalta_card_photo.png';
+class _HomeSpaceSlideCard extends StatelessWidget {
+  final _SpaceStoreData space;
+  final bool compact;
+  final int pageIndex;
+  final int pageCount;
+
+  const _HomeSpaceSlideCard({
+    required this.space,
+    required this.compact,
+    required this.pageIndex,
+    required this.pageCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final copy = _copyForSpace(space);
+    final imageUrl = space.heroImageUrl ?? space.cardImageUrl;
+    final titleSize = compact ? 44.0 : 58.0;
+    final subtitleSize = compact ? 15.0 : 18.0;
+    final descriptionSize = compact ? 14.0 : 16.0;
+    final contentPadding = compact
+        ? const EdgeInsets.fromLTRB(22, 28, 22, 26)
+        : const EdgeInsets.fromLTRB(34, 40, 34, 34);
+
+    return Padding(
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            _trackSpacesEvent('home_block5_space_click', {
+              'screen': 'home',
+              'block': 'spaces_glame',
+              'space': space.slug,
+              'cta': 'view_space',
+            });
+            context.push('/spaces/${space.slug}');
+          },
+          child: Semantics(
+            button: true,
+            label: 'Смотреть пространство ${copy.cityLabel}',
+            child: ClipRect(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _NetworkStoreImage(url: imageUrl),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.12),
+                          Colors.black.withValues(alpha: 0.35),
+                          Colors.black.withValues(alpha: 0.78),
+                        ],
+                        stops: const [0, 0.45, 1],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Padding(
+                      padding: contentPadding,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${(pageIndex + 1).toString().padLeft(2, '0')} / ${pageCount.toString().padLeft(2, '0')}',
+                            style: TextStyle(
+                              fontSize: compact ? 12 : 13,
+                              letterSpacing: 1.4,
+                              color: Colors.white.withValues(alpha: 0.72),
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            copy.heroTitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: titleSize,
+                              height: 0.96,
+                              letterSpacing: 0,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w300,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            copy.heroAddressLines.join('\n'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: subtitleSize,
+                              height: 1.28,
+                              color: Colors.white.withValues(alpha: 0.88),
+                              fontWeight: FontWeight.w300,
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          Container(
+                            width: 58,
+                            height: 1,
+                            color: Colors.white.withValues(alpha: 0.72),
+                          ),
+                          const SizedBox(height: 22),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 470),
+                            child: Text(
+                              copy.detailDescription,
+                              maxLines: compact ? 3 : 4,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: descriptionSize,
+                                height: 1.42,
+                                color: Colors.white.withValues(alpha: 0.78),
+                                fontWeight: FontWeight.w300,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Container(
+                            height: compact ? 44 : 50,
+                            constraints: BoxConstraints(
+                              minWidth: compact ? 206 : 240,
+                              maxWidth: compact ? 245 : 280,
+                            ),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.white),
+                              color: Colors.black.withValues(alpha: 0.2),
+                            ),
+                            child: Text(
+                              'Смотреть пространство',
+                              style: TextStyle(
+                                fontSize: compact ? 12 : 13,
+                                letterSpacing: 0.5,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
-  if (space.slug == 'simferopol') {
-    return 'assets/images/home/glame_block5_simferopol_card_photo.png';
+}
+
+class _SpacesSliderIndicator extends StatelessWidget {
+  final int currentIndex;
+  final int count;
+
+  const _SpacesSliderIndicator({
+    required this.currentIndex,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(count, (index) {
+        final active = index == currentIndex;
+        return Expanded(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            height: active ? 2 : 1,
+            margin: EdgeInsets.only(right: index == count - 1 ? 0 : 8),
+            color: active
+                ? GlameColors.whiteGlame
+                : GlameColors.borderGray.withValues(alpha: 0.65),
+          ),
+        );
+      }),
+    );
   }
-  return space.cardImageUrl;
 }
 
 class _SpaceHero extends StatelessWidget {
@@ -695,19 +925,30 @@ class _SpaceCtaButton extends StatelessWidget {
   final bool filled;
   final VoidCallback? onPressed;
   final _SpacePalette? palette;
+  final IconData? leadingIcon;
 
   const _SpaceCtaButton({
     required this.label,
     this.filled = false,
     this.onPressed,
     this.palette,
+    this.leadingIcon,
   });
 
   @override
   Widget build(BuildContext context) {
+    final iconColor = filled
+        ? (palette?.filledForeground ?? GlameColors.surface2)
+        : GlameColors.textPrimary;
     final child = Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: leadingIcon == null
+          ? MainAxisAlignment.spaceBetween
+          : MainAxisAlignment.start,
       children: [
+        if (leadingIcon != null) ...[
+          Icon(leadingIcon, size: 18, color: iconColor),
+          const SizedBox(width: 12),
+        ],
         Flexible(
           child: Text(
             label,
@@ -719,13 +960,8 @@ class _SpaceCtaButton extends StatelessWidget {
             ),
           ),
         ),
-        Icon(
-          Icons.arrow_forward,
-          size: 18,
-          color: filled
-              ? (palette?.filledForeground ?? GlameColors.surface2)
-              : GlameColors.textPrimary,
-        ),
+        if (leadingIcon == null)
+          Icon(Icons.arrow_forward, size: 18, color: iconColor),
       ],
     );
 
@@ -883,6 +1119,7 @@ class _SpaceStoreData {
   final String? workingHours;
   final String? phone;
   final String? comment;
+  final String? stockStoreExternalId;
   final LatLng? point;
   final String? cardImageUrl;
   final String? heroImageUrl;
@@ -897,6 +1134,7 @@ class _SpaceStoreData {
     required this.workingHours,
     required this.phone,
     required this.comment,
+    required this.stockStoreExternalId,
     required this.point,
     required this.cardImageUrl,
     required this.heroImageUrl,
@@ -965,6 +1203,7 @@ const _fallbackSpaces = <_SpaceStoreData>[
     workingHours: null,
     phone: null,
     comment: null,
+    stockStoreExternalId: '3daee4e4-a2ab-11f0-96fc-fa163e4cc04e',
     point: LatLng(44.487622, 34.161089),
     cardImageUrl:
         '/static/app_admin_media/store/glame_block5_yalta_card_photo.png',
@@ -985,6 +1224,7 @@ const _fallbackSpaces = <_SpaceStoreData>[
     workingHours: null,
     phone: null,
     comment: null,
+    stockStoreExternalId: '6c3a8322-a2ab-11f0-96fc-fa163e4cc04e',
     point: LatLng(44.938003, 34.093569),
     cardImageUrl:
         '/static/app_admin_media/store/glame_block5_simferopol_card_photo.png',
@@ -1034,6 +1274,7 @@ List<_SpaceStoreData> _parseSpaces(List<dynamic> rawItems) {
           workingHours: _stringValue(item['working_hours']),
           phone: _stringValue(item['phone']),
           comment: _stringValue(item['comment']),
+          stockStoreExternalId: _stringValue(item['stock_store_external_id']),
           point: lat == null || lng == null ? null : LatLng(lat, lng),
           cardImageUrl: card,
           heroImageUrl: hero,
@@ -1328,9 +1569,37 @@ void _openStoreChat(BuildContext context, _SpaceStoreData store) {
 
 void _openCatalog(BuildContext context, _SpaceStoreData store) {
   _trackSpacesEvent('space_catalog_click', _spaceItemMap(store));
-  context.go('/catalog?availableIn=${store.slug}');
+  final storeId = _stockStoreIdForSpace(store);
+  final query = <String, String>{
+    'tab': '1',
+    'storeId': storeId,
+    'storeTitle': _catalogStoreTitle(store),
+    'storeSlug': store.slug,
+  };
+  context.go(Uri(path: '/home', queryParameters: query).toString());
 }
 
 void _trackSpacesEvent(String eventName, [Map<String, Object?>? params]) {
   debugPrint('analytics:$eventName ${params ?? const {}}');
+}
+
+String _catalogStoreTitle(_SpaceStoreData store) {
+  if (store.slug == 'yalta') return 'GLAME Ялта';
+  if (store.slug == 'simferopol') return 'GLAME Симферополь';
+  return store.title;
+}
+
+String _stockStoreIdForSpace(_SpaceStoreData store) {
+  final configured = (store.stockStoreExternalId ?? '').trim();
+  if (configured.isNotEmpty) return configured;
+  switch (store.slug) {
+    case 'yalta':
+      return '3daee4e4-a2ab-11f0-96fc-fa163e4cc04e';
+    case 'simferopol':
+      return '6c3a8322-a2ab-11f0-96fc-fa163e4cc04e';
+    case 'mriya':
+      return 'e1a2ea42-fdc8-11ef-8c0c-fa163e4cc04e';
+    default:
+      return store.slug;
+  }
 }

@@ -18,6 +18,8 @@ import '../product/product_providers.dart';
 import '../wishlist/wishlist_controller.dart';
 import 'looks_providers.dart';
 
+const double _glameMediaAspectRatio = 3 / 4;
+
 class LookDetailScreen extends ConsumerStatefulWidget {
   final String lookId;
   final Map<String, dynamic>? localLook;
@@ -264,14 +266,20 @@ class _LookDetailScreenState extends ConsumerState<LookDetailScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.removeCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
         content: Text('Образ добавлен в корзину: ${productIds.length} поз.'),
         backgroundColor: GlameColors.textPrimary,
+        duration: const Duration(seconds: 2),
         action: SnackBarAction(
           label: 'ПЕРЕЙТИ',
           textColor: GlameColors.gold,
-          onPressed: () => context.go('/home?tab=3'),
+          onPressed: () {
+            messenger.removeCurrentSnackBar();
+            context.go('/home?tab=3');
+          },
         ),
       ),
     );
@@ -366,10 +374,11 @@ class _LookHeroSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final heroImages = images.isEmpty ? const [null] : images;
 
-    final heroHeight = (MediaQuery.of(context).size.height * 0.42).clamp(
-      330.0,
-      470.0,
-    );
+    final heroHeight =
+        (MediaQuery.of(context).size.width / _glameMediaAspectRatio).clamp(
+          420.0,
+          720.0,
+        );
 
     return SizedBox(
       height: heroHeight,
@@ -898,7 +907,7 @@ class _LookDetailProductCard extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AspectRatio(
-            aspectRatio: 1.38,
+            aspectRatio: _glameMediaAspectRatio,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -1384,8 +1393,8 @@ class _LookProductCard extends ConsumerWidget {
           ),
           const SizedBox(width: 10),
           SizedBox(
-            width: 84,
-            height: 84,
+            width: 78,
+            height: 104,
             child: Stack(
               fit: StackFit.expand,
               children: [

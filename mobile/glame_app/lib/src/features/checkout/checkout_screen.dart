@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/formatters/phone.dart';
 import '../../core/theme/glame_theme.dart';
 import '../auth/auth_controller.dart';
 import '../auth/user.dart' as auth_model;
@@ -16,14 +17,21 @@ final checkoutApiProvider = Provider<CheckoutApi>((ref) {
 });
 
 class CheckoutScreen extends ConsumerStatefulWidget {
-  const CheckoutScreen({super.key});
+  final int initialStep;
+  final bool returnToCartOnAddressBack;
+
+  const CheckoutScreen({
+    super.key,
+    this.initialStep = 0,
+    this.returnToCartOnAddressBack = false,
+  });
 
   @override
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
 }
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
-  int step = 0;
+  late int step;
 
   final name = TextEditingController();
   final phone = TextEditingController();
@@ -41,8 +49,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool loadingGiftCertificates = true;
   bool validatingGiftCertificate = false;
   bool useBonuses = false;
+  bool saveDeliveryToProfile = true;
   bool contactPrefilled = false;
   bool deliveryPrefApplied = false;
+  late final VoidCallback _removePhoneFormatter;
   Map<String, dynamic>? result;
   String? deliveryError;
   String? loyaltyError;
@@ -55,6 +65,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Map<String, dynamic>? cdekOptions;
   List<Map<String, dynamic>> pickupStores = const [];
+  List<Map<String, dynamic>> deliveryAddresses = const [];
   List<Map<String, dynamic>> giftCertificates = const [];
   Map<String, dynamic>? selectedStore;
   Map<String, dynamic>? selectedCdekCity;
@@ -67,11 +78,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
+    step = widget.initialStep.clamp(0, 3);
+    _removePhoneFormatter = installRuPhonePrefixFormatter(phone);
     _loadDeliveryData();
   }
 
   @override
   void dispose() {
+    _removePhoneFormatter();
     name.dispose();
     phone.dispose();
     address.dispose();
@@ -91,6 +105,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final cartController = ref.read(cartControllerProvider.notifier);
 
     final subtotal = cart.subtotal;
+    final promotionDiscountAmount = cart.discountAmount;
+    final merchandiseTotal = cart.total > 0 || promotionDiscountAmount > 0
+        ? cart.total
+        : subtotal;
     final pricingMode = _cdekPricingMode();
     final freeFromRub = _cdekFreeShippingThresholdRub();
     final surchargeRub = _cdekMarkupRub();
@@ -114,7 +132,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ? 0
           : base;
     }
-    final totalBeforeBonuses = subtotal + deliveryAmount;
+    final totalBeforeBonuses = merchandiseTotal + deliveryAmount;
     final maxBonusPointsByOrder = totalBeforeBonuses ~/ 1000; // 10% заказа
     final bonusPointsToUse = useBonuses
         ? (loyaltyPoints > maxBonusPointsByOrder
@@ -206,6 +224,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       subtotal,
                       totalBeforeBonuses,
                       deliveryAmount,
+                      promotionDiscountAmount,
                       bonusDiscountAmount,
                       giftCertificateDiscountAmount,
                       bonusPointsToUse,
@@ -229,6 +248,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     int subtotal,
     int totalBeforeBonuses,
     int deliveryAmount,
+    int promotionDiscountAmount,
     int bonusDiscountAmount,
     int giftCertificateDiscountAmount,
     int bonusPointsToUse,
@@ -298,6 +318,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           _Totals(
             subtotal: subtotal,
             deliveryAmount: deliveryAmount,
+            promotionDiscountAmount: promotionDiscountAmount,
             bonusDiscountAmount: bonusDiscountAmount,
             giftCertificateDiscountAmount: giftCertificateDiscountAmount,
             total: total,
@@ -322,155 +343,205 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             title: 'Доставка',
             subtitle: 'Выберите самовывоз из магазина или пункт СДЭК',
           ),
-          TextField(
-            controller: name,
-            decoration: const InputDecoration(labelText: 'Имя'),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: phone,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Телефон'),
-          ),
-          const SizedBox(height: 10),
-          const SizedBox(height: 10),
-          const SizedBox(height: 4),
-          Text(
-            'Способ доставки',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          _PaymentOption(
-            title: 'Самовывоз из магазина',
-            subtitle: 'Выбор удобного магазина GLAME',
-            selected: deliveryMethod == 'pickup',
-            onTap: () => setState(() => deliveryMethod = 'pickup'),
-          ),
-          const SizedBox(height: 8),
-          _PaymentOption(
-            title: 'Доставка СДЭК (ПВЗ)',
-            subtitle: 'Выбор пункта выдачи и расчет стоимости',
-            selected: deliveryMethod == 'cdek_pvz',
-            onTap: () => setState(() {
-              deliveryMethod = 'cdek_pvz';
-              // For CDEK flow enforce explicit city -> PVZ selection.
-              selectedPvz = null;
-            }),
-          ),
-          if (deliveryMethod == 'pickup') ...[
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: selectedStore == null
-                  ? null
-                  : selectedStore!['id'] as String?,
-              isExpanded: true,
-              items: pickupStores
-                  .map(
-                    (s) => DropdownMenuItem<String>(
-                      value: s['id'] as String?,
-                      child: Text(
-                        _storeLabel(s),
-                        overflow: TextOverflow.ellipsis,
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _CheckoutTextField(controller: name, label: 'Имя'),
+                  const SizedBox(height: 10),
+                  _CheckoutTextField(
+                    controller: phone,
+                    label: 'Телефон',
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 10),
+                  if (deliveryAddresses.isNotEmpty) ...[
+                    Text(
+                      'Сохраненные адреса',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    ...deliveryAddresses.map(
+                      (delivery) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _SavedDeliveryOption(
+                          title: _deliveryTitle(delivery),
+                          subtitle: _deliverySubtitle(delivery),
+                          selected:
+                              _deliveryIdentityKey(
+                                _buildCurrentDeliveryMarker(),
+                              ) ==
+                              _deliveryIdentityKey(delivery),
+                          onTap: () => _applySavedDelivery(delivery),
+                        ),
                       ),
                     ),
-                  )
-                  .toList(growable: false),
-              onChanged: (id) {
-                setState(() {
-                  selectedStore = pickupStores.firstWhere(
-                    (s) => s['id'] == id,
-                    orElse: () => <String, dynamic>{},
-                  );
-                  if (selectedStore != null && selectedStore!.isEmpty) {
-                    selectedStore = null;
-                  }
-                });
-              },
-              decoration: const InputDecoration(
-                labelText: 'Магазин самовывоза',
+                    const SizedBox(height: 4),
+                  ],
+                  const SizedBox(height: 14),
+                  Text(
+                    'Способ доставки',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  _PaymentOption(
+                    title: 'Самовывоз из магазина',
+                    subtitle: 'Выбор удобного магазина GLAME',
+                    selected: deliveryMethod == 'pickup',
+                    onTap: () => setState(() => deliveryMethod = 'pickup'),
+                  ),
+                  const SizedBox(height: 8),
+                  _PaymentOption(
+                    title: 'Доставка СДЭК (ПВЗ)',
+                    subtitle: 'Выбор пункта выдачи и расчет стоимости',
+                    selected: deliveryMethod == 'cdek_pvz',
+                    onTap: () => setState(() {
+                      deliveryMethod = 'cdek_pvz';
+                      // For CDEK flow enforce explicit city -> PVZ selection.
+                      selectedPvz = null;
+                    }),
+                  ),
+                  const SizedBox(height: 6),
+                  CheckboxListTile(
+                    value: saveDeliveryToProfile,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: const Text('Сохранить способ доставки в профиле'),
+                    onChanged: isLoggedIn
+                        ? (value) => setState(
+                            () => saveDeliveryToProfile = value ?? false,
+                          )
+                        : null,
+                  ),
+                  if (deliveryMethod == 'pickup') ...[
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedStore == null
+                          ? null
+                          : selectedStore!['id'] as String?,
+                      isExpanded: true,
+                      items: pickupStores
+                          .map(
+                            (s) => DropdownMenuItem<String>(
+                              value: s['id'] as String?,
+                              child: Text(
+                                _storeLabel(s),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (id) {
+                        setState(() {
+                          selectedStore = pickupStores.firstWhere(
+                            (s) => s['id'] == id,
+                            orElse: () => <String, dynamic>{},
+                          );
+                          if (selectedStore != null && selectedStore!.isEmpty) {
+                            selectedStore = null;
+                          }
+                        });
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Магазин самовывоза',
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      onPressed: _pickCdekCityFromCdekApi,
+                      child: Text(
+                        selectedCdekCity == null
+                            ? 'Выбрать город СДЭК'
+                            : 'Город: ${_cityLabel(selectedCdekCity!)} (изменить)',
+                      ),
+                    ),
+                    if (selectedCdekCity != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Город: ${_cityLabel(selectedCdekCity!)}',
+                        style: const TextStyle(
+                          color: GlameColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    if (loadingCdekPvz)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 6),
+                        child: LinearProgressIndicator(),
+                      ),
+                    if (selectedCdekCity == null) ...[
+                      const Text(
+                        'Сначала выберите город СДЭК',
+                        style: TextStyle(color: GlameColors.textSecondary),
+                      ),
+                    ] else ...[
+                      OutlinedButton(
+                        onPressed: _pickCdekPvzFromCdekApi,
+                        child: Text(
+                          selectedPvz == null
+                              ? 'Выбрать пункт ПВЗ СДЭК'
+                              : 'ПВЗ: ${_pvzLabel(selectedPvz!)} (изменить)',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _pickCdekPvzOnMap,
+                        icon: const Icon(Icons.map_outlined, size: 18),
+                        label: const Text('Выбрать ПВЗ на карте'),
+                      ),
+                    ],
+                    if (deliveryMethod == 'cdek_pvz' &&
+                        (selectedCdekCity != null) &&
+                        (_cdekPricingMode() != 'calculator' ||
+                            cdekDeliveryAmountKopeks != null)) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Стоимость СДЭК: ${_rub(deliveryAmount)}${cdekTariffTitle == null ? '' : ' ($cdekTariffTitle)'}',
+                        style: const TextStyle(
+                          color: GlameColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    _CheckoutTextField(
+                      controller: address,
+                      label: 'Комментарий к доставке',
+                      hintText: 'Необязательно',
+                    ),
+                  ],
+                  if (deliveryError != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: GlameColors.graphite),
+                      ),
+                      child: Text(
+                        deliveryError!,
+                        style: const TextStyle(color: GlameColors.graphite),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ] else ...[
-            const SizedBox(height: 10),
-            OutlinedButton(
-              onPressed: _pickCdekCityFromCdekApi,
-              child: Text(
-                selectedCdekCity == null
-                    ? 'Выбрать город СДЭК'
-                    : 'Город: ${_cityLabel(selectedCdekCity!)} (изменить)',
-              ),
-            ),
-            if (selectedCdekCity != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Город: ${_cityLabel(selectedCdekCity!)}',
-                style: const TextStyle(color: GlameColors.textSecondary),
-              ),
-            ],
-            const SizedBox(height: 10),
-            if (loadingCdekPvz)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 6),
-                child: LinearProgressIndicator(),
-              ),
-            if (selectedCdekCity == null) ...[
-              const Text(
-                'Сначала выберите город СДЭК',
-                style: TextStyle(color: GlameColors.textSecondary),
-              ),
-            ] else ...[
-              OutlinedButton(
-                onPressed: _pickCdekPvzFromCdekApi,
-                child: Text(
-                  selectedPvz == null
-                      ? 'Выбрать пункт ПВЗ СДЭК'
-                      : 'ПВЗ: ${_pvzLabel(selectedPvz!)} (изменить)',
-                ),
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _pickCdekPvzOnMap,
-                icon: const Icon(Icons.map_outlined, size: 18),
-                label: const Text('Выбрать ПВЗ на карте'),
-              ),
-            ],
-            if (deliveryMethod == 'cdek_pvz' &&
-                (selectedCdekCity != null) &&
-                (_cdekPricingMode() != 'calculator' ||
-                    cdekDeliveryAmountKopeks != null)) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Стоимость СДЭК: ${_rub(deliveryAmount)}${cdekTariffTitle == null ? '' : ' ($cdekTariffTitle)'}',
-                style: const TextStyle(color: GlameColors.textSecondary),
-              ),
-            ],
-            const SizedBox(height: 8),
-            TextField(
-              controller: address,
-              decoration: const InputDecoration(
-                labelText: 'Комментарий к доставке (необязательно)',
-              ),
-            ),
-          ],
-          if (deliveryError != null) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: GlameColors.graphite),
-              ),
-              child: Text(
-                deliveryError!,
-                style: const TextStyle(color: GlameColors.graphite),
-              ),
-            ),
-          ],
-          const Spacer(),
+          ),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => setState(() => step = 0),
+                  onPressed: () {
+                    if (widget.returnToCartOnAddressBack) {
+                      Navigator.of(context).maybePop();
+                      return;
+                    }
+                    setState(() => step = 0);
+                  },
                   child: const Text('Назад'),
                 ),
               ),
@@ -478,17 +549,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               Expanded(
                 child: FilledButton(
                   onPressed: () {
-                    final nameOk = name.text.trim().isNotEmpty;
-                    final phoneOk = phone.text.trim().isNotEmpty;
-                    final pickupOk =
-                        deliveryMethod == 'pickup' && selectedStore != null;
-                    final cdekOk =
-                        deliveryMethod == 'cdek_pvz' &&
-                        selectedCdekCity != null &&
-                        selectedPvz != null &&
-                        (_cdekPricingMode() != 'calculator' ||
-                            cdekDeliveryAmountKopeks != null);
-                    if (!nameOk || !phoneOk || (!pickupOk && !cdekOk)) return;
+                    if (!_isAddressStepComplete()) return;
                     setState(() => step = 2);
                   },
                   child: const Text('Далее'),
@@ -509,57 +570,67 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             title: 'Оплата',
             subtitle: 'Выберите удобный способ оплаты заказа',
           ),
-          _PaymentOption(
-            title: 'Оплата при получении',
-            subtitle: 'Выделяем как приоритетный способ',
-            selected: paymentMethod == 'cod',
-            onTap: () => setState(() => paymentMethod = 'cod'),
-          ),
-          const SizedBox(height: 10),
-          _PaymentOption(
-            title: 'Картой онлайн',
-            subtitle: 'Оплата через YooKassa',
-            selected: paymentMethod == 'card',
-            onTap: () => setState(() => paymentMethod = 'card'),
-          ),
-          const SizedBox(height: 10),
-          _BonusPaymentOption(
-            isLoggedIn: isLoggedIn,
-            loading: loadingLoyalty,
-            error: loyaltyError,
-            loyaltyPoints: loyaltyPoints,
-            bonusPointsToUse: bonusPointsToUse,
-            totalBeforeBonuses: totalBeforeBonuses,
-            selected: useBonuses,
-            onOpenBalance: () => context.go('/home?tab=4'),
-            onLogin: () =>
-                context.go('/login?next=${Uri.encodeComponent('/checkout')}'),
-            onRegister: () => context.go(
-              '/auth/register?next=${Uri.encodeComponent('/checkout')}',
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _PaymentOption(
+                    title: 'Оплата при получении',
+                    subtitle: 'Выделяем как приоритетный способ',
+                    selected: paymentMethod == 'cod',
+                    onTap: () => setState(() => paymentMethod = 'cod'),
+                  ),
+                  const SizedBox(height: 10),
+                  _PaymentOption(
+                    title: 'Картой онлайн',
+                    subtitle: 'Оплата через YooKassa',
+                    selected: paymentMethod == 'card',
+                    onTap: () => setState(() => paymentMethod = 'card'),
+                  ),
+                  const SizedBox(height: 10),
+                  _BonusPaymentOption(
+                    isLoggedIn: isLoggedIn,
+                    loading: loadingLoyalty,
+                    error: loyaltyError,
+                    loyaltyPoints: loyaltyPoints,
+                    bonusPointsToUse: bonusPointsToUse,
+                    totalBeforeBonuses: totalBeforeBonuses,
+                    selected: useBonuses,
+                    onOpenBalance: () => context.go('/home?tab=4'),
+                    onLogin: () => context.go(
+                      '/login?next=${Uri.encodeComponent('/checkout')}',
+                    ),
+                    onRegister: () => context.go(
+                      '/auth/register?next=${Uri.encodeComponent('/checkout')}',
+                    ),
+                    onChanged: loyaltyPoints <= 0
+                        ? null
+                        : (value) => setState(() => useBonuses = value),
+                  ),
+                  const SizedBox(height: 10),
+                  _GiftCertificatePaymentOption(
+                    numberController: giftCertificateNumber,
+                    pinController: giftCertificatePin,
+                    certificates: giftCertificates,
+                    loadingCertificates: loadingGiftCertificates,
+                    certificatesError: giftCertificatesError,
+                    preview: giftCertificatePreview,
+                    error: giftCertificateError,
+                    loading: validatingGiftCertificate,
+                    appliedAmount: giftCertificateDiscountAmount,
+                    onSelectCertificate: _selectGiftCertificate,
+                    onValidate: _validateGiftCertificate,
+                    onClear: () => setState(() {
+                      giftCertificatePreview = null;
+                      giftCertificateError = null;
+                    }),
+                  ),
+                ],
+              ),
             ),
-            onChanged: loyaltyPoints <= 0
-                ? null
-                : (value) => setState(() => useBonuses = value),
           ),
-          const SizedBox(height: 10),
-          _GiftCertificatePaymentOption(
-            numberController: giftCertificateNumber,
-            pinController: giftCertificatePin,
-            certificates: giftCertificates,
-            loadingCertificates: loadingGiftCertificates,
-            certificatesError: giftCertificatesError,
-            preview: giftCertificatePreview,
-            error: giftCertificateError,
-            loading: validatingGiftCertificate,
-            appliedAmount: giftCertificateDiscountAmount,
-            onSelectCertificate: _selectGiftCertificate,
-            onValidate: _validateGiftCertificate,
-            onClear: () => setState(() {
-              giftCertificatePreview = null;
-              giftCertificateError = null;
-            }),
-          ),
-          const Spacer(),
           Row(
             children: [
               Expanded(
@@ -592,6 +663,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         _Totals(
           subtotal: subtotal,
           deliveryAmount: deliveryAmount,
+          promotionDiscountAmount: promotionDiscountAmount,
           bonusDiscountAmount: bonusDiscountAmount,
           giftCertificateDiscountAmount: giftCertificateDiscountAmount,
           total: total,
@@ -668,7 +740,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             delivery: _buildDeliveryPayload(cart),
                             contact: {
                               'name': name.text.trim(),
-                              'phone': phone.text.trim(),
+                              'phone': formatRuPhoneInput(phone.text),
                             },
                             giftCertificate: giftCertificateDiscountAmount <= 0
                                 ? null
@@ -728,6 +800,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       setState(() {
         pickupStores = stores;
         cdekOptions = options;
+        deliveryAddresses = profile['delivery_addresses'] is List
+            ? (profile['delivery_addresses'] as List)
+                  .whereType<Map>()
+                  .map((x) => Map<String, dynamic>.from(x))
+                  .toList()
+            : const <Map<String, dynamic>>[];
         if (selectedStore == null && stores.isNotEmpty) {
           selectedStore = stores.first;
         }
@@ -809,8 +887,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
-  Future<void> _applyPreferredDelivery(Map<String, dynamic> delivery) async {
-    if (deliveryPrefApplied || !mounted) return;
+  Future<void> _applyPreferredDelivery(
+    Map<String, dynamic> delivery, {
+    bool force = false,
+  }) async {
+    if ((!force && deliveryPrefApplied) || !mounted) return;
     deliveryPrefApplied = true;
     final method = (delivery['method'] ?? delivery['type'] ?? '')
         .toString()
@@ -819,9 +900,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     if (method == 'pickup') {
       final storeId = (delivery['store_id'] ?? '').toString();
+      final storeName = (delivery['store_name'] ?? '').toString().trim();
+      final storeAddress = (delivery['address'] ?? '').toString().trim();
       Map<String, dynamic>? matched;
       for (final store in pickupStores) {
-        if ('${store['id']}' == storeId) {
+        final currentName = (store['name'] ?? '').toString().trim();
+        final currentAddress = (store['address'] ?? '').toString().trim();
+        final idMatches = storeId.isNotEmpty && '${store['id']}' == storeId;
+        final nameMatches =
+            storeName.isNotEmpty &&
+            currentName.toLowerCase() == storeName.toLowerCase();
+        final addressMatches =
+            storeAddress.isNotEmpty &&
+            currentAddress.toLowerCase() == storeAddress.toLowerCase();
+        if (idMatches || nameMatches || addressMatches) {
           matched = store;
           break;
         }
@@ -860,6 +952,48 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  Future<void> _applySavedDelivery(Map<String, dynamic> delivery) async {
+    await _applyPreferredDelivery(delivery, force: true);
+    if (!mounted || !_isAddressStepComplete()) return;
+    setState(() => step = 2);
+  }
+
+  bool _isAddressStepComplete() {
+    final nameOk = name.text.trim().isNotEmpty;
+    final phoneOk = isRuPhoneComplete(phone.text);
+    final pickupOk = deliveryMethod == 'pickup' && selectedStore != null;
+    final cdekOk =
+        deliveryMethod == 'cdek_pvz' &&
+        selectedCdekCity != null &&
+        selectedPvz != null &&
+        (_cdekPricingMode() != 'calculator' ||
+            cdekDeliveryAmountKopeks != null);
+    return nameOk && phoneOk && (pickupOk || cdekOk);
+  }
+
+  Map<String, dynamic> _buildCurrentDeliveryMarker() {
+    if (deliveryMethod == 'pickup') {
+      final store = selectedStore ?? const <String, dynamic>{};
+      return {
+        'method': 'pickup',
+        'store_id': store['id'],
+        'store_name': store['name'],
+        'address': store['address'],
+      };
+    }
+    final pvz = selectedPvz ?? const <String, dynamic>{};
+    final location = (pvz['location'] is Map)
+        ? Map<String, dynamic>.from(pvz['location'] as Map)
+        : const <String, dynamic>{};
+    return {
+      'method': 'cdek',
+      'type': 'pvz',
+      'pvz_code': pvz['code'],
+      'pvz_name': pvz['name'],
+      'address': location['address'] ?? pvz['address'],
+    };
+  }
+
   void _prefillContactFromProfile(auth_model.User? user) {
     if (contactPrefilled || user == null) return;
     final profileName = user.fullName?.trim() ?? '';
@@ -869,8 +1003,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (name.text.trim().isEmpty && profileName.isNotEmpty) {
       name.text = profileName;
     }
-    if (phone.text.trim().isEmpty && profilePhone.isNotEmpty) {
-      phone.text = profilePhone;
+    if (isRuPhonePrefixOnly(phone.text) && profilePhone.isNotEmpty) {
+      phone.text = formatRuPhoneInput(profilePhone);
     }
   }
 
@@ -1665,6 +1799,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'city': store['city'],
         'address': store['address'],
         'items_count': cart.items.length,
+        'save_to_profile': saveDeliveryToProfile,
       };
     }
 
@@ -1684,8 +1819,184 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       'comment': address.text.trim(),
       'tariff': cdekTariffTitle,
       'items_count': cart.items.length,
+      'save_to_profile': saveDeliveryToProfile,
     };
   }
+}
+
+class _CheckoutTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String? hintText;
+  final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
+  final ValueChanged<String>? onChanged;
+
+  const _CheckoutTextField({
+    required this.controller,
+    required this.label,
+    this.hintText,
+    this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _CheckoutFieldLabel(label),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          textCapitalization: textCapitalization,
+          onChanged: onChanged,
+          style: const TextStyle(
+            color: GlameColors.nearBlack,
+            fontSize: 16,
+            height: 1.2,
+          ),
+          cursorColor: GlameColors.nearBlack,
+          decoration: InputDecoration(
+            hintText: hintText,
+            hintStyle: const TextStyle(color: GlameColors.steelGray),
+            filled: true,
+            fillColor: GlameColors.whiteGlame,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 13,
+            ),
+            border: const OutlineInputBorder(
+              borderRadius: BorderRadius.zero,
+              borderSide: BorderSide(color: GlameColors.borderGray),
+            ),
+            enabledBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.zero,
+              borderSide: BorderSide(color: GlameColors.borderGray),
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.zero,
+              borderSide: BorderSide(color: GlameColors.whiteGlame),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CheckoutFieldLabel extends StatelessWidget {
+  final String text;
+
+  const _CheckoutFieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: GlameColors.coldLightGray,
+        fontSize: 13,
+        height: 1.1,
+      ),
+    );
+  }
+}
+
+class _SavedDeliveryOption extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SavedDeliveryOption({
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected ? GlameColors.whiteGlame : GlameColors.borderGray,
+          ),
+          color: selected ? GlameColors.surface2 : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              size: 18,
+              color: selected
+                  ? GlameColors.whiteGlame
+                  : GlameColors.coldLightGray,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: GlameColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _deliveryIdentityKey(Map<String, dynamic> delivery) {
+  var method = (delivery['method'] ?? delivery['type'] ?? '')
+      .toString()
+      .trim()
+      .toLowerCase();
+  if (method == 'cdek') method = 'pvz';
+  if (method == 'pickup') {
+    return 'pickup:${delivery['store_id'] ?? delivery['store_name'] ?? delivery['address'] ?? ''}';
+  }
+  return 'pvz:${delivery['pvz_code'] ?? delivery['address'] ?? ''}';
+}
+
+String _deliveryTitle(Map<String, dynamic> delivery) {
+  final method = (delivery['method'] ?? delivery['type'] ?? '')
+      .toString()
+      .trim()
+      .toLowerCase();
+  if (method == 'pickup') {
+    return _deliveryString(delivery['store_name']) ?? 'Самовывоз GLAME';
+  }
+  return _deliveryString(delivery['pvz_name']) ?? 'Пункт выдачи СДЭК';
+}
+
+String _deliverySubtitle(Map<String, dynamic> delivery) {
+  final city = _deliveryString(delivery['city'] ?? delivery['city_name']);
+  final address = _deliveryString(delivery['address']);
+  final code = _deliveryString(delivery['pvz_code']);
+  final parts = <String>[?city, ?address, if (code != null) 'Код $code'];
+  return parts.isEmpty ? 'Адрес не указан' : parts.join(', ');
+}
+
+String? _deliveryString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
 }
 
 class _Progress extends StatelessWidget {
@@ -1965,6 +2276,7 @@ class _GiftCertificatePaymentOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final balance = _jsonInt(preview?['balance_amount']) ?? 0;
+    final remainingBalance = (balance - appliedAmount).clamp(0, balance);
     final number = (preview?['number'] ?? '').toString();
     final availableCertificates = certificates.where((certificate) {
       final status = (certificate['status'] ?? '').toString().toLowerCase();
@@ -2010,48 +2322,62 @@ class _GiftCertificatePaymentOption extends StatelessWidget {
               child: LinearProgressIndicator(minHeight: 2),
             )
           else if (availableCertificates.isNotEmpty) ...[
-            DropdownButtonFormField<String>(
-              initialValue:
-                  availableCertificates.any(
-                    (certificate) =>
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _CheckoutFieldLabel('Выбрать из моих сертификатов'),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  initialValue:
+                      availableCertificates.any(
+                        (certificate) =>
+                            (certificate['number'] ??
+                                    certificate['series'] ??
+                                    '')
+                                .toString()
+                                .trim() ==
+                            selectedNumber,
+                      )
+                      ? selectedNumber
+                      : null,
+                  decoration: const InputDecoration(
+                    filled: true,
+                    fillColor: GlameColors.whiteGlame,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 13,
+                    ),
+                  ),
+                  items: availableCertificates.map((certificate) {
+                    final certNumber =
                         (certificate['number'] ?? certificate['series'] ?? '')
                             .toString()
-                            .trim() ==
-                        selectedNumber,
-                  )
-                  ? selectedNumber
-                  : null,
-              decoration: const InputDecoration(
-                labelText: 'Выбрать из моих сертификатов',
-              ),
-              items: availableCertificates.map((certificate) {
-                final certNumber =
-                    (certificate['number'] ?? certificate['series'] ?? '')
-                        .toString()
-                        .trim();
-                final certBalance =
-                    _jsonInt(certificate['balance_amount']) ?? 0;
-                return DropdownMenuItem<String>(
-                  value: certNumber,
-                  child: Text(
-                    '$certNumber · ${_rub(certBalance)}',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value == null) return;
-                for (final certificate in availableCertificates) {
-                  final certNumber =
-                      (certificate['number'] ?? certificate['series'] ?? '')
-                          .toString()
-                          .trim();
-                  if (certNumber == value) {
-                    onSelectCertificate(certificate);
-                    break;
-                  }
-                }
-              },
+                            .trim();
+                    final certBalance =
+                        _jsonInt(certificate['balance_amount']) ?? 0;
+                    return DropdownMenuItem<String>(
+                      value: certNumber,
+                      child: Text(
+                        '$certNumber · ${_rub(certBalance)}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    for (final certificate in availableCertificates) {
+                      final certNumber =
+                          (certificate['number'] ?? certificate['series'] ?? '')
+                              .toString()
+                              .trim();
+                      if (certNumber == value) {
+                        onSelectCertificate(certificate);
+                        break;
+                      }
+                    }
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 10),
           ] else if (certificatesError != null) ...[
@@ -2061,22 +2387,20 @@ class _GiftCertificatePaymentOption extends StatelessWidget {
             ),
             const SizedBox(height: 10),
           ],
-          TextField(
+          _CheckoutTextField(
             controller: numberController,
+            label: 'Номер сертификата',
+            hintText: 'Можно ввести вручную',
             textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(
-              labelText: 'Номер сертификата',
-              hintText: 'Можно ввести вручную',
-            ),
             onChanged: (_) {
               if (preview != null) onClear();
             },
           ),
           const SizedBox(height: 10),
-          TextField(
+          _CheckoutTextField(
             controller: pinController,
+            label: 'PIN',
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'PIN'),
             onChanged: (_) {
               if (preview != null) onClear();
             },
@@ -2091,7 +2415,9 @@ class _GiftCertificatePaymentOption extends StatelessWidget {
             const SizedBox(height: 6),
             _Row(label: 'Баланс', value: _rub(balance)),
             const SizedBox(height: 6),
-            _Row(label: 'К списанию', value: '-${_rub(appliedAmount)}'),
+            _Row(label: 'К списанию', value: _rub(appliedAmount)),
+            const SizedBox(height: 6),
+            _Row(label: 'Останется', value: _rub(remainingBalance)),
           ],
           const SizedBox(height: 12),
           OutlinedButton(
@@ -2113,6 +2439,7 @@ class _GiftCertificatePaymentOption extends StatelessWidget {
 class _Totals extends StatelessWidget {
   final int subtotal;
   final int deliveryAmount;
+  final int promotionDiscountAmount;
   final int bonusDiscountAmount;
   final int giftCertificateDiscountAmount;
   final int total;
@@ -2120,6 +2447,7 @@ class _Totals extends StatelessWidget {
   const _Totals({
     required this.subtotal,
     required this.deliveryAmount,
+    required this.promotionDiscountAmount,
     required this.bonusDiscountAmount,
     required this.giftCertificateDiscountAmount,
     required this.total,
@@ -2136,6 +2464,10 @@ class _Totals extends StatelessWidget {
       child: Column(
         children: [
           _Row(label: 'Стоимость товаров', value: _rub(subtotal)),
+          if (promotionDiscountAmount > 0) ...[
+            const SizedBox(height: 10),
+            _Row(label: 'Акция', value: '-${_rub(promotionDiscountAmount)}'),
+          ],
           const SizedBox(height: 10),
           _Row(
             label: 'Доставка',

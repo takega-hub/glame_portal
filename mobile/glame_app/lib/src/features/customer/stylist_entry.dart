@@ -90,6 +90,10 @@ Future<void> showStylistContactSheet(
           StylistWorkingHoursStatus.nowMoscow();
       return StatefulBuilder(
         builder: (modalContext, setState) {
+          final width = MediaQuery.of(modalContext).size.width;
+          final compact = width < 420;
+          final horizontalPadding = compact ? 18.0 : 24.0;
+          final verticalPadding = compact ? 18.0 : 24.0;
           void toggleTag(String tag) {
             setState(() {
               if (!selectedTags.add(tag)) selectedTags.remove(tag);
@@ -117,10 +121,10 @@ Future<void> showStylistContactSheet(
 
           return Padding(
             padding: EdgeInsets.fromLTRB(
-              24,
-              24,
-              24,
-              MediaQuery.of(modalContext).viewInsets.bottom + 24,
+              horizontalPadding,
+              verticalPadding,
+              horizontalPadding,
+              MediaQuery.of(modalContext).viewInsets.bottom + verticalPadding,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -128,59 +132,63 @@ Future<void> showStylistContactSheet(
               children: [
                 Text(
                   status.isOpen ? 'Стилист GLAME' : 'Оставить заявку стилисту',
-                  style: const TextStyle(
-                    fontSize: 28,
+                  style: TextStyle(
+                    fontSize: compact ? 24 : 28,
                     fontWeight: FontWeight.w400,
                     height: 1.05,
                     color: GlameColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: compact ? 8 : 12),
                 Text(
                   status.label,
-                  style: const TextStyle(
-                    fontSize: 14,
+                  style: TextStyle(
+                    fontSize: compact ? 12 : 14,
                     color: GlameColors.textSecondary,
                   ),
                 ),
-                const SizedBox(height: 18),
+                SizedBox(height: compact ? 12 : 18),
                 Text(
                   status.isOpen
                       ? 'Опишите задачу — стилист поможет подобрать украшение онлайн или пригласит в пространство, если нужна примерка.'
                       : 'Стилист GLAME ответит с 10:00 до 20:00 по МСК. Опишите задачу — мы подберем украшения под образ, повод или подарок.',
-                  style: const TextStyle(
-                    fontSize: 16,
+                  style: TextStyle(
+                    fontSize: compact ? 14 : 16,
                     height: 1.35,
                     color: GlameColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: compact ? 14 : 20),
                 TextField(
                   controller: messageController,
-                  minLines: 3,
-                  maxLines: 5,
-                  decoration: const InputDecoration(
+                  minLines: compact ? 2 : 3,
+                  maxLines: compact ? 4 : 5,
+                  style: TextStyle(fontSize: compact ? 13 : 16, height: 1.35),
+                  decoration: InputDecoration(
                     labelText: 'Что хотите подобрать?',
+                    labelStyle: TextStyle(fontSize: compact ? 12 : null),
                     hintText:
                         'Например: украшение на каждый день, подарок, комплект к образу, серьги под форму лица...',
+                    hintStyle: TextStyle(fontSize: compact ? 12 : null),
                   ),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: compact ? 12 : 16),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: compact ? 6 : 8,
+                  runSpacing: compact ? 6 : 8,
                   children: [
                     for (final tag in _stylistQuickTags)
                       _StylistQuickTagButton(
                         label: stylistQuickTagLabel(tag) ?? tag,
                         selected: selectedTags.contains(tag),
+                        compact: compact,
                         onTap: () => toggleTag(tag),
                       ),
                   ],
                 ),
-                const SizedBox(height: 22),
+                SizedBox(height: compact ? 16 : 22),
                 SizedBox(
-                  height: GlameUi.buttonHeight,
+                  height: compact ? 48 : GlameUi.buttonHeight,
                   child: FilledButton(
                     onPressed: submit,
                     child: Text(
@@ -251,11 +259,13 @@ class StylistWorkingHoursStatus {
 class _StylistQuickTagButton extends StatelessWidget {
   final String label;
   final bool selected;
+  final bool compact;
   final VoidCallback onTap;
 
   const _StylistQuickTagButton({
     required this.label,
     required this.selected,
+    this.compact = false,
     required this.onTap,
   });
 
@@ -269,11 +279,14 @@ class _StylistQuickTagButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 12,
+            vertical: compact ? 8 : 10,
+          ),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: compact ? 12 : 14,
               color: selected ? GlameColors.surface2 : GlameColors.textPrimary,
             ),
           ),

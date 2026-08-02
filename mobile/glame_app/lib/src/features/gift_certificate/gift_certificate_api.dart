@@ -61,4 +61,9 @@ class GiftCertificateApi {
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
   }
+
+  Future<Map<String, dynamic>> getPaymentStatus(String orderId) async {
+    final resp = await _dio.get('/orders/$orderId/payment-status');
+    return Map<String, dynamic>.from(resp.data as Map);
+  }
 }

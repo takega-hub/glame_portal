@@ -108,10 +108,6 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final categoryValues = _characteristicValues(
-      widget.characteristics,
-      'Категория',
-    );
     final brandValues = _characteristicValues(widget.characteristics, 'Бренд');
     final colorValues = _characteristicValues(widget.characteristics, 'Цвет');
     final sizeValues = _characteristicValues(widget.characteristics, 'Размер');
@@ -131,15 +127,9 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
       widget.characteristics,
       'Тип замка',
     );
-    final collectionValues = _characteristicValues(
-      widget.characteristics,
-      'Коллекция',
-    );
-    final seasonValues = _characteristicValues(widget.characteristics, 'Сезон');
-    final styleValues = _characteristicValues(widget.characteristics, 'Стиль');
 
     return Material(
-      color: const Color(0xFFF7F6F4),
+      color: GlameColors.surface2,
       child: SafeArea(
         child: Column(
           children: [
@@ -170,19 +160,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                     _LightPriceFields(priceMin: priceMin, priceMax: priceMax),
                     const SizedBox(height: 8),
                     _ExpandableFilterSection(
-                      title: 'Категория',
-                      selected: null,
-                      expanded: _expandedSection == 'category',
-                      onTap: () => _toggleSection('category'),
-                      children: _choiceRows(
-                        categoryValues,
-                        selected: null,
-                        onSelect: (_) {},
-                        light: true,
-                      ),
-                    ),
-                    _ExpandableFilterSection(
-                      title: 'Марки и капсулы',
+                      title: 'Бренды',
                       selected: brand,
                       expanded: _expandedSection == 'brand',
                       onTap: () => _toggleSection('brand'),
@@ -193,18 +171,6 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                           setState(() => brand = value);
                           _scheduleCountRefresh();
                         },
-                        light: true,
-                      ),
-                    ),
-                    _ExpandableFilterSection(
-                      title: 'Коллекция',
-                      selected: null,
-                      expanded: _expandedSection == 'collection',
-                      onTap: () => _toggleSection('collection'),
-                      children: _choiceRows(
-                        collectionValues,
-                        selected: null,
-                        onSelect: (_) {},
                         light: true,
                       ),
                     ),
@@ -239,7 +205,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                       ),
                     ),
                     _ExpandableFilterSection(
-                      title: 'Материал верха',
+                      title: 'Материал',
                       selected: material,
                       expanded: _expandedSection == 'material',
                       onTap: () => _toggleSection('material'),
@@ -298,30 +264,6 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                         light: true,
                       ),
                     ),
-                    _ExpandableFilterSection(
-                      title: 'Сезон',
-                      selected: null,
-                      expanded: _expandedSection == 'season',
-                      onTap: () => _toggleSection('season'),
-                      children: _choiceRows(
-                        seasonValues,
-                        selected: null,
-                        onSelect: (_) {},
-                        light: true,
-                      ),
-                    ),
-                    _ExpandableFilterSection(
-                      title: 'Стиль',
-                      selected: null,
-                      expanded: _expandedSection == 'style',
-                      onTap: () => _toggleSection('style'),
-                      children: _choiceRows(
-                        styleValues,
-                        selected: null,
-                        onSelect: (_) {},
-                        light: true,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -334,8 +276,8 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                 child: FilledButton(
                   onPressed: _apply,
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF2F2925),
-                    foregroundColor: Colors.white,
+                    backgroundColor: GlameColors.nearBlack,
+                    foregroundColor: GlameColors.whiteGlame,
                     shape: const RoundedRectangleBorder(),
                   ),
                   child: Text(_buttonLabel()),
@@ -590,7 +532,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
   Future<void> _showSortPicker(BuildContext context) async {
     final next = await showModalBottomSheet<String?>(
       context: context,
-      backgroundColor: const Color(0xFFF7F6F4),
+      backgroundColor: GlameColors.surface2,
       shape: const RoundedRectangleBorder(),
       builder: (context) {
         return SafeArea(
@@ -737,7 +679,7 @@ class _LightHeader extends StatelessWidget {
             tooltip: 'Назад',
             onPressed: () => Navigator.of(context).maybePop(),
             icon: const Icon(Icons.arrow_back, size: 20),
-            color: const Color(0xFF242424),
+            color: GlameColors.textPrimary,
           ),
           const Expanded(
             child: Text(
@@ -746,14 +688,14 @@ class _LightHeader extends StatelessWidget {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF202020),
+                color: GlameColors.textPrimary,
               ),
             ),
           ),
           TextButton(
             onPressed: onReset,
             style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF777777),
+              foregroundColor: GlameColors.textSecondary,
               padding: const EdgeInsets.symmetric(horizontal: 8),
             ),
             child: const Text('Сброс'),
@@ -779,13 +721,16 @@ class _InStockRow extends StatelessWidget {
           const Expanded(
             child: Text(
               'Только в наличии',
-              style: TextStyle(fontSize: 13, color: Color(0xFF222222)),
+              style: TextStyle(fontSize: 13, color: GlameColors.textPrimary),
             ),
           ),
           Switch.adaptive(
             value: value,
             onChanged: onChanged,
-            activeTrackColor: const Color(0xFF2F2925),
+            activeThumbColor: GlameColors.whiteGlame,
+            activeTrackColor: GlameColors.borderGray,
+            inactiveThumbColor: GlameColors.borderGray,
+            inactiveTrackColor: GlameColors.softGray,
           ),
         ],
       ),
@@ -810,15 +755,22 @@ class _SortRow extends StatelessWidget {
             const Expanded(
               child: Text(
                 'Сортировка',
-                style: TextStyle(fontSize: 13, color: Color(0xFF222222)),
+                style: TextStyle(fontSize: 13, color: GlameColors.textPrimary),
               ),
             ),
             Text(
               label,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF333333)),
+              style: const TextStyle(
+                fontSize: 12,
+                color: GlameColors.textPrimary,
+              ),
             ),
             const SizedBox(width: 6),
-            const Icon(Icons.chevron_right, size: 20, color: Color(0xFF222222)),
+            const Icon(
+              Icons.chevron_right,
+              size: 20,
+              color: GlameColors.textPrimary,
+            ),
           ],
         ),
       ),
@@ -869,7 +821,7 @@ class _LightPriceFields extends StatelessWidget {
       children: [
         const Text(
           'Цена, руб',
-          style: TextStyle(fontSize: 13, color: Color(0xFF222222)),
+          style: TextStyle(fontSize: 13, color: GlameColors.textPrimary),
         ),
         const SizedBox(height: 6),
         Row(
@@ -879,26 +831,40 @@ class _LightPriceFields extends StatelessWidget {
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 26),
-              child: Text('—', style: TextStyle(color: Color(0xFF9A9A9A))),
+              child: Text(
+                '—',
+                style: TextStyle(color: GlameColors.textSecondary),
+              ),
             ),
             Expanded(
               child: _LightPriceInput(controller: priceMax, label: 'до'),
             ),
           ],
         ),
-        RangeSlider(
-          values: RangeValues(
-            start <= end ? start : end,
-            end >= start ? end : start,
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: GlameColors.steelGray,
+            inactiveTrackColor: GlameColors.softGray,
+            thumbColor: GlameColors.steelGray,
+            overlayColor: GlameColors.steelGray.withValues(alpha: 0.12),
+            valueIndicatorColor: GlameColors.steelGray,
+            rangeThumbShape: const RoundRangeSliderThumbShape(
+              enabledThumbRadius: 8,
+            ),
+            rangeTrackShape: const RoundedRectRangeSliderTrackShape(),
           ),
-          min: 0,
-          max: 52990,
-          activeColor: const Color(0xFFBDD6EE),
-          inactiveColor: const Color(0xFFD9E6F3),
-          onChanged: (values) {
-            priceMin.text = values.start.round().toString();
-            priceMax.text = values.end.round().toString();
-          },
+          child: RangeSlider(
+            values: RangeValues(
+              start <= end ? start : end,
+              end >= start ? end : start,
+            ),
+            min: 0,
+            max: 52990,
+            onChanged: (values) {
+              priceMin.text = values.start.round().toString();
+              priceMax.text = values.end.round().toString();
+            },
+          ),
         ),
       ],
     );
@@ -916,20 +882,20 @@ class _LightPriceInput extends StatelessWidget {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
-      style: const TextStyle(fontSize: 12, color: Color(0xFF222222)),
+      style: const TextStyle(fontSize: 12, color: GlameColors.textPrimary),
       decoration: InputDecoration(
         prefixText: '$label  ',
-        prefixStyle: const TextStyle(color: Color(0xFF9A9A9A)),
+        prefixStyle: const TextStyle(color: GlameColors.textSecondary),
         isDense: true,
         contentPadding: const EdgeInsets.only(bottom: 7),
         border: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+          borderSide: BorderSide(color: GlameColors.softGray),
         ),
         enabledBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Color(0xFFE0E0E0)),
+          borderSide: BorderSide(color: GlameColors.softGray),
         ),
         focusedBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Color(0xFFBDD6EE)),
+          borderSide: BorderSide(color: GlameColors.nearBlack),
         ),
       ),
     );
@@ -967,7 +933,7 @@ class _ExpandableFilterSection extends StatelessWidget {
                     title,
                     style: const TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF222222),
+                      color: GlameColors.textPrimary,
                     ),
                   ),
                 ),
@@ -978,18 +944,21 @@ class _ExpandableFilterSection extends StatelessWidget {
                     alignment: Alignment.center,
                     margin: const EdgeInsets.only(right: 8),
                     decoration: const BoxDecoration(
-                      color: Color(0xFFD7E6F6),
+                      color: GlameColors.nearBlack,
                       shape: BoxShape.circle,
                     ),
                     child: const Text(
                       '1',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF2F4050)),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: GlameColors.whiteGlame,
+                      ),
                     ),
                   ),
                 Icon(
                   expanded ? Icons.expand_less : Icons.chevron_right,
                   size: 21,
-                  color: const Color(0xFF222222),
+                  color: GlameColors.textPrimary,
                 ),
               ],
             ),
@@ -1123,7 +1092,7 @@ class _ChoiceRow extends StatelessWidget {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: selected
-                    ? (light ? const Color(0xFF2F2925) : GlameColors.whiteGlame)
+                    ? (light ? GlameColors.nearBlack : GlameColors.whiteGlame)
                     : Colors.transparent,
                 border: Border.all(
                   color: light
@@ -1149,7 +1118,7 @@ class _ChoiceRow extends StatelessWidget {
                   fontSize: 13,
                   height: 1.2,
                   color: light
-                      ? const Color(0xFF222222)
+                      ? GlameColors.textPrimary
                       : GlameColors.whiteGlame,
                 ),
               ),

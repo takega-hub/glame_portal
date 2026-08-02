@@ -16,11 +16,17 @@ class AuthState {
 
   factory AuthState.initial() => const AuthState(user: null, loading: true);
 
-  AuthState copyWith({User? user, bool? loading, String? error}) {
+  static const Object _unset = Object();
+
+  AuthState copyWith({
+    Object? user = _unset,
+    bool? loading,
+    Object? error = _unset,
+  }) {
     return AuthState(
-      user: user ?? this.user,
+      user: identical(user, _unset) ? this.user : user as User?,
       loading: loading ?? this.loading,
-      error: error,
+      error: identical(error, _unset) ? this.error : error as String?,
     );
   }
 }
@@ -182,8 +188,8 @@ class AuthController extends StateNotifier<AuthState> {
         error: detail == 'Phone already registered'
             ? 'Телефон уже зарегистрирован. Войдите в аккаунт.'
             : detail == 'Invalid referral code'
-                ? 'Реферальный код не найден или неактивен.'
-                : detail ?? 'Ошибка регистрации',
+            ? 'Реферальный код не найден или неактивен.'
+            : detail ?? 'Ошибка регистрации',
       );
       rethrow;
     } catch (e) {

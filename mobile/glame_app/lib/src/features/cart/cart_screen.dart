@@ -107,7 +107,12 @@ class CartScreen extends ConsumerWidget {
             else
               ...cart.items.map((x) => _CartItemRow(item: x)),
             const SizedBox(height: 24),
-            _Totals(subtotal: cart.subtotal),
+            _Totals(
+              subtotal: cart.subtotal,
+              discountAmount: cart.discountAmount,
+              total: cart.total,
+              appliedPromotions: cart.appliedPromotions,
+            ),
             const SizedBox(height: 12),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -117,7 +122,7 @@ class CartScreen extends ConsumerWidget {
               ),
               onPressed: cart.items.isEmpty
                   ? null
-                  : () => context.push('/checkout'),
+                  : () => context.push('/checkout?step=address&from=cart'),
               child: const Text('Оформить заказ'),
             ),
           ],
@@ -280,14 +285,25 @@ class _CartItemRow extends ConsumerWidget {
 
 class _Totals extends StatelessWidget {
   final int subtotal;
+  final int discountAmount;
+  final int total;
+  final List<Map<String, dynamic>> appliedPromotions;
 
-  const _Totals({required this.subtotal});
+  const _Totals({
+    required this.subtotal,
+    required this.discountAmount,
+    required this.total,
+    required this.appliedPromotions,
+  });
 
   @override
   Widget build(BuildContext context) {
     final freeFrom = 1000000;
     final delivery = subtotal >= freeFrom ? 0 : 0;
-    final total = subtotal + delivery;
+    final totalWithDelivery = total + delivery;
+    final promotionTitle = appliedPromotions.isNotEmpty
+        ? (appliedPromotions.first['title'] as String?)?.trim()
+        : null;
     return Container(
       decoration: BoxDecoration(
         color: GlameColors.graphite,
@@ -300,6 +316,15 @@ class _Totals extends StatelessWidget {
             label: 'Стоимость товаров',
             value: formatRubFromKopeks(subtotal),
           ),
+          if (discountAmount > 0) ...[
+            const SizedBox(height: 10),
+            _Row(
+              label: promotionTitle?.isNotEmpty == true
+                  ? promotionTitle!
+                  : 'Скидка по акции',
+              value: '-${formatRubFromKopeks(discountAmount)}',
+            ),
+          ],
           const SizedBox(height: 10),
           _Row(
             label: 'Доставка',
@@ -312,7 +337,7 @@ class _Totals extends StatelessWidget {
           const SizedBox(height: 10),
           _Row(
             label: 'Итого',
-            value: formatRubFromKopeks(total),
+            value: formatRubFromKopeks(totalWithDelivery),
             valueStyle: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(color: GlameColors.whiteGlame),

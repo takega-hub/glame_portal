@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/asset_url.dart';
@@ -130,6 +131,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
               ? ownDescription
               : baseDescription;
           final specs = item['specifications'];
+          final category = (item['category'] as String?)?.trim();
           final stock = item['stock'];
           final loyaltyPoints =
               ref.watch(authControllerProvider).user?.loyaltyPoints ?? 0;
@@ -200,8 +202,14 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                 basePriceKopeks: basePrice is num ? basePrice.toInt() : null,
                 loyaltyPoints: loyaltyPoints,
                 images: images,
+                category: category,
+                specifications: specs is Map
+                    ? Map<String, dynamic>.from(specs)
+                    : const <String, dynamic>{},
                 productDescription: productDescription,
                 stock: stock,
+                product: item,
+                variantsData: variantsData,
                 isWishlisted: isWishlisted,
                 looksAsync: looksAsync,
                 recommendationsAsync: recommendationsAsync,
@@ -222,8 +230,12 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     required int? basePriceKopeks,
     required int loyaltyPoints,
     required List<String> images,
+    required String? category,
+    required Map<String, dynamic> specifications,
     required String productDescription,
     required num? stock,
+    required Map<String, dynamic> product,
+    required Map<String, dynamic>? variantsData,
     required bool isWishlisted,
     required AsyncValue<List<dynamic>> looksAsync,
     required AsyncValue<List<dynamic>> recommendationsAsync,
@@ -235,6 +247,8 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
           context,
           images,
           brand: productBrand,
+          name: name,
+          article: article,
           isWishlisted: isWishlisted,
         ),
         const SizedBox(height: 14),
@@ -248,7 +262,13 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
           stock: stock,
         ),
         const SizedBox(height: 14),
-        _buildActionButtons(context, stock, isWishlisted),
+        _buildActionButtons(
+          context,
+          stock,
+          isWishlisted,
+          product: product,
+          variantsData: variantsData,
+        ),
         const SizedBox(height: 14),
         _buildBenefitsBlock(),
         const SizedBox(height: 12),
@@ -256,7 +276,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
         const SizedBox(height: 14),
         _buildLookSetBlock(looksAsync, loyaltyPoints: loyaltyPoints),
         const SizedBox(height: 16),
-        _buildDetailsBlock(),
+        _buildDetailsBlock(category: category, specifications: specifications),
         const SizedBox(height: 16),
         _buildPackagingBlock(images),
         const SizedBox(height: 16),
@@ -383,6 +403,8 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     BuildContext context,
     List<String> images, {
     required String brand,
+    required String name,
+    required String? article,
     required bool isWishlisted,
   }) {
     if (images.isEmpty) return _NoImage();
@@ -529,20 +551,11 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                       const SizedBox(width: 6),
                       _ProductHeroOverlayIcon(
                         icon: Icons.ios_share_outlined,
-                        onTap: () async {
-                          await Clipboard.setData(
-                            ClipboardData(
-                              text:
-                                  'https://app.glamejewelry.ru/#/product/${widget.productId}',
-                            ),
-                          );
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Ссылка на товар скопирована'),
-                            ),
-                          );
-                        },
+                        onTap: () => _shareProduct(
+                          context,
+                          name: name,
+                          article: article,
+                        ),
                       ),
                     ],
                   ),
@@ -647,8 +660,10 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
   Widget _buildActionButtons(
     BuildContext context,
     num? stock,
-    bool isWishlisted,
-  ) {
+    bool isWishlisted, {
+    required Map<String, dynamic> product,
+    required Map<String, dynamic>? variantsData,
+  }) {
     final available = stock != null && stock > 0;
     if (!available) {
       return Column(
@@ -656,13 +671,11 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Сообщим, когда товар появится в наличии'),
-                  ),
-                );
-              },
+              onPressed: () => _showArrivalSubscriptionSheet(
+                context,
+                product: product,
+                variantsData: variantsData,
+              ),
               style: FilledButton.styleFrom(
                 backgroundColor: GlameColors.textPrimary,
                 foregroundColor: GlameColors.surface2,
@@ -716,9 +729,12 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
             Expanded(
               child: OutlinedButton(
                 onPressed: () async {
-                  final added = await _addToCart(context);
+                  final added = await _addToCart(
+                    context,
+                    showSuccessMessage: false,
+                  );
                   if (added && context.mounted) {
-                    context.go('/checkout');
+                    context.go('/home?tab=11');
                   }
                 },
                 style: OutlinedButton.styleFrom(
@@ -739,7 +755,151 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     );
   }
 
-  Future<bool> _addToCart(BuildContext context) async {
+  Future<void> _shareProduct(
+    BuildContext context, {
+    required String name,
+    required String? article,
+  }) async {
+    final productUrl =
+        'https://app.glamejewelry.ru/#/product/${widget.productId}';
+    final title = name.trim().isEmpty ? 'Украшение GLAME' : name.trim();
+    final articleText = (article ?? '').trim();
+    final text = [
+      title,
+      if (articleText.isNotEmpty) 'Артикул: $articleText',
+      productUrl,
+    ].join('\n');
+
+    try {
+      final result = await SharePlus.instance.share(
+        ShareParams(
+          text: text,
+          subject: title,
+          title: title,
+          mailToFallbackEnabled: false,
+          downloadFallbackEnabled: false,
+        ),
+      );
+      if (result.status != ShareResultStatus.unavailable) return;
+    } catch (_) {
+      // Fall through to copying below when native/browser sharing is unavailable.
+    }
+
+    await Clipboard.setData(ClipboardData(text: productUrl));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Ссылка на товар скопирована'),
+          backgroundColor: GlameColors.textPrimary,
+          duration: Duration(milliseconds: 1600),
+        ),
+      );
+  }
+
+  Future<void> _showArrivalSubscriptionSheet(
+    BuildContext context, {
+    required Map<String, dynamic> product,
+    required Map<String, dynamic>? variantsData,
+  }) async {
+    final options = _arrivalOptions(product, variantsData);
+    final initialEmail = ref.read(authControllerProvider).user?.email;
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      builder: (sheetContext) {
+        return _ArrivalSubscriptionSheet(
+          productName: (product['name'] as String?) ?? 'Украшение GLAME',
+          initialEmail: initialEmail,
+          options: options,
+          onSubmit: (email, option) async {
+            final response = await ref
+                .read(productApiProvider)
+                .subscribeArrival(
+                  productId: widget.productId,
+                  variantProductId: option.productId,
+                  email: email,
+                );
+            await ref
+                .read(wishlistControllerProvider.notifier)
+                .ensureAdded(option.productId);
+            final message = (response['message'] as String?)?.trim();
+            return message == null || message.isEmpty
+                ? 'Готово. Мы сообщим о поступлении.'
+                : message;
+          },
+        );
+      },
+    );
+    if (!context.mounted || result == null) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(result),
+          backgroundColor: GlameColors.textPrimary,
+          duration: const Duration(milliseconds: 2200),
+        ),
+      );
+  }
+
+  List<_ArrivalOption> _arrivalOptions(
+    Map<String, dynamic> product,
+    Map<String, dynamic>? variantsData,
+  ) {
+    final raw = variantsData?['variants'];
+    final variants = raw is List
+        ? raw
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .where((item) => (item['id'] as String?)?.isNotEmpty == true)
+              .toList()
+        : <Map<String, dynamic>>[];
+    if (variants.isEmpty) {
+      variants.add(product);
+    }
+    if (!variants.any((item) => item['id'] == widget.productId)) {
+      variants.insert(0, product);
+    }
+
+    final seen = <String>{};
+    return variants
+        .map((item) {
+          final id = (item['id'] as String?)?.trim() ?? '';
+          if (id.isEmpty || !seen.add(id)) return null;
+          return _ArrivalOption(
+            productId: id,
+            label: _arrivalOptionLabel(item),
+            inStock: _variantHasPositiveStock(Map<dynamic, dynamic>.from(item)),
+          );
+        })
+        .whereType<_ArrivalOption>()
+        .toList();
+  }
+
+  String _arrivalOptionLabel(Map<String, dynamic> item) {
+    final specs = item['specifications'];
+    final parts = <String>[];
+    if (specs is Map) {
+      for (final key in const ['Цвет', 'Размер', 'Материал', 'Покрытие']) {
+        final value = specs[key];
+        final text = value == null ? '' : '$value'.trim();
+        if (text.isNotEmpty) parts.add('$key: $text');
+      }
+    }
+    final article = (item['article'] as String?)?.trim();
+    if (parts.isNotEmpty) return parts.join(', ');
+    if (article != null && article.isNotEmpty) return article;
+    return ((item['name'] as String?) ?? 'Вариант').trim();
+  }
+
+  Future<bool> _addToCart(
+    BuildContext context, {
+    bool showSuccessMessage = true,
+  }) async {
     final auth = ref.read(authControllerProvider);
     if (auth.user == null) {
       context.go(
@@ -759,16 +919,17 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       return false;
     }
     if (!context.mounted) return false;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Товар добавлен в корзину'),
+    if (!showSuccessMessage) {
+      ScaffoldMessenger.of(context).removeCurrentSnackBar();
+      return true;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Товар добавлен в корзину'),
         backgroundColor: GlameColors.textPrimary,
-        duration: const Duration(seconds: 2),
-        action: SnackBarAction(
-          label: 'ПЕРЕЙТИ',
-          textColor: GlameColors.gold,
-          onPressed: () => context.go('/home?tab=11'),
-        ),
+        duration: Duration(milliseconds: 1600),
       ),
     );
     return true;
@@ -783,10 +944,8 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: GlameColors.textPrimary,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
       builder: (sheetContext) {
         return _StylistEntrySheet(
           name: name,
@@ -824,10 +983,8 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: GlameColors.textPrimary,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
       builder: (sheetContext) {
         return _ProductQuestionSheet(
           name: name,
@@ -854,10 +1011,8 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: GlameColors.textPrimary,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
       builder: (sheetContext) {
         return _ChoiceHelpSheet(
           name: name,
@@ -1152,38 +1307,27 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       return;
     }
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Комплект добавлен в корзину'),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Комплект добавлен в корзину'),
         backgroundColor: GlameColors.textPrimary,
-        duration: const Duration(seconds: 2),
-        action: SnackBarAction(
-          label: 'ПЕРЕЙТИ',
-          textColor: GlameColors.gold,
-          onPressed: () => context.go('/home?tab=11'),
-        ),
+        duration: Duration(milliseconds: 1600),
       ),
     );
   }
 
-  Widget _buildDetailsBlock() {
-    final items = [
-      (
-        Icons.auto_awesome_outlined,
-        'Четкая форма',
-        'Держит акцент даже в лаконичном образе.',
-      ),
-      (
-        Icons.water_drop_outlined,
-        'Гладкая поверхность',
-        'Отражает свет и добавляет глубину украшению.',
-      ),
-      (
-        Icons.lock_outline,
-        'Надежный замок',
-        'Комфортная посадка и уверенность в течение дня.',
-      ),
-    ];
+  Widget _buildDetailsBlock({
+    required String? category,
+    required Map<String, dynamic> specifications,
+  }) {
+    final items = _productDetailItems(
+      category: category,
+      specifications: specifications,
+    );
+    if (items.isEmpty) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1208,16 +1352,18 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(item.$1, size: 28, color: GlameColors.textSecondary),
+                      Icon(
+                        item.icon,
+                        size: 28,
+                        color: GlameColors.textSecondary,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item.$2,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              item.title,
                               style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -1226,7 +1372,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              item.$3,
+                              item.description,
                               maxLines: 3,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -1249,28 +1395,281 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     );
   }
 
+  List<_ProductDetailItem> _productDetailItems({
+    required String? category,
+    required Map<String, dynamic> specifications,
+  }) {
+    final normalizedCategory = _normalizeText(category).toLowerCase();
+    final items = <_ProductDetailItem>[];
+
+    final material = _specValue(specifications, 'Материал');
+    final coating = _specValue(specifications, 'Покрытие');
+    final insert = _specValue(specifications, 'Вставка');
+    final color = _specValue(specifications, 'Цвет');
+    final size = _specValue(specifications, 'Размер');
+    final lockType = _specValue(specifications, 'Тип замка');
+    final combination = _specValue(specifications, 'Сочетание');
+
+    void add(
+      IconData icon,
+      String title,
+      String description, {
+      Set<String> aliases = const {},
+    }) {
+      final identity = title.toLowerCase();
+      if (items.any((item) => aliases.contains(item.title.toLowerCase()))) {
+        return;
+      }
+      if (items.any((item) => item.title.toLowerCase() == identity)) return;
+      items.add(_ProductDetailItem(icon, title, description));
+    }
+
+    if (material != null) {
+      add(
+        Icons.category_outlined,
+        material,
+        _materialDescription(material),
+        aliases: {'материал'},
+      );
+    }
+
+    if (coating != null) {
+      add(
+        Icons.water_drop_outlined,
+        coating,
+        _coatingDescription(coating, color),
+        aliases: {'покрытие'},
+      );
+    } else if (color != null) {
+      add(
+        Icons.palette_outlined,
+        color,
+        _colorDescription(color),
+        aliases: {'цвет'},
+      );
+    }
+
+    if (insert != null && !_isNoInsertValue(insert)) {
+      add(
+        Icons.diamond_outlined,
+        insert,
+        _insertDescription(insert),
+        aliases: {'вставка'},
+      );
+    } else if (insert != null) {
+      add(
+        Icons.auto_awesome_outlined,
+        'Без вставок',
+        'Чистая форма и акцент на линии самого украшения.',
+        aliases: {'вставка'},
+      );
+    }
+
+    if (size != null) {
+      final sizeTitle = _isRingCategory(normalizedCategory)
+          ? 'Размер $size'
+          : 'Длина / размер $size';
+      add(
+        Icons.straighten_outlined,
+        sizeTitle,
+        _sizeDescription(normalizedCategory),
+        aliases: {'размер'},
+      );
+    }
+
+    if (lockType != null &&
+        !_isRingCategory(normalizedCategory) &&
+        !_isCuffCategory(normalizedCategory)) {
+      add(
+        Icons.lock_outline,
+        lockType,
+        _lockDescription(lockType, normalizedCategory),
+        aliases: {'замок'},
+      );
+    }
+
+    if (combination != null && items.length < 4) {
+      add(
+        Icons.tune_outlined,
+        combination,
+        'Сочетание элементов помогает собрать образ в единой стилистике.',
+        aliases: {'сочетание'},
+      );
+    }
+
+    if (items.length < 3 && color != null && coating != null) {
+      add(
+        Icons.palette_outlined,
+        color,
+        _colorDescription(color),
+        aliases: {'цвет'},
+      );
+    }
+
+    return items.take(4).toList();
+  }
+
+  String? _specValue(Map<String, dynamic> specifications, String key) {
+    final raw = specifications[key];
+    if (raw == null) return null;
+    final value = _normalizeText(raw);
+    if (value.isEmpty) return null;
+    if (value == '0' || value == '00000000-0000-0000-0000-000000000000') {
+      return null;
+    }
+    return value;
+  }
+
+  String _normalizeText(Object? value) {
+    if (value == null) return '';
+    return value
+        .toString()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'\s*,\s*'), ', ')
+        .trim();
+  }
+
+  bool _isRingCategory(String category) =>
+      category.contains('кольц') || category.contains('ring');
+
+  bool _isCuffCategory(String category) =>
+      category.contains('кафф') || category.contains('cuff');
+
+  bool _isNoInsertValue(String value) {
+    final normalized = value.toLowerCase();
+    return normalized.contains('без встав') ||
+        normalized.contains('без кам') ||
+        normalized == 'нет';
+  }
+
+  String _materialDescription(String value) {
+    final normalized = value.toLowerCase();
+    if (normalized.contains('сталь')) {
+      return 'Прочный материал для ежедневной носки и стабильной формы.';
+    }
+    if (normalized.contains('zamak')) {
+      return 'Пластичный ювелирный сплав, подходящий для выразительного объема.';
+    }
+    if (normalized.contains('латун')) {
+      return 'Плотная основа, которая хорошо держит декоративную форму.';
+    }
+    if (normalized.contains('сплав')) {
+      return 'Ювелирная основа для сложной формы и комфортной посадки.';
+    }
+    return 'Основной материал изделия указан в характеристиках товара.';
+  }
+
+  String _coatingDescription(String value, String? color) {
+    final normalized = value.toLowerCase();
+    final tone = color == null ? '' : ' Оттенок: $color.';
+    if (normalized.contains('родий')) {
+      return 'Родиевое покрытие добавляет холодный блеск и защищает поверхность.$tone';
+    }
+    if (normalized.contains('позолот')) {
+      return 'Покрытие с теплым металлическим блеском и акцентной фактурой.$tone';
+    }
+    if (normalized.contains('сереб')) {
+      return 'Светлое покрытие подчеркивает линию и отражающие поверхности.$tone';
+    }
+    if (normalized.contains('чернен')) {
+      return 'Чернение усиливает рельеф и визуальную глубину деталей.$tone';
+    }
+    return 'Покрытие отвечает за оттенок, блеск и характер поверхности.$tone';
+  }
+
+  String _insertDescription(String value) {
+    final normalized = value.toLowerCase();
+    if (normalized.contains('фианит')) {
+      return 'Фианиты дают точечный блеск и аккуратный световой акцент.';
+    }
+    if (normalized.contains('жемч')) {
+      return 'Жемчужная вставка добавляет мягкое сияние и спокойный акцент.';
+    }
+    if (normalized.contains('кам')) {
+      return 'Каменная вставка делает изделие более выразительным и фактурным.';
+    }
+    if (normalized.contains('эмаль')) {
+      return 'Эмаль добавляет цветовой акцент и графичность.';
+    }
+    return 'Вставка формирует главный визуальный акцент изделия.';
+  }
+
+  String _colorDescription(String value) {
+    final normalized = value.toLowerCase();
+    if (normalized.contains('золот')) {
+      return 'Теплый металлический тон легко становится главным акцентом образа.';
+    }
+    if (normalized.contains('сереб')) {
+      return 'Холодный металлический тон выглядит спокойно и универсально.';
+    }
+    if (normalized.contains('черн')) {
+      return 'Темный акцент добавляет графичность и контраст.';
+    }
+    if (normalized.contains('биколор')) {
+      return 'Два оттенка металла позволяют сочетать изделие с разными украшениями.';
+    }
+    return 'Цвет помогает встроить украшение в вашу личную палитру.';
+  }
+
+  String _sizeDescription(String category) {
+    if (_isRingCategory(category)) {
+      return 'Посадка зависит от размера кольца и выбранного пальца.';
+    }
+    if (category.contains('брасл')) {
+      return 'Размер помогает подобрать комфортную посадку на запястье.';
+    }
+    if (category.contains('кулон') ||
+        category.contains('колье') ||
+        category.contains('чокер')) {
+      return 'Длина влияет на посадку украшения и линию декольте.';
+    }
+    return 'Размер указан для точного подбора и комфортной носки.';
+  }
+
+  String _lockDescription(String value, String category) {
+    final normalized = value.toLowerCase();
+    if (normalized.contains('без зам')) {
+      return 'Конструкция без замка рассчитана на простую посадку.';
+    }
+    if (normalized.contains('карабин')) {
+      return 'Карабин быстро фиксируется и удобен для ежедневной носки.';
+    }
+    if (normalized.contains('штифт')) {
+      return 'Штифтовая фиксация аккуратно держит серьгу на мочке.';
+    }
+    if (normalized.contains('швенз')) {
+      return 'Швензовый замок дает мягкую посадку и подвижность серьги.';
+    }
+    if (normalized.contains('тогл')) {
+      return 'Тогл работает как заметная конструктивная деталь украшения.';
+    }
+    if (normalized.contains('булав')) {
+      return 'Булавка фиксирует брошь на ткани или аксессуаре.';
+    }
+    return 'Тип фиксации подобран под форму и сценарий носки изделия.';
+  }
+
   Widget _buildPackagingBlock(List<String> images) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _BlockTitle('УПАКОВКА'),
         const SizedBox(height: 12),
-        _ProductSection(
-          child: Row(
+        const _ProductSection(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _WidePreview(
-                imageUrl: '/static/content_media/IMG_0576.jpg',
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Text(
-                  'Каждое изделие в фирменной упаковке GLAME. Готово к подарку.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.55,
-                    color: GlameColors.textPrimary,
-                  ),
+              Text(
+                'Каждое изделие в фирменной упаковке GLAME. Готово к подарку.',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.55,
+                  color: GlameColors.textPrimary,
                 ),
+              ),
+              SizedBox(height: 14),
+              _WidePreview(
+                assetPath: 'assets/images/product/glame_packaging.webp',
               ),
             ],
           ),
@@ -1303,9 +1702,10 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeader(
+          _SectionHeader(
             title: 'ПОХОЖИЕ ПО НАСТРОЕНИЮ',
             action: 'Смотреть все',
+            onActionTap: () => context.go('/home?tab=1'),
           ),
           const SizedBox(height: 14),
           SizedBox(
@@ -1359,8 +1759,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     for (final item in variants) {
       if (item is! Map) continue;
       final id = item['id'];
-      final price = item['price'];
-      if (id is String && id.isNotEmpty && price is num && price > 0) {
+      if (id is String && id.isNotEmpty && _variantHasPositiveStock(item)) {
         return id;
       }
     }
@@ -1369,6 +1768,24 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
       final id = item['id'];
       if (id is String && id.isNotEmpty) return id;
     }
+    return null;
+  }
+
+  bool _variantHasPositiveStock(Map<dynamic, dynamic> item) {
+    final stock = _stockNumber(item['stock']) ?? _stockNumber(item['quantity']);
+    if (stock != null && stock > 0) return true;
+
+    final specs = item['specifications'];
+    if (specs is Map) {
+      final quantity = _stockNumber(specs['quantity']);
+      if (quantity != null && quantity > 0) return true;
+    }
+    return false;
+  }
+
+  num? _stockNumber(Object? value) {
+    if (value is num) return value;
+    if (value is String) return num.tryParse(value.trim().replaceAll(',', '.'));
     return null;
   }
 
@@ -1617,29 +2034,41 @@ class _BlockTitle extends StatelessWidget {
 class _SectionHeader extends StatelessWidget {
   final String title;
   final String action;
+  final VoidCallback? onActionTap;
 
-  const _SectionHeader({required this.title, required this.action});
+  const _SectionHeader({
+    required this.title,
+    required this.action,
+    this.onActionTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(child: _BlockTitle(title)),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Text(
-            action,
-            style: const TextStyle(
-              fontSize: 12,
-              color: GlameColors.textSecondary,
+        InkWell(
+          onTap: onActionTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Row(
+              children: [
+                Text(
+                  action,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: GlameColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.arrow_forward,
+                  size: 18,
+                  color: GlameColors.textSecondary,
+                ),
+              ],
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        const Icon(
-          Icons.arrow_forward,
-          size: 18,
-          color: GlameColors.textSecondary,
         ),
       ],
     );
@@ -1662,6 +2091,308 @@ class _ProductSection extends StatelessWidget {
   }
 }
 
+class _ArrivalOption {
+  final String productId;
+  final String label;
+  final bool inStock;
+
+  const _ArrivalOption({
+    required this.productId,
+    required this.label,
+    required this.inStock,
+  });
+}
+
+class _ArrivalSubscriptionSheet extends StatefulWidget {
+  final String productName;
+  final String? initialEmail;
+  final List<_ArrivalOption> options;
+  final Future<String> Function(String email, _ArrivalOption option) onSubmit;
+
+  const _ArrivalSubscriptionSheet({
+    required this.productName,
+    required this.initialEmail,
+    required this.options,
+    required this.onSubmit,
+  });
+
+  @override
+  State<_ArrivalSubscriptionSheet> createState() =>
+      _ArrivalSubscriptionSheetState();
+}
+
+class _ArrivalSubscriptionSheetState extends State<_ArrivalSubscriptionSheet> {
+  late final TextEditingController _email;
+  late _ArrivalOption _selected;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = (widget.initialEmail ?? '').contains('@')
+        ? widget.initialEmail
+        : '';
+    _email = TextEditingController(text: initial);
+    _selected = widget.options.isNotEmpty
+        ? widget.options.firstWhere(
+            (option) => !option.inStock,
+            orElse: () => widget.options.first,
+          )
+        : const _ArrivalOption(
+            productId: '',
+            label: 'Текущий вариант',
+            inStock: false,
+          );
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    super.dispose();
+  }
+
+  bool _validEmail(String value) {
+    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim());
+  }
+
+  Future<void> _submit() async {
+    final email = _email.text.trim().toLowerCase();
+    if (!_validEmail(email)) {
+      setState(() => _error = 'Введите корректный email');
+      return;
+    }
+    if (_selected.productId.isEmpty) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final message = await widget.onSubmit(email, _selected);
+      if (!mounted) return;
+      Navigator.of(context).pop(message);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error =
+            'Не удалось сохранить заявку. Проверьте email и попробуйте еще раз.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(left: 12, right: 12, bottom: bottom),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.86,
+          ),
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+          decoration: const BoxDecoration(
+            color: GlameColors.nearBlack,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+            border: Border(
+              top: BorderSide(color: GlameColors.borderGray),
+              left: BorderSide(color: GlameColors.borderGray),
+              right: BorderSide(color: GlameColors.borderGray),
+            ),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: GlameColors.whiteGlame,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Сообщить о поступлении',
+                        style: TextStyle(
+                          fontSize: 20,
+                          color: GlameColors.whiteGlame,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _loading
+                          ? null
+                          : () => Navigator.of(context).maybePop(),
+                      icon: const Icon(
+                        Icons.close,
+                        color: GlameColors.whiteGlame,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.productName.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: GlameColors.coldLightGray,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const _SelectorLabel('EMAIL ДЛЯ УВЕДОМЛЕНИЯ'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _email,
+                  enabled: !_loading,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done,
+                  style: const TextStyle(
+                    color: GlameColors.nearBlack,
+                    fontSize: 15,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: 'name@example.com',
+                    hintStyle: TextStyle(color: GlameColors.textSecondary),
+                    filled: true,
+                    fillColor: GlameColors.whiteGlame,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.zero,
+                      borderSide: BorderSide(color: GlameColors.whiteGlame),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.zero,
+                      borderSide: BorderSide(color: GlameColors.whiteGlame),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.zero,
+                      borderSide: BorderSide(color: GlameColors.whiteGlame),
+                    ),
+                  ),
+                  onSubmitted: (_) => _submit(),
+                ),
+                if (widget.options.length > 1) ...[
+                  const SizedBox(height: 18),
+                  const _SelectorLabel('ВАРИАНТ'),
+                  const SizedBox(height: 8),
+                  ...widget.options.map(
+                    (option) => _ArrivalVariantRow(
+                      option: option,
+                      selected: option.productId == _selected.productId,
+                      onTap: _loading
+                          ? null
+                          : () => setState(() => _selected = option),
+                    ),
+                  ),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    style: const TextStyle(
+                      color: GlameColors.coldLightGray,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                FilledButton(
+                  onPressed: _loading ? null : _submit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: GlameColors.whiteGlame,
+                    foregroundColor: GlameColors.nearBlack,
+                    disabledBackgroundColor: GlameColors.borderGray,
+                    disabledForegroundColor: GlameColors.nearBlack,
+                    minimumSize: const Size.fromHeight(48),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: Text(_loading ? 'СОХРАНЯЕМ...' : 'СООБЩИТЬ МНЕ'),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Мы добавим украшение в избранное и отправим письмо, когда выбранный вариант появится в наличии.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: GlameColors.steelGray,
+                    fontSize: 11,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArrivalVariantRow extends StatelessWidget {
+  final _ArrivalOption option;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const _ArrivalVariantRow({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: selected ? GlameColors.whiteGlame : GlameColors.borderGray,
+          ),
+          color: selected ? GlameColors.graphite : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              color: selected ? GlameColors.whiteGlame : GlameColors.steelGray,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                option.label,
+                style: const TextStyle(
+                  color: GlameColors.whiteGlame,
+                  fontSize: 13,
+                  height: 1.25,
+                ),
+              ),
+            ),
+            if (option.inStock)
+              const Text(
+                'В наличии',
+                style: TextStyle(color: GlameColors.steelGray, fontSize: 11),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SheetScaffold extends StatelessWidget {
   final String title;
   final Widget child;
@@ -1673,48 +2404,91 @@ class _SheetScaffold extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          18,
-          10,
-          18,
-          18 + MediaQuery.of(context).viewInsets.bottom,
+        padding: EdgeInsets.only(
+          left: 14,
+          right: 14,
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 42,
-                height: 3,
-                decoration: BoxDecoration(
-                  color: GlameColors.lightGray,
-                  borderRadius: BorderRadius.circular(3),
-                ),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+          decoration: const BoxDecoration(
+            color: GlameColors.nearBlack,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+            border: Border(
+              top: BorderSide(color: GlameColors.borderGray),
+              left: BorderSide(color: GlameColors.borderGray),
+              right: BorderSide(color: GlameColors.borderGray),
+            ),
+          ),
+          child: DefaultTextStyle.merge(
+            style: const TextStyle(color: GlameColors.whiteGlame),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: GlameColors.whiteGlame,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            letterSpacing: 1.2,
+                            color: GlameColors.whiteGlame,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: GlameColors.whiteGlame,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  child,
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(fontSize: 16, letterSpacing: 1.2),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close, size: 18),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            child,
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+ButtonStyle _sheetPrimaryButtonStyle() {
+  return FilledButton.styleFrom(
+    backgroundColor: GlameColors.whiteGlame,
+    foregroundColor: GlameColors.nearBlack,
+    disabledBackgroundColor: GlameColors.borderGray,
+    disabledForegroundColor: GlameColors.nearBlack,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+    textStyle: const TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      letterSpacing: .5,
+    ),
+  );
 }
 
 class _SheetProductCard extends StatelessWidget {
@@ -1733,8 +2507,8 @@ class _SheetProductCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        border: Border.all(color: GlameColors.lightGray),
-        borderRadius: BorderRadius.circular(8),
+        color: GlameColors.graphite,
+        border: Border.all(color: GlameColors.whiteGlame),
       ),
       child: Row(
         children: [
@@ -1744,7 +2518,7 @@ class _SheetProductCard extends StatelessWidget {
               width: 42,
               height: 42,
               child: imageUrl == null
-                  ? Container(color: GlameColors.surface)
+                  ? Container(color: GlameColors.nearBlack)
                   : CachedNetworkImage(imageUrl: imageUrl!, fit: BoxFit.cover),
             ),
           ),
@@ -1754,11 +2528,22 @@ class _SheetProductCard extends StatelessWidget {
               name.toUpperCase(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, letterSpacing: .4),
+              style: const TextStyle(
+                fontSize: 12,
+                letterSpacing: .4,
+                color: GlameColors.whiteGlame,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(width: 10),
-          Text(priceLabel, style: const TextStyle(fontSize: 12)),
+          Text(
+            priceLabel,
+            style: const TextStyle(
+              fontSize: 12,
+              color: GlameColors.coldLightGray,
+            ),
+          ),
         ],
       ),
     );
@@ -1789,7 +2574,7 @@ class _StylistEntrySheet extends StatelessWidget {
         children: [
           const Text(
             'Чтобы быстрее помочь, сначала уточним, что вам нужно',
-            style: TextStyle(fontSize: 12, color: GlameColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: GlameColors.coldLightGray),
           ),
           const SizedBox(height: 14),
           _SheetProductCard(
@@ -1814,7 +2599,7 @@ class _StylistEntrySheet extends StatelessWidget {
           const SizedBox(height: 10),
           const Text(
             'Дальше вопросы меняются в зависимости от ответа',
-            style: TextStyle(fontSize: 11, color: GlameColors.textSecondary),
+            style: TextStyle(fontSize: 11, color: GlameColors.steelGray),
           ),
         ],
       ),
@@ -1857,7 +2642,7 @@ class _ProductQuestionSheet extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               'Что хотите узнать?',
-              style: TextStyle(fontSize: 12, color: GlameColors.textSecondary),
+              style: TextStyle(fontSize: 12, color: GlameColors.coldLightGray),
             ),
           ),
           const SizedBox(height: 10),
@@ -1876,6 +2661,7 @@ class _ProductQuestionSheet extends StatelessWidget {
             width: double.infinity,
             height: 52,
             child: FilledButton(
+              style: _sheetPrimaryButtonStyle(),
               onPressed: () => onSubmit('Хочу консультацию по этому изделию'),
               child: const Text('ПЕРЕЙТИ К СТИЛИСТУ'),
             ),
@@ -1952,6 +2738,7 @@ class _ChoiceHelpSheetState extends State<_ChoiceHelpSheet> {
             width: double.infinity,
             height: 52,
             child: FilledButton(
+              style: _sheetPrimaryButtonStyle(),
               onPressed: () => widget.onSubmit([
                 'Кому: $who',
                 'Задача: $task',
@@ -1986,7 +2773,13 @@ class _QuestionGroup extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 12)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 12,
+              color: GlameColors.coldLightGray,
+            ),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -1998,6 +2791,22 @@ class _QuestionGroup extends StatelessWidget {
                 selected: selected,
                 onSelected: (_) => onChanged(option),
                 showCheckmark: false,
+                selectedColor: GlameColors.whiteGlame,
+                backgroundColor: Colors.transparent,
+                side: BorderSide(
+                  color: selected
+                      ? GlameColors.whiteGlame
+                      : GlameColors.borderGray,
+                ),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero,
+                ),
+                labelStyle: TextStyle(
+                  color: selected
+                      ? GlameColors.nearBlack
+                      : GlameColors.whiteGlame,
+                  fontSize: 12,
+                ),
               );
             }).toList(),
           ),
@@ -2022,20 +2831,32 @@ class _SheetActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.zero,
       child: Container(
         height: 52,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          border: Border.all(color: GlameColors.lightGray),
-          borderRadius: BorderRadius.circular(8),
+          color: GlameColors.graphite,
+          border: Border.all(color: GlameColors.whiteGlame),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 20, color: GlameColors.textSecondary),
+            Icon(icon, size: 20, color: GlameColors.whiteGlame),
             const SizedBox(width: 10),
-            Text(label, style: const TextStyle(fontSize: 13)),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: GlameColors.whiteGlame,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward,
+              size: 18,
+              color: GlameColors.whiteGlame,
+            ),
           ],
         ),
       ),
@@ -2397,25 +3218,17 @@ class _SquarePreview extends StatelessWidget {
 }
 
 class _WidePreview extends StatelessWidget {
-  final String? imageUrl;
+  final String assetPath;
 
-  const _WidePreview({this.imageUrl});
+  const _WidePreview({required this.assetPath});
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(2),
-      child: SizedBox(
-        width: 150,
-        height: 86,
-        child: imageUrl != null
-            ? CachedNetworkImage(
-                imageUrl: imageUrl!,
-                fit: BoxFit.cover,
-                placeholder: (_, _) => Container(color: GlameColors.surface),
-                errorWidget: (_, _, _) => Container(color: GlameColors.surface),
-              )
-            : Container(color: GlameColors.surface),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Image.asset(assetPath, fit: BoxFit.cover),
       ),
     );
   }
@@ -2746,10 +3559,18 @@ class _SelectorLabel extends StatelessWidget {
       style: const TextStyle(
         fontSize: 9,
         letterSpacing: 0.6,
-        color: GlameColors.textSecondary,
+        color: GlameColors.steelGray,
       ),
     );
   }
+}
+
+class _ProductDetailItem {
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const _ProductDetailItem(this.icon, this.title, this.description);
 }
 
 class _VariantChip extends StatelessWidget {

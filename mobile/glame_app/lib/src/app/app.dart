@@ -17,6 +17,7 @@ import '../features/product/product_screen.dart';
 import '../features/onboarding/onboarding_controller.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/profile/clients_screen.dart';
+import '../features/profile/profile_news_screen.dart';
 import '../features/checkout/checkout_screen.dart';
 import '../features/looks/look_detail_screen.dart';
 import '../features/looks/look_builder_screen.dart';
@@ -83,6 +84,9 @@ final routerProvider = Provider<GoRouter>((ref) {
             initialTab: tab,
             initialCategory: state.uri.queryParameters['category'],
             initialSearch: state.uri.queryParameters['search'],
+            initialCatalogStoreId: state.uri.queryParameters['storeId'],
+            initialCatalogStoreTitle: state.uri.queryParameters['storeTitle'],
+            initialCatalogStoreSlug: state.uri.queryParameters['storeSlug'],
             initialLookFilter: state.uri.queryParameters['lookFilter'],
           );
         },
@@ -154,11 +158,32 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/checkout',
-        builder: (context, state) => const CheckoutScreen(),
+        builder: (context, state) {
+          final step = switch (state.uri.queryParameters['step']) {
+            'address' => 1,
+            'payment' => 2,
+            'confirm' => 3,
+            _ => 0,
+          };
+          return CheckoutScreen(
+            initialStep: step,
+            returnToCartOnAddressBack:
+                step == 1 && state.uri.queryParameters['from'] == 'cart',
+          );
+        },
       ),
       GoRoute(
         path: '/clients',
         builder: (context, state) => const ClientsScreen(),
+      ),
+      GoRoute(
+        path: '/profile/news',
+        builder: (context, state) => const ProfileNewsScreen(),
+      ),
+      GoRoute(
+        path: '/profile/news/:id',
+        builder: (context, state) =>
+            ProfileNewsScreen(initialNewsId: state.pathParameters['id']),
       ),
       GoRoute(
         path: '/stylist-chat',
@@ -205,6 +230,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/brands',
         builder: (context, state) => const BrandsPageScreen(),
       ),
+      GoRoute(path: '/brands/all', redirect: (context, state) => '/brands'),
       GoRoute(
         path: '/brand/:id',
         builder: (context, state) =>
@@ -271,6 +297,12 @@ String? _catalogCategoryFromRoute({
   required String typeSlug,
 }) {
   switch (categorySlug.trim().toLowerCase()) {
+    case 'new':
+    case 'new-in':
+    case 'novelties':
+    case 'novinki':
+    case 'новинки':
+      return 'Новинки';
     case 'earrings':
       return 'Серьги';
     case 'ear_cuffs':

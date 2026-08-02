@@ -242,6 +242,7 @@ class _PhotoUploadScreenState extends ConsumerState<PhotoUploadScreen> {
                 imageUrl: introImageUrl,
                 imageAspectRatio: 1315 / 1197,
                 imageAssetPath: 'assets/images/home/photo_upload_intro.png',
+                onTap: _handleChooseOrTakePhoto,
               ),
               const SizedBox(height: 16),
               const PhotoSelectionInfoCard(),
@@ -1267,6 +1268,7 @@ class PhotoSelectionPromoCard extends StatelessWidget {
   final String? imageUrl;
   final double? imageAspectRatio;
   final bool useFixedHeightWhenImage;
+  final VoidCallback? onTap;
 
   const PhotoSelectionPromoCard({
     super.key,
@@ -1277,6 +1279,7 @@ class PhotoSelectionPromoCard extends StatelessWidget {
     this.imageUrl,
     this.imageAspectRatio,
     this.useFixedHeightWhenImage = false,
+    this.onTap,
   });
 
   @override
@@ -1291,235 +1294,262 @@ class PhotoSelectionPromoCard extends StatelessWidget {
           imageAspectRatio ??
           (hasAssetImage ? _promoImageAspectRatio(resolvedAssetPath) : 1);
       if (useFixedHeightWhenImage) {
-        return Container(
-          height: height,
+        return _wrapTap(
+          Container(
+            height: height,
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFD6D6D6)),
+            ),
+            child: hasNetworkImage
+                ? CachedNetworkImage(
+                    imageUrl: resolvedImageUrl,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.topCenter,
+                    placeholder: (_, _) =>
+                        const ColoredBox(color: Color(0xFFF4F1EC)),
+                    errorWidget: (_, _, _) => hasAssetImage
+                        ? Image.asset(
+                            resolvedAssetPath,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.topCenter,
+                          )
+                        : const ColoredBox(color: Color(0xFFF4F1EC)),
+                  )
+                : Image.asset(
+                    resolvedAssetPath,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.topCenter,
+                  ),
+          ),
+        );
+      }
+      return _wrapTap(
+        Container(
           decoration: BoxDecoration(
             border: Border.all(color: const Color(0xFFD6D6D6)),
           ),
-          child: hasNetworkImage
-              ? CachedNetworkImage(
-                  imageUrl: resolvedImageUrl,
-                  width: double.infinity,
-                  height: double.infinity,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.topCenter,
-                  placeholder: (_, _) =>
-                      const ColoredBox(color: Color(0xFFF4F1EC)),
-                  errorWidget: (_, _, _) => hasAssetImage
-                      ? Image.asset(
-                          resolvedAssetPath,
-                          width: double.infinity,
-                          height: double.infinity,
-                          fit: BoxFit.contain,
-                          alignment: Alignment.topCenter,
-                        )
-                      : const ColoredBox(color: Color(0xFFF4F1EC)),
-                )
-              : Image.asset(
-                  resolvedAssetPath,
-                  width: double.infinity,
-                  height: double.infinity,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.topCenter,
-                ),
-        );
-      }
-      return Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFD6D6D6)),
-        ),
-        child: AspectRatio(
-          aspectRatio: aspectRatio,
-          child: hasNetworkImage
-              ? CachedNetworkImage(
-                  imageUrl: resolvedImageUrl,
-                  width: double.infinity,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.topCenter,
-                  placeholder: (_, _) =>
-                      const ColoredBox(color: Color(0xFFF4F1EC)),
-                  errorWidget: (_, _, _) => hasAssetImage
-                      ? Image.asset(
-                          resolvedAssetPath,
-                          width: double.infinity,
-                          fit: BoxFit.contain,
-                          alignment: Alignment.topCenter,
-                        )
-                      : const ColoredBox(color: Color(0xFFF4F1EC)),
-                )
-              : Image.asset(
-                  resolvedAssetPath,
-                  width: double.infinity,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.topCenter,
-                ),
+          child: AspectRatio(
+            aspectRatio: aspectRatio,
+            child: hasNetworkImage
+                ? CachedNetworkImage(
+                    imageUrl: resolvedImageUrl,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.topCenter,
+                    placeholder: (_, _) =>
+                        const ColoredBox(color: Color(0xFFF4F1EC)),
+                    errorWidget: (_, _, _) => hasAssetImage
+                        ? Image.asset(
+                            resolvedAssetPath,
+                            width: double.infinity,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.topCenter,
+                          )
+                        : const ColoredBox(color: Color(0xFFF4F1EC)),
+                  )
+                : Image.asset(
+                    resolvedAssetPath,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.topCenter,
+                  ),
+          ),
         ),
       );
     }
 
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFD6D6D6)),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1E1E1E), Color(0xFF0F0F10), Color(0xFF272727)],
+    return _wrapTap(
+      Container(
+        height: height,
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFD6D6D6)),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF1E1E1E), Color(0xFF0F0F10), Color(0xFF272727)],
+          ),
         ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            left: 22,
-            top: 22,
-            child: Container(
-              width: 28,
-              height: 1,
-              color: GlameColors.surface2.withValues(alpha: 0.7),
+        child: Stack(
+          children: [
+            Positioned(
+              left: 22,
+              top: 22,
+              child: Container(
+                width: 28,
+                height: 1,
+                color: GlameColors.surface2.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-          Positioned(
-            right: 22,
-            top: 22,
-            child: Container(
-              width: 28,
-              height: 1,
-              color: GlameColors.surface2.withValues(alpha: 0.7),
+            Positioned(
+              right: 22,
+              top: 22,
+              child: Container(
+                width: 28,
+                height: 1,
+                color: GlameColors.surface2.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-          Positioned(
-            left: 22,
-            top: 22,
-            child: Container(
-              width: 1,
-              height: 28,
-              color: GlameColors.surface2.withValues(alpha: 0.7),
+            Positioned(
+              left: 22,
+              top: 22,
+              child: Container(
+                width: 1,
+                height: 28,
+                color: GlameColors.surface2.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-          Positioned(
-            right: 22,
-            top: 22,
-            child: Container(
-              width: 1,
-              height: 28,
-              color: GlameColors.surface2.withValues(alpha: 0.7),
+            Positioned(
+              right: 22,
+              top: 22,
+              child: Container(
+                width: 1,
+                height: 28,
+                color: GlameColors.surface2.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-          Positioned(
-            left: 22,
-            bottom: 22,
-            child: Container(
-              width: 28,
-              height: 1,
-              color: GlameColors.surface2.withValues(alpha: 0.7),
+            Positioned(
+              left: 22,
+              bottom: 22,
+              child: Container(
+                width: 28,
+                height: 1,
+                color: GlameColors.surface2.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-          Positioned(
-            right: 22,
-            bottom: 22,
-            child: Container(
-              width: 28,
-              height: 1,
-              color: GlameColors.surface2.withValues(alpha: 0.7),
+            Positioned(
+              right: 22,
+              bottom: 22,
+              child: Container(
+                width: 28,
+                height: 1,
+                color: GlameColors.surface2.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-          Positioned(
-            left: 22,
-            bottom: 22,
-            child: Container(
-              width: 1,
-              height: 28,
-              color: GlameColors.surface2.withValues(alpha: 0.7),
+            Positioned(
+              left: 22,
+              bottom: 22,
+              child: Container(
+                width: 1,
+                height: 28,
+                color: GlameColors.surface2.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-          Positioned(
-            right: 22,
-            bottom: 22,
-            child: Container(
-              width: 1,
-              height: 28,
-              color: GlameColors.surface2.withValues(alpha: 0.7),
+            Positioned(
+              right: 22,
+              bottom: 22,
+              child: Container(
+                width: 1,
+                height: 28,
+                color: GlameColors.surface2.withValues(alpha: 0.7),
+              ),
             ),
-          ),
-          Positioned(
-            right: 28,
-            top: 56,
-            bottom: 56,
-            child: Container(
-              width: 172,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    GlameColors.surface2.withValues(alpha: 0.26),
-                    GlameColors.surface2.withValues(alpha: 0.1),
+            Positioned(
+              right: 28,
+              top: 56,
+              bottom: 56,
+              child: Container(
+                width: 172,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      GlameColors.surface2.withValues(alpha: 0.26),
+                      GlameColors.surface2.withValues(alpha: 0.1),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 28,
+              top: 34,
+              child: SizedBox(
+                width: 200,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 34,
+                        height: 1.02,
+                        fontWeight: FontWeight.w400,
+                        color: GlameColors.surface2,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        height: 1.48,
+                        color: GlameColors.surface2,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-          ),
-          Positioned(
-            left: 28,
-            top: 34,
-            child: SizedBox(
-              width: 200,
+            Positioned(
+              left: 28,
+              right: 28,
+              bottom: 30,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 34,
-                      height: 1.02,
-                      fontWeight: FontWeight.w400,
-                      color: GlameColors.surface2,
-                    ),
+                children: const [
+                  _VisualFeatureLine(
+                    icon: Icons.adjust_outlined,
+                    label: 'Ваш стиль',
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    description,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      height: 1.48,
-                      color: GlameColors.surface2,
-                    ),
+                  SizedBox(height: 10),
+                  _VisualFeatureLine(
+                    icon: Icons.auto_awesome_outlined,
+                    label: 'Образ',
+                  ),
+                  SizedBox(height: 10),
+                  _VisualFeatureLine(
+                    icon: Icons.diamond_outlined,
+                    label: 'Украшения',
+                  ),
+                  SizedBox(height: 10),
+                  _VisualFeatureLine(
+                    icon: Icons.tune_outlined,
+                    label: 'Подбор',
+                  ),
+                  SizedBox(height: 10),
+                  _VisualFeatureLine(
+                    icon: Icons.favorite_border,
+                    label: 'Рекомендации',
                   ),
                 ],
               ),
             ),
-          ),
-          Positioned(
-            left: 28,
-            right: 28,
-            bottom: 30,
-            child: Column(
-              children: const [
-                _VisualFeatureLine(
-                  icon: Icons.adjust_outlined,
-                  label: 'Ваш стиль',
-                ),
-                SizedBox(height: 10),
-                _VisualFeatureLine(
-                  icon: Icons.auto_awesome_outlined,
-                  label: 'Образ',
-                ),
-                SizedBox(height: 10),
-                _VisualFeatureLine(
-                  icon: Icons.diamond_outlined,
-                  label: 'Украшения',
-                ),
-                SizedBox(height: 10),
-                _VisualFeatureLine(icon: Icons.tune_outlined, label: 'Подбор'),
-                SizedBox(height: 10),
-                _VisualFeatureLine(
-                  icon: Icons.favorite_border,
-                  label: 'Рекомендации',
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _wrapTap(Widget child) {
+    if (onTap == null) {
+      return child;
+    }
+    return Semantics(
+      button: true,
+      label: 'Выбрать или сделать фото',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: child,
+        ),
       ),
     );
   }

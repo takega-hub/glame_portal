@@ -41,7 +41,9 @@ class WishlistController extends StateNotifier<Set<String>> {
         await _applyServerRows(synced);
         return;
       }
-      final rows = await _ref.read(customerCabinetApiProvider).getFavoriteProducts();
+      final rows = await _ref
+          .read(customerCabinetApiProvider)
+          .getFavoriteProducts();
       await _applyServerRows(rows);
     } catch (_) {
       // Local cache remains available when offline or unauthenticated.
@@ -63,7 +65,11 @@ class WishlistController extends StateNotifier<Set<String>> {
     await prefs.setStringList(_key, ids.toList());
   }
 
-  Future<void> _syncServer(Set<String> ids, {String? changedId, required bool added}) async {
+  Future<void> _syncServer(
+    Set<String> ids, {
+    String? changedId,
+    required bool added,
+  }) async {
     final auth = _ref.read(authControllerProvider);
     if (auth.user == null) return;
     try {
@@ -71,8 +77,8 @@ class WishlistController extends StateNotifier<Set<String>> {
       final rows = changedId == null
           ? await api.syncFavoriteProducts(ids.toList())
           : added
-              ? await api.addFavoriteProduct(changedId)
-              : await api.deleteFavoriteProduct(changedId);
+          ? await api.addFavoriteProduct(changedId)
+          : await api.deleteFavoriteProduct(changedId);
       await _applyServerRows(rows);
     } catch (_) {
       // Keep optimistic local state; next load will reconcile.
@@ -93,6 +99,15 @@ class WishlistController extends StateNotifier<Set<String>> {
     state = next;
     await _persistLocal(next);
     await _syncServer(next, changedId: id, added: added);
+  }
+
+  Future<void> ensureAdded(String productId) async {
+    final id = productId.trim();
+    if (id.isEmpty || state.contains(id)) return;
+    final next = {...state, id};
+    state = next;
+    await _persistLocal(next);
+    await _syncServer(next, changedId: id, added: true);
   }
 
   Future<void> remove(String productId) async {

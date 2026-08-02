@@ -17,17 +17,15 @@ class ClientsScreen extends StatefulWidget {
           '01_Условия_покупки_и_использования_приложения_GLAME.docx',
       prefKey: 'clients_doc_purchase_app_terms_read',
     ),
-    _ClientInfoItem('02', 'Условия возврата'),
     _ClientInfoItem(
-      '03',
+      '02',
       'Политика конфиденциальности',
       assetPath: 'assets/documents/glame_privacy_policy.txt',
       originalFileName: '02_Политика_конфиденциальности_GLAME.docx',
       prefKey: 'clients_doc_privacy_policy_read',
     ),
-    _ClientInfoItem('04', 'Публичная оферта'),
     _ClientInfoItem(
-      '05',
+      '03',
       'Рекомендательные технологии',
       assetPath: 'assets/documents/glame_recommendation_rules.txt',
       originalFileName: '03_Правила_рекомендательных_технологий_GLAME.docx',
@@ -414,79 +412,32 @@ class _SupportPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(height: 1, color: GlameColors.borderGray),
-        const SizedBox(height: 22),
-        const Text(
-          'CONTACT & SUPPORT',
+        Divider(height: 1, color: GlameColors.borderGray),
+        SizedBox(height: 22),
+        Text(
+          'Email',
           style: TextStyle(
-            color: GlameColors.coldLightGray,
-            fontSize: 11,
+            color: GlameColors.steelGray,
+            fontSize: 12,
             height: 1,
             fontWeight: FontWeight.w600,
-            letterSpacing: 2.2,
+            letterSpacing: 1.2,
           ),
         ),
-        const SizedBox(height: 22),
-        Row(
-          children: const [
-            Expanded(
-              child: _SupportTile(number: '01', title: 'WHATSAPP'),
-            ),
-            SizedBox(width: 1),
-            Expanded(
-              child: _SupportTile(number: '02', title: 'TELEGRAM'),
-            ),
-          ],
+        SizedBox(height: 12),
+        Text(
+          'info@glamejewelry.ru',
+          style: TextStyle(
+            color: GlameColors.whiteGlame,
+            fontSize: 18,
+            height: 1.2,
+            fontWeight: FontWeight.w400,
+          ),
         ),
       ],
-    );
-  }
-}
-
-class _SupportTile extends StatelessWidget {
-  final String number;
-  final String title;
-
-  const _SupportTile({required this.number, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1,
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: GlameColors.nearBlack,
-          border: Border.all(color: GlameColors.borderGray, width: 1),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              number,
-              style: const TextStyle(
-                color: GlameColors.steelGray,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              title,
-              style: const TextStyle(
-                color: GlameColors.whiteGlame,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.6,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

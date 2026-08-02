@@ -45,6 +45,7 @@ dependencies:
   latlong2: ^0.9.1
   freezed_annotation: ^2.4.4
   json_annotation: ^4.9.0
+  share_plus: ^13.2.1
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +76,7 @@ flutter:
     - assets/images/stores/
     - assets/data/
     - assets/images/service/
+    - assets/images/product/
     - assets/images/gift_certificate/
     - assets/documents/
 

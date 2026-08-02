@@ -16,6 +16,7 @@ class CustomerCabinetApi {
     String? fullName,
     String? email,
     Map<String, dynamic>? preferredDelivery,
+    List<Map<String, dynamic>>? deliveryAddresses,
   }) async {
     final resp = await _dio.put(
       '/customer/profile',
@@ -24,6 +25,8 @@ class CustomerCabinetApi {
         ?email == null ? null : 'email': email,
         ?preferredDelivery == null ? null : 'preferred_delivery':
             preferredDelivery,
+        ?deliveryAddresses == null ? null : 'delivery_addresses':
+            deliveryAddresses,
       },
     );
     return Map<String, dynamic>.from(resp.data as Map);

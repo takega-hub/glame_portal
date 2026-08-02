@@ -7,25 +7,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/formatters/rub.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/theme/glame_theme.dart';
+import '../../core/widgets/glame_bottom_bar.dart';
 import '../auth/auth_controller.dart';
 import '../customer/stylist_entry.dart';
 import '../home/home_api.dart';
+import '../looks/looks_api.dart';
 
 const String _block4BackgroundAsset =
     'assets/images/home/glame_home_block4_open_display_background.png';
 const String _block4HomeBlockKey = 'collected_glame';
 const String _block4BrandsPageBlockKey = 'collected_glame_brands';
+const String _brandsShowcaseBlockKey = 'brands_showcase';
 const double _brandsPagePadding = 28;
-const double _block4CompactBrandSectionHeight = 340;
 const String _block4HomeCacheKey = 'glame.home.block4.collected_glame.v1';
+const String _brandSlidesCachePrefix = 'glame.brand.slides.v2.';
 const String _block4HomeSnapshotAsset =
     'assets/data/home_block4_collected_glame_snapshot.json';
 
 final _brandsApiProvider = Provider<HomeApi>((ref) {
   return HomeApi(ref.watch(apiClientProvider));
+});
+
+final _brandsLooksApiProvider = Provider<LooksApi>((ref) {
+  return LooksApi(ref.watch(apiClientProvider));
 });
 
 final homeCollectedGlameBlockProvider =
@@ -120,79 +126,243 @@ Map<String, dynamic> _firstMap(List<dynamic> raw) {
   return const <String, dynamic>{};
 }
 
-final brandsPageHeroProvider = FutureProvider<BrandsPageHeroData?>((ref) async {
+final brandsPageHeroProvider = StreamProvider<BrandsPageHeroData?>((ref) {
   final api = ref.watch(_brandsApiProvider);
-  final raw = await api.getHomeSlides(blockKey: _block4BrandsPageBlockKey);
-  final slide = raw.isNotEmpty && raw.first is Map
-      ? Map<String, dynamic>.from(raw.first as Map)
-      : const <String, dynamic>{};
-  final imageSource = '${slide['image_url'] ?? ''}'.trim();
-  if (imageSource.isEmpty) {
-    return null;
-  }
-  final title = '${slide['title'] ?? ''}'.trim();
-  final subtitle = '${slide['subtitle'] ?? ''}'.trim();
-  return BrandsPageHeroData(
-    imageSource: imageSource,
-    title: title.isEmpty ? 'Смотреть бренды' : title,
-    subtitle: subtitle.isEmpty ? 'Собрано GLAME' : subtitle,
-  );
+  return _watchBrandSlide(_block4BrandsPageBlockKey, api).map((slide) {
+    if (slide == null) return null;
+    final imageSource = '${slide['image_url'] ?? ''}'.trim();
+    if (imageSource.isEmpty) return null;
+    final title = '${slide['title'] ?? ''}'.trim();
+    final subtitle = '${slide['subtitle'] ?? ''}'.trim();
+    return BrandsPageHeroData(
+      imageSource: imageSource,
+      title: title.isEmpty ? 'Смотреть бренды' : title,
+      subtitle: subtitle.isEmpty ? 'Собрано GLAME' : subtitle,
+    );
+  });
 });
 
-final brandDetailHeroProvider =
-    FutureProvider.family<BrandsPageHeroData?, String>((ref, brandId) async {
-      final api = ref.watch(_brandsApiProvider);
-      final raw = await api.getHomeSlides(
-        blockKey: _brandDetailBlockKey(brandId),
-      );
-      final slide = raw.isNotEmpty && raw.first is Map
-          ? Map<String, dynamic>.from(raw.first as Map)
-          : const <String, dynamic>{};
-      final imageSource = '${slide['image_url'] ?? ''}'.trim();
-      if (imageSource.isEmpty) {
-        return null;
+Stream<Map<String, dynamic>?> _watchBrandSlide(
+  String blockKey,
+  HomeApi api,
+) async* {
+  await for (final slides in _watchBrandSlides(blockKey, api)) {
+    yield _firstNullableMap(slides);
+  }
+}
+
+Stream<List<dynamic>> _watchBrandSlides(String blockKey, HomeApi api) async* {
+  final cacheKey = '$_brandSlidesCachePrefix$blockKey';
+  final cached = await _readBrandSlidesCache(cacheKey);
+  if (cached.isNotEmpty) {
+    yield cached;
+  }
+
+  try {
+    final remote = await api.getHomeSlides(blockKey: blockKey);
+    if (remote.isNotEmpty) {
+      await _saveBrandSlidesCache(cacheKey, remote);
+      if (jsonEncode(remote) != jsonEncode(cached)) {
+        yield remote;
       }
-      return BrandsPageHeroData(
-        imageSource: imageSource,
-        title: '',
-        subtitle: '',
-      );
+    } else if (cached.isEmpty) {
+      yield const <dynamic>[];
+    }
+  } catch (_) {
+    if (cached.isEmpty) yield const <dynamic>[];
+  }
+}
+
+Map<String, dynamic>? _firstNullableMap(List<dynamic> raw) {
+  for (final item in raw) {
+    if (item is Map) return Map<String, dynamic>.from(item);
+  }
+  return null;
+}
+
+Future<void> _saveBrandSlidesCache(String key, List<dynamic> slides) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(key, jsonEncode(slides));
+}
+
+Future<List<dynamic>> _readBrandSlidesCache(String key) async {
+  final prefs = await SharedPreferences.getInstance();
+  final raw = prefs.getString(key);
+  if (raw == null || raw.isEmpty) return const <dynamic>[];
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is List) return decoded;
+  } catch (_) {
+    await prefs.remove(key);
+  }
+  return const <dynamic>[];
+}
+
+final brandDetailHeroProvider =
+    StreamProvider.family<BrandsPageHeroData?, String>((ref, brandId) {
+      final api = ref.watch(_brandsApiProvider);
+      return _watchBrandSlide(_brandDetailBlockKey(brandId), api).map((slide) {
+        if (slide == null) return null;
+        final imageSource = '${slide['image_url'] ?? ''}'.trim();
+        if (imageSource.isEmpty) return null;
+        final title = '${slide['title'] ?? ''}'.trim();
+        final subtitle = '${slide['subtitle'] ?? ''}'.trim();
+        return BrandsPageHeroData(
+          imageSource: imageSource,
+          title: title,
+          subtitle: subtitle,
+        );
+      });
     });
 
-final brandFeaturedProductsProvider =
-    FutureProvider.family<List<_BrandProductCardData>, String>((
+final brandFeaturedLooksProvider =
+    FutureProvider.family<List<_BrandLookCardData>, String>((
       ref,
       brandId,
     ) async {
       final brand = _brandById(brandId);
-      if (brand == null) return const <_BrandProductCardData>[];
+      if (brand == null) return const <_BrandLookCardData>[];
 
-      final api = ref.watch(_brandsApiProvider);
-      final raw = await api.getProductsPaged(
-        skip: 0,
-        limit: 100,
-        search: brand.searchQuery,
-        inStock: true,
-        hasImages: true,
-      );
-
-      final itemsRaw = raw['items'];
-      if (itemsRaw is! List) return const <_BrandProductCardData>[];
-
-      final items = itemsRaw
+      final api = ref.watch(_brandsLooksApiProvider);
+      final raw = await api.getAllFeed();
+      final looks = raw
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
           .toList(growable: false);
 
-      final candidates = items
-          .map(_BrandProductCardData.fromMap)
+      final candidates = looks
+          .where((look) => _lookHasBrandProduct(look, brand))
+          .map(_BrandLookCardData.fromMap)
           .where((item) => item.id.isNotEmpty)
-          .where((item) => _matchesBrand(item, brand))
           .toList(growable: false);
 
-      final ordered = _selectFeaturedProducts(candidates, brand);
-      return ordered.take(6).toList(growable: false);
+      return candidates.take(6).toList(growable: false);
     });
+
+final brandsShowcaseProvider = StreamProvider<List<_BrandShowcaseCardData>>((
+  ref,
+) async* {
+  final api = ref.watch(_brandsApiProvider);
+  await for (final cards in _watchBrandShowcaseCards(api)) {
+    yield cards;
+  }
+});
+
+Stream<List<_BrandShowcaseCardData>> _watchBrandShowcaseCards(
+  HomeApi api,
+) async* {
+  final cacheKeys = [
+    _brandsShowcaseBlockKey,
+    for (final brand in _allBrands) _brandDetailBlockKey(brand.id),
+  ];
+  final cachedCards = await _loadBrandShowcaseCardsFromCache(cacheKeys);
+  if (cachedCards.isNotEmpty) {
+    yield _fillBrandShowcaseCards(cachedCards.take(4).toList(growable: false));
+  }
+
+  final remoteCards = <_BrandShowcaseCardData>[];
+  List<dynamic> overrideRaw;
+  try {
+    overrideRaw = await api.getHomeSlides(blockKey: _brandsShowcaseBlockKey);
+  } catch (_) {
+    if (cachedCards.isEmpty) yield _fallbackBrandShowcaseCards;
+    return;
+  }
+  if (overrideRaw.isNotEmpty) {
+    await _saveBrandSlidesCache(
+      '$_brandSlidesCachePrefix$_brandsShowcaseBlockKey',
+      overrideRaw,
+    );
+    remoteCards.addAll(
+      overrideRaw
+          .whereType<Map>()
+          .map((item) => _BrandShowcaseCardData.fromMap(item))
+          .where((item) => item.title.isNotEmpty)
+          .take(4),
+    );
+  }
+  if (remoteCards.isNotEmpty) {
+    yield _fillBrandShowcaseCards(remoteCards);
+    return;
+  }
+
+  final detailCards = <_BrandShowcaseCardData>[];
+  for (final brand in _allBrands) {
+    final blockKey = _brandDetailBlockKey(brand.id);
+    List<dynamic> raw;
+    try {
+      raw = await api.getHomeSlides(blockKey: blockKey);
+    } catch (_) {
+      continue;
+    }
+    if (raw.isNotEmpty) {
+      await _saveBrandSlidesCache('$_brandSlidesCachePrefix$blockKey', raw);
+    }
+    if (raw.isEmpty || raw.first is! Map) continue;
+    detailCards.add(
+      _BrandShowcaseCardData.fromBrandDetail(
+        brand,
+        Map<String, dynamic>.from(raw.first as Map),
+      ),
+    );
+  }
+  detailCards.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+  final next = _fillBrandShowcaseCards(
+    detailCards.take(4).toList(growable: false),
+  );
+  if (jsonEncode(next.map((item) => item.cacheSignature).toList()) !=
+      jsonEncode(cachedCards.map((item) => item.cacheSignature).toList())) {
+    yield next;
+  } else if (cachedCards.isEmpty) {
+    yield next;
+  }
+}
+
+Future<List<_BrandShowcaseCardData>> _loadBrandShowcaseCardsFromCache(
+  List<String> blockKeys,
+) async {
+  final cards = <_BrandShowcaseCardData>[];
+  for (final blockKey in blockKeys) {
+    final cached = await _readBrandSlidesCache(
+      '$_brandSlidesCachePrefix$blockKey',
+    );
+    if (cached.isEmpty) continue;
+    if (blockKey == _brandsShowcaseBlockKey) {
+      cards.addAll(
+        cached
+            .whereType<Map>()
+            .map((item) => _BrandShowcaseCardData.fromMap(item))
+            .where((item) => item.title.isNotEmpty),
+      );
+      continue;
+    }
+    final brandId = blockKey.replaceFirst('brand_detail_', '');
+    final brand = _brandById(brandId);
+    if (brand == null || cached.first is! Map) continue;
+    cards.add(
+      _BrandShowcaseCardData.fromBrandDetail(
+        brand,
+        Map<String, dynamic>.from(cached.first as Map),
+      ),
+    );
+  }
+  cards.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+  return cards;
+}
+
+List<_BrandShowcaseCardData> _fillBrandShowcaseCards(
+  List<_BrandShowcaseCardData> cards,
+) {
+  final result = <_BrandShowcaseCardData>[...cards];
+  final usedIds = result.map((item) => item.brandId).toSet();
+  for (final fallback in _fallbackBrandShowcaseCards) {
+    if (result.length >= 4) break;
+    if (usedIds.contains(fallback.brandId)) continue;
+    result.add(fallback);
+    usedIds.add(fallback.brandId);
+  }
+  return result.take(4).toList(growable: false);
+}
 
 class HomeBlockCollectedGlameData {
   final String title;
@@ -251,15 +421,13 @@ class _HomeCollectedGlameBlockState
 
   @override
   Widget build(BuildContext context) {
-    final dataAsync = widget.data == null
-        ? ref.watch(homeCollectedGlameBlockProvider)
-        : AsyncValue.data(widget.data!);
+    final showcaseAsync = ref.watch(brandsShowcaseProvider);
 
-    return dataAsync.when(
-      data: (data) {
+    return showcaseAsync.when(
+      data: (cards) {
         _trackViewOnce();
-        return _HomeCollectedGlameBlockContent(
-          data: data,
+        return _HomeBrandsShowcaseSection(
+          cards: cards,
           viewportHeight: widget.viewportHeight,
           onCtaPressed: () {
             _trackBlock4Event('home_block4_brands_click');
@@ -267,8 +435,16 @@ class _HomeCollectedGlameBlockState
           },
         );
       },
-      loading: () => const _HomeCollectedGlameBlockSkeleton(),
-      error: (_, _) => const SizedBox.shrink(),
+      loading: () => _HomeBrandsShowcaseSection(
+        cards: _fallbackBrandShowcaseCards,
+        viewportHeight: widget.viewportHeight,
+        onCtaPressed: widget.onCtaPressed,
+      ),
+      error: (_, _) => _HomeBrandsShowcaseSection(
+        cards: _fallbackBrandShowcaseCards,
+        viewportHeight: widget.viewportHeight,
+        onCtaPressed: widget.onCtaPressed,
+      ),
     );
   }
 
@@ -285,209 +461,65 @@ class _HomeCollectedGlameBlockState
   }
 }
 
-class _HomeCollectedGlameBlockContent extends StatelessWidget {
-  final HomeBlockCollectedGlameData data;
+class _HomeBrandsShowcaseSection extends StatelessWidget {
+  final List<_BrandShowcaseCardData> cards;
   final VoidCallback onCtaPressed;
   final double? viewportHeight;
 
-  const _HomeCollectedGlameBlockContent({
-    required this.data,
+  const _HomeBrandsShowcaseSection({
+    required this.cards,
     required this.onCtaPressed,
     this.viewportHeight,
   });
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
     final compact = viewportHeight != null;
-    final targetHeight = viewportHeight;
-    final topBarBottom =
-        MediaQuery.of(context).padding.top +
-        GlameUi.heroTopOffset +
-        GlameUi.heroTopBarHeight;
-    final contentWidth = width - (GlameUi.pagePadding * 2);
-    final compactBrandSectionHeight = compact
-        ? _block4CompactBrandSectionHeight
-        : 0.0;
-    final heroHeight = compact
-        ? ((targetHeight ?? 760) - compactBrandSectionHeight).clamp(
-            360.0,
-            520.0,
-          )
-        : data.useSingleImage
-        ? (contentWidth * 1.52).clamp(520.0, 980.0)
-        : (contentWidth * 1.5).clamp(430.0, 560.0);
-    final heroTopPadding = compact
-        ? topBarBottom + 24.0
-        : data.useSingleImage
-        ? (width < 420 ? 44.0 : 56.0)
-        : (width < 420 ? 58.0 : 72.0);
-    final titleMaxWidth = contentWidth * (width < 420 ? 0.84 : 0.72);
-    final subtitleMaxWidth = contentWidth * (width < 420 ? 0.58 : 0.62);
-    final ctaWidth = compact ? 164.0 : (width < 420 ? 168.0 : 205.0);
+    final safeTop = MediaQuery.of(context).padding.top;
+    final topPadding = compact
+        ? safeTop + GlameUi.heroTopOffset + GlameUi.heroTopBarHeight + 10
+        : 58.0;
+    final bottomPadding = compact ? 16.0 : 42.0;
 
-    return Semantics(
-      label: data.title,
-      child: Container(
-        height: targetHeight,
-        width: double.infinity,
-        color: GlameColors.graphite,
+    return Container(
+      height: viewportHeight,
+      width: double.infinity,
+      color: GlameColors.whiteGlame,
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          GlameUi.pagePadding,
+          topPadding,
+          GlameUi.pagePadding,
+          bottomPadding,
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              height: heroHeight,
-              child: Stack(
-                children: [
-                  if (data.useSingleImage)
-                    Positioned.fill(
-                      child: _Block4ImageLayer(
-                        source: data.visualImage,
-                        cacheVersion: data.imageCacheVersion,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.topCenter,
-                      ),
-                    ),
-                  if (!data.useSingleImage) ...[
-                    Positioned.fill(
-                      child: _Block4ImageLayer(
-                        source: data.backgroundImage ?? _block4BackgroundAsset,
-                        cacheVersion: data.imageCacheVersion,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                      ),
-                    ),
-                    Positioned(
-                      right: 0,
-                      top: 210,
-                      bottom: 0,
-                      width: width * 0.72,
-                      child: IgnorePointer(
-                        child: _Block4ImageLayer(
-                          source: data.visualImage,
-                          cacheVersion: data.imageCacheVersion,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.centerRight,
-                        ),
-                      ),
-                    ),
-                  ],
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              GlameColors.graphite.withValues(alpha: 0.96),
-                              GlameColors.graphite.withValues(alpha: 0.66),
-                              GlameColors.graphite.withValues(alpha: 0.16),
-                            ],
-                            stops: data.useSingleImage
-                                ? const [0.0, 0.34, 0.78]
-                                : const [0.0, 0.38, 0.78],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      GlameUi.pagePadding,
-                      heroTopPadding,
-                      GlameUi.pagePadding,
-                      28,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: titleMaxWidth),
-                          child: Text(
-                            data.title,
-                            style: TextStyle(
-                              fontSize: compact ? 34 : 44,
-                              height: 1.06,
-                              letterSpacing: 0,
-                              color: GlameColors.whiteGlame,
-                              fontWeight: FontWeight.w300,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: compact ? 18 : 28),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: subtitleMaxWidth,
-                          ),
-                          child: Text(
-                            data.subtitle,
-                            style: TextStyle(
-                              fontSize: compact ? 18 : 23,
-                              height: 1.38,
-                              letterSpacing: 0,
-                              color: GlameColors.steelGray,
-                              fontWeight: FontWeight.w300,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: compact ? 20 : 34),
-                        SizedBox(
-                          height: compact ? 48 : GlameUi.buttonHeight,
-                          width: ctaWidth,
-                          child: OutlinedButton(
-                            onPressed: onCtaPressed,
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(
-                                GlameUi.minTapTarget,
-                              ),
-                              side: const BorderSide(
-                                color: GlameColors.whiteGlame,
-                                width: GlameUi.borderWidth,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  GlameUi.radius,
-                                ),
-                              ),
-                              padding: EdgeInsets.zero,
-                            ),
-                            child: Text(
-                              data.ctaLabel,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: compact ? 16 : 18,
-                                height: 1.0,
-                                letterSpacing: 0,
-                                color: GlameColors.whiteGlame,
-                                fontWeight: FontWeight.w300,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+            const Text(
+              'Бренды',
+              style: TextStyle(
+                fontSize: 52,
+                height: 0.96,
+                letterSpacing: 0,
+                fontWeight: FontWeight.w300,
+                color: GlameColors.graphite,
               ),
             ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                GlameUi.pagePadding,
-                compact ? 8 : 14,
-                GlameUi.pagePadding,
-                compact ? 18 : 30,
-              ),
-              child: _Block4BrandsGrid(
-                brands: data.brandNames,
-                compact: compact,
-                onBrandTap: (brandName) {
-                  final brandId = _brandIdFromName(brandName);
-                  if (brandId.isEmpty) return;
-                  context.push('/brand/$brandId');
-                },
+            const SizedBox(height: 18),
+            const Text(
+              'Выбирайте бренд по характеру, стилю и настроению.',
+              style: TextStyle(
+                fontSize: 17,
+                height: 1.35,
+                color: GlameColors.steelGrey,
+                fontWeight: FontWeight.w300,
               ),
             ),
+            SizedBox(height: compact ? 24 : 34),
+            _BrandsShowcaseGrid(cards: cards),
+            SizedBox(height: compact ? 24 : 36),
+            _BrandsShowAllButton(onPressed: onCtaPressed),
           ],
         ),
       ),
@@ -495,55 +527,17 @@ class _HomeCollectedGlameBlockContent extends StatelessWidget {
   }
 }
 
-class _HomeCollectedGlameBlockSkeleton extends StatelessWidget {
-  const _HomeCollectedGlameBlockSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: GlameColors.surface2,
-      padding: const EdgeInsets.fromLTRB(
-        _brandsPagePadding,
-        0,
-        _brandsPagePadding,
-        36,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: const [
-          _CollectedGlameSkeletonBox(height: 38, width: 240),
-          SizedBox(height: 18),
-          _CollectedGlameSkeletonBox(height: 52, width: 310),
-          SizedBox(height: 28),
-          AspectRatio(
-            aspectRatio: 941 / 1672,
-            child: _CollectedGlameSkeletonBox(),
-          ),
-          SizedBox(height: 16),
-          SizedBox(
-            height: GlameUi.buttonHeight,
-            child: _CollectedGlameSkeletonBox(),
-          ),
-          SizedBox(height: 20),
-          _CollectedGlameSkeletonBox(height: 92),
-        ],
-      ),
-    );
-  }
-}
-
 class _CollectedGlameSkeletonBox extends StatelessWidget {
-  final double? width;
   final double? height;
 
-  const _CollectedGlameSkeletonBox({this.width, this.height});
+  const _CollectedGlameSkeletonBox({this.height});
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        width: width,
+        width: double.infinity,
         height: height,
         decoration: BoxDecoration(
           color: GlameColors.coolLightGray,
@@ -615,101 +609,6 @@ String? _localBlock4ImageAsset(String source, String? cacheVersion) {
   };
 }
 
-class _Block4BrandsGrid extends StatelessWidget {
-  final List<String> brands;
-  final ValueChanged<String> onBrandTap;
-  final bool compact;
-
-  const _Block4BrandsGrid({
-    required this.brands,
-    required this.onBrandTap,
-    this.compact = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = compact
-        ? <List<String>>[
-            brands.take(4).toList(growable: false),
-            brands.skip(4).take(3).toList(growable: false),
-            brands.skip(7).take(3).toList(growable: false),
-            brands.skip(10).take(2).toList(growable: false),
-            brands.skip(12).take(2).toList(growable: false),
-          ]
-        : <List<String>>[
-            brands.take(5).toList(growable: false),
-            brands.skip(5).take(3).toList(growable: false),
-            brands.skip(8).take(4).toList(growable: false),
-            brands.skip(12).take(2).toList(growable: false),
-          ];
-
-    return Column(
-      children: [
-        for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) const _Block4ThinDivider(),
-          SizedBox(
-            height: compact ? 58 : 60,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: _buildRowChildren(rows[i]),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  List<Widget> _buildRowChildren(List<String> row) {
-    final children = <Widget>[];
-    final itemPadding = EdgeInsets.symmetric(
-      horizontal: compact ? 4 : 10,
-      vertical: compact ? 6 : 10,
-    );
-    for (var i = 0; i < row.length; i++) {
-      children.add(
-        Flexible(
-          child: InkWell(
-            onTap: () => onBrandTap(row[i]),
-            child: Padding(
-              padding: itemPadding,
-              child: Text(
-                row[i],
-                textAlign: TextAlign.center,
-                softWrap: true,
-                style: TextStyle(
-                  fontSize: compact ? 12 : 16,
-                  height: compact ? 1.12 : 1.15,
-                  letterSpacing: 0,
-                  color: GlameColors.whiteGlame,
-                  fontWeight: FontWeight.w300,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      if (i < row.length - 1) {
-        children.add(
-          Container(width: 1, height: 22, color: GlameColors.borderGray),
-        );
-      }
-    }
-    return children;
-  }
-}
-
-class _Block4ThinDivider extends StatelessWidget {
-  const _Block4ThinDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 1,
-      color: GlameColors.borderGray.withValues(alpha: 0.85),
-    );
-  }
-}
-
 class BrandsPageScreen extends ConsumerWidget {
   const BrandsPageScreen({super.key});
 
@@ -721,7 +620,18 @@ class BrandsPageScreen extends ConsumerWidget {
       _trackEvent('brands_page_view');
     });
     return Scaffold(
-      appBar: const GlameTopAppBar(),
+      appBar: GlameTopAppBar(
+        leadingIcon: Icons.arrow_back,
+        leadingTooltip: 'Назад',
+        onMenuPressed: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/brands');
+          }
+        },
+      ),
+      bottomNavigationBar: const GlameBottomBar(selectedIndex: 1),
       body: SafeArea(
         top: false,
         child: ListView(
@@ -735,29 +645,7 @@ class BrandsPageScreen extends ConsumerWidget {
             heroAsync.when(
               data: (hero) {
                 if (hero == null) {
-                  return const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Смотреть бренды',
-                        style: TextStyle(
-                          fontSize: 40,
-                          height: 0.98,
-                          fontWeight: FontWeight.w400,
-                          color: GlameColors.graphite,
-                        ),
-                      ),
-                      SizedBox(height: 14),
-                      Text(
-                        'Собрано GLAME',
-                        style: TextStyle(
-                          fontSize: 18,
-                          height: 1.42,
-                          color: GlameColors.steelGrey,
-                        ),
-                      ),
-                    ],
-                  );
+                  return const _AllBrandsHeader();
                 }
                 return _BrandsPageHeroCard(
                   imageSource: hero.imageSource,
@@ -766,29 +654,7 @@ class BrandsPageScreen extends ConsumerWidget {
                 );
               },
               loading: () => const _CollectedGlameSkeletonBox(height: 220),
-              error: (_, _) => const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Смотреть бренды',
-                    style: TextStyle(
-                      fontSize: 40,
-                      height: 0.98,
-                      fontWeight: FontWeight.w400,
-                      color: GlameColors.graphite,
-                    ),
-                  ),
-                  SizedBox(height: 14),
-                  Text(
-                    'Собрано GLAME',
-                    style: TextStyle(
-                      fontSize: 18,
-                      height: 1.42,
-                      color: GlameColors.steelGrey,
-                    ),
-                  ),
-                ],
-              ),
+              error: (_, _) => const _AllBrandsHeader(),
             ),
             const SizedBox(height: 24),
             for (var i = 0; i < _allBrands.length; i++) ...[
@@ -796,6 +662,198 @@ class BrandsPageScreen extends ConsumerWidget {
               if (i != _allBrands.length - 1)
                 Container(height: 1, color: GlameColors.coldLightGrey),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AllBrandsHeader extends StatelessWidget {
+  const _AllBrandsHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Смотреть бренды',
+          style: TextStyle(
+            fontSize: 40,
+            height: 0.98,
+            fontWeight: FontWeight.w400,
+            color: GlameColors.graphite,
+          ),
+        ),
+        SizedBox(height: 14),
+        Text(
+          'Собрано GLAME',
+          style: TextStyle(
+            fontSize: 18,
+            height: 1.42,
+            color: GlameColors.steelGrey,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BrandsShowcaseGrid extends StatelessWidget {
+  final List<_BrandShowcaseCardData> cards;
+
+  const _BrandsShowcaseGrid({required this.cards});
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveCards = cards.isEmpty ? _fallbackBrandShowcaseCards : cards;
+    return GridView.builder(
+      itemCount: effectiveCards.take(4).length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 3 / 4,
+      ),
+      itemBuilder: (context, index) {
+        return _BrandShowcaseCard(card: effectiveCards[index]);
+      },
+    );
+  }
+}
+
+class _BrandShowcaseCard extends StatelessWidget {
+  final _BrandShowcaseCardData card;
+
+  const _BrandShowcaseCard({required this.card});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        _trackEvent('brand_showcase_card_click', {'brand_id': card.brandId});
+        context.push('/brand/${card.brandId}');
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(GlameUi.radius),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (card.imageUrl != null)
+              _Block4ImageLayer(
+                source: card.imageUrl!,
+                cacheVersion: card.imageCacheVersion,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+              )
+            else
+              const ColoredBox(color: GlameColors.coldLightGrey),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.fromRGBO(0, 0, 0, 0.0),
+                    Color.fromRGBO(0, 0, 0, 0.08),
+                    Color.fromRGBO(0, 0, 0, 0.72),
+                  ],
+                  stops: [0.0, 0.48, 1.0],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 15,
+              right: 15,
+              bottom: 15,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          card.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            height: 1.08,
+                            letterSpacing: 0,
+                            color: GlameColors.whiteGlame,
+                            fontWeight: FontWeight.w300,
+                          ),
+                        ),
+                        if (card.subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            card.subtitle,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              height: 1.18,
+                              letterSpacing: 0,
+                              color: GlameColors.whiteGlame,
+                              fontWeight: FontWeight.w300,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.arrow_forward,
+                    size: 20,
+                    color: GlameColors.whiteGlame,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandsShowAllButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _BrandsShowAllButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 58,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: GlameColors.graphite,
+          side: const BorderSide(
+            color: GlameColors.steelGrey,
+            width: GlameUi.borderWidth,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(GlameUi.radius),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+        ),
+        child: const Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Смотреть все бренды',
+                style: TextStyle(fontSize: 15.5, letterSpacing: 0),
+              ),
+            ),
+            Icon(Icons.arrow_forward, size: 21),
           ],
         ),
       ),
@@ -920,33 +978,197 @@ class BrandDetailScreen extends ConsumerWidget {
     }
 
     final heroAsync = ref.watch(brandDetailHeroProvider(brand.id));
-    final featuredAsync = ref.watch(brandFeaturedProductsProvider(brand.id));
+    final featuredAsync = ref.watch(brandFeaturedLooksProvider(brand.id));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _trackEvent('brand_page_view', {'brand_id': brand.id});
     });
 
     return Scaffold(
-      appBar: const GlameTopAppBar(),
+      appBar: GlameTopAppBar(
+        leadingIcon: Icons.arrow_back,
+        leadingTooltip: 'Назад',
+        onMenuPressed: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/brands');
+          }
+        },
+      ),
+      bottomNavigationBar: const GlameBottomBar(selectedIndex: 1),
       body: SafeArea(
         top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            _brandsPagePadding,
-            24,
-            _brandsPagePadding,
-            32,
-          ),
-          children: [
-            _BrandHeroCard(
-              brand: brand,
-              heroImageSource:
-                  heroAsync.valueOrNull?.imageSource ?? _block4BackgroundAsset,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                SizedBox(
+                  height: constraints.maxHeight,
+                  child: _BrandFullScreenHero(
+                    brand: brand,
+                    heroImageSource:
+                        heroAsync.valueOrNull?.imageSource ??
+                        _block4BackgroundAsset,
+                    heroTitle: heroAsync.valueOrNull?.title,
+                    heroSubtitle: heroAsync.valueOrNull?.subtitle,
+                  ),
+                ),
+                _BrandDetailBody(brand: brand, featuredAsync: featuredAsync),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandFullScreenHero extends StatelessWidget {
+  final _BrandDetailData brand;
+  final String heroImageSource;
+  final String? heroTitle;
+  final String? heroSubtitle;
+
+  const _BrandFullScreenHero({
+    required this.brand,
+    required this.heroImageSource,
+    this.heroTitle,
+    this.heroSubtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _nonEmptyString(heroTitle) ?? brand.name;
+    final adminSubtitle = _nonEmptyString(heroSubtitle);
+    final body = adminSubtitle ?? brand.description;
+    final showFallbackSignature = adminSubtitle == null;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _Block4ImageLayer(
+          source: heroImageSource,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+        ),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromRGBO(0, 0, 0, 0.08),
+                Color.fromRGBO(0, 0, 0, 0.18),
+                Color.fromRGBO(0, 0, 0, 0.74),
+              ],
+              stops: [0.0, 0.48, 1.0],
             ),
-            const SizedBox(height: 16),
+          ),
+        ),
+        Positioned(
+          left: _brandsPagePadding,
+          right: _brandsPagePadding,
+          bottom: 38,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 48,
+                  height: 0.95,
+                  letterSpacing: 0,
+                  color: GlameColors.whiteGlame,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+              if (showFallbackSignature) ...[
+                const SizedBox(height: 14),
+                Text(
+                  brand.signature,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    height: 1.3,
+                    color: GlameColors.coldLightGrey,
+                    fontWeight: FontWeight.w300,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Container(width: 54, height: 1, color: GlameColors.whiteGlame),
+              const SizedBox(height: 22),
+              Text(
+                body,
+                maxLines: adminSubtitle == null ? 4 : 6,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  height: 1.42,
+                  color: GlameColors.whiteGlame,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                height: 52,
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () {
+                    _trackEvent('brand_all_products_click', {
+                      'brand_id': brand.id,
+                    });
+                    _openBrandCatalog(context, brand);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: GlameColors.whiteGlame,
+                    side: const BorderSide(
+                      color: GlameColors.whiteGlame,
+                      width: GlameUi.borderWidth,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(GlameUi.radius),
+                    ),
+                  ),
+                  child: Text(
+                    'Смотреть все изделия ${brand.name}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BrandDetailBody extends StatelessWidget {
+  final _BrandDetailData brand;
+  final AsyncValue<List<_BrandLookCardData>> featuredAsync;
+
+  const _BrandDetailBody({required this.brand, required this.featuredAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: GlameColors.surface2,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          _brandsPagePadding,
+          24,
+          _brandsPagePadding,
+          32,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             _BrandDnaStrip(markers: brand.dnaMarkers),
-            const SizedBox(height: 16),
-            _BrandCategoryBar(brand: brand),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             Text(
               'ВЫБОР GLAME В ${brand.name.toUpperCase()}',
               style: const TextStyle(
@@ -957,16 +1179,16 @@ class BrandDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 14),
             featuredAsync.when(
-              data: (products) {
-                if (products.isEmpty) {
+              data: (looks) {
+                if (looks.isEmpty) {
                   return _BrandEmptyState(brand: brand);
                 }
-                return _BrandFeaturedProductsGrid(products: products);
+                return _BrandFeaturedLooksGrid(looks: looks);
               },
               loading: () => const _BrandDetailLoadingState(),
               error: (_, _) => _BrandErrorState(brand: brand),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             _BrandUseCasesInfo(items: brand.useCases),
           ],
         ),
@@ -1028,105 +1250,6 @@ class _BrandListRow extends StatelessWidget {
   }
 }
 
-class _BrandHeroCard extends StatelessWidget {
-  final _BrandDetailData brand;
-  final String heroImageSource;
-
-  const _BrandHeroCard({required this.brand, required this.heroImageSource});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: GlameColors.coldLightGrey,
-          width: GlameUi.borderWidth,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            decoration: const BoxDecoration(color: GlameColors.white),
-            child: AspectRatio(
-              aspectRatio: 941 / 1672,
-              child: _Block4ImageLayer(
-                source: heroImageSource,
-                fit: BoxFit.contain,
-                alignment: Alignment.topCenter,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  brand.name,
-                  style: const TextStyle(
-                    fontSize: 40,
-                    height: 0.98,
-                    color: GlameColors.graphite,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  brand.signature,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    height: 1.35,
-                    color: GlameColors.steelGrey,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  brand.description,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.45,
-                    color: GlameColors.graphite,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  height: GlameUi.buttonHeight,
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      _trackEvent('brand_all_products_click', {
-                        'brand_id': brand.id,
-                      });
-                      _openBrandCatalog(context, brand);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(GlameUi.minTapTarget),
-                      side: const BorderSide(
-                        color: GlameColors.coldLightGrey,
-                        width: GlameUi.borderWidth,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(GlameUi.radius),
-                      ),
-                    ),
-                    child: Text(
-                      'Смотреть все изделия ${brand.name}',
-                      style: const TextStyle(
-                        fontSize: 17,
-                        color: GlameColors.graphite,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _BrandDnaStrip extends StatelessWidget {
   final List<String> markers;
 
@@ -1139,7 +1262,9 @@ class _BrandDnaStrip extends StatelessWidget {
         for (var index = 0; index < markers.length; index++) ...[
           Expanded(
             child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              height: 60,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
                 border: Border.all(
                   color: GlameColors.coldLightGrey,
@@ -1163,118 +1288,44 @@ class _BrandDnaStrip extends StatelessWidget {
   }
 }
 
-class _BrandCategoryBar extends StatelessWidget {
-  final _BrandDetailData brand;
+class _BrandFeaturedLooksGrid extends StatelessWidget {
+  final List<_BrandLookCardData> looks;
 
-  const _BrandCategoryBar({required this.brand});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'КАТЕГОРИИ',
-          style: TextStyle(
-            fontSize: 13,
-            letterSpacing: 2.2,
-            color: GlameColors.steelGrey,
-          ),
-        ),
-        const SizedBox(height: 14),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (var index = 0; index < brand.categories.length; index++) ...[
-                _BrandCategoryChip(item: brand.categories[index], brand: brand),
-                if (index != brand.categories.length - 1)
-                  const SizedBox(width: 10),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _BrandCategoryChip extends StatelessWidget {
-  final _BrandCategoryData item;
-  final _BrandDetailData brand;
-
-  const _BrandCategoryChip({required this.item, required this.brand});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        _trackEvent('brand_category_click', {
-          'brand_id': brand.id,
-          'category': item.categorySlug,
-          if (item.typeSlug != null) 'type': item.typeSlug,
-        });
-        _openBrandCategory(context, brand, item);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: GlameColors.coldLightGrey,
-            width: GlameUi.borderWidth,
-          ),
-        ),
-        child: Text(
-          item.label,
-          style: const TextStyle(
-            fontSize: 15,
-            height: 1.2,
-            color: GlameColors.graphite,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BrandFeaturedProductsGrid extends StatelessWidget {
-  final List<_BrandProductCardData> products;
-
-  const _BrandFeaturedProductsGrid({required this.products});
+  const _BrandFeaturedLooksGrid({required this.looks});
 
   @override
   Widget build(BuildContext context) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: products.length,
+      itemCount: looks.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: 0.74,
+        childAspectRatio: 3 / 4,
       ),
       itemBuilder: (context, index) {
-        return _BrandFeaturedProductCard(product: products[index]);
+        return _BrandFeaturedLookCard(look: looks[index]);
       },
     );
   }
 }
 
-class _BrandFeaturedProductCard extends StatelessWidget {
-  final _BrandProductCardData product;
+class _BrandFeaturedLookCard extends StatelessWidget {
+  final _BrandLookCardData look;
 
-  const _BrandFeaturedProductCard({required this.product});
+  const _BrandFeaturedLookCard({required this.look});
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () {
-        _trackEvent('brand_featured_product_click', {
-          'brand_id': product.brandId,
-          'product_id': product.id,
+        _trackEvent('brand_featured_look_click', {
+          'brand_id': look.brandId,
+          'look_id': look.id,
         });
-        context.push('/product/${product.id}');
+        context.push('/look/${look.id}');
       },
       child: Container(
         decoration: BoxDecoration(
@@ -1283,59 +1334,98 @@ class _BrandFeaturedProductCard extends StatelessWidget {
             width: GlameUi.borderWidth,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        clipBehavior: Clip.hardEdge,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            AspectRatio(
-              aspectRatio: 1.08,
-              child: Container(
+            if (look.imageUrl == null)
+              const ColoredBox(color: GlameColors.coldLightGrey)
+            else
+              CachedNetworkImage(
+                imageUrl: look.imageUrl!,
                 width: double.infinity,
-                color: GlameColors.coldLightGrey,
-                clipBehavior: Clip.hardEdge,
-                decoration: const BoxDecoration(
-                  color: GlameColors.coldLightGrey,
+                height: double.infinity,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                placeholder: (context, _) =>
+                    const ColoredBox(color: GlameColors.coldLightGrey),
+                errorWidget: (context, _, _) =>
+                    const ColoredBox(color: GlameColors.coldLightGrey),
+              ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Color.fromRGBO(238, 239, 237, 0.28),
+                    Color.fromRGBO(238, 239, 237, 0.92),
+                  ],
+                  stops: [0.48, 0.72, 1.0],
                 ),
-                child: product.imageUrl == null
-                    ? const ColoredBox(color: GlameColors.coldLightGrey)
-                    : CachedNetworkImage(
-                        imageUrl: product.imageUrl!,
-                        width: double.infinity,
-                        height: double.infinity,
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                        placeholder: (context, _) =>
-                            const ColoredBox(color: GlameColors.coldLightGrey),
-                        errorWidget: (context, _, _) =>
-                            const ColoredBox(color: GlameColors.coldLightGrey),
-                      ),
               ),
             ),
-            Container(height: 1, color: GlameColors.coldLightGrey),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    product.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      height: 1.25,
-                      color: GlameColors.graphite,
-                    ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color.fromRGBO(238, 239, 237, 0.9),
+                  border: Border(
+                    top: BorderSide(color: Color.fromRGBO(255, 255, 255, 0.48)),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    formatRubFromKopeks(product.price),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.2,
-                      color: GlameColors.graphite,
-                    ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        look.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          height: 1.05,
+                          color: GlameColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (look.productsLabel.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          look.productsLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            height: 1.2,
+                            letterSpacing: 0.8,
+                            color: GlameColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        'Смотреть образ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.1,
+                          color: GlameColors.textPrimary.withValues(
+                            alpha: 0.82,
+                          ),
+                          decoration: TextDecoration.underline,
+                          decorationColor: GlameColors.textPrimary.withValues(
+                            alpha: 0.44,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ],
@@ -1611,97 +1701,6 @@ void _trackEvent(String eventName, [Map<String, Object?>? params]) {
   debugPrint('analytics:$eventName ${params ?? const {}}');
 }
 
-void _openBrandCategory(
-  BuildContext context,
-  _BrandDetailData brand,
-  _BrandCategoryData category,
-) {
-  final uri = Uri(
-    path: '/catalog',
-    queryParameters: {
-      'brand': brand.id,
-      'category': category.categorySlug,
-      if (category.typeSlug != null) 'type': category.typeSlug,
-    },
-  );
-  context.push(uri.toString());
-}
-
-List<_BrandProductCardData> _selectFeaturedProducts(
-  List<_BrandProductCardData> items,
-  _BrandDetailData brand,
-) {
-  final ranked = [...items];
-  ranked.sort(
-    (a, b) => _featuredProductScore(
-      b,
-      brand,
-    ).compareTo(_featuredProductScore(a, brand)),
-  );
-
-  final result = <_BrandProductCardData>[];
-  final usedCategories = <String>{};
-
-  for (final item in ranked) {
-    final normalized = _normalizeBrandCategory(item);
-    if (!usedCategories.contains(normalized)) {
-      result.add(item);
-      usedCategories.add(normalized);
-    }
-    if (result.length >= 4) break;
-  }
-
-  for (final item in ranked) {
-    if (result.any((x) => x.id == item.id)) continue;
-    result.add(item);
-    if (result.length >= 6) break;
-  }
-
-  return result;
-}
-
-int _featuredProductScore(_BrandProductCardData item, _BrandDetailData brand) {
-  final normalized = _normalizeBrandCategory(item);
-  final preferredIndex = brand.preferredCategoryOrder.indexOf(normalized);
-  final categoryScore = preferredIndex == -1 ? 0 : (30 - preferredIndex * 3);
-  final imageScore = item.imageUrl == null ? 0 : 20;
-  final priceScore = item.price > 0 ? 8 : 0;
-  final nameScore = item.name.length > 22 ? 4 : 2;
-  return categoryScore + imageScore + priceScore + nameScore;
-}
-
-bool _matchesBrand(_BrandProductCardData item, _BrandDetailData brand) {
-  final haystack = '${item.brand} ${item.name} ${item.category}'.toLowerCase();
-  return haystack.contains(brand.searchQuery.toLowerCase());
-}
-
-String _normalizeBrandCategory(_BrandProductCardData item) {
-  final haystack = '${item.category} ${item.name}'.toLowerCase();
-  if (haystack.contains('кафф')) return 'ear_cuffs';
-  if (haystack.contains('серьг')) return 'earrings';
-  if (haystack.contains('брош')) return 'brooches';
-  if (haystack.contains('брасл')) return 'bracelets';
-  if (haystack.contains('чокер')) return 'necklaces:choker';
-  if (haystack.contains('кулон') || haystack.contains('подвес')) {
-    return 'necklaces:pendant';
-  }
-  if (haystack.contains('колье')) return 'necklaces';
-  return 'other';
-}
-
-String? _productImageUrl(Map<String, dynamic> item) {
-  final imagesRaw = item['images'];
-  if (imagesRaw is List) {
-    for (final entry in imagesRaw) {
-      final url = resolveAssetUrl(entry);
-      if (url != null && url.isNotEmpty) return url;
-    }
-  }
-  return resolveAssetUrl(item['image']) ??
-      resolveAssetUrl(item['image_url']) ??
-      resolveAssetUrl(item['photo']);
-}
-
 _BrandDetailData? _brandById(String id) {
   for (final brand in _allBrands) {
     if (brand.id == id) return brand;
@@ -1709,40 +1708,183 @@ _BrandDetailData? _brandById(String id) {
   return null;
 }
 
-class _BrandProductCardData {
+bool _lookHasBrandProduct(Map<String, dynamic> look, _BrandDetailData brand) {
+  final raw = look['products'];
+  if (raw is! List) return false;
+  return raw.whereType<Map>().any((product) {
+    final productBrand = _normalizeBrandText('${product['brand'] ?? ''}');
+    final specBrand = product['specifications'] is Map
+        ? _normalizeBrandText(
+            '${(product['specifications'] as Map)['Бренд'] ?? ''}',
+          )
+        : '';
+    final name = _normalizeBrandText('${product['name'] ?? ''}');
+    final target = _normalizeBrandText(brand.searchQuery);
+    return productBrand == target ||
+        specBrand == target ||
+        name.contains(target);
+  });
+}
+
+String _normalizeBrandText(String value) {
+  return value
+      .trim()
+      .toLowerCase()
+      .replaceAll('ё', 'е')
+      .replaceAll('wrinkles og time', 'wrinkles of time');
+}
+
+String? _lookImageUrl(Map<String, dynamic> item) {
+  final gallery = item['look_image_urls'];
+  if (gallery is List) {
+    for (final entry in gallery) {
+      final url = _resolveLookImageEntry(entry);
+      if (url != null && url.isNotEmpty) return url;
+    }
+  }
+  return resolveAssetUrl(item['look_image_url']) ??
+      resolveAssetUrl(item['image_url']) ??
+      resolveAssetUrl(item['cover_image_url']) ??
+      resolveAssetUrl(item['image']);
+}
+
+String? _resolveLookImageEntry(Object? entry) {
+  if (entry is Map) {
+    return resolveAssetUrl(entry['url']) ??
+        resolveAssetUrl(entry['image_url']) ??
+        resolveAssetUrl(entry['src']);
+  }
+  return resolveAssetUrl(entry);
+}
+
+List<Map<String, dynamic>> _lookProducts(Map<String, dynamic> look) {
+  final raw = look['products'];
+  if (raw is! List) return const <Map<String, dynamic>>[];
+  return raw
+      .whereType<Map>()
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList(growable: false);
+}
+
+class _BrandLookCardData {
   final String id;
   final String name;
   final String brandId;
-  final String brand;
-  final String category;
-  final int price;
+  final String productsLabel;
   final String? imageUrl;
 
-  const _BrandProductCardData({
+  const _BrandLookCardData({
     required this.id,
     required this.name,
     required this.brandId,
-    required this.brand,
-    required this.category,
-    required this.price,
+    required this.productsLabel,
     required this.imageUrl,
   });
 
-  factory _BrandProductCardData.fromMap(Map<String, dynamic> item) {
-    final priceRaw = item['price'];
-    final price = priceRaw is int
-        ? priceRaw
-        : (priceRaw is num ? priceRaw.toInt() : 0);
-    return _BrandProductCardData(
+  factory _BrandLookCardData.fromMap(Map<String, dynamic> item) {
+    final products = _lookProducts(item);
+    final productNames = products
+        .map((product) => '${product['name'] ?? ''}'.trim())
+        .where((name) => name.isNotEmpty)
+        .take(2)
+        .toList(growable: false);
+    return _BrandLookCardData(
       id: '${item['id'] ?? ''}'.trim(),
-      name: '${item['name'] ?? 'Изделие'}'.trim(),
-      brandId: _brandIdFromName('${item['brand'] ?? ''}'.trim()),
-      brand: '${item['brand'] ?? ''}'.trim(),
-      category: '${item['category'] ?? ''}'.trim(),
-      price: price,
-      imageUrl: _productImageUrl(item),
+      name: '${item['name'] ?? item['look_name'] ?? 'Образ GLAME'}'.trim(),
+      brandId: '',
+      productsLabel: productNames.isEmpty
+          ? '${products.length} изделий в образе'
+          : productNames.join(' + '),
+      imageUrl: _lookImageUrl(item),
     );
   }
+}
+
+class _BrandShowcaseCardData {
+  final String brandId;
+  final String title;
+  final String subtitle;
+  final String? imageUrl;
+  final String? imageCacheVersion;
+  final int sortOrder;
+
+  const _BrandShowcaseCardData({
+    required this.brandId,
+    required this.title,
+    required this.subtitle,
+    required this.imageUrl,
+    required this.imageCacheVersion,
+    required this.sortOrder,
+  });
+
+  List<Object?> get cacheSignature => [
+    brandId,
+    title,
+    subtitle,
+    imageUrl,
+    imageCacheVersion,
+    sortOrder,
+  ];
+
+  factory _BrandShowcaseCardData.fromBrandDetail(
+    _BrandDetailData brand,
+    Map<String, dynamic> slide,
+  ) {
+    final title = '${slide['title'] ?? ''}'.trim();
+    final subtitle = '${slide['subtitle'] ?? ''}'.trim();
+    return _BrandShowcaseCardData(
+      brandId: brand.id,
+      title: title.isEmpty ? brand.name : title,
+      subtitle: subtitle.isEmpty ? brand.signature : subtitle,
+      imageUrl:
+          resolveAssetUrl(slide['image_url']) ??
+          resolveAssetUrl(slide['background_image_url']),
+      imageCacheVersion:
+          '${slide['updated_at'] ?? slide['id'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${slide['updated_at'] ?? slide['id']}',
+      sortOrder: int.tryParse('${slide['sort_order'] ?? ''}') ?? 0,
+    );
+  }
+
+  factory _BrandShowcaseCardData.fromMap(Map item) {
+    final title = '${item['title'] ?? ''}'.trim();
+    final brandId = _brandIdFromSlide(item, title);
+    final fallbackBrand = _brandById(brandId);
+    return _BrandShowcaseCardData(
+      brandId: brandId.isEmpty ? _brandIdFromName(title) : brandId,
+      title: title.isEmpty ? (fallbackBrand?.name ?? 'GLAME') : title,
+      subtitle: '${item['subtitle'] ?? fallbackBrand?.signature ?? ''}'.trim(),
+      imageUrl:
+          resolveAssetUrl(item['image_url']) ??
+          resolveAssetUrl(item['background_image_url']),
+      imageCacheVersion:
+          '${item['updated_at'] ?? item['id'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${item['updated_at'] ?? item['id']}',
+      sortOrder: int.tryParse('${item['sort_order'] ?? ''}') ?? 0,
+    );
+  }
+}
+
+String _brandIdFromSlide(Map item, String title) {
+  final payload = item['image_action_payload'];
+  if (payload is Map) {
+    final direct =
+        '${payload['brand_id'] ?? payload['brandId'] ?? payload['brand'] ?? ''}'
+            .trim();
+    if (direct.isNotEmpty) return _brandIdFromName(direct);
+  }
+  for (final key in [
+    'image_action_link',
+    'primary_button_link',
+    'secondary_button_link',
+  ]) {
+    final raw = '${item[key] ?? ''}'.trim();
+    final match = RegExp(r'/brand/([^/?#]+)').firstMatch(raw);
+    if (match != null) return match.group(1) ?? '';
+  }
+  return _brandIdFromName(title);
 }
 
 class _BrandCategoryData {
@@ -2051,5 +2193,40 @@ const List<_BrandDetailData> _allBrands = [
       'выбрать украшение для собранного выхода',
     ],
     preferredCategoryOrder: _defaultOrder,
+  ),
+];
+
+const List<_BrandShowcaseCardData> _fallbackBrandShowcaseCards = [
+  _BrandShowcaseCardData(
+    brandId: 'unode50',
+    title: 'UNOde50',
+    subtitle: 'смелые формы и узнаваемый характер',
+    imageUrl: _block4BackgroundAsset,
+    imageCacheVersion: 'fallback-unode50',
+    sortOrder: 10,
+  ),
+  _BrandShowcaseCardData(
+    brandId: 'geometry',
+    title: 'Geometry',
+    subtitle: 'архитектурные формы и чистые линии',
+    imageUrl: _block4BackgroundAsset,
+    imageCacheVersion: 'fallback-geometry',
+    sortOrder: 20,
+  ),
+  _BrandShowcaseCardData(
+    brandId: 'antura',
+    title: 'Antura',
+    subtitle: 'ювелирная смола и выразительный цвет',
+    imageUrl: _block4BackgroundAsset,
+    imageCacheVersion: 'fallback-antura',
+    sortOrder: 30,
+  ),
+  _BrandShowcaseCardData(
+    brandId: 'agafi',
+    title: 'AGafi',
+    subtitle: 'украшения из натуральных камней',
+    imageUrl: _block4BackgroundAsset,
+    imageCacheVersion: 'fallback-agafi',
+    sortOrder: 40,
   ),
 ];

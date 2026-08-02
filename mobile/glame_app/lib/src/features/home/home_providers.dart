@@ -9,6 +9,8 @@ import '../looks/looks_providers.dart';
 import 'home_api.dart';
 
 const _homeStoresCacheKey = 'glame.home.stores.v1';
+const _homeSlidesCachePrefix = 'glame.home.slides.v2.';
+const _homeNewLooksCacheKey = 'glame.home.new_looks.v1';
 const _bundledStoresAsset = 'assets/data/stores_snapshot.json';
 
 final homeApiProvider = Provider<HomeApi>((ref) {
@@ -19,37 +21,75 @@ final homeHeroBannersProvider = FutureProvider<List<dynamic>>((ref) async {
   return ref.watch(homeApiProvider).getBanners(placement: 'home_hero');
 });
 
-final homeSlidesProvider = FutureProvider<List<dynamic>>((ref) async {
-  return ref.watch(homeApiProvider).getHomeSlides(blockKey: 'style_inside');
+final homeSlidesProvider = StreamProvider<List<dynamic>>((ref) {
+  return _watchHomeSlides(ref.watch(homeApiProvider), 'style_inside');
 });
 
-final homePhotoSelectionBlockProvider = FutureProvider<Map<String, dynamic>?>((
+final homePhotoSelectionBlockProvider = StreamProvider<Map<String, dynamic>?>((
   ref,
-) async {
-  final raw = await ref
-      .watch(homeApiProvider)
-      .getHomeSlides(blockKey: 'photo_selection');
-  for (final item in raw) {
-    if (item is Map) {
-      return Map<String, dynamic>.from(item);
-    }
-  }
-  return null;
+) {
+  return _watchHomeSlideMap(ref.watch(homeApiProvider), 'photo_selection');
 });
 
-final homeHowToBuyBlockProvider = FutureProvider<Map<String, dynamic>?>((
-  ref,
-) async {
-  final raw = await ref
-      .watch(homeApiProvider)
-      .getHomeSlides(blockKey: 'service_how_to_buy');
-  for (final item in raw) {
-    if (item is Map) {
-      return Map<String, dynamic>.from(item);
+final homeHowToBuyBlockProvider = StreamProvider<Map<String, dynamic>?>((ref) {
+  return _watchHomeSlideMap(ref.watch(homeApiProvider), 'service_how_to_buy');
+});
+
+Stream<Map<String, dynamic>?> _watchHomeSlideMap(
+  HomeApi api,
+  String blockKey,
+) async* {
+  await for (final slides in _watchHomeSlides(api, blockKey)) {
+    yield _firstHomeSlideMap(slides);
+  }
+}
+
+Stream<List<dynamic>> _watchHomeSlides(HomeApi api, String blockKey) async* {
+  final cacheKey = '$_homeSlidesCachePrefix$blockKey';
+  final cached = await _readJsonListCache(cacheKey);
+  if (cached.isNotEmpty) {
+    yield cached;
+  }
+
+  try {
+    final remote = await api.getHomeSlides(blockKey: blockKey);
+    if (remote.isNotEmpty) {
+      await _saveJsonListCache(cacheKey, remote);
+      if (jsonEncode(remote) != jsonEncode(cached)) {
+        yield remote;
+      }
+    } else if (cached.isEmpty) {
+      yield const <dynamic>[];
     }
+  } catch (_) {
+    if (cached.isEmpty) yield const <dynamic>[];
+  }
+}
+
+Map<String, dynamic>? _firstHomeSlideMap(List<dynamic> slides) {
+  for (final item in slides) {
+    if (item is Map) return Map<String, dynamic>.from(item);
   }
   return null;
-});
+}
+
+Future<void> _saveJsonListCache(String key, List<dynamic> items) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(key, jsonEncode(items));
+}
+
+Future<List<dynamic>> _readJsonListCache(String key) async {
+  final prefs = await SharedPreferences.getInstance();
+  final raw = prefs.getString(key);
+  if (raw == null || raw.isEmpty) return const <dynamic>[];
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is List) return decoded;
+  } catch (_) {
+    await prefs.remove(key);
+  }
+  return const <dynamic>[];
+}
 
 final homePromotionsProvider = FutureProvider<List<dynamic>>((ref) async {
   return ref.watch(homeApiProvider).getPromotions();
@@ -138,8 +178,27 @@ final homeNewProductsProvider = FutureProvider<List<dynamic>>((ref) async {
   return const <dynamic>[];
 });
 
-final homeNewLooksProvider = FutureProvider<List<dynamic>>((ref) async {
-  return ref.watch(looksApiProvider).getFeed(limit: 12, isNew: true);
+final homeNewLooksProvider = StreamProvider<List<dynamic>>((ref) async* {
+  final cached = await _readJsonListCache(_homeNewLooksCacheKey);
+  if (cached.isNotEmpty) {
+    yield cached;
+  }
+
+  try {
+    final remote = await ref
+        .watch(looksApiProvider)
+        .getFeed(limit: 12, isNew: true);
+    if (remote.isNotEmpty) {
+      await _saveJsonListCache(_homeNewLooksCacheKey, remote);
+      if (jsonEncode(remote) != jsonEncode(cached)) {
+        yield remote;
+      }
+    } else if (cached.isEmpty) {
+      yield const <dynamic>[];
+    }
+  } catch (_) {
+    if (cached.isEmpty) yield const <dynamic>[];
+  }
 });
 
 final homeCategoryPreviewProductsProvider =

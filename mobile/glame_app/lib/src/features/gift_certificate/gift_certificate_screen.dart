@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/formatters/phone.dart';
 import '../../core/theme/glame_theme.dart';
 import '../auth/auth_controller.dart';
+import '../customer/customer_cabinet_providers.dart';
 import 'gift_certificate_api.dart';
 
 class GiftCertificateScreen extends ConsumerStatefulWidget {
@@ -21,24 +24,38 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
   final _nameController = TextEditingController();
   final _messageController = TextEditingController();
   final _senderController = TextEditingController();
+  final _amountController = TextEditingController(text: '5 000');
+
+  late final VoidCallback _removePhoneFormatter;
 
   int _step = 0;
   int _amount = 5000;
   int _design = 0;
   bool _sendLater = false;
   bool _submitting = false;
+  bool _checkingPayment = false;
   DateTime? _sendAt;
   Map<String, dynamic>? _purchaseResult;
 
   static const _amounts = [3000, 5000, 10000, 20000];
+  static const _minAmount = 1000;
+  static const _maxAmount = 100000;
+
+  @override
+  void initState() {
+    super.initState();
+    _removePhoneFormatter = installRuPhonePrefixFormatter(_phoneController);
+  }
 
   @override
   void dispose() {
+    _removePhoneFormatter();
     _phoneController.dispose();
     _emailController.dispose();
     _nameController.dispose();
     _messageController.dispose();
     _senderController.dispose();
+    _amountController.dispose();
     super.dispose();
   }
 
@@ -71,8 +88,10 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
                         key: const ValueKey('amount'),
                         amount: _amount,
                         design: _design,
+                        amountController: _amountController,
                         onAmountChanged: (value) =>
-                            setState(() => _amount = value),
+                            _setAmount(value, syncInput: true),
+                        onCustomAmountChanged: _setCustomAmount,
                         onDesignChanged: (value) =>
                             setState(() => _design = value),
                       ),
@@ -105,8 +124,10 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
                         sendLater: _sendLater,
                         sendAt: _sendAt,
                         purchaseResult: _purchaseResult,
+                        checkingPayment: _checkingPayment,
                         onEditRecipient: () => setState(() => _step = 1),
                         onEditAmount: () => setState(() => _step = 0),
+                        onCheckPayment: () => _checkPaymentStatus(),
                       ),
                     },
                   ),
@@ -284,8 +305,14 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
   void _handlePrimaryAction() {
     if (_submitting) return;
     if (_step == 0) {
-      if (!_amounts.contains(_amount)) {
-        _showMessage('Выберите номинал сертификата из доступных в 1С');
+      if (_amount < _minAmount) {
+        _showMessage('Минимальная сумма сертификата ${_formatRub(_minAmount)}');
+        return;
+      }
+      if (_amount > _maxAmount) {
+        _showMessage(
+          'Максимальная сумма сертификата ${_formatRub(_maxAmount)}',
+        );
         return;
       }
       setState(() => _step = 1);
@@ -293,9 +320,14 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
     }
 
     if (_step == 1) {
-      if (_phoneController.text.trim().isEmpty &&
-          _emailController.text.trim().isEmpty) {
+      final recipientPhone = formatRuPhoneInput(_phoneController.text);
+      final hasPhone = !isRuPhonePrefixOnly(recipientPhone);
+      if (!hasPhone && _emailController.text.trim().isEmpty) {
         _showMessage('Укажите телефон или эл. почту получателя');
+        return;
+      }
+      if (hasPhone && !isRuPhoneComplete(recipientPhone)) {
+        _showMessage('Введите корректный номер телефона получателя');
         return;
       }
       if (_sendLater && _sendAt == null) {
@@ -303,6 +335,11 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
         return;
       }
       setState(() => _step = 2);
+      return;
+    }
+
+    if (_purchaseResult != null) {
+      _openPaymentUrl(_purchaseResult!);
       return;
     }
 
@@ -320,11 +357,14 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
     try {
       final api = ref.read(giftCertificateApiProvider);
       final origin = Uri.base.origin;
+      final recipientPhone = formatRuPhoneInput(_phoneController.text);
       final resp = await api.purchase(
         amountKopeks: _amount * 100,
         returnUrl: origin,
         recipientName: _nameController.text,
-        recipientPhone: _phoneController.text,
+        recipientPhone: isRuPhonePrefixOnly(recipientPhone)
+            ? ''
+            : recipientPhone,
         recipientEmail: _emailController.text,
         message: _messageController.text,
         senderName: _senderController.text,
@@ -334,11 +374,8 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
       if (!mounted) return;
       setState(() => _purchaseResult = resp);
 
-      final confirmationUrl = (resp['confirmation_url'] ?? '').toString();
-      final uri = Uri.tryParse(confirmationUrl);
-      if (uri != null) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
+      await _openPaymentUrl(resp);
+      _schedulePaymentChecks();
       _showMessage(
         'Серия сертификата создана в 1С. После оплаты сертификат станет активным.',
       );
@@ -352,6 +389,67 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
     }
   }
 
+  Future<void> _openPaymentUrl(Map<String, dynamic> result) async {
+    final confirmationUrl = (result['confirmation_url'] ?? '').toString();
+    final uri = Uri.tryParse(confirmationUrl);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  void _schedulePaymentChecks() {
+    for (final delay in const [
+      Duration(seconds: 3),
+      Duration(seconds: 8),
+      Duration(seconds: 15),
+    ]) {
+      Future<void>.delayed(delay, () {
+        if (!mounted || _purchaseResult == null) return;
+        _checkPaymentStatus(silent: true);
+      });
+    }
+  }
+
+  Future<void> _checkPaymentStatus({bool silent = false}) async {
+    final result = _purchaseResult;
+    final orderId = (result?['order_id'] ?? '').toString();
+    if (orderId.isEmpty || _checkingPayment) return;
+
+    setState(() => _checkingPayment = true);
+    try {
+      final api = ref.read(giftCertificateApiProvider);
+      final status = await api.getPaymentStatus(orderId);
+      final payment = status['payment'] is Map
+          ? Map<String, dynamic>.from(status['payment'] as Map)
+          : const <String, dynamic>{};
+      final paymentStatus = (payment['status'] ?? '').toString();
+      if (!mounted) return;
+      setState(() {
+        _purchaseResult = {
+          ...?result,
+          'order_status': status['order_status'],
+          'payment': payment,
+          'payment_status': paymentStatus,
+        };
+      });
+      if (paymentStatus == 'succeeded') {
+        ref.invalidate(customerGiftCertificatesProvider);
+        if (!silent) {
+          _showMessage('Оплата подтверждена. Сертификат активирован.');
+        }
+      } else if (!silent) {
+        _showMessage('Оплата пока не подтверждена.');
+      }
+    } catch (_) {
+      if (mounted && !silent) {
+        _showMessage('Не удалось проверить оплату');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _checkingPayment = false);
+      }
+    }
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -359,6 +457,21 @@ class _GiftCertificateScreenState extends ConsumerState<GiftCertificateScreen> {
         backgroundColor: GlameColors.textPrimary,
       ),
     );
+  }
+
+  void _setAmount(int value, {required bool syncInput}) {
+    setState(() => _amount = value);
+    if (!syncInput) return;
+    final nextText = _formatAmountInput(value);
+    _amountController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+    );
+  }
+
+  void _setCustomAmount(String value) {
+    final amount = _parseAmountInput(value);
+    setState(() => _amount = amount);
   }
 }
 
@@ -415,14 +528,18 @@ class _StepHeader extends StatelessWidget {
 class _DesignStep extends StatelessWidget {
   final int amount;
   final int design;
+  final TextEditingController amountController;
   final ValueChanged<int> onAmountChanged;
+  final ValueChanged<String> onCustomAmountChanged;
   final ValueChanged<int> onDesignChanged;
 
   const _DesignStep({
     super.key,
     required this.amount,
     required this.design,
+    required this.amountController,
     required this.onAmountChanged,
+    required this.onCustomAmountChanged,
     required this.onDesignChanged,
   });
 
@@ -484,6 +601,12 @@ class _DesignStep extends StatelessWidget {
               ),
             );
           }).toList(),
+        ),
+        const SizedBox(height: 18),
+        _CustomAmountField(
+          controller: amountController,
+          selected: !_GiftCertificateScreenState._amounts.contains(amount),
+          onChanged: onCustomAmountChanged,
         ),
         const SizedBox(height: 30),
         const Center(child: _TermsLink()),
@@ -597,8 +720,10 @@ class _PaymentStep extends StatelessWidget {
   final bool sendLater;
   final DateTime? sendAt;
   final Map<String, dynamic>? purchaseResult;
+  final bool checkingPayment;
   final VoidCallback onEditRecipient;
   final VoidCallback onEditAmount;
+  final VoidCallback onCheckPayment;
 
   const _PaymentStep({
     super.key,
@@ -610,8 +735,10 @@ class _PaymentStep extends StatelessWidget {
     required this.sendLater,
     required this.sendAt,
     required this.purchaseResult,
+    required this.checkingPayment,
     required this.onEditRecipient,
     required this.onEditAmount,
+    required this.onCheckPayment,
   });
 
   @override
@@ -621,6 +748,10 @@ class _PaymentStep extends StatelessWidget {
         : const <String, dynamic>{};
     final series = (certificate['series'] ?? certificate['number'] ?? '')
         .toString();
+    final normalizedPhone = formatRuPhoneInput(phone);
+    final phoneValue = isRuPhonePrefixOnly(normalizedPhone)
+        ? 'Не указан'
+        : normalizedPhone;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -650,7 +781,7 @@ class _PaymentStep extends StatelessWidget {
         ),
         _SummaryRow(
           label: 'Телефон',
-          value: phone.trim().isEmpty ? 'Не указан' : phone,
+          value: phoneValue,
           onTap: onEditRecipient,
         ),
         _SummaryRow(
@@ -696,7 +827,11 @@ class _PaymentStep extends StatelessWidget {
         ),
         const SizedBox(height: 28),
         if (purchaseResult != null) ...[
-          _PurchaseResultCard(result: purchaseResult!),
+          _PurchaseResultCard(
+            result: purchaseResult!,
+            checkingPayment: checkingPayment,
+            onCheckPayment: onCheckPayment,
+          ),
           const SizedBox(height: 24),
         ],
         const Center(child: _TermsLink()),
@@ -707,8 +842,14 @@ class _PaymentStep extends StatelessWidget {
 
 class _PurchaseResultCard extends StatelessWidget {
   final Map<String, dynamic> result;
+  final bool checkingPayment;
+  final VoidCallback onCheckPayment;
 
-  const _PurchaseResultCard({required this.result});
+  const _PurchaseResultCard({
+    required this.result,
+    required this.checkingPayment,
+    required this.onCheckPayment,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -721,6 +862,12 @@ class _PurchaseResultCard extends StatelessWidget {
     final onecSeriesRef = (certificate['onec_series_ref_key'] ?? '').toString();
     final pin = (result['pin'] ?? certificate['pin'] ?? '').toString();
     final confirmationUrl = (result['confirmation_url'] ?? '').toString();
+    final payment = result['payment'] is Map
+        ? Map<String, dynamic>.from(result['payment'] as Map)
+        : const <String, dynamic>{};
+    final paymentStatus = (result['payment_status'] ?? payment['status'] ?? '')
+        .toString();
+    final isPaid = paymentStatus == 'succeeded';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -753,12 +900,24 @@ class _PurchaseResultCard extends StatelessWidget {
             const SizedBox(height: 8),
             _ResultLine(label: '1С', value: onecSeriesRef),
           ],
+          if (paymentStatus.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _ResultLine(
+              label: 'Оплата',
+              value: _paymentStatusText(paymentStatus),
+            ),
+          ],
           const SizedBox(height: 12),
-          const Text(
-            'После оплаты сертификат станет активным, а серия будет отмечена в 1С как проданная. При покупке в магазине продавец проводит сертификат по серии.',
-            style: TextStyle(color: GlameColors.coldLightGray, height: 1.35),
+          Text(
+            isPaid
+                ? 'Оплата подтверждена. Сертификат активен, серия отмечена в 1С как проданная.'
+                : 'После оплаты сертификат станет активным, а серия будет отмечена в 1С как проданная. При покупке в магазине продавец проводит сертификат по серии.',
+            style: const TextStyle(
+              color: GlameColors.coldLightGray,
+              height: 1.35,
+            ),
           ),
-          if (confirmationUrl.isNotEmpty) ...[
+          if (!isPaid && confirmationUrl.isNotEmpty) ...[
             const SizedBox(height: 14),
             OutlinedButton(
               onPressed: () async {
@@ -769,6 +928,17 @@ class _PurchaseResultCard extends StatelessWidget {
               child: const Text('ПЕРЕЙТИ К ОПЛАТЕ'),
             ),
           ],
+          const SizedBox(height: 10),
+          OutlinedButton(
+            onPressed: checkingPayment ? null : onCheckPayment,
+            child: checkingPayment
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('ПРОВЕРИТЬ ОПЛАТУ'),
+          ),
         ],
       ),
     );
@@ -998,6 +1168,82 @@ class _AmountButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CustomAmountField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool selected;
+  final ValueChanged<String> onChanged;
+
+  const _CustomAmountField({
+    required this.controller,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('ИЛИ ВВЕДИТЕ СВОЮ СУММУ', style: _labelStyle),
+        const SizedBox(height: 10),
+        TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          inputFormatters: [_RubAmountInputFormatter()],
+          onChanged: onChanged,
+          style: const TextStyle(
+            color: GlameColors.whiteGlame,
+            fontSize: 24,
+            letterSpacing: 0,
+            fontWeight: FontWeight.w700,
+          ),
+          cursorColor: GlameColors.whiteGlame,
+          decoration: InputDecoration(
+            suffixText: '₽',
+            suffixStyle: const TextStyle(
+              color: GlameColors.whiteGlame,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+            hintText: 'Например, 7 500',
+            filled: false,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 18,
+            ),
+            hintStyle: const TextStyle(
+              color: GlameColors.textSecondary,
+              fontSize: 18,
+              fontWeight: FontWeight.w400,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.zero,
+              borderSide: BorderSide(
+                color: selected
+                    ? GlameColors.whiteGlame
+                    : GlameColors.borderGray,
+              ),
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderRadius: BorderRadius.zero,
+              borderSide: BorderSide(color: GlameColors.whiteGlame),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'От ${_formatRub(_GiftCertificateScreenState._minAmount)} до ${_formatRub(_GiftCertificateScreenState._maxAmount)}',
+          style: const TextStyle(
+            color: GlameColors.textSecondary,
+            fontSize: 12,
+            height: 1.25,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1335,7 +1581,50 @@ String _formatRub(int amount) {
   return '$text ₽';
 }
 
+String _formatAmountInput(int amount) {
+  return amount.toString().replaceAllMapped(
+    RegExp(r'(\d)(?=(\d{3})+$)'),
+    (match) => '${match[1]} ',
+  );
+}
+
+int _parseAmountInput(String value) {
+  final digits = value.replaceAll(RegExp(r'\D'), '');
+  if (digits.isEmpty) return 0;
+  return int.tryParse(digits) ?? 0;
+}
+
 String _formatDate(DateTime date) {
   String two(int value) => value.toString().padLeft(2, '0');
   return '${two(date.day)}.${two(date.month)}.${date.year}, ${two(date.hour)}:${two(date.minute)}';
+}
+
+String _paymentStatusText(String status) {
+  switch (status) {
+    case 'succeeded':
+      return 'Оплачено';
+    case 'canceled':
+      return 'Отменено';
+    case 'pending':
+      return 'Ожидает оплаты';
+    case 'waiting_for_capture':
+      return 'Ожидает подтверждения';
+    default:
+      return status.isEmpty ? 'Неизвестно' : status;
+  }
+}
+
+class _RubAmountInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final amount = _parseAmountInput(newValue.text);
+    final text = amount <= 0 ? '' : _formatAmountInput(amount);
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
 }

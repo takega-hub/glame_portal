@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/formatters/phone.dart';
 import '../../core/theme/glame_theme.dart';
 import 'auth_field.dart';
 import 'auth_controller.dart';
@@ -16,10 +17,12 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phone = TextEditingController();
   final _password = TextEditingController();
+  late final VoidCallback _removePhoneFormatter;
 
   @override
   void initState() {
     super.initState();
+    _removePhoneFormatter = installRuPhonePrefixFormatter(_phone);
     // Очищаем ошибку при входе на экран
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(authControllerProvider.notifier).clearError();
@@ -28,6 +31,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
+    _removePhoneFormatter();
     _phone.dispose();
     _password.dispose();
     super.dispose();
@@ -87,7 +91,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () async {
-                  if (_phone.text.trim().isEmpty) {
+                  final phone = formatRuPhoneInput(_phone.text);
+                  if (!isRuPhoneComplete(phone)) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
@@ -98,7 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     return;
                   }
                   try {
-                    await controller.requestOtp(phone: _phone.text.trim());
+                    await controller.requestOtp(phone: phone);
                     final currentState = ref.read(authControllerProvider);
                     if (currentState.error != null) {
                       return;
@@ -106,7 +111,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     if (!context.mounted) return;
                     GoRouter.of(context).push(
-                      '/auth/otp?phone=${Uri.encodeComponent(_phone.text.trim())}&next=${Uri.encodeComponent(next ?? '')}',
+                      '/auth/otp?phone=${Uri.encodeComponent(phone)}&next=${Uri.encodeComponent(next ?? '')}',
                     );
                   } catch (_) {}
                 },
@@ -127,8 +132,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ? null
                   : () async {
                       final go = GoRouter.of(context);
-                      if (_phone.text.trim().isEmpty ||
-                          _password.text.isEmpty) {
+                      final phone = formatRuPhoneInput(_phone.text);
+                      if (!isRuPhoneComplete(phone) || _password.text.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Введите телефон и пароль'),
@@ -137,7 +142,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         return;
                       }
                       await controller.login(
-                        email: _phone.text.trim(),
+                        email: phone,
                         password: _password.text,
                       );
                       if (!mounted) return;

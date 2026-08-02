@@ -8,12 +8,16 @@ class Env {
   );
 
   static String get apiBaseUrl {
-    if (kIsWeb && _configuredApiBaseUrl == _defaultApiBaseUrl) {
+    final value = _configuredApiBaseUrl.trim();
+    if (kIsWeb && value == _defaultApiBaseUrl) {
       // On web default to current origin (e.g. http://5.101.179.47:9092)
       // so local/proxied environments work without TLS/CORS issues.
       return Uri.base.origin;
     }
-    return _configuredApiBaseUrl;
+    if (value.endsWith('/api')) {
+      return value.substring(0, value.length - 4);
+    }
+    return value.endsWith('/') ? value.substring(0, value.length - 1) : value;
   }
 
   static const apiPrefix = String.fromEnvironment(

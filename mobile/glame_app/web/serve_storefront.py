@@ -10,6 +10,15 @@ from urllib.parse import urlsplit
 BACKEND_HOST = "localhost"
 BACKEND_PORT = 8000
 PROXY_PREFIXES = ("/api", "/static", "/uploads")
+IMAGE_EXTENSIONS = {
+    ".avif",
+    ".gif",
+    ".jpeg",
+    ".jpg",
+    ".png",
+    ".svg",
+    ".webp",
+}
 
 
 class QuietThreadingHTTPServer(ThreadingHTTPServer):
@@ -24,6 +33,7 @@ class StorefrontHandler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def __init__(self, *args, **kwargs):
+        self._cache_policy = "no-store"
         default_dir = Path(__file__).resolve().parent
         static_dir = Path(os.environ.get("STOREFRONT_DIR", str(default_dir))).resolve()
         super().__init__(*args, directory=str(static_dir), **kwargs)
@@ -65,13 +75,18 @@ class StorefrontHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def end_headers(self):
-        # Prevent browser from serving stale Flutter bundles between rebuilds.
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-        self.send_header("Pragma", "no-cache")
-        self.send_header("Expires", "0")
+        if self._cache_policy == "immutable":
+            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        else:
+            # Prevent browser from serving stale Flutter bundles and API responses between rebuilds.
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
         super().end_headers()
 
     def _proxy_request(self):
+        path = urlsplit(self.path).path
+        self._cache_policy = "immutable" if self._is_cacheable_asset(path) else "no-store"
         body = None
         content_length = self.headers.get("Content-Length")
         if content_length:
@@ -94,7 +109,7 @@ class StorefrontHandler(SimpleHTTPRequestHandler):
             self.send_response(resp.status, resp.reason)
             for key, value in resp.getheaders():
                 lower = key.lower()
-                if lower in {"transfer-encoding", "connection", "content-length"}:
+                if lower in {"transfer-encoding", "connection", "content-length", "cache-control", "pragma", "expires"}:
                     continue
                 self.send_header(key, value)
             self.send_header("Content-Length", str(len(data)))
@@ -112,6 +127,12 @@ class StorefrontHandler(SimpleHTTPRequestHandler):
                 return
         finally:
             conn.close()
+
+    @staticmethod
+    def _is_cacheable_asset(path: str) -> bool:
+        if not path.startswith(("/static/", "/uploads/")):
+            return False
+        return Path(path).suffix.lower() in IMAGE_EXTENSIONS
 
 
 def main():

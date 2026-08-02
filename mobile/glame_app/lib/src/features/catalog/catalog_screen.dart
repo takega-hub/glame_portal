@@ -15,11 +15,16 @@ import 'catalog_controller.dart';
 import '../product/product_providers.dart';
 import '../wishlist/wishlist_controller.dart';
 
+const double _glameMediaAspectRatio = 3 / 4;
+
 class CatalogScreen extends ConsumerStatefulWidget {
   final String title;
   final String? initialCategory;
   final String? initialBrand;
   final String? initialSearch;
+  final String? initialStoreId;
+  final String? initialStoreTitle;
+  final String? storeBackRoute;
   final bool pickLookBase;
 
   const CatalogScreen({
@@ -28,6 +33,9 @@ class CatalogScreen extends ConsumerStatefulWidget {
     this.initialCategory,
     this.initialBrand,
     this.initialSearch,
+    this.initialStoreId,
+    this.initialStoreTitle,
+    this.storeBackRoute,
     this.pickLookBase = false,
   });
 
@@ -62,13 +70,18 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       final initial = _normalizeCategory(widget.initialCategory);
       final initialBrand = _normalizeValue(widget.initialBrand);
       final initialSearch = (widget.initialSearch ?? '').trim();
-      if (initial != null || initialBrand != null || initialSearch.isNotEmpty) {
+      final initialStoreId = _normalizeValue(widget.initialStoreId);
+      if (initial != null ||
+          initialBrand != null ||
+          initialSearch.isNotEmpty ||
+          initialStoreId != null) {
         ref
             .read(catalogControllerProvider.notifier)
             .resetAndApply(
               category: initial,
               brand: initialBrand,
               search: initialSearch,
+              storeId: initialStoreId,
             );
       }
     });
@@ -79,7 +92,8 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialCategory == widget.initialCategory &&
         oldWidget.initialBrand == widget.initialBrand &&
-        oldWidget.initialSearch == widget.initialSearch) {
+        oldWidget.initialSearch == widget.initialSearch &&
+        oldWidget.initialStoreId == widget.initialStoreId) {
       return;
     }
     final next = _normalizeCategory(widget.initialCategory);
@@ -91,7 +105,12 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     });
     ref
         .read(catalogControllerProvider.notifier)
-        .resetAndApply(category: next, brand: nextBrand, search: nextSearch);
+        .resetAndApply(
+          category: next,
+          brand: nextBrand,
+          search: nextSearch,
+          storeId: _normalizeValue(widget.initialStoreId),
+        );
   }
 
   @override
@@ -192,16 +211,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                                   ),
                                 ),
                               ),
-                            if (!catalog.loading && !catalog.hasMore)
-                              Text(
-                                'Показано ${groupedItems.length} из ${catalog.total}',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  letterSpacing: 1,
-                                  color: GlameColors.coldLightGray,
-                                ),
-                              ),
+                            const SizedBox.shrink(),
                           ],
                         ),
                       ),
@@ -219,6 +229,9 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   Widget _buildHeader(BuildContext context) {
     final isWideScreen = MediaQuery.of(context).size.width > 768;
     final title = widget.pickLookBase ? 'ВЫБЕРИТЕ ОСНОВУ' : widget.title;
+    final storeTitle = _normalizeValue(widget.initialStoreTitle);
+    final backRoute = _normalizeValue(widget.storeBackRoute);
+    final showBack = widget.pickLookBase || backRoute != null;
     return Container(
       padding: EdgeInsets.fromLTRB(
         isWideScreen ? 40 : 20,
@@ -229,10 +242,16 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (widget.pickLookBase) ...[
+          if (showBack) ...[
             IconButton(
               tooltip: 'Назад',
-              onPressed: () => context.pop(),
+              onPressed: () {
+                if (widget.pickLookBase) {
+                  context.pop();
+                  return;
+                }
+                if (backRoute != null) context.go(backRoute);
+              },
               style: IconButton.styleFrom(
                 foregroundColor: GlameColors.whiteGlame,
                 side: const BorderSide(color: GlameColors.borderGray),
@@ -257,15 +276,20 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                 ),
                 const SizedBox(height: 10),
                 Container(width: 54, height: 1, color: GlameColors.steelGray),
+                if (storeTitle != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'В наличии в $storeTitle',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      letterSpacing: 0.7,
+                      color: GlameColors.coldLightGray,
+                    ),
+                  ),
+                ],
               ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '${_groupCatalogItems(ref.watch(catalogControllerProvider).items).length} товаров',
-            style: const TextStyle(
-              fontSize: 12,
-              color: GlameColors.coldLightGray,
             ),
           ),
         ],
@@ -429,7 +453,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: const Color(0xFFF7F6F4),
+      backgroundColor: GlameColors.surface2,
       shape: const RoundedRectangleBorder(),
       builder: (context) {
         return SizedBox(
@@ -478,10 +502,23 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     final loaded = characteristicsAsync.valueOrNull;
     if (loaded != null && loaded.isNotEmpty) return loaded;
     try {
-      return await ref.read(productCharacteristicsProvider.future);
+      final providerLoaded = await ref.read(
+        productCharacteristicsProvider.future,
+      );
+      if (providerLoaded.isNotEmpty) return providerLoaded;
     } catch (_) {
-      return const <String, dynamic>{};
+      ref.invalidate(productCharacteristicsProvider);
     }
+    try {
+      final directLoaded = await ref
+          .read(catalogControllerProvider.notifier)
+          .api
+          .getCharacteristicsValues();
+      if (directLoaded.isNotEmpty) return directLoaded;
+    } catch (_) {
+      // The sheet can still open; individual sections will show empty states.
+    }
+    return const <String, dynamic>{};
   }
 
   Future<int> _loadFilteredCount(
@@ -612,7 +649,13 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
       final base = _baseArticle(((variants.first)['article'] as String?) ?? '');
       Map<String, dynamic> selected = variants.first;
-      if (base.isNotEmpty) {
+      for (final item in variants) {
+        if (_hasPositiveStock(item)) {
+          selected = item;
+          break;
+        }
+      }
+      if (!_hasPositiveStock(selected) && base.isNotEmpty) {
         for (final item in variants) {
           final article = ((item['article'] as String?) ?? '').trim();
           if (article == base) {
@@ -665,7 +708,10 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
 
   static String? _normalizeCategory(String? category) {
     final next = (category ?? '').trim();
-    return next.isEmpty ? null : next;
+    if (next.isEmpty) return null;
+    final normalized = next.toLowerCase();
+    if (normalized == 'все' || normalized == 'all') return null;
+    return next;
   }
 
   static String? _normalizeValue(String? value) {
@@ -758,7 +804,7 @@ class _ProductCardDarkrain extends ConsumerWidget {
     final brand = brandRaw.isEmpty
         ? null
         : _normalizeCatalogDisplayLabel(brandRaw).toUpperCase();
-    final isAvailable = [item, ...variants].any(_hasPositiveStock);
+    var totalStock = _totalStock(variants);
     final loyaltyPoints =
         ref.watch(authControllerProvider).user?.loyaltyPoints ?? 0;
     var priceLabel = _buildPriceLabel(item, variants, loyaltyPoints);
@@ -783,6 +829,7 @@ class _ProductCardDarkrain extends ConsumerWidget {
           if (baseImages is List && baseImages.isNotEmpty) {
             remoteImageUrl = resolveAssetUrl(baseImages.first);
           }
+          totalStock = _totalStock([if (base.isNotEmpty) base, ...remote]);
           return _buildPriceLabel(
             base.isEmpty ? item : base,
             remote,
@@ -795,6 +842,7 @@ class _ProductCardDarkrain extends ConsumerWidget {
         priceLabel = remoteData;
       }
     }
+    final isAvailable = totalStock > 0;
     final images = current['images'];
     String? imageUrl = (images is List && images.isNotEmpty)
         ? resolveAssetUrl(images.first)
@@ -828,7 +876,8 @@ class _ProductCardDarkrain extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
+          AspectRatio(
+            aspectRatio: _glameMediaAspectRatio,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -877,15 +926,18 @@ class _ProductCardDarkrain extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            name.toUpperCase(),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 11,
-              letterSpacing: 0.8,
-              color: GlameColors.whiteGlame,
-              height: 1.4,
+          SizedBox(
+            height: 32,
+            child: Text(
+              name.toUpperCase(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                letterSpacing: 0.8,
+                color: GlameColors.whiteGlame,
+                height: 1.4,
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -899,7 +951,9 @@ class _ProductCardDarkrain extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            isAvailable ? 'В наличии' : 'Нет в наличии',
+            isAvailable
+                ? 'В наличии: ${_formatStockAmount(totalStock)} шт.'
+                : 'Нет в наличии',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -940,14 +994,48 @@ class _ProductCardDarkrain extends ConsumerWidget {
   }
 
   List<Map<String, dynamic>> _extractVariants(Map<String, dynamic> item) {
+    final result = <Map<String, dynamic>>[Map<String, dynamic>.from(item)];
+    final seenIds = <String>{
+      if ((item['id'] as String?)?.isNotEmpty == true) item['id'] as String,
+    };
     final raw = item['_variants'];
     if (raw is List) {
-      return raw
-          .whereType<Map>()
-          .map((x) => Map<String, dynamic>.from(x))
-          .toList();
+      for (final variant in raw.whereType<Map>()) {
+        final normalized = Map<String, dynamic>.from(variant);
+        final id = normalized['id'] as String?;
+        if (id != null && id.isNotEmpty && !seenIds.add(id)) continue;
+        result.add(normalized);
+      }
     }
-    return [Map<String, dynamic>.from(item)];
+    return result;
+  }
+
+  num _totalStock(List<Map<String, dynamic>> variants) {
+    var total = 0.0;
+    final seenIds = <String>{};
+    for (final variant in variants) {
+      final id = variant['id'] as String?;
+      if (id != null && id.isNotEmpty && !seenIds.add(id)) continue;
+      total += _stockAmount(variant).toDouble();
+    }
+    return total;
+  }
+
+  num _stockAmount(Map<String, dynamic> item) {
+    final stock =
+        _asStockNumber(item['stock']) ?? _asStockNumber(item['quantity']);
+    if (stock != null) return stock;
+
+    final specs = item['specifications'];
+    if (specs is Map) {
+      return _asStockNumber(specs['quantity']) ?? 0;
+    }
+    return 0;
+  }
+
+  String _formatStockAmount(num value) {
+    if (value == value.roundToDouble()) return value.toInt().toString();
+    return value.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '');
   }
 
   int? _asInt(dynamic value) {
@@ -976,12 +1064,8 @@ class _ProductCardDarkrain extends ConsumerWidget {
         .toList();
     prices.sort();
 
-    final min = prices.first;
     final max = prices.last;
-    if (min == max) {
-      return formatRubFromKopeks(min);
-    }
-    return 'от ${formatRubFromKopeks(min)} до ${formatRubFromKopeks(max)}';
+    return formatRubFromKopeks(max);
   }
 }
 

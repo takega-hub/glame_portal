@@ -12,7 +12,13 @@ class HomeApi {
   }) async {
     final resp = await _dio.get(
       '/app/home-slides',
-      queryParameters: {'block_key': blockKey},
+      queryParameters: {
+        'block_key': blockKey,
+        '_ts': DateTime.now().millisecondsSinceEpoch,
+      },
+      options: Options(
+        headers: const {'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
+      ),
     );
     return (resp.data as List<dynamic>?) ?? const [];
   }
@@ -96,29 +102,56 @@ class HomeApi {
     String? razmer,
     String? tipZamka,
     String? color,
+    String? storeId,
   }) async {
-    final resp = await _dio.get(
+    final queryParameters = {
+      'skip': skip,
+      'limit': limit,
+      if (category != null && category.isNotEmpty) 'category': category,
+      if (brand != null && brand.isNotEmpty) 'brand': brand,
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (inStock == true) 'in_stock': true,
+      ...?(hasImages == null ? null : {'has_images': hasImages}),
+      ...?(priceMin != null ? {'price_min': priceMin} : null),
+      ...?(priceMax != null ? {'price_max': priceMax} : null),
+      if (sort != null && sort.isNotEmpty) 'sort': sort,
+      if (material != null && material.isNotEmpty) 'material': material,
+      if (vstavka != null && vstavka.isNotEmpty) 'vstavka': vstavka,
+      if (pokrytie != null && pokrytie.isNotEmpty) 'pokrytie': pokrytie,
+      if (razmer != null && razmer.isNotEmpty) 'razmer': razmer,
+      if (tipZamka != null && tipZamka.isNotEmpty) 'tip_zamka': tipZamka,
+      if (color != null && color.isNotEmpty) 'color': color,
+      if (storeId != null && storeId.isNotEmpty) 'store_id': storeId,
+    };
+    final resp = await _retryTransientGet(
       '/products/paged',
-      queryParameters: {
-        'skip': skip,
-        'limit': limit,
-        if (category != null && category.isNotEmpty) 'category': category,
-        if (brand != null && brand.isNotEmpty) 'brand': brand,
-        if (search != null && search.isNotEmpty) 'search': search,
-        if (inStock == true) 'in_stock': true,
-        ...?(hasImages == null ? null : {'has_images': hasImages}),
-        ...?(priceMin != null ? {'price_min': priceMin} : null),
-        ...?(priceMax != null ? {'price_max': priceMax} : null),
-        if (sort != null && sort.isNotEmpty) 'sort': sort,
-        if (material != null && material.isNotEmpty) 'material': material,
-        if (vstavka != null && vstavka.isNotEmpty) 'vstavka': vstavka,
-        if (pokrytie != null && pokrytie.isNotEmpty) 'pokrytie': pokrytie,
-        if (razmer != null && razmer.isNotEmpty) 'razmer': razmer,
-        if (tipZamka != null && tipZamka.isNotEmpty) 'tip_zamka': tipZamka,
-        if (color != null && color.isNotEmpty) 'color': color,
-      },
+      queryParameters: queryParameters,
     );
     return Map<String, dynamic>.from(resp.data as Map);
+  }
+
+  Future<Response<dynamic>> _retryTransientGet(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    DioException? lastError;
+    for (var attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await _dio.get(path, queryParameters: queryParameters);
+      } on DioException catch (error) {
+        lastError = error;
+        if (!_isTransientNetworkError(error) || attempt == 2) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 250 * (attempt + 1)));
+      }
+    }
+    throw lastError!;
+  }
+
+  bool _isTransientNetworkError(DioException error) {
+    return error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.sendTimeout;
   }
 
   Future<Map<String, dynamic>> getCharacteristicsValues() async {

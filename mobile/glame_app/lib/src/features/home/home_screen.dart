@@ -26,6 +26,7 @@ const double _homeBlockHorizontalPadding = GlameUi.pagePadding;
 const double _newInDropCardHeight = 500;
 const double _newInProductGap = 13;
 const double _newInLookCardHeight = 330;
+const double _glameMediaAspectRatio = 3 / 4;
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -65,11 +66,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final slidesAsync = ref.watch(homeSlidesProvider);
     final newLooksAsync = ref.watch(homeNewLooksProvider);
+    final newProductsAsync = ref.watch(homeNewProductsProvider);
 
     final slidesData = slidesAsync.asData?.value;
     final preparedSlides = slidesData != null
         ? _normalizeSlides(slidesData)
         : _fallbackHeroSlides;
+    final heroSlidesSignature = _slidesSignature(preparedSlides);
     _syncAutoPlay(preparedSlides.length);
     if (_currentHeroPage >= preparedSlides.length &&
         preparedSlides.isNotEmpty) {
@@ -84,9 +87,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final dropData = featuredLook != null
         ? _NewInDropData.fromLook(featuredLook)
         : null;
-    final productCards =
-        featuredLook?.products.toList(growable: false) ??
-        const <_NewInProductData>[];
+    final fallbackProductCards = _normalizeCatalogProducts(
+      newProductsAsync.asData?.value,
+    );
+    final productCards = (featuredLook?.products.isNotEmpty ?? false)
+        ? featuredLook!.products.toList(growable: false)
+        : fallbackProductCards;
+    final effectiveDropData =
+        dropData ??
+        (fallbackProductCards.isNotEmpty
+            ? _NewInDropData.fromProduct(fallbackProductCards.first)
+            : null);
 
     final isPagedMobileHome = MediaQuery.of(context).size.width < 600;
     if (isPagedMobileHome) {
@@ -100,6 +111,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               _HomeFullScreenSection(
                 child: _HomeHeroBlock(
+                  key: ValueKey(heroSlidesSignature),
                   slides: preparedSlides,
                   currentPage: _currentHeroPage.clamp(
                     0,
@@ -118,9 +130,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               _HomeFullScreenSection(
                 child: _HomeNewInBlock(
-                  drop: dropData,
+                  drop: effectiveDropData,
                   products: productCards,
-                  loading: newLooksAsync.isLoading,
+                  loading:
+                      newLooksAsync.isLoading || newProductsAsync.isLoading,
                   onOpenAllNew: _openAllNew,
                   onOpenDrop: dropData == null
                       ? null
@@ -167,6 +180,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               SizedBox(
                 height: viewportHeight,
                 child: _HomeHeroBlock(
+                  key: ValueKey(heroSlidesSignature),
                   slides: preparedSlides,
                   currentPage: _currentHeroPage.clamp(
                     0,
@@ -184,9 +198,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               _HomeNewInBlock(
-                drop: dropData,
+                drop: effectiveDropData,
                 products: productCards,
-                loading: newLooksAsync.isLoading,
+                loading: newLooksAsync.isLoading || newProductsAsync.isLoading,
                 onOpenAllNew: _openAllNew,
                 onOpenDrop: dropData == null
                     ? null
@@ -272,7 +286,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _openAllNew() async {
     if (!mounted) return;
-    context.go('/home?tab=5&lookFilter=${Uri.encodeComponent('Новинка')}');
+    context.go(
+      Uri(
+        path: '/home',
+        queryParameters: {'tab': '1', 'category': 'Новинки'},
+      ).toString(),
+    );
   }
 
   Future<void> _openNewInDrop(_NewInDropData drop) async {
@@ -281,7 +300,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       context.push('/look/${drop.lookId}');
       return;
     }
-    context.go('/home?tab=5&lookFilter=${Uri.encodeComponent('Новинка')}');
+    context.go(
+      Uri(
+        path: '/home',
+        queryParameters: {'tab': '1', 'category': 'Новинки'},
+      ).toString(),
+    );
   }
 
   Future<void> _openPhotoUpload() async {
@@ -371,6 +395,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await _openHomeBlock(block ?? 2);
       return;
     }
+    if (type == 'news') {
+      final newsId = _firstNotEmpty(<Object?>[
+        payload['news_id'],
+        payload['newsId'],
+        payload['id'],
+      ]);
+      if (!mounted) return;
+      if (newsId != null) {
+        context.push('/profile/news/$newsId');
+        return;
+      }
+      context.push('/profile/news');
+      return;
+    }
     final urlFromPayload = _firstNotEmpty(<Object?>[
       payload['url'],
       payload['link'],
@@ -457,7 +495,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         subtitle: _stringValue(raw['subtitle']),
         backgroundImageUrl: backgroundImageUrl,
         imageUrl: imageUrl,
-        localBackgroundAsset: _localHeroAssetForIndex(slides.length),
+        localBackgroundAsset: null,
         cacheVersion:
             _stringValue(raw['updated_at']) ?? _stringValue(raw['id']),
         imageAction: _parseAction(
@@ -484,9 +522,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           legacyLinkKey: 'secondary_button_link',
         ),
       );
+      slide = slide.copyWith(
+        localBackgroundAsset:
+            (slide.backgroundImageUrl == null && slide.imageUrl == null)
+            ? _localHeroAssetForIndex(slides.length)
+            : null,
+      );
       slides.add(_applyHeroSpec(slide, slides.length));
     }
     return slides.isEmpty ? _fallbackHeroSlides : slides;
+  }
+
+  String _slidesSignature(List<_HomeSlideData> slides) {
+    return slides
+        .map(
+          (slide) => [
+            slide.backgroundImageUrl,
+            slide.imageUrl,
+            slide.localBackgroundAsset,
+            slide.cacheVersion,
+          ].join('|'),
+        )
+        .join('||');
   }
 
   _HomeSlideData _applyHeroSpec(_HomeSlideData slide, int index) {
@@ -679,6 +736,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return result;
   }
 
+  List<_NewInProductData> _normalizeCatalogProducts(List<dynamic>? items) {
+    final result = <_NewInProductData>[];
+    for (final item in items ?? const <dynamic>[]) {
+      if (item is! Map) continue;
+      final raw = Map<String, dynamic>.from(item);
+      final id = _stringValue(raw['id']) ?? '';
+      final imageUrl = _resolveProductImage(raw);
+      result.add(
+        _NewInProductData(
+          id: id,
+          brand:
+              (_stringValue(raw['brand']) ??
+                      _stringValue(raw['category']) ??
+                      'GLAME')
+                  .toUpperCase(),
+          name: _stringValue(raw['name']) ?? 'Украшение',
+          availability: _buildAvailabilityLabel(raw),
+          imageUrl: imageUrl,
+          priceLabel: _buildProductPriceLabel(raw),
+        ),
+      );
+    }
+    return result;
+  }
+
   String? _resolveProductImage(Map raw) {
     final images = raw['images'];
     if (images is List) {
@@ -733,6 +815,7 @@ class _HomeHeroBlock extends StatelessWidget {
   final Future<void> Function(_HomeSlideAction? action) onOpenAction;
 
   const _HomeHeroBlock({
+    super.key,
     required this.slides,
     required this.currentPage,
     required this.pageController,
@@ -779,25 +862,6 @@ class _HomeHeroBlock extends StatelessWidget {
                   ),
                 );
               },
-            ),
-          ),
-        ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    GlameColors.textPrimary.withValues(alpha: 0.36),
-                    GlameColors.textPrimary.withValues(alpha: 0.06),
-                    GlameColors.textPrimary.withValues(alpha: 0.52),
-                    GlameColors.textPrimary.withValues(alpha: 0.78),
-                  ],
-                  stops: const [0, 0.36, 0.8, 1],
-                ),
-              ),
             ),
           ),
         ),
@@ -944,23 +1008,28 @@ class _HeroBackground extends StatelessWidget {
         else
           Container(color: GlameColors.coolLightGray),
         if (hasBackground)
-          CachedNetworkImage(
-            imageUrl: backgroundImageUrl!,
-            cacheKey: _versionedImageCacheKey(
-              backgroundImageUrl!,
-              cacheVersion,
+          Image.network(
+            _versionedImageUrl(backgroundImageUrl!, cacheVersion),
+            key: ValueKey(
+              _versionedImageCacheKey(backgroundImageUrl!, cacheVersion),
             ),
             fit: BoxFit.cover,
-            placeholder: (_, _) => const SizedBox.shrink(),
-            errorWidget: (_, _, _) => const SizedBox.shrink(),
+            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+              if (wasSynchronouslyLoaded || frame != null) return child;
+              return const SizedBox.shrink();
+            },
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
         if (hasImage)
-          CachedNetworkImage(
-            imageUrl: imageUrl!,
-            cacheKey: _versionedImageCacheKey(imageUrl!, cacheVersion),
+          Image.network(
+            _versionedImageUrl(imageUrl!, cacheVersion),
+            key: ValueKey(_versionedImageCacheKey(imageUrl!, cacheVersion)),
             fit: BoxFit.cover,
-            placeholder: (_, _) => const SizedBox.shrink(),
-            errorWidget: (_, _, _) => const SizedBox.shrink(),
+            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+              if (wasSynchronouslyLoaded || frame != null) return child;
+              return const SizedBox.shrink();
+            },
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
       ],
     );
@@ -971,6 +1040,15 @@ String _versionedImageCacheKey(String url, String? version) {
   final cleanVersion = version?.trim();
   if (cleanVersion == null || cleanVersion.isEmpty) return url;
   return '$url@$cleanVersion';
+}
+
+String _versionedImageUrl(String url, String? version) {
+  final cleanVersion = version?.trim();
+  if (cleanVersion == null || cleanVersion.isEmpty) return url;
+  final uri = Uri.tryParse(url);
+  if (uri == null) return url;
+  final separator = uri.hasQuery ? '&' : '?';
+  return '$url${separator}v=${Uri.encodeQueryComponent(cleanVersion)}';
 }
 
 class _GlameHeroButton extends StatelessWidget {
@@ -1214,6 +1292,13 @@ class _HeroTextBlock extends StatelessWidget {
               fontWeight: FontWeight.w400,
               color: GlameColors.surface2,
               letterSpacing: 0.2,
+              shadows: const [
+                Shadow(
+                  color: Color.fromRGBO(0, 0, 0, 0.42),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
             ),
           ),
         if (hasSubtitle && hasTitle) SizedBox(height: compact ? 10 : 12),
@@ -1226,6 +1311,13 @@ class _HeroTextBlock extends StatelessWidget {
               fontWeight: FontWeight.w400,
               color: GlameColors.surface2,
               letterSpacing: 0.1,
+              shadows: const [
+                Shadow(
+                  color: Color.fromRGBO(0, 0, 0, 0.44),
+                  blurRadius: 8,
+                  offset: Offset(0, 1),
+                ),
+              ],
             ),
           ),
       ],
@@ -1302,23 +1394,23 @@ class _HomeNewInBlock extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final items = products.isEmpty
-        ? List<_NewInProductData>.generate(
-            3,
-            (index) => _NewInProductData.placeholder(index),
-          )
-        : products;
+    final items = products;
     final isPagedLayout = viewportHeight != null;
     final screenWidth = MediaQuery.of(context).size.width;
     final blockHeight = viewportHeight ?? MediaQuery.of(context).size.height;
     final compact = isPagedLayout || screenWidth < 600;
-    final topPadding = isPagedLayout ? 132.0 : (compact ? 64.0 : 72.0);
+    final topPadding = isPagedLayout ? 86.0 : (compact ? 54.0 : 64.0);
     final bottomPadding = isPagedLayout ? 18.0 : (compact ? 64.0 : 72.0);
     final titleSize = compact ? 24.0 : 42.0;
     final linkSize = compact ? 14.0 : 19.0;
-    final bodySize = compact ? 14.0 : 18.0;
+    final availableCardWidth = screenWidth - (_homeBlockHorizontalPadding * 2);
     final dropHeight = compact
-        ? (isPagedLayout ? (blockHeight * 0.34).clamp(220.0, 300.0) : 420.0)
+        ? (isPagedLayout
+              ? (blockHeight * 0.56).clamp(340.0, 520.0)
+              : (availableCardWidth / _glameMediaAspectRatio).clamp(
+                  420.0,
+                  620.0,
+                ))
         : _newInDropCardHeight;
     final productCardHeight = compact
         ? (isPagedLayout ? (blockHeight * 0.2).clamp(145.0, 190.0) : 310.0)
@@ -1376,46 +1468,25 @@ class _HomeNewInBlock extends ConsumerWidget {
               ),
             ),
           ),
-          SizedBox(height: compact ? 18 : 20),
-          SizedBox(
-            width: 310,
-            child: Text(
-              'Кураторские поступления: онлайн, в бутике или с доставкой по России.',
-              style: TextStyle(
-                fontSize: bodySize,
-                height: 1.4,
-                color: GlameColors.steelGray,
-              ),
-            ),
-          ),
-          SizedBox(height: compact ? 28 : 36),
+          SizedBox(height: compact ? 18 : 28),
           if (compact && isPagedLayout)
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final availableHeight = constraints.maxHeight;
-                  final hasScrollHint = items.length > 3;
-                  final hintHeight = hasScrollHint ? 24.0 : 0.0;
                   final verticalGap = 16.0;
-                  final rowGap = hasScrollHint ? 10.0 : 0.0;
-                  final preferredProductHeight = (availableHeight * 0.32).clamp(
-                    188.0,
-                    236.0,
+                  final preferredProductHeight = (availableHeight * 0.28).clamp(
+                    170.0,
+                    205.0,
                   );
                   final dynamicDropHeight =
-                      (availableHeight -
-                              preferredProductHeight -
-                              verticalGap -
-                              rowGap -
-                              hintHeight)
-                          .clamp(220.0, 320.0);
+                      (availableHeight - preferredProductHeight - verticalGap)
+                          .clamp(340.0, 520.0);
                   final dynamicProductHeight =
-                      (availableHeight -
-                              dynamicDropHeight -
-                              verticalGap -
-                              rowGap -
-                              hintHeight)
-                          .clamp(188.0, 236.0);
+                      (availableHeight - dynamicDropHeight - verticalGap).clamp(
+                        170.0,
+                        220.0,
+                      );
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1428,29 +1499,6 @@ class _HomeNewInBlock extends ConsumerWidget {
                         compact: compact,
                       ),
                       SizedBox(height: verticalGap),
-                      if (hasScrollHint)
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 10),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Text(
-                                'Листайте',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  letterSpacing: 0.6,
-                                  color: GlameColors.steelGray,
-                                ),
-                              ),
-                              SizedBox(width: 6),
-                              Icon(
-                                Icons.arrow_forward_rounded,
-                                size: 16,
-                                color: GlameColors.steelGray,
-                              ),
-                            ],
-                          ),
-                        ),
                       _NewInProductCardsRow(
                         items: items,
                         height: dynamicProductHeight,
@@ -1470,29 +1518,6 @@ class _HomeNewInBlock extends ConsumerWidget {
               compact: compact,
             ),
             SizedBox(height: compact ? 14 : 26),
-            if (items.length > 3)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: const [
-                    Text(
-                      'Листайте',
-                      style: TextStyle(
-                        fontSize: 12,
-                        letterSpacing: 0.6,
-                        color: GlameColors.steelGray,
-                      ),
-                    ),
-                    SizedBox(width: 6),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 16,
-                      color: GlameColors.steelGray,
-                    ),
-                  ],
-                ),
-              ),
             _NewInProductCardsRow(
               items: items,
               height: productCardHeight,
@@ -1521,6 +1546,10 @@ class _NewInProductCardsRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cardWidth = (constraints.maxWidth - (_newInProductGap * 2)) / 3;
+        final compactCardWidth = ((height - 88) * _glameMediaAspectRatio).clamp(
+          132.0,
+          190.0,
+        );
         if (compact) {
           return Stack(
             children: [
@@ -1532,7 +1561,7 @@ class _NewInProductCardsRow extends StatelessWidget {
                   children: [
                     for (var index = 0; index < items.length; index++) ...[
                       SizedBox(
-                        width: 240,
+                        width: compactCardWidth,
                         child: _NewInProductCard(
                           product: items[index],
                           height: height,
@@ -2162,8 +2191,8 @@ class _NewInProductCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: compact ? 74 : 70,
+            AspectRatio(
+              aspectRatio: _glameMediaAspectRatio,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -2284,6 +2313,15 @@ class _NewInDropData {
       imageUrl: look.imageUrl ?? '',
     );
   }
+
+  factory _NewInDropData.fromProduct(_NewInProductData product) {
+    return _NewInDropData(
+      lookId: '',
+      title: 'Новый дроп',
+      description: 'Кураторская подборка украшений GLAME.',
+      imageUrl: product.imageUrl ?? '',
+    );
+  }
 }
 
 class _NewInLookData {
@@ -2320,17 +2358,6 @@ class _NewInProductData {
     required this.imageUrl,
     this.priceLabel,
   });
-
-  factory _NewInProductData.placeholder(int index) {
-    const names = ['Браслет Wave', 'Колье Shell', 'Браслет Orb'];
-    return _NewInProductData(
-      id: '',
-      brand: 'GLAME',
-      name: names[index % names.length],
-      availability: 'В наличии · доставка по России',
-      imageUrl: null,
-    );
-  }
 }
 
 class _HomeSlideData {
@@ -2359,6 +2386,34 @@ class _HomeSlideData {
     required this.secondaryButtonText,
     required this.secondaryAction,
   });
+
+  _HomeSlideData copyWith({
+    String? title,
+    String? subtitle,
+    String? backgroundImageUrl,
+    String? imageUrl,
+    String? localBackgroundAsset,
+    String? cacheVersion,
+    _HomeSlideAction? imageAction,
+    String? primaryButtonText,
+    _HomeSlideAction? primaryAction,
+    String? secondaryButtonText,
+    _HomeSlideAction? secondaryAction,
+  }) {
+    return _HomeSlideData(
+      title: title ?? this.title,
+      subtitle: subtitle ?? this.subtitle,
+      backgroundImageUrl: backgroundImageUrl ?? this.backgroundImageUrl,
+      imageUrl: imageUrl ?? this.imageUrl,
+      localBackgroundAsset: localBackgroundAsset ?? this.localBackgroundAsset,
+      cacheVersion: cacheVersion ?? this.cacheVersion,
+      imageAction: imageAction ?? this.imageAction,
+      primaryButtonText: primaryButtonText ?? this.primaryButtonText,
+      primaryAction: primaryAction ?? this.primaryAction,
+      secondaryButtonText: secondaryButtonText ?? this.secondaryButtonText,
+      secondaryAction: secondaryAction ?? this.secondaryAction,
+    );
+  }
 }
 
 class _HomeSlideAction {
@@ -2370,8 +2425,9 @@ class _HomeSlideAction {
 }
 
 const List<String> _localHeroBackgroundAssets = <String>[
-  'assets/images/home/hero/home_hero_style_inside_01.png',
+  'assets/images/home/hero/home_hero_style_inside_01_20260718.png',
   'assets/images/home/hero/home_hero_style_inside_02.png',
+  'assets/images/home/hero/home_hero_style_inside_03.jpg',
 ];
 
 const _HomeSlideData _fallbackSlide = _HomeSlideData(
@@ -2380,8 +2436,9 @@ const _HomeSlideData _fallbackSlide = _HomeSlideData(
       'Украшения, которые собирают образ под ваш стиль, задачу и повод.\nОнлайн — по всей России.',
   backgroundImageUrl: null,
   imageUrl: null,
-  localBackgroundAsset: 'assets/images/home/hero/home_hero_style_inside_01.png',
-  cacheVersion: 'bundled-2026-06-30-01',
+  localBackgroundAsset:
+      'assets/images/home/hero/home_hero_style_inside_01_20260718.png',
+  cacheVersion: 'bundled-2026-07-18-01',
   imageAction: null,
   primaryButtonText: 'Собрать свой стиль',
   primaryAction: _HomeSlideAction(type: 'selection', legacyLink: '/selection'),
@@ -2413,6 +2470,25 @@ const List<_HomeSlideData> _fallbackHeroSlides = <_HomeSlideData>[
     secondaryAction: _HomeSlideAction(
       type: 'selection',
       legacyLink: '/selection',
+    ),
+  ),
+  _HomeSlideData(
+    title: 'GLAME 7 ЛЕТ',
+    subtitle: '3=2\nЛюбое украшение меньшей стоимости - за 1 Р\n15-21 июля',
+    backgroundImageUrl: null,
+    imageUrl: null,
+    localBackgroundAsset:
+        'assets/images/home/hero/home_hero_style_inside_03.jpg',
+    cacheVersion: 'bundled-2026-07-18-03',
+    imageAction: null,
+    primaryButtonText: 'Выбрать украшения',
+    primaryAction: _HomeSlideAction(type: 'catalog'),
+    secondaryButtonText: 'Подробнее об акции',
+    secondaryAction: _HomeSlideAction(
+      type: 'news',
+      payload: <String, dynamic>{
+        'news_id': 'd1b55ff7-0e4a-4cc6-91a7-445cf7983a6c',
+      },
     ),
   ),
 ];

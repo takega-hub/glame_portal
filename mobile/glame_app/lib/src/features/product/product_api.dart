@@ -29,4 +29,20 @@ class ProductApi {
     );
     return (resp.data as List<dynamic>?) ?? const [];
   }
+
+  Future<Map<String, dynamic>> subscribeArrival({
+    required String productId,
+    required String variantProductId,
+    required String email,
+  }) async {
+    final resp = await _dio.post(
+      '/products/$productId/arrival-subscriptions',
+      data: {
+        'email': email,
+        'variant_product_id': variantProductId,
+        'source': 'product_card',
+      },
+    );
+    return Map<String, dynamic>.from(resp.data as Map);
+  }
 }

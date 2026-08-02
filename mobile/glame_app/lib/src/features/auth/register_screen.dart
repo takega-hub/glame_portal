@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/formatters/phone.dart';
 import '../../core/theme/glame_theme.dart';
 import 'auth_field.dart';
 import 'auth_controller.dart';
@@ -20,6 +21,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _password = TextEditingController();
   final _fullName = TextEditingController();
   final _referralCode = TextEditingController();
+  late final VoidCallback _removePhoneFormatter;
   DateTime? _birthDate;
 
   String? get _normalizedReferralCode {
@@ -34,7 +36,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _removePhoneFormatter = installRuPhonePrefixFormatter(_phone);
+  }
+
+  @override
   void dispose() {
+    _removePhoneFormatter();
     _phone.dispose();
     _password.dispose();
     _fullName.dispose();
@@ -98,7 +107,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               GestureDetector(
                 onTap: () => _selectDate(context),
                 child: AuthFieldShell(
-                  label: 'Дата рождения (не обязательно)',
+                  label: 'Дата рождения',
                   dark: true,
                   child: InputDecorator(
                     decoration: const InputDecoration(),
@@ -150,6 +159,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ? null
                     : () async {
                         final go = GoRouter.of(context);
+                        final phone = formatRuPhoneInput(_phone.text);
+                        if (!isRuPhoneComplete(phone)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Введите номер телефона'),
+                            ),
+                          );
+                          return;
+                        }
                         if (_fullName.text.trim().isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Введите Ваше имя')),
@@ -166,7 +184,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         }
                         try {
                           await controller.registerPhone(
-                            phone: _phone.text.trim(),
+                            phone: phone,
                             password: _password.text,
                             fullName: _fullName.text.trim(),
                             birthDate: _birthDate
