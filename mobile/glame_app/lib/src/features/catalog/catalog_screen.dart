@@ -193,7 +193,7 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
                               ? (isWideScreen ? 2.25 : 0.92)
                               : widget.pickLookBase
                               ? (isWideScreen ? 0.56 : 0.48)
-                              : (isWideScreen ? 0.62 : 0.56),
+                              : (isWideScreen ? 0.62 : 0.52),
                         ),
                       ),
                     ),

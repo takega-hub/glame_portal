@@ -582,15 +582,10 @@ class _SelectionMethodContent extends StatelessWidget {
                       statusPayload: stylistStatus,
                     ),
                   ),
-                  if (!isGiftMode) ...[
-                    const SizedBox(height: 14),
-                    _SelectionMethodRow(
-                      number: '03',
-                      title: 'Подобрать подарок',
-                      description: 'Для особенного момента',
-                      onTap: () => context.push('/selection/gift'),
-                    ),
-                  ],
+                  const SizedBox(height: 22),
+                  Expanded(
+                    child: _SelectionProcessPanel(isGiftMode: isGiftMode),
+                  ),
                 ],
               ),
             ),
@@ -779,6 +774,162 @@ class _SelectionMethodRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SelectionProcessPanel extends StatelessWidget {
+  final bool isGiftMode;
+
+  const _SelectionProcessPanel({required this.isGiftMode});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF151617),
+        border: Border.all(color: GlameColors.borderGray),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(painter: _SelectionProcessPainter()),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Как работает подбор',
+                  style: TextStyle(
+                    fontSize: 18,
+                    height: 1.15,
+                    color: GlameColors.whiteGlame,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _SelectionProcessStep(
+                  number: '01',
+                  title: isGiftMode
+                      ? 'Опишите повод и получателя'
+                      : 'Вы загружаете фото или задачу',
+                ),
+                const _SelectionProcessStep(
+                  number: '02',
+                  title: 'Мы считываем форму, масштаб и стиль',
+                ),
+                const _SelectionProcessStep(
+                  number: '03',
+                  title: 'Показываем украшения, которые подходят образу',
+                ),
+                const Spacer(),
+                Text(
+                  isGiftMode
+                      ? 'Подарочный сценарий можно разобрать со стилистом: повод, бюджет и формат вручения.'
+                      : 'Можно начать с AI-подбора или сразу передать задачу стилисту.',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    color: GlameColors.steelGray,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectionProcessStep extends StatelessWidget {
+  final String number;
+  final String title;
+
+  const _SelectionProcessStep({required this.number, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 34,
+            child: Text(
+              number,
+              style: const TextStyle(
+                fontSize: 11,
+                letterSpacing: 0.7,
+                color: GlameColors.steelGray,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.25,
+                color: GlameColors.whiteGlame,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectionProcessPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final linePaint = Paint()
+      ..color = GlameColors.borderGray.withValues(alpha: 0.22)
+      ..strokeWidth = 1;
+    final accentPaint = Paint()
+      ..color = GlameColors.gold.withValues(alpha: 0.28)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+
+    for (var y = 34.0; y < size.height; y += 42) {
+      canvas.drawLine(
+        Offset(size.width * 0.58, y),
+        Offset(size.width, y),
+        linePaint,
+      );
+    }
+
+    final path = Path()
+      ..moveTo(size.width * 0.58, size.height * 0.28)
+      ..quadraticBezierTo(
+        size.width * 0.78,
+        size.height * 0.14,
+        size.width * 0.96,
+        size.height * 0.32,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.76,
+        size.height * 0.52,
+        size.width * 0.92,
+        size.height * 0.74,
+      );
+    canvas.drawPath(path, accentPaint);
+    canvas.drawCircle(
+      Offset(size.width * 0.84, size.height * 0.42),
+      42,
+      Paint()
+        ..color = GlameColors.whiteGlame.withValues(alpha: 0.025)
+        ..style = PaintingStyle.fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SelectionProcessPainter oldDelegate) {
+    return false;
   }
 }
 

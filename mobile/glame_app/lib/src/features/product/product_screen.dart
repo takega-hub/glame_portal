@@ -3632,18 +3632,23 @@ class _ColorDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lower = label.toLowerCase();
-    final color = lower.contains('сер')
-        ? GlameColors.coolLightGray
+    final colors = lower.contains('сер')
+        ? const [Color(0xFFF3F5F6), Color(0xFFAEB4B8), Color(0xFFE1E4E6)]
         : lower.contains('роз')
-        ? GlameColors.warmGray
-        : GlameColors.gold;
+        ? const [Color(0xFFF2C7AE), Color(0xFFC78C6F), Color(0xFFFFE0CF)]
+        : const [Color(0xFFFFE7A3), Color(0xFFC79A2E), Color(0xFFFFF2BF)];
     return Container(
       width: 14,
       height: 14,
       decoration: BoxDecoration(
-        color: color,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+          stops: const [0, 0.52, 1],
+        ),
         shape: BoxShape.circle,
-        border: Border.all(color: GlameColors.lightGray),
+        border: Border.all(color: const Color(0xFFB88C24)),
       ),
     );
   }

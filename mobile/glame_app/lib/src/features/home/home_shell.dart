@@ -364,13 +364,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                     statusPayload: stylistStatus,
                   ),
                 ),
-                const SizedBox(height: 14),
-                _SelectionTabAction(
-                  number: '03',
-                  title: 'Подобрать подарок',
-                  description: 'Для особенного момента',
-                  onTap: () => context.push('/selection/gift'),
-                ),
+                const SizedBox(height: 22),
+                const Expanded(child: _SelectionTabProcessPanel()),
               ],
             ),
           ),
@@ -718,6 +713,156 @@ class _SelectionTabAction extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SelectionTabProcessPanel extends StatelessWidget {
+  const _SelectionTabProcessPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFF151617),
+        border: Border.all(color: GlameColors.borderGray),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(painter: _SelectionTabProcessPainter()),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 22, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Как работает подбор',
+                  style: TextStyle(
+                    fontSize: 18,
+                    height: 1.15,
+                    color: GlameColors.whiteGlame,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                SizedBox(height: 18),
+                _SelectionTabProcessStep(
+                  number: '01',
+                  title: 'Вы загружаете фото или задачу',
+                ),
+                _SelectionTabProcessStep(
+                  number: '02',
+                  title: 'Мы считываем форму, масштаб и стиль',
+                ),
+                _SelectionTabProcessStep(
+                  number: '03',
+                  title: 'Показываем украшения, которые подходят образу',
+                ),
+                Spacer(),
+                Text(
+                  'Можно начать с AI-подбора или сразу передать задачу стилисту.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    color: GlameColors.steelGray,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectionTabProcessStep extends StatelessWidget {
+  final String number;
+  final String title;
+
+  const _SelectionTabProcessStep({required this.number, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 34,
+            child: Text(
+              number,
+              style: const TextStyle(
+                fontSize: 11,
+                letterSpacing: 0.7,
+                color: GlameColors.steelGray,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.25,
+                color: GlameColors.whiteGlame,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectionTabProcessPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final linePaint = Paint()
+      ..color = GlameColors.borderGray.withValues(alpha: 0.22)
+      ..strokeWidth = 1;
+    final accentPaint = Paint()
+      ..color = GlameColors.gold.withValues(alpha: 0.28)
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+
+    for (var y = 34.0; y < size.height; y += 42) {
+      canvas.drawLine(
+        Offset(size.width * 0.58, y),
+        Offset(size.width, y),
+        linePaint,
+      );
+    }
+
+    final path = ui.Path()
+      ..moveTo(size.width * 0.58, size.height * 0.28)
+      ..quadraticBezierTo(
+        size.width * 0.78,
+        size.height * 0.14,
+        size.width * 0.96,
+        size.height * 0.32,
+      )
+      ..quadraticBezierTo(
+        size.width * 0.76,
+        size.height * 0.52,
+        size.width * 0.92,
+        size.height * 0.74,
+      );
+    canvas.drawPath(path, accentPaint);
+    canvas.drawCircle(
+      Offset(size.width * 0.84, size.height * 0.42),
+      42,
+      Paint()
+        ..color = GlameColors.whiteGlame.withValues(alpha: 0.025)
+        ..style = PaintingStyle.fill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SelectionTabProcessPainter oldDelegate) {
+    return false;
   }
 }
 

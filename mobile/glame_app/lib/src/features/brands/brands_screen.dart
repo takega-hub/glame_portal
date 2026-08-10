@@ -479,7 +479,7 @@ class _HomeBrandsShowcaseSection extends StatelessWidget {
     final topPadding = compact
         ? safeTop + GlameUi.heroTopOffset + GlameUi.heroTopBarHeight + 10
         : 58.0;
-    final bottomPadding = compact ? 16.0 : 42.0;
+    final bottomPadding = compact ? 8.0 : 42.0;
 
     return Container(
       height: viewportHeight,
@@ -516,10 +516,10 @@ class _HomeBrandsShowcaseSection extends StatelessWidget {
                 fontWeight: FontWeight.w300,
               ),
             ),
-            SizedBox(height: compact ? 24 : 34),
-            _BrandsShowcaseGrid(cards: cards),
-            SizedBox(height: compact ? 24 : 36),
-            _BrandsShowAllButton(onPressed: onCtaPressed),
+            SizedBox(height: compact ? 8 : 34),
+            _BrandsShowcaseGrid(cards: cards, compact: compact),
+            SizedBox(height: compact ? 14 : 36),
+            _BrandsShowAllButton(onPressed: onCtaPressed, compact: compact),
           ],
         ),
       ),
@@ -702,8 +702,9 @@ class _AllBrandsHeader extends StatelessWidget {
 
 class _BrandsShowcaseGrid extends StatelessWidget {
   final List<_BrandShowcaseCardData> cards;
+  final bool compact;
 
-  const _BrandsShowcaseGrid({required this.cards});
+  const _BrandsShowcaseGrid({required this.cards, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -712,11 +713,11 @@ class _BrandsShowcaseGrid extends StatelessWidget {
       itemCount: effectiveCards.take(4).length,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 3 / 4,
+        crossAxisSpacing: compact ? 10 : 12,
+        mainAxisSpacing: compact ? 10 : 12,
+        childAspectRatio: compact ? 0.84 : 3 / 4,
       ),
       itemBuilder: (context, index) {
         return _BrandShowcaseCard(card: effectiveCards[index]);
@@ -825,13 +826,14 @@ class _BrandShowcaseCard extends StatelessWidget {
 
 class _BrandsShowAllButton extends StatelessWidget {
   final VoidCallback onPressed;
+  final bool compact;
 
-  const _BrandsShowAllButton({required this.onPressed});
+  const _BrandsShowAllButton({required this.onPressed, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 58,
+      height: compact ? 48 : 58,
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
@@ -843,7 +845,7 @@ class _BrandsShowAllButton extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(GlameUi.radius),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 20 : 24),
         ),
         child: const Row(
           children: [

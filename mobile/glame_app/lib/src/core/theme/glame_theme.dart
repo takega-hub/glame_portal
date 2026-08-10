@@ -17,7 +17,7 @@ class GlameColors {
   static const surface2 = Color(0xFFFFFFFF);
   static const lightGray = softGray;
   static const coolLightGray = coldLightGray;
-  static const gold = steelGray;
+  static const gold = Color(0xFFC9A24A);
   static const steelGrey = steelGray;
   static const coldLightGrey = coldLightGray;
   static const textPrimary = nearBlack;

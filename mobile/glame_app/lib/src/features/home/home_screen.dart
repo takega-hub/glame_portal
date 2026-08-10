@@ -1399,7 +1399,7 @@ class _HomeNewInBlock extends ConsumerWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final blockHeight = viewportHeight ?? MediaQuery.of(context).size.height;
     final compact = isPagedLayout || screenWidth < 600;
-    final topPadding = isPagedLayout ? 86.0 : (compact ? 54.0 : 64.0);
+    final topPadding = isPagedLayout ? 118.0 : (compact ? 54.0 : 64.0);
     final bottomPadding = isPagedLayout ? 18.0 : (compact ? 64.0 : 72.0);
     final titleSize = compact ? 24.0 : 42.0;
     final linkSize = compact ? 14.0 : 19.0;
@@ -1546,10 +1546,12 @@ class _NewInProductCardsRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cardWidth = (constraints.maxWidth - (_newInProductGap * 2)) / 3;
-        final compactCardWidth = ((height - 88) * _glameMediaAspectRatio).clamp(
-          132.0,
-          190.0,
-        );
+        final compactInfoHeight = compact ? 60.0 : 88.0;
+        final compactCardWidth =
+            ((height - compactInfoHeight) * _glameMediaAspectRatio).clamp(
+              92.0,
+              190.0,
+            );
         if (compact) {
           return Stack(
             children: [
@@ -2177,117 +2179,168 @@ class _NewInProductCard extends ConsumerWidget {
     final isFavorite =
         product.id.isNotEmpty &&
         ref.watch(wishlistControllerProvider).contains(product.id);
+    final compactInfoHeight = compact ? 54.0 : null;
 
-    return InkWell(
-      onTap: product.id.isEmpty
-          ? null
-          : () => context.push('/product/${product.id}'),
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: GlameColors.graphite,
-          border: Border.all(color: GlameColors.borderGray),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: _glameMediaAspectRatio,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  product.imageUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: product.imageUrl!,
-                          fit: BoxFit.cover,
-                          placeholder: (_, _) =>
-                              Container(color: GlameColors.warmGray),
-                          errorWidget: (_, _, _) =>
-                              Container(color: GlameColors.warmGray),
-                        )
-                      : Container(color: GlameColors.warmGray),
-                  Positioned(
-                    top: compact ? 6 : 10,
-                    right: compact ? 6 : 10,
-                    child: InkWell(
-                      onTap: product.id.isEmpty
-                          ? null
-                          : () => ref
-                                .read(wishlistControllerProvider.notifier)
-                                .toggle(product.id),
-                      child: Container(
-                        width: compact ? 28 : 38,
-                        height: compact ? 28 : 38,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: GlameColors.graphite.withValues(alpha: 0.62),
-                          border: Border.all(color: GlameColors.borderGray),
-                        ),
-                        child: Icon(
-                          isFavorite ? Icons.favorite : Icons.favorite_border,
-                          size: compact ? 16 : 20,
-                          color: GlameColors.whiteGlame,
-                        ),
-                      ),
-                    ),
+    return ClipRect(
+      child: InkWell(
+        onTap: product.id.isEmpty
+            ? null
+            : () => context.push('/product/${product.id}'),
+        child: Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: GlameColors.graphite,
+            border: Border.all(color: GlameColors.borderGray),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (compact)
+                Expanded(
+                  child: _NewInProductImage(
+                    product: product,
+                    isFavorite: isFavorite,
+                    compact: compact,
                   ),
-                ],
-              ),
-            ),
-            Container(height: 1, color: GlameColors.borderGray),
-            Expanded(
-              flex: compact ? 34 : 36,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  compact ? 10 : 16,
-                  compact ? 7 : 14,
-                  compact ? 10 : 16,
-                  compact ? 7 : 14,
+                )
+              else
+                AspectRatio(
+                  aspectRatio: _glameMediaAspectRatio,
+                  child: _NewInProductImage(
+                    product: product,
+                    isFavorite: isFavorite,
+                    compact: compact,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      product.brand,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 9 : 12,
-                        height: 1.1,
-                        letterSpacing: 0.9,
-                        color: GlameColors.steelGray,
-                      ),
-                    ),
-                    SizedBox(height: compact ? 2 : 6),
-                    Text(
-                      product.name,
-                      maxLines: compact ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 12 : 16,
-                        height: 1.15,
-                        color: GlameColors.whiteGlame,
-                      ),
-                    ),
-                    SizedBox(height: compact ? 2 : 6),
-                    Text(
-                      product.availability,
-                      maxLines: compact ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 10 : 13,
-                        height: 1.15,
-                        color: GlameColors.steelGray,
-                      ),
-                    ),
-                  ],
+              Container(height: 1, color: GlameColors.borderGray),
+              if (compact)
+                SizedBox(
+                  height: compactInfoHeight,
+                  child: _NewInProductInfo(product: product, compact: compact),
+                )
+              else
+                Expanded(
+                  child: _NewInProductInfo(product: product, compact: compact),
                 ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _NewInProductInfo extends StatelessWidget {
+  final _NewInProductData product;
+  final bool compact;
+
+  const _NewInProductInfo({required this.product, required this.compact});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        compact ? 8 : 16,
+        compact ? 4 : 14,
+        compact ? 8 : 16,
+        compact ? 3 : 14,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: compact
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.end,
+        children: [
+          Text(
+            product.brand,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: compact ? 9 : 12,
+              height: compact ? 1.0 : 1.1,
+              letterSpacing: 0.9,
+              color: GlameColors.steelGray,
+            ),
+          ),
+          SizedBox(height: compact ? 1 : 6),
+          Text(
+            product.name,
+            maxLines: compact ? 1 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: compact ? 11 : 16,
+              height: compact ? 1.05 : 1.15,
+              color: GlameColors.whiteGlame,
+            ),
+          ),
+          SizedBox(height: compact ? 1 : 6),
+          Text(
+            product.availability,
+            maxLines: compact ? 1 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: compact ? 9 : 13,
+              height: compact ? 1.05 : 1.15,
+              color: GlameColors.steelGray,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NewInProductImage extends ConsumerWidget {
+  final _NewInProductData product;
+  final bool isFavorite;
+  final bool compact;
+
+  const _NewInProductImage({
+    required this.product,
+    required this.isFavorite,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        product.imageUrl != null
+            ? CachedNetworkImage(
+                imageUrl: product.imageUrl!,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => Container(color: GlameColors.warmGray),
+                errorWidget: (_, _, _) =>
+                    Container(color: GlameColors.warmGray),
+              )
+            : Container(color: GlameColors.warmGray),
+        Positioned(
+          top: compact ? 6 : 10,
+          right: compact ? 6 : 10,
+          child: InkWell(
+            onTap: product.id.isEmpty
+                ? null
+                : () => ref
+                      .read(wishlistControllerProvider.notifier)
+                      .toggle(product.id),
+            child: Container(
+              width: compact ? 28 : 38,
+              height: compact ? 28 : 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: GlameColors.graphite.withValues(alpha: 0.62),
+                border: Border.all(color: GlameColors.borderGray),
+              ),
+              child: Icon(
+                isFavorite ? Icons.favorite : Icons.favorite_border,
+                size: compact ? 16 : 20,
+                color: GlameColors.whiteGlame,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
