@@ -4,6 +4,7 @@ from sqlalchemy import select, or_
 from typing import Optional, Any
 from app.database.connection import get_db, AsyncSessionLocal
 from app.api.auth import get_current_user
+from app.services.upload_security import validate_image_upload
 from app.services.look_tryon_service import look_tryon_service
 from app.agents.photo_analysis_interpreter_agent import PhotoAnalysisInterpreterAgent
 from app.agents.stylist_agent import StylistAgent
@@ -491,6 +492,7 @@ async def upload_user_photo(
 
         user_uuid = current_user.id
         photo_data = await photo.read()
+        validate_image_upload(photo_data, photo.content_type, max_bytes=10 * 1024 * 1024)
 
         photo_url = await look_tryon_service.save_user_photo(
             photo_data=photo_data,
@@ -528,6 +530,7 @@ async def analyze_user_photo(
     """
     try:
         photo_data = await photo.read()
+        validate_image_upload(photo_data, photo.content_type, max_bytes=10 * 1024 * 1024)
         saved_photo_url: str | None = None
 
         try:
@@ -613,6 +616,7 @@ async def generate_look_with_tryon(
         look_uuid = UUID(look_id) if look_id else None
 
         photo_data = await photo.read()
+        validate_image_upload(photo_data, photo.content_type, max_bytes=10 * 1024 * 1024)
 
         async with AsyncSessionLocal() as db:
             agent = StylistAgent(db)

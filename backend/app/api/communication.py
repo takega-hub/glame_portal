@@ -7,7 +7,7 @@ import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, delete, distinct, update
@@ -26,7 +26,10 @@ from app.agents.communication_agent import CommunicationAgent
 from app.services.communication_service import CommunicationService
 from app.services.sms_service import get_sms_service
 from app.services.generation_history import get_generation_history
+from app.services.sms_aero_import_service import import_sms_aero_file_to_customer_history
+from app.services.crm_interaction_attribution_service import CrmInteractionAttributionService
 from app.models.user import User
+from app.api.dependencies import require_admin
 from app.models.customer_message import CustomerMessage
 from collections import defaultdict
 
@@ -41,10 +44,79 @@ _GENERATED_MESSAGES_SYNC_FILE_MTIME_NS: Dict[str, int] = {}
 _GENERATED_MESSAGES_SYNC_DEFAULT_INTERVAL_SECONDS = 10.0
 COMMUNICATION_BATCH_MAX_LLM_MESSAGES = int(os.getenv("COMMUNICATION_BATCH_MAX_LLM_MESSAGES", "500"))
 COMMUNICATION_BATCH_MAX_CONSECUTIVE_ERRORS = int(os.getenv("COMMUNICATION_BATCH_MAX_CONSECUTIVE_ERRORS", "5"))
+SMS_STATUS_SYNC_DEFAULT_INTERVAL_SECONDS = int(os.getenv("SMS_STATUS_SYNC_INTERVAL_SECONDS", "300"))
+SMS_STATUS_SYNC_LIMIT = int(os.getenv("SMS_STATUS_SYNC_LIMIT", "200"))
+SMS_AERO_STATUS_LABELS = {
+    0: "В очереди",
+    1: "Доставлено",
+    2: "Не доставлено",
+    3: "Передано оператору",
+    6: "Отклонено",
+    8: "На модерации",
+}
+SMS_AERO_TO_MESSAGE_STATUS = {
+    0: "queued",
+    1: "delivered",
+    2: "failed",
+    3: "sent",
+    6: "failed",
+    8: "moderation",
+}
+SMS_FINAL_STATUSES = {"delivered", "failed"}
+SMS_POLLABLE_STATUSES = {"sent", "queued", "moderation", "scheduled"}
 
 
 def _deterministic_batch_message_id(generation_id: str, user_id: UUID) -> uuid.UUID:
     return uuid.uuid5(_BATCH_MSG_ID_NAMESPACE, f"{generation_id}:{str(user_id)}")
+
+
+def _normalize_sms_phone(phone: Optional[str]) -> Optional[str]:
+    if not phone:
+        return None
+    clean_phone = "".join(c for c in str(phone) if c.isdigit())
+    if len(clean_phone) == 11 and clean_phone.startswith("8"):
+        clean_phone = "7" + clean_phone[1:]
+    elif len(clean_phone) == 10:
+        clean_phone = "7" + clean_phone
+    return clean_phone if len(clean_phone) == 11 else None
+
+
+def _sms_status_from_provider(data: Dict[str, Any]) -> str:
+    try:
+        status_code = int(data.get("status"))
+    except (TypeError, ValueError):
+        return "sent"
+    return SMS_AERO_TO_MESSAGE_STATUS.get(status_code, "sent")
+
+
+def _sms_delivery_payload(
+    *,
+    response: Dict[str, Any],
+    checked_at: Optional[datetime] = None,
+    error: Optional[str] = None,
+) -> Dict[str, Any]:
+    data = response.get("data") if isinstance(response, dict) else None
+    if not isinstance(data, dict):
+        data = {}
+    status_code = data.get("status")
+    try:
+        status_code_int = int(status_code)
+    except (TypeError, ValueError):
+        status_code_int = None
+    payload: Dict[str, Any] = {
+        "provider": "sms_aero",
+        "sms_id": data.get("id"),
+        "status": _sms_status_from_provider(data) if data else ("failed" if error else "sent"),
+        "status_code": status_code_int,
+        "status_label": SMS_AERO_STATUS_LABELS.get(status_code_int) if status_code_int is not None else None,
+        "extend_status": data.get("extendStatus"),
+        "last_response": data,
+    }
+    if checked_at:
+        payload["last_checked_at"] = checked_at.isoformat()
+    if error:
+        payload["error"] = error
+    return payload
 
 
 async def _persist_generated_messages(
@@ -285,6 +357,105 @@ async def stop_generated_messages_sync(app):
             await task
         except Exception:
             pass
+
+
+async def sync_sms_delivery_statuses(db: AsyncSession, limit: int = SMS_STATUS_SYNC_LIMIT) -> Dict[str, Any]:
+    sms_service = get_sms_service()
+    if not sms_service:
+        return {"skipped": True, "reason": "sms_service_not_configured", "checked": 0, "updated": 0}
+
+    result = await db.execute(
+        select(CustomerMessage)
+        .where(
+            CustomerMessage.payload.isnot(None),
+            CustomerMessage.payload.has_key("sms_id"),
+            CustomerMessage.status.in_(SMS_POLLABLE_STATUSES),
+        )
+        .order_by(CustomerMessage.sent_at.asc().nullsfirst(), CustomerMessage.created_at.asc())
+        .limit(limit)
+    )
+    messages = result.scalars().all()
+    checked = 0
+    updated = 0
+    errors = 0
+
+    for msg in messages:
+        payload = dict(msg.payload or {})
+        try:
+            sms_id = int(payload.get("sms_id"))
+        except (TypeError, ValueError):
+            continue
+
+        try:
+            response = await sms_service.check_status(sms_id)
+            checked_at = datetime.now(timezone.utc)
+            delivery = _sms_delivery_payload(response=response, checked_at=checked_at)
+            next_status = str(delivery.get("status") or msg.status)
+            previous_payload = payload.get("sms_delivery")
+            previous_status = msg.status
+
+            payload["sms_delivery"] = delivery
+            payload["sms_status_checked_at"] = checked_at.isoformat()
+            msg.payload = payload
+            msg.status = next_status
+            if next_status == "delivered" and not msg.sent_at:
+                msg.sent_at = checked_at
+
+            if previous_payload != delivery or previous_status != next_status:
+                updated += 1
+                _invalidate_customer_messages_cache(msg.user_id)
+            checked += 1
+        except Exception as exc:
+            logger.warning("Failed to sync SMS status for message %s / sms_id=%s: %s", msg.id, sms_id, exc)
+            errors += 1
+
+    await db.commit()
+    return {"checked": checked, "updated": updated, "errors": errors}
+
+
+async def _sms_status_sync_loop(stop_event: asyncio.Event, interval_seconds: int):
+    from app.database.connection import AsyncSessionLocal
+
+    while not stop_event.is_set():
+        try:
+            async with AsyncSessionLocal() as db:
+                result = await sync_sms_delivery_statuses(db)
+                if result.get("checked"):
+                    logger.info("SMS delivery status sync: %s", result)
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.exception("SMS delivery status sync failed: %s", exc)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+        except asyncio.TimeoutError:
+            continue
+
+
+async def start_sms_status_sync(app, interval_seconds: Optional[int] = None):
+    if getattr(app.state, "sms_status_sync_task", None):
+        return
+    stop_event = asyncio.Event()
+    interval = interval_seconds or SMS_STATUS_SYNC_DEFAULT_INTERVAL_SECONDS
+    task = asyncio.create_task(_sms_status_sync_loop(stop_event, interval))
+    app.state.sms_status_sync_stop_event = stop_event
+    app.state.sms_status_sync_task = task
+    logger.info("SMS delivery status sync started (interval=%s seconds).", interval)
+
+
+async def stop_sms_status_sync(app):
+    stop_event = getattr(app.state, "sms_status_sync_stop_event", None)
+    task = getattr(app.state, "sms_status_sync_task", None)
+    if stop_event:
+        stop_event.set()
+    if task:
+        task.cancel()
+        try:
+            await task
+        except Exception:
+            pass
+    app.state.sms_status_sync_stop_event = None
+    app.state.sms_status_sync_task = None
 
 
 def _invalidate_customer_messages_cache(customer_id: UUID):
@@ -743,6 +914,7 @@ class CustomerMessageItem(BaseModel):
     event_store: Optional[str] = None
     message_kind: str  # individual|broadcast
     generation_id: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
     status: str  # new, sent
     sent_at: Optional[datetime] = None
     created_at: datetime
@@ -891,6 +1063,14 @@ async def list_customer_messages(
     desc: bool = Query(True),
 ):
     """Список сгенерированных сообщений для покупателя (история общения)."""
+    attribution = await CrmInteractionAttributionService(db).update_purchase_conversions(
+        window_days=14,
+        user_ids=[customer_id],
+        commit=True,
+    )
+    if attribution.get("updated"):
+        _invalidate_customer_messages_cache(customer_id)
+
     cache_key = f"{str(customer_id)}:{kind}:{date_from or ''}:{date_to or ''}:{sort_by}:{'desc' if desc else 'asc'}:{limit}:{offset}"
     now_ts = time.time()
     cached = _CUSTOMER_MESSAGES_CACHE.get(cache_key)
@@ -959,6 +1139,7 @@ async def list_customer_messages(
             event_store=m.event_store,
             message_kind=_infer_message_kind(m.payload),
             generation_id=_extract_generation_id(m.payload),
+            payload=m.payload if isinstance(m.payload, dict) else None,
             status=m.status,
             sent_at=m.sent_at,
             created_at=m.created_at,
@@ -992,18 +1173,49 @@ async def mark_message_sent(
     message_id: UUID,
     db: AsyncSession = Depends(get_db),
 ):
-    """Отметить сообщение как отправленное (с датой отправки)."""
+    """Отправить одиночное сообщение через SMS Aero."""
     result = await db.execute(select(CustomerMessage).where(CustomerMessage.id == message_id))
     msg = result.scalar_one_or_none()
     if not msg:
         raise HTTPException(status_code=404, detail="Сообщение не найдено")
-    msg.status = "sent"
-    msg.sent_at = datetime.now(timezone.utc)
+
+    user = await db.get(User, msg.user_id)
+    phone = _normalize_sms_phone(getattr(user, "phone", None))
+    if not phone:
+        raise HTTPException(status_code=400, detail="У покупателя нет корректного телефона для SMS")
+
+    sms_service = get_sms_service()
+    if not sms_service:
+        raise HTTPException(status_code=503, detail="Сервис SMS Aero не настроен")
+
+    sent_at = datetime.now(timezone.utc)
+    try:
+        response = await sms_service.send_sms(phone, msg.message, sign="GLAME")
+    except Exception as exc:
+        payload = dict(msg.payload or {})
+        payload["sms_delivery"] = _sms_delivery_payload(response={}, checked_at=sent_at, error=str(exc))
+        msg.payload = payload
+        msg.status = "failed"
+        await db.commit()
+        _invalidate_customer_messages_cache(msg.user_id)
+        raise HTTPException(status_code=502, detail=f"SMS Aero не принял сообщение: {exc}")
+
+    delivery = _sms_delivery_payload(response=response, checked_at=sent_at)
+    payload = dict(msg.payload or {})
+    if delivery.get("sms_id"):
+        payload["sms_id"] = delivery["sms_id"]
+    payload["sms_delivery"] = delivery
+    payload["sms_status_checked_at"] = sent_at.isoformat()
+    msg.payload = payload
+    msg.status = str(delivery.get("status") or "sent")
+    msg.sent_at = sent_at
     await db.commit()
     _invalidate_customer_messages_cache(msg.user_id)
     return {
         "status": "ok",
-        "message": "Сообщение отмечено как отправленное",
+        "message": "Сообщение отправлено в SMS Aero",
+        "delivery_status": msg.status,
+        "sms_id": delivery.get("sms_id"),
         "sent_at": msg.sent_at.isoformat(),
     }
 
@@ -2304,59 +2516,47 @@ async def _send_sms_task(gen_id: str, messages: List[Dict[str, Any]], date_send:
                     clean_phone = "7" + clean_phone
                 
                 response = await sms_service.send_sms(clean_phone, text, sign="GLAME", date_send=unixtime)
-                
-                # SMS Aero returns data structure:
-                # { "success": true, "data": { "id": 12345, ... }, "message": null }
-                sms_id = None
-                if response.get("success") and response.get("data"):
-                    data = response.get("data")
-                    if isinstance(data, dict):
-                        sms_id = data.get("id")
-                
-                sent_count += 1
-                
+
                 if client_id:
                     try:
-                        # Обновляем статус в БД
                         msg_id = _deterministic_batch_message_id(gen_id, UUID(str(client_id)))
-                        
-                        # Сохраняем sms_id в payload, если есть
-                        update_values = {"status": 'sent', "sent_at": actual_sent_at}
-                        
-                        if sms_id:
-                            # Нужно аккуратно обновить payload, не затирая остальное
-                            # Но в SQL update это сложно сделать атомарно для jsonb без чтения
-                            # Попробуем jsonb_set или просто добавим поле, если поддерживается
-                            # Для простоты пока просто статус
-                            pass
-
-                        stmt = (
-                            update(CustomerMessage)
-                            .where(CustomerMessage.id == msg_id)
-                            .values(**update_values)
-                        )
-                        # Если есть sms_id, добавим его в payload через jsonb_set или аналог
-                        # Но так как мы используем sqlalchemy async, проще сделать два запроса или один умный
-                        # Пока оставим как есть, главное статус
-                        
-                        await db.execute(stmt)
-                        
-                        # Если есть sms_id, попробуем обновить payload отдельно или сразу
-                        if sms_id:
-                            # update payload = jsonb_set(payload, '{sms_id}', '12345')
-                            from sqlalchemy import text as sql_text
-                            await db.execute(
-                                sql_text("UPDATE customer_messages SET payload = jsonb_set(payload, '{sms_id}', :sms_id) WHERE id = :msg_id"),
-                                {"sms_id": str(sms_id), "msg_id": msg_id}
-                            )
+                        db_msg = await db.get(CustomerMessage, msg_id)
+                        if db_msg:
+                            delivery = _sms_delivery_payload(response=response, checked_at=datetime.now(timezone.utc))
+                            payload = dict(db_msg.payload or {})
+                            if delivery.get("sms_id"):
+                                payload["sms_id"] = delivery["sms_id"]
+                            payload["sms_delivery"] = delivery
+                            payload["sms_status_checked_at"] = datetime.now(timezone.utc).isoformat()
+                            db_msg.payload = payload
+                            db_msg.status = str(delivery.get("status") or "sent")
+                            db_msg.sent_at = actual_sent_at
 
                         _invalidate_customer_messages_cache(UUID(str(client_id)))
                     except Exception as db_err:
                         logger.error(f"Failed to update status for {client_id}: {db_err}")
+                sent_count += 1
 
             except Exception as e:
                 logger.error(f"Failed to send SMS to {phone}: {e}")
                 errors_count += 1
+                client_id = msg.get("client_id") if isinstance(msg, dict) else None
+                if client_id:
+                    try:
+                        msg_id = _deterministic_batch_message_id(gen_id, UUID(str(client_id)))
+                        db_msg = await db.get(CustomerMessage, msg_id)
+                        if db_msg:
+                            payload = dict(db_msg.payload or {})
+                            payload["sms_delivery"] = _sms_delivery_payload(
+                                response={},
+                                checked_at=datetime.now(timezone.utc),
+                                error=str(e),
+                            )
+                            db_msg.payload = payload
+                            db_msg.status = "failed"
+                            _invalidate_customer_messages_cache(UUID(str(client_id)))
+                    except Exception as db_err:
+                        logger.error(f"Failed to save SMS error for {client_id}: {db_err}")
         
         await db.commit()
             
@@ -2402,3 +2602,46 @@ async def send_generation_sms(
     except Exception as e:
         logger.exception(f"Ошибка запуска рассылки: {e}")
         raise HTTPException(status_code=500, detail=f"Ошибка запуска рассылки: {e}")
+
+
+@router.post("/sms/status/sync")
+async def sync_sms_status_endpoint(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(SMS_STATUS_SYNC_LIMIT, ge=1, le=1000),
+):
+    """Обновить статусы SMS из SMS Aero по сохраненным sms_id."""
+    return await sync_sms_delivery_statuses(db, limit=limit)
+
+
+@router.post("/sms-aero/import")
+async def import_sms_aero_broadcast_file(
+    db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+    campaign_name: Optional[str] = Form(None),
+    event_store: Optional[str] = Form(None),
+    _current_user: User = Depends(require_admin()),
+):
+    """Импортировать экспорт рассылки SMS Aero в историю взаимодействий покупателей."""
+    filename = file.filename or "sms-aero-import"
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Файл пустой")
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Файл слишком большой, максимум 10 МБ")
+        if not filename.lower().endswith((".csv", ".xlsx", ".xls")):
+            raise HTTPException(status_code=400, detail="Поддерживаются только CSV и Excel-файлы")
+        return await import_sms_aero_file_to_customer_history(
+            db,
+            filename=filename,
+            content=content,
+            campaign_name=campaign_name,
+            event_store=event_store,
+        )
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Ошибка импорта файла SMS Aero %s: %s", filename, exc)
+        raise HTTPException(status_code=500, detail="Не удалось импортировать файл SMS Aero")

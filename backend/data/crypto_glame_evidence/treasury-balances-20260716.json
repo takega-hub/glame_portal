@@ -1,0 +1,167 @@
+{
+  "status": "ok",
+  "generated_at": "2026-07-16T09:12:13.903613+00:00",
+  "config": {
+    "enabled": true,
+    "critical_only": false,
+    "network": "mainnet",
+    "glm_buffer": 100.0,
+    "ton_buffer": 0.2,
+    "hot_wallet_refill_glm_threshold": 5000.0,
+    "hot_wallet_refill_ton_threshold": 0.5,
+    "hot_wallet_refill_glm_target": 5000.0,
+    "hot_wallet_refill_ton_target": 2.0,
+    "limits_override": {
+      "exists": false
+    },
+    "tx_value_nanoton": 50000000,
+    "hot_wallet_address": "UQA5EmFpVIEJea3jgPdErJyH19lJHs9HUuarIvXbQpBz2Mok",
+    "treasury_address": "UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq",
+    "production_hot_wallet_address": "UQA5EmFpVIEJea3jgPdErJyH19lJHs9HUuarIvXbQpBz2Mok"
+  },
+  "requirements": {
+    "pending_points_to_glm_count": 0,
+    "pending_points_to_glm_amount_glm": 0,
+    "legacy_pending_count": 0,
+    "legacy_pending_amount_glm": 0,
+    "domain_pending_count": 0,
+    "domain_pending_amount_glm": 0,
+    "required_glm": 100.0,
+    "required_ton": 0.2,
+    "glm_buffer": 100.0,
+    "ton_buffer": 0.2
+  },
+  "wallets": [
+    {
+      "role": "hot_wallet",
+      "address": "UQA5EmFpVIEJea3jgPdErJyH19lJHs9HUuarIvXbQpBz2Mok",
+      "network": "mainnet",
+      "glm_balance": 9829.0,
+      "ton_balance": 1.993716498,
+      "jetton_wallet_address": "EQDQ1H4oUg0AbDJaSkw2iuk1Z-VuxpsaYIK8G2aRnQArAHh-",
+      "required_glm": 5000.0,
+      "required_ton": 0.5,
+      "safe_transfer_capacity_glm": 9729.0,
+      "safe_transfer_capacity_ton": 1.793716498,
+      "refill_threshold_glm": 5000.0,
+      "refill_threshold_ton": 0.5,
+      "refill_target_glm": 5000.0,
+      "refill_target_ton": 2.0,
+      "status": "ok",
+      "checked_at": "2026-07-16T09:12:13.635713+00:00",
+      "errors": [],
+      "glm_balance_payload": {
+        "status": "ok",
+        "source": "toncenter_v3",
+        "balance_raw": "9829000000000",
+        "error": null
+      },
+      "ton_balance_payload": {
+        "status": "ok",
+        "source": "toncenter_v2",
+        "balance_nanoton": "1993716498",
+        "error": null
+      }
+    },
+    {
+      "role": "treasury",
+      "address": "UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq",
+      "network": "mainnet",
+      "glm_balance": 9990001.0,
+      "ton_balance": 2.759599438,
+      "jetton_wallet_address": "EQBLQoVnddiZoCEj_6HOzAnwvsJUp-Dc7GKoNHNiMU3_KSAY",
+      "required_glm": 100.0,
+      "required_ton": 0.2,
+      "safe_transfer_capacity_glm": 0.0,
+      "safe_transfer_capacity_ton": 0.0,
+      "refill_threshold_glm": null,
+      "refill_threshold_ton": null,
+      "refill_target_glm": null,
+      "refill_target_ton": null,
+      "status": "ok",
+      "checked_at": "2026-07-16T09:12:13.903493+00:00",
+      "errors": [],
+      "glm_balance_payload": {
+        "status": "ok",
+        "source": "toncenter_v3",
+        "balance_raw": "9990001000000000",
+        "error": null
+      },
+      "ton_balance_payload": {
+        "status": "ok",
+        "source": "toncenter_v2",
+        "balance_nanoton": "2759599438",
+        "error": null
+      }
+    },
+    {
+      "role": "production_candidate",
+      "address": "UQA5EmFpVIEJea3jgPdErJyH19lJHs9HUuarIvXbQpBz2Mok",
+      "network": "mainnet",
+      "glm_balance": 9829.0,
+      "ton_balance": 1.993716498,
+      "jetton_wallet_address": "EQDQ1H4oUg0AbDJaSkw2iuk1Z-VuxpsaYIK8G2aRnQArAHh-",
+      "required_glm": 0.0,
+      "required_ton": 0.0,
+      "safe_transfer_capacity_glm": 0.0,
+      "safe_transfer_capacity_ton": 0.0,
+      "refill_threshold_glm": null,
+      "refill_threshold_ton": null,
+      "refill_target_glm": null,
+      "refill_target_ton": null,
+      "status": "ok",
+      "checked_at": "2026-07-16T09:12:13.903543+00:00",
+      "errors": [],
+      "glm_balance_payload": {
+        "status": "ok",
+        "source": "toncenter_v3",
+        "balance_raw": "9829000000000",
+        "error": null
+      },
+      "ton_balance_payload": {
+        "status": "ok",
+        "source": "toncenter_v2",
+        "balance_nanoton": "1993716498",
+        "error": null
+      }
+    }
+  ],
+  "refill_plan": {
+    "status": "ok",
+    "checked_at": "2026-07-16T09:12:13.903568+00:00",
+    "required": false,
+    "reason": "hot_wallet_above_threshold",
+    "approval_required": false,
+    "approval_reason": null,
+    "approval_policy": {
+      "enabled": true,
+      "mainnet_only": true,
+      "glm_threshold": 5000.0,
+      "ton_threshold": 2.0
+    },
+    "network": "mainnet",
+    "source_role": "treasury",
+    "source_address": "UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq",
+    "destination_role": "hot_wallet",
+    "destination_address": "UQA5EmFpVIEJea3jgPdErJyH19lJHs9HUuarIvXbQpBz2Mok",
+    "refill_glm_amount": 0.0,
+    "refill_ton_amount": 0.0,
+    "hot_wallet_glm_balance": 9829.0,
+    "hot_wallet_ton_balance": 1.993716498,
+    "treasury_glm_balance": 9990001.0,
+    "treasury_ton_balance": 2.759599438,
+    "target_glm": 5000.0,
+    "target_ton": 2.0,
+    "target_mode_glm": "fixed_refill_batch",
+    "target_mode_ton": "top_up_to_target",
+    "threshold_glm": 5000.0,
+    "threshold_ton": 0.5,
+    "errors": [],
+    "instructions": [
+      "Send refill_glm_amount GLM from treasury to hot-wallet Jetton address/wallet.",
+      "Send refill_ton_amount TON from treasury or faucet to hot-wallet if TON gas is below threshold.",
+      "After transfer confirmation, run treasury balance check again."
+    ]
+  },
+  "alerts": []
+}

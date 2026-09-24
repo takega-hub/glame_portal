@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, text, func, case
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
+from email.message import EmailMessage
+from email.utils import formataddr
 from app.database.connection import get_db
 from app.models.user import User
 from app.models.onec_user_sync_job import OneCUserSyncJob
+from app.services.gift_certificate_email_service import GiftCertificateEmailService, load_smtp_settings
 from app.services.sms_service import get_sms_service
 from app.services.onec_user_sync_service import OneCUserSyncService
 from app.services.onec_user_registration_payload import OneCUserRegistrationPayload
@@ -20,9 +23,14 @@ from uuid import UUID
 from typing import Optional
 from datetime import date
 import bcrypt
+import asyncio
+import hashlib
+import hmac
+import html
 import logging
 import re
 import random
+import secrets
 
 def normalize_phone(phone: str) -> str:
     """
@@ -41,6 +49,47 @@ def normalize_phone(phone: str) -> str:
     if len(digits) == 11 and digits.startswith('7'):
         return digits
     return digits  # Возвращаем как есть, если не подошло под стандарты
+
+
+def phone_lookup_variants(phone: str) -> set[str]:
+    """Phone variants used for legacy/imported accounts.
+
+    Most accounts store phones as normalized 7XXXXXXXXXX, but historical 1C
+    imports may contain formatted values like +7 (999) 000-00-00. Auth should
+    not fail just because the stored display format differs from the login
+    form value.
+    """
+    normalized = normalize_phone(phone)
+    digits = re.sub(r"\D", "", phone or "")
+    variants = {value for value in {normalized, digits} if value}
+    if len(normalized) == 11 and normalized.startswith("7"):
+        variants.add("8" + normalized[1:])
+        variants.add(normalized[1:])
+    elif len(normalized) == 11 and normalized.startswith("8"):
+        variants.add("7" + normalized[1:])
+        variants.add(normalized[1:])
+    elif len(normalized) == 10:
+        variants.add("7" + normalized)
+        variants.add("8" + normalized)
+    return variants
+
+
+def phone_lookup_condition(phone: str):
+    variants = phone_lookup_variants(phone)
+    if not variants:
+        return User.phone == "__no_phone__"
+    phone_digits = func.regexp_replace(func.coalesce(User.phone, ""), r"\D+", "", "g")
+    return or_(User.phone.in_(variants), phone_digits.in_(variants))
+
+
+def phone_lookup_order(phone: str):
+    normalized = normalize_phone(phone)
+    phone_digits = func.regexp_replace(func.coalesce(User.phone, ""), r"\D+", "", "g")
+    return case(
+        (User.phone == normalized, 0),
+        (phone_digits == normalized, 1),
+        else_=2,
+    )
 
 def generate_otp() -> str:
     return str(random.randint(1000, 9999))
@@ -61,13 +110,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+JWT_SECRET_KEY = (os.getenv("JWT_SECRET_KEY") or "").strip()
+if not JWT_SECRET_KEY or JWT_SECRET_KEY in {"your-secret-key-change-in-production", "your_jwt_secret_key_change_in_production"}:
+    raise RuntimeError("JWT_SECRET_KEY must be configured with a unique production secret")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
 JWT_REFRESH_EXPIRATION_DAYS = int(os.getenv("JWT_REFRESH_EXPIRATION_DAYS", "30"))
+ACCESS_COOKIE_NAME = "__Host-glame_access"
+REFRESH_COOKIE_NAME = "__Host-glame_refresh"
+CSRF_COOKIE_NAME = "__Host-glame_csrf"
 OTP_TTL_SECONDS = 300
 OTP_REQUEST_INTERVAL_SECONDS = 60
 OTP_MAX_ATTEMPTS = 5
+LOGIN_RATE_LIMIT = int(os.getenv("LOGIN_RATE_LIMIT", "10"))
+LOGIN_RATE_WINDOW_SECONDS = int(os.getenv("LOGIN_RATE_WINDOW_SECONDS", "900"))
+PASSWORD_RESET_RATE_LIMIT = int(os.getenv("PASSWORD_RESET_RATE_LIMIT", "5"))
+PASSWORD_RESET_RATE_WINDOW_SECONDS = int(os.getenv("PASSWORD_RESET_RATE_WINDOW_SECONDS", "3600"))
+OTP_REQUEST_RATE_LIMIT = int(os.getenv("OTP_REQUEST_RATE_LIMIT", "3"))
+OTP_LOGIN_RATE_LIMIT = int(os.getenv("OTP_LOGIN_RATE_LIMIT", "10"))
+OTP_RATE_WINDOW_SECONDS = int(os.getenv("OTP_RATE_WINDOW_SECONDS", "900"))
+PASSWORD_RESET_TTL_MINUTES = int(os.getenv("PASSWORD_RESET_TTL_MINUTES", "60"))
+PARTNER_PORTAL_URL = (os.getenv("PARTNER_PORTAL_URL") or "https://partner.glamejewelry.ru").rstrip("/")
 REFERRAL_CLIENT_CUSTOMER_GROUP_KEY = os.getenv(
     "ONEC_REFERRAL_CLIENT_CUSTOMER_GROUP_KEY",
     "bca461ae-7396-11f1-876b-fa163e4cc04e",
@@ -76,6 +139,8 @@ APP_CLIENT_CUSTOMER_GROUP_KEY = os.getenv(
     "ONEC_APP_CLIENT_CUSTOMER_GROUP_KEY",
     "68442a44-7397-11f1-876b-fa163e4cc04e",
 )
+AUTH_SECURITY_SCHEMA_READY = False
+AUTH_SECURITY_SCHEMA_LOCK = asyncio.Lock()
 
 
 class UserRegisterPhone(BaseModel):
@@ -169,10 +234,51 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str
+
+
 class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str
+
+
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Issue host-only session cookies. Tokens remain in the response during migration."""
+    secure = os.getenv("AUTH_COOKIE_SECURE", "true").lower() not in {"0", "false", "no"}
+    common = {"secure": secure, "samesite": "lax", "path": "/"}
+    response.set_cookie(
+        ACCESS_COOKIE_NAME,
+        access_token,
+        httponly=True,
+        max_age=JWT_EXPIRATION_HOURS * 60 * 60,
+        **common,
+    )
+    response.set_cookie(
+        REFRESH_COOKIE_NAME,
+        refresh_token,
+        httponly=True,
+        max_age=JWT_REFRESH_EXPIRATION_DAYS * 24 * 60 * 60,
+        **common,
+    )
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        secrets.token_urlsafe(32),
+        httponly=False,
+        max_age=JWT_REFRESH_EXPIRATION_DAYS * 24 * 60 * 60,
+        **common,
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    for name in (ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, CSRF_COOKIE_NAME):
+        response.delete_cookie(name, path="/")
 
 
 def hash_password(password: str) -> str:
@@ -185,6 +291,127 @@ def hash_password(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Проверка пароля"""
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+
+def _password_reset_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _otp_hash(phone: str, code: str) -> str:
+    return hmac.new(JWT_SECRET_KEY.encode("utf-8"), f"{phone}:{code}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return (forwarded.split(",", 1)[0].strip() if forwarded else (request.client.host if request.client else "unknown"))[:64]
+
+
+async def _ensure_auth_security_schema(db: AsyncSession) -> None:
+    global AUTH_SECURITY_SCHEMA_READY
+    if AUTH_SECURITY_SCHEMA_READY:
+        return
+    async with AUTH_SECURITY_SCHEMA_LOCK:
+        if AUTH_SECURITY_SCHEMA_READY:
+            return
+        await db.execute(text("ALTER TABLE users ALTER COLUMN sms_otp_code TYPE VARCHAR(128)"))
+        await db.execute(text("""
+            CREATE TABLE IF NOT EXISTS auth_rate_limits (
+                bucket VARCHAR(64) NOT NULL,
+                subject VARCHAR(512) NOT NULL,
+                window_started_at TIMESTAMPTZ NOT NULL,
+                attempts INTEGER NOT NULL,
+                PRIMARY KEY (bucket, subject)
+            )
+        """))
+        await db.commit()
+        AUTH_SECURITY_SCHEMA_READY = True
+
+
+async def _enforce_rate_limit(
+    db: AsyncSession, bucket: str, subject: str, limit: int, window_seconds: int
+) -> None:
+    await _ensure_auth_security_schema(db)
+    row = (await db.execute(
+        text("""
+            INSERT INTO auth_rate_limits (bucket, subject, window_started_at, attempts)
+            VALUES (:bucket, :subject, now(), 1)
+            ON CONFLICT (bucket, subject) DO UPDATE
+            SET window_started_at = CASE
+                    WHEN auth_rate_limits.window_started_at <= now() - (:window_seconds * interval '1 second')
+                    THEN now() ELSE auth_rate_limits.window_started_at END,
+                attempts = CASE
+                    WHEN auth_rate_limits.window_started_at <= now() - (:window_seconds * interval '1 second')
+                    THEN 1 ELSE auth_rate_limits.attempts + 1 END
+            RETURNING attempts, window_started_at
+        """),
+        {"bucket": bucket, "subject": subject[:512], "window_seconds": window_seconds},
+    )).mappings().one()
+    await db.commit()
+    if int(row["attempts"]) > limit:
+        retry_after = max(1, window_seconds - int((datetime.now(timezone.utc) - row["window_started_at"]).total_seconds()))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Слишком много попыток. Повторите позже.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+async def _ensure_password_reset_table(db: AsyncSession) -> None:
+    await db.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto"))
+    await db.execute(text("""
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            email VARCHAR(255) NOT NULL,
+            token_hash VARCHAR(128) NOT NULL UNIQUE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            used_at TIMESTAMPTZ NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """))
+    await db.execute(text("CREATE INDEX IF NOT EXISTS ix_password_reset_tokens_user_id ON password_reset_tokens(user_id)"))
+    await db.execute(text("CREATE INDEX IF NOT EXISTS ix_password_reset_tokens_expires_at ON password_reset_tokens(expires_at)"))
+
+
+async def _send_password_reset_email(db: AsyncSession, recipient: str, reset_url: str) -> None:
+    settings, _source = await load_smtp_settings(db)
+    if not settings:
+        logger.warning("SMTP is not configured; password reset email was not sent to %s", recipient)
+        return
+    message = EmailMessage()
+    message["Subject"] = "Восстановление пароля GLAME Partner"
+    message["From"] = formataddr((settings.from_name, settings.from_email))
+    message["To"] = recipient
+    message.set_content(
+        "Здравствуйте!\n\n"
+        "Для восстановления пароля кабинета партнера GLAME перейдите по ссылке:\n"
+        f"{reset_url}\n\n"
+        f"Ссылка действует {PASSWORD_RESET_TTL_MINUTES} минут и может быть использована один раз.\n"
+        "Если вы не запрашивали восстановление пароля, просто игнорируйте это письмо.\n\n"
+        "GLAME Jewelry"
+    )
+    safe_url = html.escape(reset_url, quote=True)
+    message.add_alternative(
+        f"""<!doctype html>
+<html>
+  <body style="margin:0;background:#111;color:#f1f2f3;font-family:Arial,sans-serif;">
+    <div style="max-width:620px;margin:0 auto;padding:32px 20px;">
+      <div style="font-size:26px;letter-spacing:6px;margin-bottom:24px;">GLAME</div>
+      <div style="background:#fff;color:#111;padding:28px;">
+        <h2 style="margin:0 0 16px;">Восстановление пароля</h2>
+        <p style="line-height:1.5;">Нажмите кнопку ниже, чтобы задать новый пароль для кабинета партнера GLAME.</p>
+        <p style="margin:28px 0;">
+          <a href="{safe_url}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;padding:14px 22px;letter-spacing:2px;text-transform:uppercase;font-weight:bold;">Задать новый пароль</a>
+        </p>
+        <p style="color:#555;font-size:13px;line-height:1.5;">Ссылка действует {PASSWORD_RESET_TTL_MINUTES} минут и может быть использована один раз.</p>
+      </div>
+      <p style="color:#aeb0b4;font-size:12px;line-height:1.5;margin-top:18px;">Если вы не запрашивали восстановление пароля, просто игнорируйте это письмо.</p>
+    </div>
+  </body>
+</html>""",
+        subtype="html",
+    )
+    await asyncio.to_thread(GiftCertificateEmailService(db)._send_message, settings, message)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -208,13 +435,18 @@ def create_refresh_token(data: dict) -> str:
     return encoded_jwt
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+async def get_current_user(
+    request: Request,
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    token = token or request.cookies.get(ACCESS_COOKIE_NAME)
     if not token:
         raise credentials_exception
     
@@ -401,15 +633,37 @@ async def register_phone(user_data: UserRegisterPhone, db: AsyncSession = Depend
     )
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+async def login(
+    request: Request,
+    response: Response,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
     username = (form_data.username or "").strip()
-    phone_norm = normalize_phone(username)
-    
-    # Ищем пользователя либо по email, либо по нормализованному телефону
-    result = await db.execute(
-        select(User).where(or_(User.email == username, User.phone == phone_norm, User.phone == username))
+    await _enforce_rate_limit(
+        db, "login", f"{_client_ip(request)}:{username.lower()}", LOGIN_RATE_LIMIT, LOGIN_RATE_WINDOW_SECONDS
     )
-    user = result.scalar_one_or_none()
+    phone_norm = normalize_phone(username)
+    username_lower = username.lower()
+    staff_login = User.preferences.op("->>")("staff_login")
+    
+    # Ищем пользователя по email, телефону или внутреннему логину сотрудника из штатного расписания.
+    result = await db.execute(
+        select(User)
+        .where(
+            or_(
+                func.lower(User.email) == username_lower,
+                phone_lookup_condition(username),
+                func.lower(staff_login) == username_lower,
+            )
+        )
+        .order_by(
+            case((func.lower(User.email) == username_lower, 0), else_=1),
+            case((func.lower(staff_login) == username_lower, 0), else_=1),
+            phone_lookup_order(username),
+        )
+    )
+    user = result.scalars().first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -429,6 +683,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
+    set_auth_cookies(response, access_token, refresh_token)
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -436,9 +691,99 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     }
 
 
+@router.post("/password-reset/request")
+async def request_password_reset(
+    payload: PasswordResetRequest, request: Request, db: AsyncSession = Depends(get_db)
+):
+    email_norm = str(payload.email).strip().lower()
+    await _enforce_rate_limit(
+        db, "password_reset", f"{_client_ip(request)}:{email_norm}",
+        PASSWORD_RESET_RATE_LIMIT, PASSWORD_RESET_RATE_WINDOW_SECONDS,
+    )
+    await _ensure_password_reset_table(db)
+    result = await db.execute(select(User).where(func.lower(User.email) == email_norm))
+    user = result.scalar_one_or_none()
+    generic_response = {"status": "ok", "message": "Если email найден, мы отправим ссылку для восстановления пароля."}
+    if not user:
+        await db.commit()
+        return generic_response
+
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_TTL_MINUTES)
+    await db.execute(
+        text("""
+            INSERT INTO password_reset_tokens (user_id, email, token_hash, expires_at)
+            VALUES (:user_id, :email, :token_hash, :expires_at)
+        """),
+        {
+            "user_id": str(user.id),
+            "email": email_norm,
+            "token_hash": _password_reset_token_hash(token),
+            "expires_at": expires_at,
+        },
+    )
+    await db.commit()
+    reset_url = f"{PARTNER_PORTAL_URL}/?reset_token={token}"
+    try:
+        await _send_password_reset_email(db, email_norm, reset_url)
+    except Exception:
+        logger.exception("Could not send password reset email to %s", email_norm)
+    return generic_response
+
+
+@router.post("/password-reset/confirm")
+async def confirm_password_reset(
+    payload: PasswordResetConfirmRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Пароль должен быть не короче 6 символов")
+    await _ensure_password_reset_table(db)
+    token_hash = _password_reset_token_hash(payload.token)
+    row = (
+        await db.execute(
+            text("""
+                SELECT id, user_id
+                FROM password_reset_tokens
+                WHERE token_hash = :token_hash
+                  AND used_at IS NULL
+                  AND expires_at > now()
+                ORDER BY created_at DESC
+                LIMIT 1
+            """),
+            {"token_hash": token_hash},
+        )
+    ).mappings().first()
+    if not row:
+        raise HTTPException(status_code=400, detail="Ссылка недействительна или срок действия истек")
+
+    user = await db.get(User, row["user_id"])
+    if not user:
+        raise HTTPException(status_code=400, detail="Пользователь не найден")
+    user.password_hash = hash_password(payload.new_password)
+    await db.execute(
+        text("UPDATE password_reset_tokens SET used_at = now() WHERE id = :id"),
+        {"id": row["id"]},
+    )
+    await db.commit()
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+    set_auth_cookies(response, access_token, refresh_token)
+    return {
+        "status": "ok",
+        "message": "Пароль обновлен.",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
+
+
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
-    refresh_token: str,
+    request: Request,
+    response: Response,
+    refresh_token: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """Обновление access token с помощью refresh token"""
@@ -448,6 +793,10 @@ async def refresh_token(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
+    refresh_token = refresh_token or request.cookies.get(REFRESH_COOKIE_NAME)
+    if not refresh_token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(refresh_token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         token_type = payload.get("type")
@@ -475,6 +824,7 @@ async def refresh_token(
     new_access_token = create_access_token(data={"sub": str(user.id)})
     new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
+    set_auth_cookies(response, new_access_token, new_refresh_token)
     return {
         "access_token": new_access_token,
         "refresh_token": new_refresh_token,
@@ -483,10 +833,12 @@ async def refresh_token(
 
 
 async def get_current_user_optional(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> Optional[User]:
     """Опциональная версия get_current_user - возвращает None если пользователь не авторизован"""
+    token = token or request.cookies.get(ACCESS_COOKIE_NAME)
     if not token:
         return None
     
@@ -691,14 +1043,24 @@ async def change_password(
 
 
 @router.post("/request-otp")
-async def request_otp(body: RequestOtpRequest, db: AsyncSession = Depends(get_db)):
+async def request_otp(
+    body: RequestOtpRequest, request: Request, db: AsyncSession = Depends(get_db)
+):
     phone_norm = normalize_phone(body.phone)
     if not phone_norm:
         raise HTTPException(status_code=400, detail="Invalid phone number")
 
     # Ищем пользователя
-    result = await db.execute(select(User).where(User.phone == phone_norm))
-    user = result.scalar_one_or_none()
+    await _enforce_rate_limit(
+        db, "otp_request", f"{_client_ip(request)}:{phone_norm}",
+        OTP_REQUEST_RATE_LIMIT, OTP_RATE_WINDOW_SECONDS,
+    )
+    result = await db.execute(
+        select(User)
+        .where(phone_lookup_condition(body.phone))
+        .order_by(phone_lookup_order(body.phone))
+    )
+    user = result.scalars().first()
     
     if not user:
         raise HTTPException(
@@ -740,7 +1102,7 @@ async def request_otp(body: RequestOtpRequest, db: AsyncSession = Depends(get_db
             detail="Не удалось отправить SMS-код"
         )
 
-    user.sms_otp_code = code
+    user.sms_otp_code = _otp_hash(phone_norm, code)
     user.sms_otp_expires_at = now + timedelta(seconds=OTP_TTL_SECONDS)
     user.sms_otp_attempts = 0
     user.sms_otp_last_sent_at = now
@@ -752,13 +1114,26 @@ async def request_otp(body: RequestOtpRequest, db: AsyncSession = Depends(get_db
     return {"message": "Код отправлен", "success": True}
 
 @router.post("/login-otp", response_model=OtpToken)
-async def login_otp(body: LoginOtpRequest, db: AsyncSession = Depends(get_db)):
+async def login_otp(
+    body: LoginOtpRequest,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
     phone_norm = normalize_phone(body.phone)
     if not phone_norm:
         raise HTTPException(status_code=400, detail="Invalid phone number")
 
-    result = await db.execute(select(User).where(User.phone == phone_norm))
-    user = result.scalar_one_or_none()
+    await _enforce_rate_limit(
+        db, "otp_login", f"{_client_ip(request)}:{phone_norm}", OTP_LOGIN_RATE_LIMIT, OTP_RATE_WINDOW_SECONDS
+    )
+
+    result = await db.execute(
+        select(User)
+        .where(phone_lookup_condition(body.phone))
+        .order_by(phone_lookup_order(body.phone))
+    )
+    user = result.scalars().first()
     
     if not user:
         raise HTTPException(
@@ -787,7 +1162,7 @@ async def login_otp(body: LoginOtpRequest, db: AsyncSession = Depends(get_db)):
         await db.commit()
         raise HTTPException(status_code=400, detail="Превышено число попыток. Запросите новый код")
 
-    if user.sms_otp_code != body.code:
+    if not hmac.compare_digest(user.sms_otp_code, _otp_hash(phone_norm, body.code)):
         user.sms_otp_attempts = (user.sms_otp_attempts or 0) + 1
         if user.sms_otp_attempts >= OTP_MAX_ATTEMPTS:
             user.sms_otp_code = None
@@ -807,6 +1182,7 @@ async def login_otp(body: LoginOtpRequest, db: AsyncSession = Depends(get_db)):
     access_token = create_access_token(data={"sub": str(user.id), "login_method": "otp"})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
+    set_auth_cookies(response, access_token, refresh_token)
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -814,91 +1190,33 @@ async def login_otp(body: LoginOtpRequest, db: AsyncSession = Depends(get_db)):
         "require_password_change": True # Флаг для фронтенда
     }
 
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response):
+    clear_auth_cookies(response)
+
 @router.post("/login-by-card", response_model=Token)
-async def login_by_card(
-    request: CardLoginRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Вход по номеру дисконтной карты
-    Код - последние 4 цифры карты или SMS код (заглушка)
-    """
-    # Ищем пользователя по номеру телефона (который равен номеру карты)
-    result = await db.execute(select(User).where(User.phone == request.card_number))
-    user = result.scalar_one_or_none()
-    
-    if not user or not user.is_customer:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Дисконтная карта не найдена",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Простая проверка кода: последние 4 цифры карты
-    # В продакшене здесь должна быть проверка SMS кода
-    expected_code = request.card_number[-4:] if len(request.card_number) >= 4 else ""
-    
-    if request.code != expected_code:
-        # Заглушка: для тестирования принимаем любой код
-        # В продакшене здесь должна быть проверка SMS кода из БД или внешнего сервиса
-        pass
-    
-    # Создание токенов
-    access_token = create_access_token(data={"sub": str(user.id)})
-    refresh_token = create_refresh_token(data={"sub": str(user.id)})
-    
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+async def login_by_card_disabled():
+    """Legacy card login is disabled until it uses verified OTP authentication."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Вход по карте отключён. Используйте вход по паролю или SMS-коду.",
+    )
 
 
 @router.post("/verify-card")
-async def verify_card(
-    request: VerifyCardRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Проверка существования дисконтной карты
-    """
-    result = await db.execute(select(User).where(User.phone == request.card_number))
-    user = result.scalar_one_or_none()
-    
-    if not user or not user.is_customer:
-        return {"exists": False}
-    
-    return {
-        "exists": True,
-        "card_number": user.discount_card_number,
-        "full_name": user.full_name
-    }
+async def verify_card_disabled():
+    """Do not expose whether a discount card or phone number exists."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Проверка карты отключена. Используйте вход по паролю или SMS-коду.",
+    )
 
 
 @router.post("/request-code")
-async def request_code(
-    request: VerifyCardRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    Запрос кода подтверждения (заглушка для SMS)
-    В продакшене здесь должна быть интеграция с SMS сервисом
-    """
-    result = await db.execute(select(User).where(User.phone == request.card_number))
-    user = result.scalar_one_or_none()
-    
-    if not user or not user.is_customer:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Дисконтная карта не найдена"
-        )
-    
-    # Заглушка: в продакшене здесь отправка SMS
-    # Генерируем код (для тестирования используем последние 4 цифры)
-    code = request.card_number[-4:] if len(request.card_number) >= 4 else "0000"
-    
-    return {
-        "success": True,
-        "message": "Код отправлен",
-        "code": code  # В продакшене не возвращаем код
-    }
+async def request_code_disabled():
+    """Legacy card-code flow is disabled; it returned authentication material."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Вход по карте отключён. Используйте /request-otp.",
+    )

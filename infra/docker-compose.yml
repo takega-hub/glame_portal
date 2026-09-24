@@ -3,11 +3,11 @@ services:
     image: postgres:15-alpine
     container_name: glame_postgres
     environment:
-      POSTGRES_USER: glame_user
-      POSTGRES_PASSWORD: glame_password
-      POSTGRES_DB: glame_db
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
     ports:
-      - "${POSTGRES_HOST_PORT:-5433}:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,8 +21,8 @@ services:
     image: qdrant/qdrant:latest
     container_name: glame_qdrant
     ports:
-      - "${QDRANT_HOST_PORT:-6333}:6333"
-      - "${QDRANT_GRPC_HOST_PORT:-6334}:6334"
+      - "127.0.0.1:${QDRANT_HOST_PORT:-6333}:6333"
+      - "127.0.0.1:${QDRANT_GRPC_HOST_PORT:-6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -35,7 +35,7 @@ services:
     image: redis:7-alpine
     container_name: glame_redis
     ports:
-      - "${REDIS_HOST_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -51,7 +51,7 @@ services:
     env_file:
       - ../backend/.env
     environment:
-      DATABASE_URL: postgresql://glame_user:glame_password@postgres:5432/glame_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB must be set}
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379
       ML_INFERENCE_URL: http://ml_inference:8010
@@ -65,7 +65,7 @@ services:
       ml_inference:
         condition: service_healthy
     ports:
-      - "${BACKEND_HOST_PORT:-8000}:8000"
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8000}:8000"
     volumes:
       - backend_uploads:/app/uploads
       - backend_static:/app/static
@@ -81,7 +81,7 @@ services:
       context: ../ml-service
     container_name: glame_ml_inference
     ports:
-      - "${ML_INFERENCE_HOST_PORT:-8010}:8010"
+      - "127.0.0.1:${ML_INFERENCE_HOST_PORT:-8010}:8010"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health')"]
       interval: 15s

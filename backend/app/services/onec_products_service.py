@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Callable, Awaitable
 
-from sqlalchemy import or_, select, func, delete
+from sqlalchemy import and_, or_, select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
@@ -33,6 +33,21 @@ class OneCProductsService:
         db: AsyncSession,
     ):
         self.db = db
+
+    def _preserve_downloaded_images(
+        self,
+        current_images: Optional[List[str]],
+        incoming_images: Optional[List[str]],
+    ) -> Optional[List[str]]:
+        if not incoming_images:
+            return current_images
+        if (
+            current_images
+            and any(str(image).startswith("/static/product_images/") for image in current_images)
+            and not any(str(image).startswith("/static/") for image in incoming_images)
+        ):
+            return current_images
+        return incoming_images
 
     # ============================================================================
     # ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (UTILITY METHODS)
@@ -409,7 +424,7 @@ class OneCProductsService:
                             result = await self.db.execute(
                                 select(Product).where(Product.external_id == external_id)
                             )
-                            existing_product = result.scalar_one_or_none()
+                            existing_product = result.scalars().first()
                     except Exception as retry_error:
                         logger.error(f"Ошибка при повторном запросе после rollback: {retry_error}")
                         raise
@@ -424,7 +439,7 @@ class OneCProductsService:
                                 )
                             )
                         )
-                        existing_product = result.scalar_one_or_none()
+                        existing_product = result.scalars().first()
                     except Exception as query_error:
                         # Если транзакция в состоянии ошибки, делаем rollback
                         logger.warning(f"Ошибка при поиске товара по article {article}: {query_error}")
@@ -440,7 +455,7 @@ class OneCProductsService:
                                         )
                                     )
                                 )
-                                existing_product = result.scalar_one_or_none()
+                                existing_product = result.scalars().first()
                         except Exception as retry_error:
                             logger.error(f"Ошибка при повторном запросе после rollback: {retry_error}")
                             raise
@@ -665,6 +680,11 @@ class OneCProductsService:
                             # Но для category обновляем только если есть новое значение
                             if key == "category" and value is None:
                                 continue  # Не очищаем категорию, если новое значение None
+                            if key == "images":
+                                value = self._preserve_downloaded_images(
+                                    existing_product.images,
+                                    value,
+                                )
                             setattr(existing_product, key, value)
                         existing_product.updated_at = datetime.now(timezone.utc)
                         updated += 1
@@ -897,7 +917,7 @@ class OneCProductsService:
                                         )
                                     )
                                 )
-                                variant_existing = result.scalar_one_or_none()
+                                variant_existing = result.scalars().first()
                             
                             # Создаем или обновляем вариант
                             variant_specs = {
@@ -923,7 +943,10 @@ class OneCProductsService:
                                     variant_existing.price = variant_price
                                 variant_existing.article = variant_article or variant_existing.article
                                 if variant_images:
-                                    variant_existing.images = variant_images
+                                    variant_existing.images = self._preserve_downloaded_images(
+                                        variant_existing.images,
+                                        variant_images,
+                                    )
                                 if mapped.get("brand"):
                                     variant_existing.brand = mapped.get("brand")
                                 if mapped.get("category"):

@@ -38,6 +38,29 @@ def _partner_chat_id(user: User | None = None, member: ReferralProgramMember | N
     return None
 
 
+def _partner_telegram_settings(user: User | None = None, member: ReferralProgramMember | None = None) -> dict[str, Any]:
+    member_meta = member.meta if member is not None and isinstance(member.meta, dict) else {}
+    user_preferences = user.preferences if user is not None and isinstance(user.preferences, dict) else {}
+    telegram_meta = member_meta.get("telegram") if isinstance(member_meta.get("telegram"), dict) else {}
+    user_telegram = user_preferences.get("telegram") if isinstance(user_preferences.get("telegram"), dict) else {}
+    chat_id = _partner_chat_id(user=user, member=member)
+    enabled = bool(
+        telegram_meta.get("notifications_enabled", user_telegram.get("notifications_enabled", bool(chat_id)))
+    )
+    subscriptions = telegram_meta.get("subscriptions") if isinstance(telegram_meta.get("subscriptions"), dict) else {}
+    user_subscriptions = user_telegram.get("subscriptions") if isinstance(user_telegram.get("subscriptions"), dict) else {}
+    return {
+        "chat_id": chat_id,
+        "notifications_enabled": enabled,
+        "subscriptions": {
+            "partner_updates": bool(subscriptions.get("partner_updates", user_subscriptions.get("partner_updates", True))),
+            "referrals": bool(subscriptions.get("referrals", user_subscriptions.get("referrals", True))),
+            "crypto": bool(subscriptions.get("crypto", user_subscriptions.get("crypto", True))),
+            "marketing": bool(subscriptions.get("marketing", user_subscriptions.get("marketing", True))),
+        },
+    }
+
+
 class TelegramNotificationService:
     """Small best-effort Telegram notification layer for GLAME operations."""
 
@@ -101,10 +124,17 @@ class TelegramNotificationService:
         member: ReferralProgramMember | None,
         title: str,
         lines: list[str] | None = None,
+        category: str = "partner_updates",
     ) -> dict[str, Any]:
         if not self.partner_enabled:
             return {"status": "skipped", "reason": "partner_notifications_disabled"}
-        chat_id = _partner_chat_id(user=user, member=member)
+        settings = _partner_telegram_settings(user=user, member=member)
+        if not settings.get("notifications_enabled"):
+            return {"status": "skipped", "reason": "partner_telegram_notifications_opted_out"}
+        subscriptions = settings.get("subscriptions") if isinstance(settings.get("subscriptions"), dict) else {}
+        if category and not subscriptions.get(category, True):
+            return {"status": "skipped", "reason": f"partner_telegram_{category}_opted_out"}
+        chat_id = settings.get("chat_id")
         if not chat_id:
             return {"status": "skipped", "reason": "partner_telegram_chat_id_missing"}
         body = "\n".join([title, *(lines or []), "", self.partner_portal_url])
@@ -119,7 +149,14 @@ class TelegramNotificationService:
         partner_title: str,
         lines: list[str] | None = None,
         severity: str = "info",
+        partner_category: str = "partner_updates",
     ) -> dict[str, Any]:
         admin_result = await self.notify_admin(title=admin_title, lines=lines, severity=severity)
-        partner_result = await self.notify_partner(user=user, member=member, title=partner_title, lines=lines)
+        partner_result = await self.notify_partner(
+            user=user,
+            member=member,
+            title=partner_title,
+            lines=lines,
+            category=partner_category,
+        )
         return {"admin": admin_result, "partner": partner_result}

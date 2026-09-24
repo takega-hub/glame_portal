@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import csv
 import hashlib
+import html
 import io
 import json
 import logging
@@ -13,17 +15,22 @@ import shutil
 import subprocess
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from email.message import EmailMessage
+from email.utils import formataddr
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4, uuid5
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, desc, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
+from tonsdk.boc import Cell
 
 from app.api.auth import (
     create_access_token,
@@ -35,6 +42,7 @@ from app.api.auth import (
     verify_password,
 )
 from app.api.dependencies import require_admin
+from app.services.upload_security import validate_image_upload
 from app.database.connection import get_db
 from app.models.referral import ReferralAttribution, ReferralCashUpgradeRequest, ReferralCode, ReferralCommission, ReferralPayout, ReferralProgramMember
 from app.models.loyalty_transaction import LoyaltyTransaction
@@ -60,6 +68,7 @@ from app.services.telegram_service import TelegramService
 from app.services.telegram_notification_service import TelegramNotificationService
 from app.services.ton_glm_treasury_balance_service import TonGlmTreasuryBalanceService
 from app.services.onec_outbound_service import OneCOutboundService
+from app.services.gift_certificate_email_service import GiftCertificateEmailService, load_smtp_settings
 
 
 router = APIRouter()
@@ -78,6 +87,8 @@ PROJECT_ROOT_DIR = Path(__file__).resolve().parents[3]
 GLM_TON_TESTNET_ARTIFACT = PROJECT_ROOT_DIR / "contracts" / "ton" / "glm-jetton" / "glm-jetton.testnet.json"
 GLM_TON_REFERENCE_LOCK = PROJECT_ROOT_DIR / "contracts" / "ton" / "glm-jetton" / "reference.jetton-contract.lock.json"
 logger = logging.getLogger(__name__)
+SUPPORT_ADMIN_URL = os.getenv("TELEGRAM_ADMIN_PORTAL_URL", "https://portal.glamejewelry.ru/admin/referrals")
+SUPPORT_TICKET_PREFIX = "GLSUP"
 
 
 def _glm_operational_stats_start_at() -> datetime | None:
@@ -360,7 +371,7 @@ class ReferralRegisterRequest(BaseModel):
     first_name: str | None = Field(default=None, max_length=120)
     middle_name: str | None = Field(default=None, max_length=120)
     password: str = Field(min_length=6, max_length=128)
-    email: str | None = Field(default=None, max_length=255)
+    email: str = Field(min_length=3, max_length=255)
     offer_accepted: bool = False
 
 
@@ -494,10 +505,26 @@ class BuyLoyaltyPointsRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class BuyGlmWithTonRequest(BaseModel):
+    amount_glm: int = Field(ge=1, le=100000)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class SellGlmForTonRequest(BaseModel):
+    amount_glm: int = Field(ge=1, le=100000)
+    note: str | None = Field(default=None, max_length=500)
+
+
 class AdminGlmTonSettlementRequest(BaseModel):
     tx_hash: str = Field(min_length=16, max_length=256)
     comment: str | None = Field(default=None, max_length=500)
     require_verified: bool = True
+
+
+class AdminGlmExchangeDeskUpdateRequest(BaseModel):
+    status: str = Field(pattern="^(processed|canceled|failed)$")
+    payout_tx_hash: str | None = Field(default=None, min_length=16, max_length=256)
+    comment: str | None = Field(default=None, max_length=500)
 
 
 class AdminGlmTonSettlementRunRequest(BaseModel):
@@ -524,6 +551,10 @@ class AdminGlmProductionApprovalsRequest(BaseModel):
     security_approved: bool = False
     treasury_approved: bool = False
     comment: str | None = Field(default=None, max_length=1000)
+    legal_evidence_ref: str | None = Field(default=None, max_length=1000)
+    security_evidence_ref: str | None = Field(default=None, max_length=1000)
+    treasury_evidence_ref: str | None = Field(default=None, max_length=1000)
+    public_wording_evidence_ref: str | None = Field(default=None, max_length=1000)
 
 
 class AdminGlmHotWalletLimitsRequest(BaseModel):
@@ -690,9 +721,32 @@ class PartnerTelegramBindRequest(BaseModel):
     chat_id: str = Field(min_length=3, max_length=64)
 
 
+class PartnerTelegramPreferencesRequest(BaseModel):
+    notifications_enabled: bool | None = None
+    partner_updates: bool | None = None
+    referrals: bool | None = None
+    crypto: bool | None = None
+    marketing: bool | None = None
+
+
 class TelegramWebhookUpdate(BaseModel):
     update_id: int | None = None
     message: dict[str, Any] | None = None
+
+
+class PartnerSupportMessageRequest(BaseModel):
+    subject: str | None = Field(default=None, max_length=120)
+    message: str = Field(min_length=3, max_length=2000)
+    category: str | None = Field(default="partner", max_length=32)
+
+
+class PublicSupportMessageRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=120)
+    email: str = Field(min_length=3, max_length=255)
+    contact: str | None = Field(default=None, max_length=255)
+    subject: str | None = Field(default=None, max_length=120)
+    message: str = Field(min_length=3, max_length=2000)
+    page: str | None = Field(default="glm", max_length=32)
 
 
 class AdminGlmAuditHashGenerateRequest(BaseModel):
@@ -1225,6 +1279,20 @@ def _glm_transaction_payload(
         "ton_deposit_requested_at": meta.get("ton_deposit_requested_at"),
         "ton_deposit_query_id": meta.get("ton_deposit_query_id"),
         "ton_deposit_last_lookup": meta.get("ton_deposit_last_lookup"),
+        "rub_amount": meta.get("rub_amount"),
+        "rub_per_glm": meta.get("rub_per_glm"),
+        "ton_rub_rate": meta.get("ton_rub_rate"),
+        "pricing_source": meta.get("pricing_source"),
+        "pricing_checked_at": meta.get("pricing_checked_at"),
+        "pricing_error": meta.get("pricing_error"),
+        "ton_amount": meta.get("ton_amount"),
+        "ton_amount_nanoton": meta.get("ton_amount_nanoton"),
+        "ton_payment_status": meta.get("ton_payment_status"),
+        "ton_payment_tx_hash": meta.get("ton_payment_tx_hash"),
+        "ton_payment_requested_at": meta.get("ton_payment_requested_at"),
+        "ton_payment_last_lookup": meta.get("ton_payment_last_lookup"),
+        "ton_payment_verification": meta.get("ton_payment_verification"),
+        "gram_payout_status": meta.get("gram_payout_status"),
         "target_points": meta.get("target_points"),
         "processed_points": meta.get("processed_points"),
         "onec_document_id": meta.get("onec_document_id"),
@@ -1332,57 +1400,11 @@ def _glm_daily_audit_hash_payload(row: GlameTokenDailyAuditHash) -> dict[str, An
 
 
 def _glm_public_audit_hash_payload(row: GlameTokenDailyAuditHash) -> dict[str, Any]:
-    payload = row.payload if isinstance(row.payload, dict) else {}
-    public_reference = row.public_reference or (
-        f"{GLM_AUDIT_JOURNAL_PUBLIC_PATH}/{row.audit_date.isoformat()}.json" if row.audit_date else None
-    )
-    return {
-        "schema": "glame_token_public_audit_hash_v1",
-        "audit_date": row.audit_date.isoformat() if row.audit_date else None,
-        "token_code": row.token_code,
-        "root_hash": row.root_hash,
-        "previous_root_hash": row.previous_root_hash,
-        "transactions_count": int(row.transactions_count or 0),
-        "accounts_count": int(row.accounts_count or 0),
-        "balance_total": int(row.balance_total or 0),
-        "hold_total": int(row.hold_total or 0),
-        "lifetime_earned_total": int(row.lifetime_earned_total or 0),
-        "lifetime_burned_total": int(row.lifetime_burned_total or 0),
-        "account_hash": payload.get("account_hash"),
-        "transaction_hashes_count": len(payload.get("transaction_hashes") or []),
-        "public_status": row.public_status,
-        "public_reference": public_reference,
-        "generated_at": row.generated_at.isoformat() if row.generated_at else None,
-        "published_at": payload.get("published_at"),
-    }
+    return GlameTokenService.public_daily_audit_hash_payload(row)
 
 
 def _write_glm_audit_public_journal(rows: list[GlameTokenDailyAuditHash]) -> None:
-    GLM_AUDIT_JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
-    public_rows = [_glm_public_audit_hash_payload(row) for row in rows]
-    updated_at = datetime.now(timezone.utc).isoformat()
-    index_payload = {
-        "schema": "glame_token_public_audit_journal_v1",
-        "token_code": "GLM",
-        "updated_at": updated_at,
-        "hashes_count": len(public_rows),
-        "hashes": public_rows,
-    }
-    (GLM_AUDIT_JOURNAL_DIR / "index.json").write_text(
-        json.dumps(index_payload, ensure_ascii=False, sort_keys=True, indent=2),
-        encoding="utf-8",
-    )
-    (GLM_AUDIT_JOURNAL_DIR / "glame-audit-hashes.jsonl").write_text(
-        "\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in public_rows) + ("\n" if public_rows else ""),
-        encoding="utf-8",
-    )
-    for item in public_rows:
-        audit_date = item.get("audit_date")
-        if audit_date:
-            (GLM_AUDIT_JOURNAL_DIR / f"{audit_date}.json").write_text(
-                json.dumps(item, ensure_ascii=False, sort_keys=True, indent=2),
-                encoding="utf-8",
-            )
+    GlameTokenService.write_public_audit_journal(rows)
 
 
 def _glm_ton_deployment_artifact() -> dict[str, Any]:
@@ -1625,10 +1647,94 @@ def _ton_proof_message(address: str, proof: dict[str, Any]) -> bytes:
     )
 
 
+def _decode_ton_state_init_boc(wallet_state_init: str) -> bytes:
+    value = (wallet_state_init or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="TON Connect не вернул walletStateInit")
+
+    padded = value + ("=" * (-len(value) % 4))
+    try:
+        return base64.b64decode(padded, validate=True)
+    except Exception:
+        try:
+            return base64.urlsafe_b64decode(padded)
+        except Exception as error:
+            raise HTTPException(status_code=400, detail="Некорректный walletStateInit") from error
+
+
+def _parse_ton_state_init(wallet_state_init: str) -> tuple[Cell, Cell | None, Cell | None]:
+    try:
+        root = Cell.one_from_boc(_decode_ton_state_init_boc(wallet_state_init))
+        state_init = root.begin_parse()
+        if state_init.read_bit():
+            state_init.skip_bits(5)
+        if state_init.read_bit():
+            state_init.skip_bits(2)
+        code = state_init.read_ref() if state_init.read_bit() else None
+        data = state_init.read_ref() if state_init.read_bit() else None
+        return root, code, data
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=400, detail="Некорректный walletStateInit") from error
+
+
+def _read_ton_wallet_public_key_candidate(data: Cell, layout: str) -> str | None:
+    try:
+        wallet_data = data.begin_parse()
+        if layout == "v5":
+            wallet_data.read_bit()
+            wallet_data.read_uint(32)
+            wallet_data.read_uint(32)
+        elif layout == "v3_v4":
+            wallet_data.read_uint(32)
+            wallet_data.read_uint(32)
+        elif layout == "v1_v2":
+            wallet_data.read_uint(32)
+        else:
+            return None
+        return wallet_data.read_bytes(32).hex()
+    except Exception:
+        return None
+
+
+def _ton_wallet_public_key_candidates(data: Cell | None) -> list[str]:
+    if data is None:
+        return []
+    candidates: list[str] = []
+    for layout in ("v5", "v3_v4", "v1_v2"):
+        public_key = _read_ton_wallet_public_key_candidate(data, layout)
+        if public_key and re.fullmatch(r"[a-f0-9]{64}", public_key) and public_key not in candidates:
+            candidates.append(public_key)
+    return candidates
+
+
+def _verify_ton_wallet_state_init(*, address: str, public_key: str, wallet_state_init: str) -> dict[str, Any]:
+    _, address_hex = address.split(":", 1)
+    root, _code, data = _parse_ton_state_init(wallet_state_init)
+    state_init_hash = root.bytes_hash().hex()
+    if state_init_hash.lower() != address_hex.lower():
+        raise HTTPException(status_code=400, detail="walletStateInit не соответствует адресу TON-кошелька")
+
+    public_key_candidates = _ton_wallet_public_key_candidates(data)
+    normalized_public_key = public_key.lower()
+    if not public_key_candidates:
+        raise HTTPException(status_code=400, detail="Не удалось извлечь public key из walletStateInit")
+    if normalized_public_key not in public_key_candidates:
+        raise HTTPException(status_code=400, detail="TON Connect public key не соответствует walletStateInit")
+
+    return {
+        "wallet_state_init_hash": state_init_hash,
+        "wallet_state_init_public_key": normalized_public_key,
+        "wallet_state_init_public_key_candidates": public_key_candidates,
+    }
+
+
 def _verify_ton_proof(
     *,
     address: str,
     public_key: str,
+    wallet_state_init: str,
     proof: dict[str, Any],
     expected_payload: str,
 ) -> dict[str, Any]:
@@ -1653,6 +1759,11 @@ def _verify_ton_proof(
 
     if not re.fullmatch(r"[A-Fa-f0-9]{64}", public_key or ""):
         raise HTTPException(status_code=400, detail="TON Connect не вернул корректный public key")
+    verified_state_init = _verify_ton_wallet_state_init(
+        address=address,
+        public_key=public_key,
+        wallet_state_init=wallet_state_init,
+    )
 
     try:
         signature = base64.b64decode(str(proof.get("signature") or ""), validate=True)
@@ -1673,6 +1784,7 @@ def _verify_ton_proof(
         "timestamp": timestamp,
         "payload": payload,
         "signature": proof.get("signature"),
+        **verified_state_init,
     }
 
 
@@ -1887,6 +1999,7 @@ async def admin_upload_reward_store_item_image(
     if content_type not in allowed:
         raise HTTPException(status_code=400, detail="Поддерживаются только JPG, PNG или WEBP")
     data = await file.read()
+    detected_type = validate_image_upload(data, content_type, max_bytes=8 * 1024 * 1024)
     if not data:
         raise HTTPException(status_code=400, detail="Файл пустой")
     if len(data) > 8 * 1024 * 1024:
@@ -1899,7 +2012,7 @@ async def admin_upload_reward_store_item_image(
     return {
         "status": "success",
         "image_url": _reward_store_media_public_url(file_name),
-        "content_type": content_type,
+        "content_type": detected_type,
         "size": len(data),
     }
 
@@ -2014,6 +2127,25 @@ async def list_referral_media_materials(
     return [_media_response(item) for item in _read_media_materials() if item.get("is_active", True)]
 
 
+@router.get("/media-materials/{material_id}/download")
+async def download_referral_media_material(
+    material_id: str,
+    _current_user: User = Depends(get_current_user),
+):
+    material = next((item for item in _read_media_materials() if item.get("id") == material_id and item.get("is_active", True)), None)
+    if not material:
+        raise HTTPException(status_code=404, detail="Материал не найден")
+    file_name = Path(str(material.get("file_name") or "")).name
+    file_path = REFERRAL_MEDIA_DIR / file_name
+    if not file_name or not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    return FileResponse(
+        path=str(file_path),
+        media_type=material.get("content_type") or "application/octet-stream",
+        filename=Path(str(material.get("original_file_name") or file_name)).name,
+    )
+
+
 @router.get("/admin/media-materials", response_model=list[ReferralMediaMaterialResponse])
 async def admin_list_referral_media_materials(
     _current_user: User = Depends(require_admin()),
@@ -2036,23 +2168,33 @@ async def admin_upload_referral_media_material(
     allowed = content_type.startswith("image/") or content_type == "application/pdf"
     if not allowed:
         raise HTTPException(status_code=400, detail="Можно загружать только изображения или PDF")
-    safe_name = _safe_media_filename(file.filename or "material")
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+    if len(content) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Файл слишком большой, максимум 15 МБ")
+    if content_type == "application/pdf":
+        if not content.startswith(b"%PDF-"):
+            raise HTTPException(status_code=400, detail="Содержимое файла не соответствует PDF")
+    else:
+        content_type = validate_image_upload(content, content_type)
+    original_name = _safe_media_filename(file.filename or "material")
+    safe_name = f"{uuid4().hex}_{original_name}"
     target = REFERRAL_MEDIA_DIR / safe_name
     try:
-        with target.open("wb") as destination:
-            shutil.copyfileobj(file.file, destination)
+        target.write_bytes(content)
     finally:
         await file.close()
     preview_file_name = _create_pdf_preview(target) if content_type == "application/pdf" else None
     now = datetime.utcnow().isoformat()
     material = {
         "id": str(uuid4()),
-        "title": title.strip() or Path(file.filename or safe_name).stem,
+        "title": title.strip() or Path(file.filename or original_name).stem,
         "category": _normalize_media_category(category),
         "description": (description or "").strip() or None,
         "file_name": safe_name,
         "preview_file_name": preview_file_name,
-        "original_file_name": file.filename or safe_name,
+        "original_file_name": file.filename or original_name,
         "content_type": content_type or None,
         "size": target.stat().st_size if target.exists() else 0,
         "is_active": bool(is_active),
@@ -2670,6 +2812,88 @@ async def admin_glm_effectiveness(
             .limit(500)
         )
     ).all()
+    commission_window_conditions = [ReferralCommission.created_at >= stats_start_at] if stats_start_at else []
+    commission_totals = (
+        await db.execute(
+            select(
+                func.count(ReferralCommission.id),
+                func.coalesce(func.sum(ReferralCommission.commission_base), 0),
+                func.coalesce(func.sum(ReferralCommission.amount_kopecks), 0),
+                func.count(func.distinct(ReferralCommission.referrer_member_id)),
+                func.count(func.distinct(ReferralCommission.referee_user_id)),
+            ).where(
+                ReferralCommission.status != "canceled",
+                *commission_window_conditions,
+            )
+        )
+    ).one()
+    glm_linked_totals = (
+        await db.execute(
+            select(
+                func.count(func.distinct(ReferralCommission.referrer_member_id)),
+                func.coalesce(func.sum(ReferralCommission.commission_base), 0),
+                func.coalesce(func.sum(ReferralCommission.amount_kopecks), 0),
+            )
+            .join(
+                GlameTokenAccount,
+                and_(
+                    GlameTokenAccount.referral_member_id == ReferralCommission.referrer_member_id,
+                    GlameTokenAccount.token_code == "GLM",
+                ),
+            )
+            .where(
+                ReferralCommission.status != "canceled",
+                *commission_window_conditions,
+            )
+        )
+    ).one()
+    repeat_referee_rows = (
+        await db.execute(
+            select(
+                ReferralCommission.referee_user_id,
+                func.count(ReferralCommission.id).label("orders_count"),
+                func.coalesce(func.sum(ReferralCommission.commission_base), 0).label("turnover_kopecks"),
+            )
+            .where(
+                ReferralCommission.status != "canceled",
+                ReferralCommission.referee_user_id.is_not(None),
+                *commission_window_conditions,
+            )
+            .group_by(ReferralCommission.referee_user_id)
+            .having(func.count(ReferralCommission.id) > 1)
+        )
+    ).all()
+    top_referral_rows = (
+        await db.execute(
+            select(
+                ReferralProgramMember.id,
+                User.full_name,
+                User.phone,
+                func.count(ReferralCommission.id),
+                func.coalesce(func.sum(ReferralCommission.commission_base), 0),
+                func.coalesce(func.sum(ReferralCommission.amount_kopecks), 0),
+                func.coalesce(func.max(GlameTokenAccount.balance), 0),
+                func.coalesce(func.max(GlameTokenAccount.hold_balance), 0),
+                func.coalesce(func.max(GlameTokenAccount.lifetime_earned), 0),
+            )
+            .join(ReferralProgramMember, ReferralProgramMember.id == ReferralCommission.referrer_member_id)
+            .join(User, User.id == ReferralProgramMember.user_id)
+            .outerjoin(
+                GlameTokenAccount,
+                and_(
+                    GlameTokenAccount.referral_member_id == ReferralProgramMember.id,
+                    GlameTokenAccount.token_code == "GLM",
+                ),
+            )
+            .where(
+                ReferralCommission.status != "canceled",
+                *commission_window_conditions,
+            )
+            .group_by(ReferralProgramMember.id, User.full_name, User.phone)
+            .order_by(desc(func.coalesce(func.sum(ReferralCommission.commission_base), 0)))
+            .limit(8)
+        )
+    ).all()
     by_category: dict[str, dict[str, int | str]] = {}
     by_sku: dict[str, dict[str, int | str]] = {}
     for amount, meta in redemption_rows:
@@ -2694,6 +2918,10 @@ async def admin_glm_effectiveness(
     monthly_redemption_total = abs(int(tx_totals[7] or 0))
     lifetime_earned_total = int(tx_totals[5] or 0)
     lifetime_burned_total = redemption_total
+    referral_turnover_kopecks = int(commission_totals[1] or 0)
+    glm_linked_turnover_kopecks = int(glm_linked_totals[1] or 0)
+    repeat_referral_orders_count = sum(max(0, int(row.orders_count or 0) - 1) for row in repeat_referee_rows)
+    repeat_referral_turnover_kopecks = sum(int(row.turnover_kopecks or 0) for row in repeat_referee_rows)
 
     return {
         "generated_at": now.isoformat(),
@@ -2722,6 +2950,44 @@ async def admin_glm_effectiveness(
         "monthly_redemption_total": monthly_redemption_total,
         "redemption_by_category": sorted(by_category.values(), key=lambda item: int(item["amount"]), reverse=True)[:8],
         "top_redemption_items": sorted(by_sku.values(), key=lambda item: int(item["amount"]), reverse=True)[:8],
+        "business_impact": {
+            "referral_orders_count": int(commission_totals[0] or 0),
+            "referral_turnover_kopecks": referral_turnover_kopecks,
+            "referral_commission_kopecks": int(commission_totals[2] or 0),
+            "referral_partner_count": int(commission_totals[3] or 0),
+            "referral_customer_count": int(commission_totals[4] or 0),
+            "glm_linked_partner_count": int(glm_linked_totals[0] or 0),
+            "glm_linked_turnover_kopecks": glm_linked_turnover_kopecks,
+            "glm_linked_commission_kopecks": int(glm_linked_totals[2] or 0),
+            "glm_linked_turnover_percent": round((glm_linked_turnover_kopecks / referral_turnover_kopecks) * 100, 1) if referral_turnover_kopecks else 0,
+            "repeat_referral_customer_count": len(repeat_referee_rows),
+            "repeat_referral_orders_count": repeat_referral_orders_count,
+            "repeat_referral_turnover_kopecks": repeat_referral_turnover_kopecks,
+        },
+        "top_referral_turnover_partners": [
+            {
+                "member_id": str(member_id),
+                "partner_name": partner_name or "Партнер GLAME",
+                "partner_phone": partner_phone,
+                "orders_count": int(orders_count or 0),
+                "turnover_kopecks": int(turnover_kopecks or 0),
+                "commission_kopecks": int(commission_kopecks or 0),
+                "glm_balance": int(glm_balance or 0),
+                "glm_hold_balance": int(glm_hold_balance or 0),
+                "glm_lifetime_earned": int(glm_lifetime_earned or 0),
+            }
+            for (
+                member_id,
+                partner_name,
+                partner_phone,
+                orders_count,
+                turnover_kopecks,
+                commission_kopecks,
+                glm_balance,
+                glm_hold_balance,
+                glm_lifetime_earned,
+            ) in top_referral_rows
+        ],
     }
 
 
@@ -3553,6 +3819,7 @@ async def admin_glm_ton_readiness(
     settlement_config = TonGlmSettlementService.config_payload()
     auto_transfer_config = TonGlmAutoTransferService.config_payload()
     treasury_balances = await TonGlmTreasuryBalanceService(db).payload()
+    wallet_cache_propagation = await _glm_wallet_cache_propagation_payload(policy)
     treasury_alert_codes = [
         str(item.get("code"))
         for item in (treasury_balances.get("alerts") or [])
@@ -3624,6 +3891,7 @@ async def admin_glm_ton_readiness(
         ]
     )
     mainnet_enabled = bool(policy.get("mainnet_enabled"))
+    network = str(policy.get("network") or "testnet").strip() or "testnet"
     hot_wallet_secret_source = str(auto_transfer_config.get("secret_source") or "none")
     hot_wallet_address = str(auto_transfer_config.get("hot_wallet_address") or "").strip()
     active_hot_wallet_address = str(auto_transfer_config.get("active_hot_wallet_address") or "").strip()
@@ -3631,6 +3899,9 @@ async def admin_glm_ton_readiness(
     production_treasury_address = str(auto_transfer_config.get("production_treasury_address") or "").strip()
     production_signer_mode = str(auto_transfer_config.get("production_signer_mode") or "not_configured").strip()
     production_safe_signer = bool(auto_transfer_config.get("production_safe_signer"))
+    auto_transfer_signer_ready = bool(
+        production_safe_signer if network == "mainnet" else auto_transfer_config.get("has_hot_wallet_mnemonic")
+    )
     security_warnings = []
     mainnet_blockers = []
     if hot_wallet_secret_source == "env_mnemonic":
@@ -3803,7 +4074,17 @@ async def admin_glm_ton_readiness(
             ),
         },
     ]
-    blockers = [item for item in checks if not item["ok"]]
+    runtime_blocker_codes = {"network_configured", "metadata_url", "jetton_master_env", "treasury_env", "artifact_deployed"}
+    blockers = [
+        item
+        for item in checks
+        if not item["ok"] and (network != "mainnet" or item["code"] in runtime_blocker_codes)
+    ]
+    legacy_deploy_blockers = [
+        item
+        for item in checks
+        if not item["ok"] and network == "mainnet" and item["code"] not in runtime_blocker_codes
+    ]
     next_steps = []
     if any(item["code"] == "artifact_deployed" for item in blockers):
         next_steps.append("Run contracts/ton/glm-jetton npm run blueprint:prepare with GLAME testnet admin address.")
@@ -3993,8 +4274,11 @@ async def admin_glm_ton_readiness(
             for item in go_no_go_blockers[:6]
         ],
     }
+    readiness_status = "ready_for_treasury_transfer" if not blockers else "blocked"
+    if network == "mainnet":
+        readiness_status = "mainnet_ready" if go_no_go.get("ready") and not blockers else "blocked"
     return {
-        "status": "ready_for_treasury_transfer" if not blockers else "blocked",
+        "status": readiness_status,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "policy": policy,
         "env_status": env_status,
@@ -4071,11 +4355,12 @@ async def admin_glm_ton_readiness(
             "run_endpoint": "/api/referrals/admin/glm-ton-auto-transfer/run",
             "ready": bool(
                 auto_transfer_config.get("enabled")
-                and auto_transfer_config.get("has_hot_wallet_mnemonic")
+                and auto_transfer_signer_ready
                 and auto_transfer_config.get("admin_user_id")
             ),
         },
         "treasury_balances": treasury_balances,
+        "wallet_cache_propagation": wallet_cache_propagation,
         "security": {
             "pilot_only": hot_wallet_secret_source == "env_mnemonic",
             "mainnet_ready": not mainnet_blockers,
@@ -4122,6 +4407,7 @@ async def admin_glm_ton_readiness(
         "next_steps": next_steps,
         "checks": checks,
         "blockers": blockers,
+        "legacy_deploy_blockers": legacy_deploy_blockers,
     }
 
 
@@ -4131,6 +4417,345 @@ async def admin_glm_replay_idempotency_audit(
     db: AsyncSession = Depends(get_db),
 ):
     return await _glm_replay_idempotency_audit_payload(db)
+
+
+def _glm_policy_document_fingerprints() -> list[dict[str, Any]]:
+    policy_dir = Path(__file__).resolve().parents[2] / "static" / "glm_policy"
+    document_names = [
+        "token-policy.md",
+        "risk-disclosure.md",
+        "bridge-rules.md",
+        "emission-policy.md",
+        "faq.md",
+        "operator-runbook.md",
+        "production-escalation-policy.md",
+        "production-signer-contract.md",
+        "security-review-checklist.md",
+        "legal-accounting-approval.md",
+        "treasury-approval.md",
+        "launch-approval-packet.md",
+        "p2p-marketplace-approval-packet.md",
+        "exchange-desk-policy.md",
+        "jetton-metadata-mainnet-v2.json",
+    ]
+    documents: list[dict[str, Any]] = []
+    for document_name in document_names:
+        path = policy_dir / document_name
+        digest: str | None = None
+        if path.exists() and path.is_file():
+            hash_obj = hashlib.sha256()
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    hash_obj.update(chunk)
+            digest = hash_obj.hexdigest()
+        documents.append({
+            "file": f"backend/static/glm_policy/{document_name}",
+            "exists": path.exists(),
+            "sha256": digest,
+            "bytes": path.stat().st_size if path.exists() else None,
+        })
+    return documents
+
+
+def _glm_production_approval_state() -> dict[str, Any]:
+    path = Path(__file__).resolve().parents[2] / "static" / "glm_policy" / "production-approvals.json"
+    payload: dict[str, Any] = {}
+    if path.exists():
+        try:
+            raw_payload = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(raw_payload, dict):
+                payload = raw_payload
+        except json.JSONDecodeError as error:
+            return {"exists": True, "valid_json": False, "error": str(error)}
+    return {
+        "exists": path.exists(),
+        "valid_json": True,
+        "legal_approved": bool(payload.get("legal_approved")),
+        "security_approved": bool(payload.get("security_approved")),
+        "treasury_approved": bool(payload.get("treasury_approved")),
+        "updated_at": payload.get("updated_at"),
+        "comment_present": bool(payload.get("comment")),
+        "updated_by_present": bool(payload.get("updated_by")),
+        "legal_evidence_ref": payload.get("legal_evidence_ref"),
+        "security_evidence_ref": payload.get("security_evidence_ref"),
+        "treasury_evidence_ref": payload.get("treasury_evidence_ref"),
+        "public_wording_evidence_ref": payload.get("public_wording_evidence_ref"),
+        "offline_evidence_ready": all(
+            bool(str(payload.get(key) or "").strip())
+            for key in (
+                "legal_evidence_ref",
+                "security_evidence_ref",
+                "treasury_evidence_ref",
+                "public_wording_evidence_ref",
+            )
+        ),
+    }
+
+
+def _run_glm_local_launch_checks() -> dict[str, Any]:
+    script_path = PROJECT_ROOT_DIR / "scripts" / "security" / "run_crypto_glame_launch_checks.py"
+    if not script_path.exists():
+        return {
+            "ok": False,
+            "returncode": None,
+            "error": "run_crypto_glame_launch_checks.py not found",
+        }
+    try:
+        result = subprocess.run(
+            ["python3", str(script_path.relative_to(PROJECT_ROOT_DIR)), "--skip-live"],
+            cwd=PROJECT_ROOT_DIR,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=90,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "ok": False,
+            "returncode": None,
+            "error": "launch checks timed out",
+        }
+    payload: dict[str, Any] | None = None
+    stdout = result.stdout.strip()
+    if stdout:
+        try:
+            raw_payload = json.loads(stdout)
+            if isinstance(raw_payload, dict):
+                payload = raw_payload
+        except json.JSONDecodeError:
+            payload = None
+    return {
+        "ok": result.returncode == 0,
+        "returncode": result.returncode,
+        "payload": payload,
+        "stderr_tail": result.stderr.strip()[-2000:],
+    }
+
+
+async def _glm_wallet_cache_propagation_payload(policy: dict[str, Any]) -> dict[str, Any]:
+    expected_metadata_url = (
+        os.getenv("TON_GLM_MAINNET_METADATA_URL")
+        or "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata-mainnet-v2.json"
+    ).strip()
+    expected_icon_url = "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png"
+    jetton_master = str(policy.get("jetton_master_address") or os.getenv("TON_GLM_JETTON_MASTER_ADDRESS") or "").strip()
+    payload: dict[str, Any] = {
+        "status": "not_configured",
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "source": "tonapi",
+        "jetton_master_address": jetton_master or None,
+        "metadata_url": expected_metadata_url,
+        "expected": {
+            "name": "GLAME Coin",
+            "symbol": "GLM",
+            "decimals": "9",
+            "image": expected_icon_url,
+            "verification": "whitelist",
+        },
+        "tonapi": None,
+        "metadata": None,
+        "checks": [],
+        "errors": [],
+    }
+    if not jetton_master:
+        payload["errors"].append("TON_GLM_JETTON_MASTER_ADDRESS is not configured")
+        return payload
+
+    timeout = float(os.getenv("TON_GLM_WALLET_CACHE_CHECK_TIMEOUT_SECONDS", "10") or 10)
+    headers: dict[str, str] = {}
+    tonapi_key = (os.getenv("TONAPI_API_KEY") or "").strip()
+    if tonapi_key:
+        headers["Authorization"] = f"Bearer {tonapi_key}"
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            tonapi_response = await client.get(f"https://tonapi.io/v2/jettons/{jetton_master}", headers=headers)
+            tonapi_response.raise_for_status()
+            tonapi_payload = tonapi_response.json()
+            metadata_response = await client.get(expected_metadata_url)
+            metadata_response.raise_for_status()
+            metadata_payload = metadata_response.json()
+    except Exception as error:
+        payload["status"] = "error"
+        payload["errors"].append(str(error)[:500])
+        return payload
+
+    tonapi_metadata = tonapi_payload.get("metadata") if isinstance(tonapi_payload, dict) else {}
+    if not isinstance(tonapi_metadata, dict):
+        tonapi_metadata = {}
+    if not isinstance(metadata_payload, dict):
+        metadata_payload = {}
+    payload["tonapi"] = {
+        "verification": tonapi_payload.get("verification") if isinstance(tonapi_payload, dict) else None,
+        "name": tonapi_metadata.get("name"),
+        "symbol": tonapi_metadata.get("symbol"),
+        "decimals": str(tonapi_metadata.get("decimals")) if tonapi_metadata.get("decimals") is not None else None,
+        "image": tonapi_metadata.get("image"),
+        "description": tonapi_metadata.get("description"),
+        "holders_count": tonapi_payload.get("holders_count") if isinstance(tonapi_payload, dict) else None,
+        "preview": tonapi_payload.get("preview") if isinstance(tonapi_payload, dict) else None,
+    }
+    payload["metadata"] = {
+        "name": metadata_payload.get("name"),
+        "symbol": metadata_payload.get("symbol"),
+        "decimals": str(metadata_payload.get("decimals")) if metadata_payload.get("decimals") is not None else None,
+        "image": metadata_payload.get("image"),
+        "description": metadata_payload.get("description"),
+    }
+    checks = [
+        ("tonapi_name", payload["tonapi"].get("name") == "GLAME Coin", "TonAPI must show GLAME Coin"),
+        ("tonapi_symbol", payload["tonapi"].get("symbol") == "GLM", "TonAPI must show GLM symbol"),
+        ("tonapi_decimals", payload["tonapi"].get("decimals") == "9", "TonAPI must show 9 decimals"),
+        ("tonapi_icon", payload["tonapi"].get("image") == expected_icon_url, "TonAPI must show production PNG icon"),
+        ("tonapi_not_testnet", "testnet" not in str(payload["tonapi"].get("description") or "").lower(), "TonAPI description must not contain testnet wording"),
+        ("tonapi_whitelist", payload["tonapi"].get("verification") == "whitelist", "TonAPI verification should be whitelist"),
+        ("metadata_name", payload["metadata"].get("name") == "GLAME Coin", "Public metadata must show GLAME Coin"),
+        ("metadata_icon", payload["metadata"].get("image") == expected_icon_url, "Public metadata must show production PNG icon"),
+    ]
+    payload["checks"] = [{"code": code, "ok": ok, "message": message} for code, ok, message in checks]
+    failed = [item for item in payload["checks"] if not item.get("ok")]
+    payload["status"] = "ok" if not failed else "warning"
+    return payload
+
+
+def _latest_glm_evidence_file(*patterns: str) -> dict[str, Any] | None:
+    evidence_dir = Path(__file__).resolve().parents[2] / "data" / "crypto_glame_evidence"
+    matches: list[Path] = []
+    for pattern in patterns:
+        matches.extend(evidence_dir.glob(pattern))
+    files = [path for path in matches if path.exists() and path.is_file()]
+    if not files:
+        return None
+    latest = max(files, key=lambda path: path.stat().st_mtime)
+    return {
+        "file": str(latest.relative_to(PROJECT_ROOT_DIR)),
+        "bytes": latest.stat().st_size,
+        "updated_at": datetime.fromtimestamp(latest.stat().st_mtime, tz=timezone.utc).isoformat(),
+        "sha256": hashlib.sha256(latest.read_bytes()).hexdigest(),
+    }
+
+
+async def _glm_launch_evidence_checklist(
+    db: AsyncSession,
+    *,
+    replay_audit: dict[str, Any],
+    launch_checks: dict[str, Any],
+) -> list[dict[str, Any]]:
+    approvals = _glm_production_approval_state()
+
+    async def published_audit_hash() -> dict[str, Any] | None:
+        row = (
+            await db.execute(
+                select(GlameTokenDailyAuditHash)
+                .where(
+                    GlameTokenDailyAuditHash.token_code == "GLM",
+                    GlameTokenDailyAuditHash.public_status == "published",
+                )
+                .order_by(desc(GlameTokenDailyAuditHash.audit_date))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return None
+        return {
+            "audit_date": row.audit_date.isoformat() if row.audit_date else None,
+            "root_hash": row.root_hash,
+            "public_reference": row.public_reference,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+
+    items: list[dict[str, Any]] = [
+        {
+            "code": "launch_evidence_snapshot",
+            "label": "Launch evidence snapshot",
+            "status": "ok" if launch_checks.get("ok") else "todo",
+            "href": "#production-approvals",
+        },
+        {
+            "code": "replay_idempotency_audit",
+            "label": "Replay/idempotency audit",
+            "status": "ok" if replay_audit.get("status") == "ok" else "todo",
+            "href": "#production-approvals",
+        },
+    ]
+    file_checks = [
+        ("bridge_reconciliation", "Bridge reconciliation evidence", "#glm-bridge-reconciliation", ("bridge-reconciliation-*", "glm-bridge-reconciliation-*")),
+        ("treasury_turnover", "Treasury turnover evidence", "#ton-readiness", ("treasury-turnover-*", "glm-treasury-turnover-*", "treasury-balances-*")),
+        ("points_to_glm_e2e", "Mainnet Баллы→GLM E2E evidence", "#ton-readiness", ("points-to-glm-e2e-*",)),
+        ("glm_to_points_e2e", "Mainnet GLM→баллы E2E evidence", "#ton-readiness", ("glm-to-points-e2e-*",)),
+        ("buy_glm_with_ton_e2e", "Mainnet Купить GLM за GRAM evidence", "#ton-readiness", ("buy-glm-with-ton-e2e-*",)),
+        ("glm_store_checkout_e2e", "GLM Store checkout evidence", "#reward-store", ("glm-store-checkout-*",)),
+        ("tonkeeper_verification", "Tonkeeper verification evidence", "/glm", ("tonkeeper-verification-*", "ton-assets-verification-*")),
+    ]
+    for code, label_text, href, patterns in file_checks:
+        evidence_file = _latest_glm_evidence_file(*patterns)
+        items.append({
+            "code": code,
+            "label": label_text,
+            "status": "ok" if evidence_file else "todo",
+            "href": href,
+            "evidence": evidence_file,
+        })
+
+    audit_hash = await published_audit_hash()
+    items.insert(4, {
+        "code": "published_audit_hash",
+        "label": "Published GLM audit hash",
+        "status": "ok" if audit_hash else "todo",
+        "href": "/glm/audit",
+        "evidence": audit_hash,
+    })
+    items.insert(5, {
+        "code": "signed_offline_approvals",
+        "label": "Signed/offline approval evidence",
+        "status": "ok" if approvals.get("offline_evidence_ready") else "todo",
+        "href": "#production-approvals",
+        "evidence": {
+            "legal_evidence_ref": approvals.get("legal_evidence_ref"),
+            "security_evidence_ref": approvals.get("security_evidence_ref"),
+            "treasury_evidence_ref": approvals.get("treasury_evidence_ref"),
+            "public_wording_evidence_ref": approvals.get("public_wording_evidence_ref"),
+        },
+    })
+    return items
+
+
+@router.get("/admin/glm-launch-evidence")
+async def admin_glm_launch_evidence(
+    _current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    replay_audit = await _glm_replay_idempotency_audit_payload(db)
+    signer_check = await TonGlmAutoTransferService.check_production_signer_health()
+    launch_checks = _run_glm_local_launch_checks()
+    ok = (
+        bool(launch_checks.get("ok"))
+        and replay_audit.get("status") == "ok"
+        and str(signer_check.get("status") or "").lower() in {"ok", "warning"}
+    )
+    return {
+        "schema": "glame_crypto_admin_launch_evidence_v1",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "ok": ok,
+        "approvals": _glm_production_approval_state(),
+        "policy_documents": _glm_policy_document_fingerprints(),
+        "launch_checks": launch_checks,
+        "signer_check": signer_check,
+        "replay_idempotency_audit": replay_audit,
+        "evidence_checklist": await _glm_launch_evidence_checklist(
+            db,
+            replay_audit=replay_audit,
+            launch_checks=launch_checks,
+        ),
+        "manual_evidence_required": [
+            "admin /admin/crypto readiness screenshot",
+            "bridge reconciliation CSV",
+            "treasury turnover CSV",
+            "mainnet points_to_glm tx hash and 1C movement evidence",
+            "mainnet glm_to_points tx hash and 1C movement evidence",
+            "GLM Store checkout/fulfillment or checkout/refund evidence",
+            "Tonkeeper asset-list PR review/merge/propagation evidence",
+        ],
+    }
 
 
 @router.post("/admin/glm-production-signer/check")
@@ -4167,6 +4792,10 @@ async def admin_glm_production_approvals(
         treasury_approved=payload.treasury_approved,
         comment=payload.comment,
         admin_user_id=current_user.id,
+        legal_evidence_ref=payload.legal_evidence_ref,
+        security_evidence_ref=payload.security_evidence_ref,
+        treasury_evidence_ref=payload.treasury_evidence_ref,
+        public_wording_evidence_ref=payload.public_wording_evidence_ref,
     )
     return {
         "status": "success",
@@ -4729,6 +5358,422 @@ def _telegram_chat_id_from_partner(user: User | None, member: ReferralProgramMem
     return None
 
 
+def _telegram_preferences_from_partner(member: ReferralProgramMember | None) -> dict[str, Any]:
+    member_meta = member.meta if member is not None and isinstance(member.meta, dict) else {}
+    telegram_meta = member_meta.get("telegram") if isinstance(member_meta.get("telegram"), dict) else {}
+    subscriptions = telegram_meta.get("subscriptions") if isinstance(telegram_meta.get("subscriptions"), dict) else {}
+    chat_id = _telegram_chat_id_from_partner(None, member)
+    return {
+        "chat_id": chat_id,
+        "notifications_enabled": bool(telegram_meta.get("notifications_enabled", bool(chat_id))),
+        "subscriptions": {
+            "partner_updates": bool(subscriptions.get("partner_updates", True)),
+            "referrals": bool(subscriptions.get("referrals", True)),
+            "crypto": bool(subscriptions.get("crypto", True)),
+            "marketing": bool(subscriptions.get("marketing", True)),
+        },
+        "linked_at": telegram_meta.get("linked_at"),
+        "source": telegram_meta.get("source"),
+    }
+
+
+def _telegram_partner_allows(member: ReferralProgramMember, category: str) -> bool:
+    preferences = _telegram_preferences_from_partner(member)
+    if not preferences.get("notifications_enabled"):
+        return False
+    subscriptions = preferences.get("subscriptions") if isinstance(preferences.get("subscriptions"), dict) else {}
+    return bool(subscriptions.get(category, True))
+
+
+async def _ensure_referral_feedback_schema(db: AsyncSession) -> None:
+    await db.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS referral_feedback_messages (
+                id UUID PRIMARY KEY,
+                ticket_code VARCHAR(32) NOT NULL,
+                source VARCHAR(32) NOT NULL DEFAULT 'partner',
+                direction VARCHAR(16) NOT NULL,
+                status VARCHAR(32) NOT NULL DEFAULT 'new',
+                user_id UUID NULL REFERENCES users(id),
+                member_id UUID NULL REFERENCES referral_program_members(id),
+                admin_chat_id VARCHAR(64) NULL,
+                telegram_message_id VARCHAR(64) NULL,
+                name VARCHAR(255) NULL,
+                email VARCHAR(255) NULL,
+                contact VARCHAR(255) NULL,
+                subject VARCHAR(255) NULL,
+                message TEXT NOT NULL,
+                meta JSONB NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                answered_at TIMESTAMPTZ NULL
+            )
+            """
+        )
+    )
+    await db.execute(text("CREATE INDEX IF NOT EXISTS ix_referral_feedback_ticket ON referral_feedback_messages(ticket_code)"))
+    await db.execute(text("CREATE INDEX IF NOT EXISTS ix_referral_feedback_user_created ON referral_feedback_messages(user_id, created_at DESC)"))
+    await db.execute(text("CREATE INDEX IF NOT EXISTS ix_referral_feedback_source_created ON referral_feedback_messages(source, created_at DESC)"))
+
+
+def _support_ticket_code() -> str:
+    return f"{SUPPORT_TICKET_PREFIX}-{secrets.token_hex(3).upper()}"
+
+
+def _support_row_payload(row: Any) -> dict[str, Any]:
+    item = row._mapping if hasattr(row, "_mapping") else row
+    created_at = item.get("created_at")
+    answered_at = item.get("answered_at")
+    return {
+        "id": str(item.get("id")),
+        "ticket_code": item.get("ticket_code"),
+        "source": item.get("source"),
+        "direction": item.get("direction"),
+        "status": item.get("status"),
+        "name": item.get("name"),
+        "email": item.get("email"),
+        "contact": item.get("contact"),
+        "subject": item.get("subject"),
+        "message": item.get("message"),
+        "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at or ""),
+        "answered_at": answered_at.isoformat() if hasattr(answered_at, "isoformat") else None,
+    }
+
+
+async def _send_support_email(db: AsyncSession, recipient: str, ticket_code: str, reply_text: str) -> bool:
+    recipient_norm = str(recipient or "").strip().lower()
+    if not recipient_norm or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", recipient_norm):
+        return False
+    settings, _source = await load_smtp_settings(db)
+    if not settings:
+        logger.warning("SMTP is not configured; support email was not sent to %s", recipient_norm)
+        return False
+    message = EmailMessage()
+    message["Subject"] = f"Ответ GLAME по обращению {ticket_code}"
+    message["From"] = formataddr((settings.from_name, settings.from_email))
+    message["To"] = recipient_norm
+    message.set_content(
+        f"Здравствуйте!\n\nОтвет по обращению {ticket_code}:\n\n{reply_text}\n\nGLAME Jewelry"
+    )
+    escaped_reply = html.escape(reply_text).replace("\n", "<br>")
+    message.add_alternative(
+        f"""<!doctype html>
+<html>
+  <body style="margin:0;background:#111;color:#f1f2f3;font-family:Arial,sans-serif;">
+    <div style="max-width:620px;margin:0 auto;padding:32px 20px;">
+      <div style="font-size:26px;letter-spacing:6px;margin-bottom:24px;">GLAME</div>
+      <div style="background:#fff;color:#111;padding:28px;">
+        <h2 style="margin:0 0 16px;">Ответ по обращению {html.escape(ticket_code)}</h2>
+        <p style="line-height:1.55;">{escaped_reply}</p>
+      </div>
+    </div>
+  </body>
+</html>""",
+        subtype="html",
+    )
+    await asyncio.to_thread(GiftCertificateEmailService(db)._send_message, settings, message)
+    return True
+
+
+async def _notify_admin_about_support_message(
+    *,
+    ticket_code: str,
+    source: str,
+    name: str | None,
+    phone: str | None,
+    email: str | None,
+    subject: str | None,
+    message: str,
+) -> dict[str, Any]:
+    lines = [
+        f"Код: {ticket_code}",
+        f"Источник: {source}",
+        f"Имя: {name or '—'}",
+        f"Телефон/контакт: {phone or '—'}",
+        f"Email: {email or '—'}",
+        f"Тема: {subject or '—'}",
+        "",
+        message,
+        "",
+        f"Ответить: /reply {ticket_code} текст ответа",
+        SUPPORT_ADMIN_URL,
+    ]
+    return await TelegramNotificationService().notify_admin(
+        title="GLAME partner support",
+        lines=lines,
+        severity="info",
+    )
+
+
+async def _handle_support_reply(db: AsyncSession, *, chat_id: str, text_value: str, message: dict[str, Any]) -> dict[str, Any]:
+    notification_service = TelegramNotificationService()
+    admin_chat_ids = {str(item) for item in notification_service.admin_chat_ids}
+    if admin_chat_ids and chat_id not in admin_chat_ids:
+        return {"status": "ignored", "reason": "not_admin_chat"}
+
+    parts = text_value.split(maxsplit=2)
+    if len(parts) < 3:
+        async with TelegramService() as telegram:
+            await telegram.send_message(chat_id=chat_id, text="Формат ответа: /reply GLSUP-ABC123 текст ответа")
+        return {"status": "missing_reply_text"}
+
+    ticket_code = parts[1].strip().upper()
+    reply_text = parts[2].strip()
+    if not ticket_code or not reply_text:
+        async with TelegramService() as telegram:
+            await telegram.send_message(chat_id=chat_id, text="Формат ответа: /reply GLSUP-ABC123 текст ответа")
+        return {"status": "missing_reply_text"}
+
+    await _ensure_referral_feedback_schema(db)
+    original = (
+        await db.execute(
+            text(
+                """
+                SELECT *
+                FROM referral_feedback_messages
+                WHERE ticket_code = :ticket_code AND direction = 'user_to_admin'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
+            ),
+            {"ticket_code": ticket_code},
+        )
+    ).first()
+    if original is None:
+        async with TelegramService() as telegram:
+            await telegram.send_message(chat_id=chat_id, text=f"Обращение {ticket_code} не найдено.")
+        return {"status": "not_found"}
+
+    item = original._mapping
+    message_id = str(message.get("message_id") or "").strip() or None
+    await db.execute(
+        text(
+            """
+            INSERT INTO referral_feedback_messages (
+                id, ticket_code, source, direction, status, user_id, member_id,
+                admin_chat_id, telegram_message_id, name, email, contact, subject,
+                message, meta, answered_at
+            )
+            VALUES (
+                :id, :ticket_code, :source, 'admin_to_user', 'sent', :user_id, :member_id,
+                :admin_chat_id, :telegram_message_id, :name, :email, :contact, :subject,
+                :message, CAST(:meta AS JSONB), now()
+            )
+            """
+        ),
+        {
+            "id": uuid4(),
+            "ticket_code": ticket_code,
+            "source": item.get("source"),
+            "user_id": item.get("user_id"),
+            "member_id": item.get("member_id"),
+            "admin_chat_id": chat_id,
+            "telegram_message_id": message_id,
+            "name": item.get("name"),
+            "email": item.get("email"),
+            "contact": item.get("contact"),
+            "subject": item.get("subject"),
+            "message": reply_text,
+            "meta": json.dumps({"reply_source": "telegram_admin"}),
+        },
+    )
+    await db.execute(
+        text(
+            """
+            UPDATE referral_feedback_messages
+            SET status = 'answered', answered_at = now()
+            WHERE ticket_code = :ticket_code AND direction = 'user_to_admin'
+            """
+        ),
+        {"ticket_code": ticket_code},
+    )
+    await db.commit()
+
+    delivered: list[str] = []
+    user_id = item.get("user_id")
+    member_id = item.get("member_id")
+    if user_id and member_id:
+        user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        member = (await db.execute(select(ReferralProgramMember).where(ReferralProgramMember.id == member_id))).scalar_one_or_none()
+        partner_chat_id = _telegram_chat_id_from_partner(user, member)
+        if partner_chat_id:
+            try:
+                async with TelegramService() as telegram:
+                    await telegram.send_message(
+                        chat_id=partner_chat_id,
+                        text=f"Ответ GLAME по обращению {ticket_code}\n\n{reply_text}\n\nИстория доступна в разделе «Связь» партнерского кабинета.",
+                    )
+                delivered.append("partner_telegram")
+            except Exception as error:  # noqa: BLE001
+                logger.warning("Failed to send support reply to partner telegram: %s", error)
+        if getattr(user, "email", None):
+            try:
+                if await _send_support_email(db, str(user.email), ticket_code, reply_text):
+                    delivered.append("partner_email")
+            except Exception as error:  # noqa: BLE001
+                logger.warning("Failed to send support reply email: %s", error)
+    elif item.get("email"):
+        try:
+            if await _send_support_email(db, str(item.get("email")), ticket_code, reply_text):
+                delivered.append("email")
+        except Exception as error:  # noqa: BLE001
+            logger.warning("Failed to send public support reply email: %s", error)
+
+    delivery_label = ", ".join(delivered) if delivered else "сохранено в истории, прямой канал не найден"
+    async with TelegramService() as telegram:
+        await telegram.send_message(chat_id=chat_id, text=f"Ответ по {ticket_code} принят: {delivery_label}.")
+    return {"status": "ok", "ticket_code": ticket_code, "delivered": delivered}
+
+
+@router.get("/me/support-messages")
+async def get_my_support_messages(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _ensure_referral_feedback_schema(db)
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT *
+                FROM referral_feedback_messages
+                WHERE user_id = :user_id
+                ORDER BY created_at DESC
+                LIMIT 80
+                """
+            ),
+            {"user_id": current_user.id},
+        )
+    ).fetchall()
+    return {"messages": [_support_row_payload(row) for row in reversed(rows)]}
+
+
+@router.post("/me/support-messages")
+async def create_my_support_message(
+    payload: PartnerSupportMessageRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    member = (
+        await db.execute(select(ReferralProgramMember).where(ReferralProgramMember.user_id == current_user.id))
+    ).scalar_one_or_none()
+    if member is None:
+        raise HTTPException(status_code=403, detail="Партнерская программа не подключена")
+
+    message_text = payload.message.strip()
+    subject = payload.subject.strip() if payload.subject else None
+    ticket_code = _support_ticket_code()
+    await _ensure_referral_feedback_schema(db)
+    row_id = uuid4()
+    await db.execute(
+        text(
+            """
+            INSERT INTO referral_feedback_messages (
+                id, ticket_code, source, direction, status, user_id, member_id,
+                name, email, contact, subject, message, meta
+            )
+            VALUES (
+                :id, :ticket_code, :source, 'user_to_admin', 'new', :user_id, :member_id,
+                :name, :email, :contact, :subject, :message, CAST(:meta AS JSONB)
+            )
+            """
+        ),
+        {
+            "id": row_id,
+            "ticket_code": ticket_code,
+            "source": "partner",
+            "user_id": current_user.id,
+            "member_id": member.id,
+            "name": current_user.full_name,
+            "email": current_user.email,
+            "contact": current_user.phone,
+            "subject": subject,
+            "message": message_text,
+            "meta": json.dumps({"category": payload.category or "partner"}),
+        },
+    )
+    await db.commit()
+    notify_result = await _notify_admin_about_support_message(
+        ticket_code=ticket_code,
+        source="partner",
+        name=current_user.full_name,
+        phone=current_user.phone,
+        email=current_user.email,
+        subject=subject,
+        message=message_text,
+    )
+    return {
+        "status": "ok",
+        "ticket_code": ticket_code,
+        "message": {
+            "id": str(row_id),
+            "ticket_code": ticket_code,
+            "source": "partner",
+            "direction": "user_to_admin",
+            "status": "new",
+            "name": current_user.full_name,
+            "email": current_user.email,
+            "contact": current_user.phone,
+            "subject": subject,
+            "message": message_text,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "answered_at": None,
+        },
+        "telegram": notify_result,
+    }
+
+
+@router.post("/public/support-messages")
+async def create_public_support_message(
+    payload: PublicSupportMessageRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    email_norm = payload.email.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email_norm):
+        raise HTTPException(status_code=400, detail="Некорректный email")
+    message_text = payload.message.strip()
+    subject = payload.subject.strip() if payload.subject else "CryptoGLAME"
+    ticket_code = _support_ticket_code()
+    await _ensure_referral_feedback_schema(db)
+    row_id = uuid4()
+    await db.execute(
+        text(
+            """
+            INSERT INTO referral_feedback_messages (
+                id, ticket_code, source, direction, status,
+                name, email, contact, subject, message, meta
+            )
+            VALUES (
+                :id, :ticket_code, :source, 'user_to_admin', 'new',
+                :name, :email, :contact, :subject, :message, CAST(:meta AS JSONB)
+            )
+            """
+        ),
+        {
+            "id": row_id,
+            "ticket_code": ticket_code,
+            "source": "glm_public",
+            "name": payload.name.strip() if payload.name else None,
+            "email": email_norm,
+            "contact": payload.contact.strip() if payload.contact else None,
+            "subject": subject,
+            "message": message_text,
+            "meta": json.dumps({"page": payload.page or "glm"}),
+        },
+    )
+    await db.commit()
+    notify_result = await _notify_admin_about_support_message(
+        ticket_code=ticket_code,
+        source="glm_public",
+        name=payload.name,
+        phone=payload.contact,
+        email=email_norm,
+        subject=subject,
+        message=message_text,
+    )
+    return {"status": "ok", "ticket_code": ticket_code, "telegram": notify_result}
+
+
 @router.post("/admin/telegram-notifications/broadcast")
 async def admin_send_telegram_notification_broadcast(
     payload: AdminTelegramBroadcastRequest,
@@ -4753,6 +5798,8 @@ async def admin_send_telegram_notification_broadcast(
 
     recipients_by_chat: dict[str, dict[str, Any]] = {}
     for member, user in rows:
+        if not _telegram_partner_allows(member, "marketing"):
+            continue
         chat_id = _telegram_chat_id_from_partner(user, member)
         if not chat_id:
             continue
@@ -4840,7 +5887,8 @@ async def admin_telegram_bridge_alerts_status(
         "next_steps": [
             "Scheduler sends admin Telegram alerts for stale bridge pending, TON waiting and 1C issues.",
             "Cooldown prevents repeated messages for unchanged alerts.",
-            "TON treasury balance reconciliation and low-balance alert is the next monitoring layer.",
+            "Critical alerts go out immediately; warning/non-critical alerts can be grouped into digest mode.",
+            "TON treasury balance reconciliation and low-balance alerts are included in the same escalation flow.",
         ],
     }
 
@@ -5179,7 +6227,7 @@ async def admin_settle_glm_to_points_bridge_with_ton_deposit(
 
 @router.get("/admin/glm-bridge/operations")
 async def admin_list_glm_bridge_operations(
-    direction: str | None = Query(default=None, pattern="^(points_to_glm|glm_to_points)$"),
+    direction: str | None = Query(default=None, pattern="^(points_to_glm|glm_to_points|buy_glm_with_ton|sell_glm_for_ton)$"),
     status_filter: str | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=1000),
     _current_user: User = Depends(require_admin()),
@@ -5208,6 +6256,358 @@ async def admin_list_glm_bridge_operations(
         "limit": limit,
         "operations": [_glm_bridge_operation_payload(operation, member, user) for operation, member, user in rows],
     }
+
+
+async def _glm_operations_attention_payload(db: AsyncSession, *, limit: int = 50) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    stale_minutes = int(os.getenv("TON_GLM_OPERATIONS_ATTENTION_STALE_MINUTES", "60") or 60)
+    stale_before = now - timedelta(minutes=stale_minutes)
+    bridge_ton_waiting_statuses = {
+        "sent",
+        "sent_waiting_settlement",
+        "wallet_request_prepared",
+        "waiting_for_deposit",
+        "not_found",
+    }
+    bridge_onec_issue_statuses = {
+        "failed",
+        "missing_discount_card",
+        "ready_for_1c",
+        "ready_for_1c_spend",
+        "posted_without_balance_change",
+        "created_without_ref_key",
+    }
+    closed_statuses = {"processed", "canceled", "cancelled", "superseded", "failed_reviewed", "manual_reviewed"}
+
+    def normalize_dt(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+
+    def age_minutes(value: datetime | None) -> int:
+        normalized = normalize_dt(value)
+        if normalized is None:
+            return 0
+        return max(0, int((now - normalized).total_seconds() // 60))
+
+    def append_item(items: list[dict[str, Any]], item: dict[str, Any]) -> None:
+        item["created_at"] = normalize_dt(item.get("created_at")).isoformat() if item.get("created_at") else None
+        item["updated_at"] = normalize_dt(item.get("updated_at")).isoformat() if item.get("updated_at") else None
+        item["checked_at"] = now.isoformat()
+        items.append(item)
+
+    def operator_events_from_meta(meta: Any, keys: list[str]) -> list[dict[str, Any]]:
+        if not isinstance(meta, dict):
+            return []
+        events: list[dict[str, Any]] = []
+        for key in keys:
+            history = meta.get(key)
+            if not isinstance(history, list):
+                continue
+            for raw_event in history:
+                if not isinstance(raw_event, dict):
+                    continue
+                event = {
+                    "source": key,
+                    "action": raw_event.get("action"),
+                    "at": raw_event.get("at"),
+                    "admin_user_id": raw_event.get("admin_user_id"),
+                    "comment": raw_event.get("comment"),
+                    "onec_status": raw_event.get("onec_sync_status") or raw_event.get("onec_spend_sync_status"),
+                    "onec_document_id": raw_event.get("onec_document_id") or raw_event.get("onec_spend_document_id"),
+                }
+                events.append(event)
+        events.sort(key=lambda event: str(event.get("at") or ""), reverse=True)
+        return events[:5]
+
+    def latest_operator_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
+        return events[0] if events else None
+
+    items: list[dict[str, Any]] = []
+    bridge_rows = (
+        await db.execute(
+            select(GlameTokenBridgeOperation, GlameTokenTransaction, ReferralProgramMember, User)
+            .join(GlameTokenTransaction, GlameTokenTransaction.id == GlameTokenBridgeOperation.transaction_id)
+            .outerjoin(ReferralProgramMember, ReferralProgramMember.id == GlameTokenBridgeOperation.referral_member_id)
+            .outerjoin(User, User.id == GlameTokenBridgeOperation.user_id)
+            .where(GlameTokenBridgeOperation.token_code == "GLM")
+            .order_by(desc(GlameTokenBridgeOperation.updated_at), desc(GlameTokenBridgeOperation.created_at))
+            .limit(500)
+        )
+    ).all()
+    for operation, tx, _member, user in bridge_rows:
+        requested_at = normalize_dt(operation.requested_at or operation.created_at)
+        updated_at = normalize_dt(operation.updated_at or operation.created_at)
+        op_status = str(operation.status or "")
+        ton_status = str(operation.ton_status or "")
+        onec_status = str(operation.onec_status or "")
+        is_open = op_status not in closed_statuses
+        is_stale = op_status == "pending" and requested_at is not None and requested_at < stale_before
+        is_ton_waiting = op_status == "pending" and ton_status in bridge_ton_waiting_statuses
+        is_onec_issue = is_open and onec_status in bridge_onec_issue_statuses
+        if not (is_stale or is_ton_waiting or is_onec_issue):
+            continue
+
+        kind = "bridge_stale_pending"
+        severity = "warning"
+        title = "Зависшая bridge-операция"
+        action_code = "mark_reviewed"
+        action_hint = "Проверьте историю операции, TON tx и 1C документ; если все корректно, отметьте как проверенную."
+        if is_onec_issue:
+            kind = "bridge_onec_issue"
+            severity = "critical"
+            title = "Bridge требует действия в 1C"
+            action_code = "retry_onec_spend" if operation.direction == "points_to_glm" else "retry_onec_bridge"
+            action_hint = "Повторите 1C sync/repair. Для ручного документа укажите ID документа 1C в поле repair."
+        elif is_ton_waiting:
+            kind = "bridge_ton_waiting"
+            severity = "critical" if age_minutes(requested_at) >= stale_minutes else "warning"
+            title = "Bridge ждет TON-подтверждение"
+            action_code = "settle_ton_transfer" if operation.direction == "points_to_glm" else "settle_glm_deposit"
+            action_hint = (
+                "Проверьте TON settlement. Если tx hash уже есть, можно повторить проверку TON."
+                if operation.ton_tx_hash
+                else "Дождитесь TON tx или внесите tx hash вручную в соответствующей очереди."
+            )
+        tx_meta = tx.meta if isinstance(tx.meta, dict) else {}
+        operator_events = operator_events_from_meta(
+            tx_meta,
+            ["onec_spend_repair_history", "repair_history", "onec_cancel_spend_repair_history"],
+        )
+        append_item(
+            items,
+            {
+                "id": str(operation.id),
+                "operation_id": str(operation.id),
+                "transaction_id": str(operation.transaction_id),
+                "account_id": str(operation.account_id),
+                "member_id": str(operation.referral_member_id) if operation.referral_member_id else None,
+                "user_id": str(operation.user_id),
+                "kind": kind,
+                "severity": severity,
+                "title": title,
+                "partner_name": getattr(user, "full_name", None) or "Партнер GLAME",
+                "partner_phone": getattr(user, "phone", None),
+                "direction": operation.direction,
+                "status": operation.status,
+                "glm_amount": int(operation.glm_amount or tx.amount or 0),
+                "points_amount": int(operation.points_amount or 0),
+                "ton_status": operation.ton_status,
+                "ton_tx_hash": operation.ton_tx_hash,
+                "onec_status": operation.onec_status,
+                "onec_document_id": operation.onec_document_id,
+                "message": operation.onec_error or action_hint,
+                "action_code": action_code,
+                "action_hint": action_hint,
+                "operator_events": operator_events,
+                "latest_operator_event": latest_operator_event(operator_events),
+                "age_minutes": age_minutes(requested_at),
+                "created_at": requested_at,
+                "updated_at": updated_at,
+            },
+        )
+
+    refund_rows = (
+        await db.execute(
+            select(GlameTokenTransaction, ReferralProgramMember, User)
+            .outerjoin(ReferralProgramMember, ReferralProgramMember.id == GlameTokenTransaction.referral_member_id)
+            .outerjoin(User, User.id == GlameTokenTransaction.user_id)
+            .where(
+                GlameTokenTransaction.token_code == "GLM",
+                GlameTokenTransaction.transaction_type == "redemption",
+                GlameTokenTransaction.status.in_(("canceled", "cancelled", "failed", "refund_pending", "refund_required")),
+            )
+            .order_by(desc(GlameTokenTransaction.created_at))
+            .limit(200)
+        )
+    ).all()
+    for tx, _member, user in refund_rows:
+        meta = tx.meta if isinstance(tx.meta, dict) else {}
+        refund_required = bool(meta.get("ton_refund_required"))
+        refund_status = str(meta.get("ton_refund_status") or "")
+        if not refund_required and refund_status not in {"required", "submitted", "pending", "sent"}:
+            continue
+        created_at = normalize_dt(tx.created_at)
+        has_refund_tx = bool(_normalize_ton_tx_hash(meta.get("ton_refund_tx_hash")))
+        refund_events: list[dict[str, Any]] = []
+        if meta.get("ton_refund_submitted_at") or meta.get("ton_refund_processed_by") or meta.get("ton_refund_comment"):
+            refund_events.append(
+                {
+                    "source": "ton_refund",
+                    "action": "record_ton_refund",
+                    "at": meta.get("ton_refund_submitted_at"),
+                    "admin_user_id": meta.get("ton_refund_processed_by"),
+                    "comment": meta.get("ton_refund_comment"),
+                    "ton_status": meta.get("ton_refund_status"),
+                    "ton_tx_hash": meta.get("ton_refund_tx_hash"),
+                }
+            )
+        append_item(
+            items,
+            {
+                "id": str(tx.id),
+                "operation_id": None,
+                "transaction_id": str(tx.id),
+                "account_id": str(tx.account_id),
+                "member_id": str(tx.referral_member_id) if tx.referral_member_id else None,
+                "user_id": str(tx.user_id),
+                "kind": "refund_attention",
+                "severity": "critical" if not has_refund_tx else "warning",
+                "title": "GLM Store refund требует проверки",
+                "partner_name": getattr(user, "full_name", None) or "Партнер GLAME",
+                "partner_phone": getattr(user, "phone", None),
+                "direction": "refund",
+                "status": tx.status,
+                "glm_amount": abs(int(tx.amount or 0)),
+                "points_amount": int(meta.get("refunded_points") or 0),
+                "ton_status": refund_status or None,
+                "ton_tx_hash": meta.get("ton_refund_tx_hash"),
+                "onec_status": meta.get("onec_spend_sync_status"),
+                "onec_document_id": meta.get("onec_spend_document_id"),
+                "message": meta.get("ton_refund_error") or "Проверьте refund: TON возврат, 1C/points rollback и статус заказа.",
+                "action_code": "settle_refund" if has_refund_tx else "refund_review",
+                "action_hint": (
+                    "Проверьте уже записанный TON refund tx hash и закройте обязательство."
+                    if has_refund_tx
+                    else "Подготовьте TON refund из treasury wallet и подтвердите отправку в кошельке."
+                ),
+                "operator_events": refund_events,
+                "latest_operator_event": latest_operator_event(refund_events),
+                "age_minutes": age_minutes(created_at),
+                "created_at": created_at,
+                "updated_at": created_at,
+            },
+        )
+
+    severity_rank = {"critical": 0, "warning": 1, "info": 2}
+    items.sort(key=lambda item: (severity_rank.get(str(item.get("severity")), 9), -int(item.get("age_minutes") or 0)))
+    limited_items = items[:limit]
+    by_kind: dict[str, int] = {}
+    by_severity: dict[str, int] = {}
+    for item in items:
+        by_kind[str(item.get("kind") or "unknown")] = by_kind.get(str(item.get("kind") or "unknown"), 0) + 1
+        by_severity[str(item.get("severity") or "info")] = by_severity.get(str(item.get("severity") or "info"), 0) + 1
+    return {
+        "generated_at": now.isoformat(),
+        "stale_minutes": stale_minutes,
+        "count": len(items),
+        "limit": limit,
+        "by_kind": by_kind,
+        "by_severity": by_severity,
+        "items": limited_items,
+    }
+
+
+@router.get("/admin/glm-operations-attention")
+async def admin_glm_operations_attention(
+    limit: int = Query(default=50, ge=1, le=200),
+    _current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _glm_operations_attention_payload(db, limit=limit)
+
+
+@router.get("/admin/glm-operations-attention/export.csv")
+async def admin_glm_operations_attention_export_csv(
+    limit: int = Query(default=500, ge=1, le=1000),
+    _current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    payload = await _glm_operations_attention_payload(db, limit=limit)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["GLAME operations attention export"])
+    writer.writerow(["generated_at", payload.get("generated_at")])
+    writer.writerow(["stale_minutes", payload.get("stale_minutes")])
+    writer.writerow(["total_count", payload.get("count")])
+    writer.writerow(["export_limit", payload.get("limit")])
+    writer.writerow([])
+    writer.writerow(["severity", "count"])
+    for severity, count in sorted((payload.get("by_severity") or {}).items()):
+        writer.writerow([severity, count])
+    writer.writerow([])
+    writer.writerow(["kind", "count"])
+    for kind, count in sorted((payload.get("by_kind") or {}).items()):
+        writer.writerow([kind, count])
+    writer.writerow([])
+    writer.writerow([
+        "severity",
+        "kind",
+        "title",
+        "partner_name",
+        "partner_phone",
+        "direction",
+        "status",
+        "glm_amount",
+        "points_amount",
+        "ton_status",
+        "ton_tx_hash",
+        "onec_status",
+        "onec_document_id",
+        "age_minutes",
+        "action_code",
+        "action_hint",
+        "message",
+        "latest_operator_action",
+        "latest_operator_at",
+        "latest_operator_admin_user_id",
+        "latest_operator_comment",
+        "operator_events_json",
+        "operation_id",
+        "transaction_id",
+        "account_id",
+        "member_id",
+        "user_id",
+        "created_at",
+        "updated_at",
+        "checked_at",
+    ])
+    for item in payload.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        latest_event = item.get("latest_operator_event") if isinstance(item.get("latest_operator_event"), dict) else {}
+        writer.writerow([
+            item.get("severity") or "",
+            item.get("kind") or "",
+            item.get("title") or "",
+            item.get("partner_name") or "",
+            item.get("partner_phone") or "",
+            item.get("direction") or "",
+            item.get("status") or "",
+            item.get("glm_amount") if item.get("glm_amount") is not None else "",
+            item.get("points_amount") if item.get("points_amount") is not None else "",
+            item.get("ton_status") or "",
+            item.get("ton_tx_hash") or "",
+            item.get("onec_status") or "",
+            item.get("onec_document_id") or "",
+            item.get("age_minutes") if item.get("age_minutes") is not None else "",
+            item.get("action_code") or "",
+            item.get("action_hint") or "",
+            item.get("message") or "",
+            latest_event.get("action") or "",
+            latest_event.get("at") or "",
+            latest_event.get("admin_user_id") or "",
+            latest_event.get("comment") or "",
+            json.dumps(item.get("operator_events") or [], ensure_ascii=False),
+            item.get("operation_id") or "",
+            item.get("transaction_id") or "",
+            item.get("account_id") or "",
+            item.get("member_id") or "",
+            item.get("user_id") or "",
+            item.get("created_at") or "",
+            item.get("updated_at") or "",
+            item.get("checked_at") or "",
+        ])
+    filename_date = datetime.now(timezone.utc).strftime("%Y%m%d")
+    filename = f"glm-operations-attention-{filename_date}.csv"
+    content = output.getvalue().encode("utf-8-sig")
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.patch("/admin/glm-bridge/operations/{operation_id}/claim")
@@ -5382,6 +6782,55 @@ async def admin_repair_glm_bridge_by_operation(
     }
 
 
+@router.patch("/admin/glm-exchange-desk/{exchange_id}")
+async def admin_update_glm_exchange_desk(
+    exchange_id: UUID,
+    payload: AdminGlmExchangeDeskUpdateRequest,
+    current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    exchange = (
+        await db.execute(
+            select(GlameTokenTransaction)
+            .where(
+                GlameTokenTransaction.id == exchange_id,
+                GlameTokenTransaction.transaction_type == "bridge",
+                GlameTokenTransaction.reason == "sell_glm_for_ton",
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if exchange is None:
+        raise HTTPException(status_code=404, detail="GLM -> GRAM exchange desk request не найдена")
+    if exchange.status != "pending":
+        raise HTTPException(status_code=400, detail="Можно закрыть только pending exchange desk request")
+    if payload.status == "processed" and not (payload.payout_tx_hash or "").strip():
+        raise HTTPException(status_code=400, detail="Для processed нужен GRAM payout tx hash")
+
+    meta = exchange.meta if isinstance(exchange.meta, dict) else {}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    exchange.status = payload.status
+    exchange.meta = {
+        **meta,
+        "gram_payout_status": "sent" if payload.status == "processed" else payload.status,
+        "gram_payout_tx_hash": (payload.payout_tx_hash or "").strip() or None,
+        "tx_hash": (payload.payout_tx_hash or "").strip() or meta.get("tx_hash"),
+        "admin_comment": (payload.comment or "").strip() or meta.get("admin_comment"),
+        "admin_user_id": str(current_user.id),
+        "processed_at": now_iso if payload.status == "processed" else meta.get("processed_at"),
+        "closed_at": now_iso,
+    }
+    flag_modified(exchange, "meta")
+    await db.flush()
+    operation = await GlameTokenService(db).sync_bridge_operation(exchange)
+    await db.commit()
+    return {
+        "status": "success",
+        "exchange": _glm_transaction_payload(exchange, operation=operation),
+        "operation": _glm_bridge_operation_payload(operation) if operation else None,
+    }
+
+
 @router.post("/admin/glm-bridge/operations/{operation_id}/points-to-glm-spend-repair")
 async def admin_repair_points_to_glm_spend_by_operation(
     operation_id: UUID,
@@ -5520,6 +6969,7 @@ async def admin_glm_loyalty_reconciliation(
     ).all()
     items: list[dict[str, Any]] = []
     checked_at = datetime.now(timezone.utc).isoformat()
+    lots_alerts_enabled = bool(GlmTelegramAlertService.config_payload().get("loyalty_lots_alerts_enabled"))
     async with OneCCustomersService() as onec:
         for member, user in rows:
             platform_points = int(getattr(user, "loyalty_points", 0) or 0)
@@ -5535,15 +6985,18 @@ async def admin_glm_loyalty_reconciliation(
                     onec_working_balance = int(payload.get("balance") or 0)
             except Exception as error:
                 errors.append(f"working_balance: {str(error)[:500]}")
-            try:
-                lots_payload = await onec.fetch_loyalty_lots_balance(
-                    getattr(user, "customer_id_1c", None),
-                    getattr(user, "discount_card_id_1c", None),
-                )
-                if lots_payload and lots_payload.get("balance") is not None:
-                    onec_lots_balance = int(lots_payload.get("balance") or 0)
-            except Exception as error:
-                errors.append(f"lots_balance: {str(error)[:500]}")
+            if lots_alerts_enabled:
+                try:
+                    lots_payload = await onec.fetch_loyalty_lots_balance(
+                        getattr(user, "customer_id_1c", None),
+                        getattr(user, "discount_card_id_1c", None),
+                    )
+                    if lots_payload and lots_payload.get("balance") is not None:
+                        onec_lots_balance = int(lots_payload.get("balance") or 0)
+                except Exception as error:
+                    errors.append(f"lots_balance: {str(error)[:500]}")
+            elif onec_working_balance is not None:
+                onec_lots_balance = onec_working_balance
 
             platform_vs_working = (
                 None if onec_working_balance is None else platform_points - onec_working_balance
@@ -5903,44 +7356,11 @@ async def admin_publish_glm_audit_hash(
     db: AsyncSession = Depends(get_db),
 ):
     target_date = payload.audit_date or datetime.now(timezone.utc).date()
-    row = (
-        await db.execute(
-            select(GlameTokenDailyAuditHash).where(
-                GlameTokenDailyAuditHash.token_code == "GLM",
-                GlameTokenDailyAuditHash.audit_date == target_date,
-            )
-        )
-    ).scalar_one_or_none()
-    if row is None:
-        row = await GlameTokenService(db).generate_daily_audit_hash(
-            audit_date=target_date,
-            admin_user_id=current_user.id,
-        )
-    now = datetime.now(timezone.utc)
-    row.public_status = "published"
-    row.public_reference = f"{GLM_AUDIT_JOURNAL_PUBLIC_PATH}/{target_date.isoformat()}.json"
-    row.updated_at = now
-    row.payload = {
-        **(row.payload or {}),
-        "published_at": now.isoformat(),
-        "published_by": str(current_user.id),
-        "public_reference": row.public_reference,
-        "journal_url": f"{GLM_AUDIT_JOURNAL_PUBLIC_PATH}/index.json",
-        "jsonl_url": f"{GLM_AUDIT_JOURNAL_PUBLIC_PATH}/glame-audit-hashes.jsonl",
-    }
-    flag_modified(row, "payload")
-    await db.flush()
-    published_rows = (
-        await db.execute(
-            select(GlameTokenDailyAuditHash)
-            .where(
-                GlameTokenDailyAuditHash.token_code == "GLM",
-                GlameTokenDailyAuditHash.public_status == "published",
-            )
-            .order_by(GlameTokenDailyAuditHash.audit_date.asc())
-        )
-    ).scalars().all()
-    _write_glm_audit_public_journal(list(published_rows))
+    row = await GlameTokenService(db).publish_daily_audit_hash(
+        audit_date=target_date,
+        admin_user_id=current_user.id,
+        publisher="admin",
+    )
     await db.commit()
     return {
         "status": "success",
@@ -6129,11 +7549,13 @@ async def register_referral_partner(payload: ReferralRegisterRequest, db: AsyncS
         last_name = last_name or (name_parts[0] if len(name_parts) > 0 else "")
         first_name = first_name or (name_parts[1] if len(name_parts) > 1 else "")
         middle_name = middle_name or (" ".join(name_parts[2:]) if len(name_parts) > 2 else "")
-    email_norm = str(payload.email).strip().lower() if payload.email else None
+    email_norm = str(payload.email).strip().lower()
     if not re.fullmatch(r"7\d{10}", phone_norm or ""):
         raise HTTPException(status_code=400, detail="Некорректный телефон")
     if not last_name or not first_name:
         raise HTTPException(status_code=400, detail="Укажите фамилию и имя")
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email_norm):
+        raise HTTPException(status_code=400, detail="Некорректный email")
     if not payload.offer_accepted:
         raise HTTPException(status_code=400, detail="Для регистрации нужно ознакомиться с офертой")
 
@@ -6456,6 +7878,13 @@ async def bind_my_telegram_notifications(
         **telegram_meta,
         "chat_id": chat_id,
         "notifications_enabled": True,
+        "subscriptions": {
+            **(telegram_meta.get("subscriptions") if isinstance(telegram_meta.get("subscriptions"), dict) else {}),
+            "partner_updates": True,
+            "referrals": True,
+            "crypto": True,
+            "marketing": True,
+        },
         "linked_at": datetime.utcnow().isoformat(),
         "source": "partner_profile",
     }
@@ -6498,6 +7927,8 @@ async def telegram_referral_webhook(
     text = str(message.get("text") or "").strip()
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
     chat_id = str(chat.get("id") or "").strip()
+    if text.startswith("/reply") and chat_id:
+        return await _handle_support_reply(db, chat_id=chat_id, text_value=text, message=message)
     if not text.startswith("/start") or not chat_id:
         return {"status": "ignored"}
     parts = text.split(maxsplit=1)
@@ -6552,6 +7983,13 @@ async def telegram_referral_webhook(
         **telegram_meta,
         "chat_id": chat_id,
         "notifications_enabled": True,
+        "subscriptions": {
+            **(telegram_meta.get("subscriptions") if isinstance(telegram_meta.get("subscriptions"), dict) else {}),
+            "partner_updates": True,
+            "referrals": True,
+            "crypto": True,
+            "marketing": True,
+        },
         "linked_at": datetime.utcnow().isoformat(),
         "source": "telegram_webhook_start_token",
         "telegram_user": message.get("from") if isinstance(message.get("from"), dict) else None,
@@ -6567,6 +8005,57 @@ async def telegram_referral_webhook(
         lines=["Связь подтверждена через партнерский сайт."],
     )
     return {"status": "success", "member_id": str(member.id)}
+
+
+@router.patch("/me/telegram-notifications/preferences")
+async def update_my_telegram_notification_preferences(
+    payload: PartnerTelegramPreferencesRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ReferralService(db)
+    member = await service.get_member_by_user_id(current_user.id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="Partner profile not found")
+    meta = dict(member.meta or {})
+    telegram_meta = meta.get("telegram") if isinstance(meta.get("telegram"), dict) else {}
+    subscriptions = telegram_meta.get("subscriptions") if isinstance(telegram_meta.get("subscriptions"), dict) else {}
+    updated_subscriptions = {
+        "partner_updates": bool(subscriptions.get("partner_updates", True)),
+        "referrals": bool(subscriptions.get("referrals", True)),
+        "crypto": bool(subscriptions.get("crypto", True)),
+        "marketing": bool(subscriptions.get("marketing", True)),
+    }
+    for key in ("partner_updates", "referrals", "crypto", "marketing"):
+        value = getattr(payload, key)
+        if value is not None:
+            updated_subscriptions[key] = bool(value)
+    notifications_enabled = (
+        bool(payload.notifications_enabled)
+        if payload.notifications_enabled is not None
+        else bool(telegram_meta.get("notifications_enabled", meta.get("telegram_chat_id")))
+    )
+    meta["telegram"] = {
+        **telegram_meta,
+        "chat_id": telegram_meta.get("chat_id") or meta.get("telegram_chat_id"),
+        "notifications_enabled": notifications_enabled,
+        "subscriptions": updated_subscriptions,
+        "preferences_updated_at": datetime.utcnow().isoformat(),
+    }
+    member.meta = meta
+    flag_modified(member, "meta")
+    await db.commit()
+    await db.refresh(member)
+    preferences = _telegram_preferences_from_partner(member)
+    return {
+        "status": "success",
+        "telegram": preferences,
+        "profile": {
+            "telegram_chat_id": preferences.get("chat_id"),
+            "telegram_notifications_enabled": preferences.get("notifications_enabled"),
+            "telegram_notification_subscriptions": preferences.get("subscriptions"),
+        },
+    }
 
 
 @router.post("/me/crypto-wallet/ton-connect", response_model=CryptoWalletBindResponse)
@@ -6595,6 +8084,7 @@ async def verify_crypto_wallet_ton_connect(
     verified_proof = _verify_ton_proof(
         address=address,
         public_key=payload.public_key,
+        wallet_state_init=payload.wallet_state_init,
         proof=payload.proof,
         expected_payload=str(challenge.get("payload")),
     )
@@ -6614,6 +8104,9 @@ async def verify_crypto_wallet_ton_connect(
         "wallet_app": payload.wallet_app,
         "public_key": payload.public_key.lower(),
         "wallet_state_init": payload.wallet_state_init,
+        "wallet_state_init_verified": True,
+        "wallet_state_init_hash": verified_proof["wallet_state_init_hash"],
+        "wallet_state_init_public_key": verified_proof["wallet_state_init_public_key"],
         "proof_timestamp": verified_proof["timestamp"],
         "next_step": "glm_claim",
     }
@@ -6649,6 +8142,7 @@ async def verify_crypto_wallet_ton_connect(
                 f"Address: {address[:12]}...{address[-8:]}",
             ],
             severity="success",
+            partner_category="crypto",
         )
     except Exception as error:  # noqa: BLE001
         logger.warning("Failed to send Telegram TON verified notification: %s", error)
@@ -7138,6 +8632,208 @@ async def request_buy_loyalty_points(
     }
 
 
+@router.post("/me/glm-primary-sale/buy")
+async def request_buy_glm_with_ton(
+    payload: BuyGlmWithTonRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ReferralService(db)
+    member = await service.get_member_by_user_id(current_user.id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="Partner profile not found")
+    wallet = _crypto_wallet_meta(member) or {}
+    if wallet.get("status") != "verified" or not wallet.get("address"):
+        raise HTTPException(status_code=400, detail="Сначала подтвердите TON-кошелек через TON Connect")
+    if not wallet.get("glm_claim_enabled"):
+        raise HTTPException(status_code=403, detail="Покупка GLM в TON еще не разрешена для вашего кошелька")
+
+    token_service = GlameTokenService(db)
+    try:
+        tx = await token_service.request_buy_glm_with_ton(
+            member=member,
+            amount_glm=payload.amount_glm,
+            wallet=wallet,
+            note=payload.note,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    await db.commit()
+    token = await token_service.summary_for_member(member.id)
+    return {
+        "status": "success",
+        "sale": _glm_transaction_payload(tx),
+        "token": {
+            **token,
+            "claim_enabled": bool(wallet.get("glm_claim_enabled")),
+            "claim_allowed": bool(wallet.get("status") == "verified" and wallet.get("glm_claim_enabled")),
+            "claim_wallet_address": wallet.get("address"),
+        },
+    }
+
+
+@router.post("/me/glm-primary-sale/{sale_id}/ton-transaction")
+async def prepare_buy_glm_with_ton_transaction(
+    sale_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ReferralService(db)
+    member = await service.get_member_by_user_id(current_user.id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="Partner profile not found")
+    wallet = _crypto_wallet_meta(member) or {}
+    if wallet.get("status") != "verified" or not wallet.get("address"):
+        raise HTTPException(status_code=400, detail="Сначала подтвердите TON-кошелек через TON Connect")
+    sale = (
+        await db.execute(
+            select(GlameTokenTransaction).where(
+                GlameTokenTransaction.id == sale_id,
+                GlameTokenTransaction.referral_member_id == member.id,
+                GlameTokenTransaction.transaction_type == "claim",
+                GlameTokenTransaction.reason == "buy_glm_with_ton",
+                GlameTokenTransaction.status == "pending_payment",
+            )
+        )
+    ).scalar_one_or_none()
+    if sale is None:
+        raise HTTPException(status_code=404, detail="Pending покупка GLM за TON не найдена")
+    try:
+        payload = await GlameTokenService(db).prepare_buy_glm_with_ton_transaction(
+            sale=sale,
+            sender_wallet_address=wallet.get("address"),
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    await db.commit()
+    return {"status": "success", **payload}
+
+
+@router.post("/me/glm-exchange-desk/sell-for-ton")
+async def request_sell_glm_for_ton(
+    payload: SellGlmForTonRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ReferralService(db)
+    member = await service.get_member_by_user_id(current_user.id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="Partner profile not found")
+    wallet = _crypto_wallet_meta(member) or {}
+    if wallet.get("status") != "verified" or not wallet.get("address"):
+        raise HTTPException(status_code=400, detail="Сначала подтвердите TON-кошелек через TON Connect")
+    if not wallet.get("glm_claim_enabled"):
+        raise HTTPException(status_code=403, detail="Обмен GLM в GRAM еще не разрешен для вашего кошелька")
+
+    token_service = GlameTokenService(db)
+    try:
+        tx = await token_service.request_sell_glm_for_ton(
+            member=member,
+            amount_glm=payload.amount_glm,
+            wallet=wallet,
+            note=payload.note,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    await db.commit()
+    token = await token_service.summary_for_member(member.id)
+    return {
+        "status": "success",
+        "exchange": _glm_transaction_payload(tx),
+        "token": {
+            **token,
+            "claim_enabled": bool(wallet.get("glm_claim_enabled")),
+            "claim_allowed": bool(wallet.get("status") == "verified" and wallet.get("glm_claim_enabled")),
+            "claim_wallet_address": wallet.get("address"),
+        },
+    }
+
+
+@router.post("/me/glm-exchange-desk/sell-for-ton/{exchange_id}/ton-transaction")
+async def prepare_sell_glm_for_ton_transaction(
+    exchange_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ReferralService(db)
+    member = await service.get_member_by_user_id(current_user.id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="Partner profile not found")
+    wallet = _crypto_wallet_meta(member) or {}
+    if wallet.get("status") != "verified" or not wallet.get("address"):
+        raise HTTPException(status_code=400, detail="Сначала подтвердите TON-кошелек через TON Connect")
+    exchange = (
+        await db.execute(
+            select(GlameTokenTransaction).where(
+                GlameTokenTransaction.id == exchange_id,
+                GlameTokenTransaction.referral_member_id == member.id,
+                GlameTokenTransaction.transaction_type == "bridge",
+                GlameTokenTransaction.reason == "sell_glm_for_ton",
+                GlameTokenTransaction.status == "pending",
+            )
+        )
+    ).scalar_one_or_none()
+    if exchange is None:
+        raise HTTPException(status_code=404, detail="Pending заявка GLM -> GRAM не найдена")
+    try:
+        payload = await GlameTokenService(db).prepare_glm_to_points_ton_transaction(
+            bridge=exchange,
+            sender_wallet_address=wallet.get("address"),
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    await db.commit()
+    return {"status": "success", **payload}
+
+
+@router.post("/me/glm-exchange-desk/sell-for-ton/{exchange_id}/cancel")
+async def cancel_sell_glm_for_ton(
+    exchange_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = ReferralService(db)
+    member = await service.get_member_by_user_id(current_user.id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="Partner profile not found")
+    exchange = (
+        await db.execute(
+            select(GlameTokenTransaction).where(
+                GlameTokenTransaction.id == exchange_id,
+                GlameTokenTransaction.referral_member_id == member.id,
+                GlameTokenTransaction.transaction_type == "bridge",
+                GlameTokenTransaction.reason == "sell_glm_for_ton",
+                GlameTokenTransaction.status == "pending",
+            )
+        )
+    ).scalar_one_or_none()
+    if exchange is None:
+        raise HTTPException(status_code=404, detail="Pending заявка GLM -> GRAM не найдена")
+    meta = exchange.meta if isinstance(exchange.meta, dict) else {}
+    exchange.status = "canceled"
+    exchange.meta = {
+        **meta,
+        "admin_comment": "Canceled by partner before GLM deposit confirmation.",
+        "canceled_at": datetime.now(timezone.utc).isoformat(),
+    }
+    flag_modified(exchange, "meta")
+    await db.flush()
+    await GlameTokenService(db).sync_bridge_operation(exchange)
+    await db.commit()
+    token = await GlameTokenService(db).summary_for_member(member.id)
+    wallet = _crypto_wallet_meta(member) or {}
+    return {
+        "status": "success",
+        "exchange": _glm_transaction_payload(exchange),
+        "token": {
+            **token,
+            "claim_enabled": bool(wallet.get("glm_claim_enabled")),
+            "claim_allowed": bool(wallet.get("status") == "verified" and wallet.get("glm_claim_enabled")),
+            "claim_wallet_address": wallet.get("address"),
+        },
+    }
+
+
 @router.post("/me/glm-convert-bonuses")
 async def convert_bonus_points_to_glm(
     payload: GlmBonusConvertRequest,
@@ -7164,6 +8860,7 @@ async def _dashboard_payload(
         "claim_allowed": bool(wallet and wallet.get("status") == "verified" and wallet.get("glm_claim_enabled")),
         "claim_wallet_address": wallet.get("address") if wallet else None,
     }
+    telegram_preferences = _telegram_preferences_from_partner(member)
     return ReferralDashboardResponse(
         member=_member_response(member),
         referral_code=_code_response(code),
@@ -7175,8 +8872,9 @@ async def _dashboard_payload(
             "customer_id_1c": user.customer_id_1c,
             "discount_card_id_1c": user.discount_card_id_1c,
             "discount_card_number": user.discount_card_number,
-            "telegram_chat_id": (member.meta or {}).get("telegram_chat_id") if isinstance(member.meta, dict) else None,
-            "telegram_notifications_enabled": bool((member.meta or {}).get("telegram_chat_id")) if isinstance(member.meta, dict) else False,
+            "telegram_chat_id": telegram_preferences.get("chat_id"),
+            "telegram_notifications_enabled": telegram_preferences.get("notifications_enabled"),
+            "telegram_notification_subscriptions": telegram_preferences.get("subscriptions"),
         },
         summary=summary,
         token=token,

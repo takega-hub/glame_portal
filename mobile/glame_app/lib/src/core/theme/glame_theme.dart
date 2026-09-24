@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../layout/glame_layout.dart';
+
 class GlameColors {
   static const graphite = Color(0xFF222426);
   static const nearBlack = Color(0xFF111111);
@@ -248,6 +250,7 @@ class GlameTopAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showDesktopNavigation = GlameLayout.widthOf(context) >= 1180;
     final foreground = dark || transparent
         ? GlameColors.whiteGlame
         : GlameColors.textPrimary;
@@ -257,65 +260,117 @@ class GlameTopAppBar extends StatelessWidget implements PreferredSizeWidget {
     return Material(
       color: background,
       elevation: 0,
-      child: Container(
-        height: height,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: SafeArea(
-          bottom: false,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned(
-                left: 0,
-                child: _GlameTopIconButton(
-                  tooltip: leadingTooltip ?? 'Меню',
-                  icon: leadingIcon ?? Icons.menu,
-                  color: foreground,
-                  onPressed:
-                      onMenuPressed ?? () => showGlameNavigationMenu(context),
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          height: height,
+          padding: EdgeInsets.symmetric(
+            horizontal: GlameLayout.horizontalGutter(context),
+          ),
+          child: GlameContentWidth(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  left: 0,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _GlameTopIconButton(
+                        tooltip: leadingTooltip ?? 'Меню',
+                        icon: leadingIcon ?? Icons.menu,
+                        color: foreground,
+                        onPressed:
+                            onMenuPressed ??
+                            () => showGlameNavigationMenu(context),
+                      ),
+                      if (showDesktopNavigation) ...[
+                        const SizedBox(width: 14),
+                        _GlameDesktopNavigation(color: foreground),
+                      ],
+                    ],
+                  ),
                 ),
-              ),
-              Center(
-                child: InkWell(
-                  onTap: onLogoPressed ?? () => context.go('/home'),
-                  child: Container(
-                    width: 154,
-                    height: 38,
-                    alignment: Alignment.center,
-                    child: GlameHeaderLogo(
-                      height: dark || transparent ? 24 : 22,
-                      silver: dark || transparent,
+                Center(
+                  child: InkWell(
+                    onTap: onLogoPressed ?? () => context.go('/home'),
+                    child: Container(
+                      width: 154,
+                      height: 38,
+                      alignment: Alignment.center,
+                      child: GlameHeaderLogo(
+                        height: dark || transparent ? 24 : 22,
+                        silver: dark || transparent,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                right: 0,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _GlameTopIconButton(
-                      tooltip: 'Корзина',
-                      icon: Icons.shopping_bag_outlined,
-                      color: foreground,
-                      onPressed:
-                          onCartPressed ?? () => context.go('/home?tab=11'),
-                    ),
-                    const SizedBox(width: 4),
-                    _GlameTopIconButton(
-                      tooltip: 'Поиск',
-                      icon: Icons.search,
-                      color: foreground,
-                      onPressed:
-                          onSearchPressed ?? () => context.go('/home?tab=1'),
-                    ),
-                  ],
+                Positioned(
+                  right: 0,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _GlameTopIconButton(
+                        tooltip: 'Корзина',
+                        icon: Icons.shopping_bag_outlined,
+                        color: foreground,
+                        onPressed:
+                            onCartPressed ?? () => context.go('/home?tab=11'),
+                      ),
+                      const SizedBox(width: 4),
+                      _GlameTopIconButton(
+                        tooltip: 'Поиск',
+                        icon: Icons.search,
+                        color: foreground,
+                        onPressed:
+                            onSearchPressed ?? () => context.go('/home?tab=1'),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _GlameDesktopNavigation extends StatelessWidget {
+  final Color color;
+
+  const _GlameDesktopNavigation({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    const entries = [
+      ('Украшения', '/home?tab=1'),
+      ('Образы', '/home?tab=5'),
+      ('Бренды', '/brands'),
+      ('Пространства', '/spaces'),
+    ];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var index = 0; index < entries.length; index++) ...[
+          InkWell(
+            onTap: () => context.go(entries[index].$2),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Text(
+                entries[index].$1,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
+          if (index != entries.length - 1) const SizedBox(width: 18),
+        ],
+      ],
     );
   }
 }
@@ -373,45 +428,28 @@ Future<void> showGlameNavigationMenu(BuildContext context) {
             height: double.infinity,
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
                 child: ListView(
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Image.asset(
-                            GlameAssets.logoSilver,
-                            height: 46,
-                            alignment: Alignment.centerLeft,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Закрыть',
-                          onPressed: () => Navigator.of(ctx).pop(),
-                          style: IconButton.styleFrom(
-                            foregroundColor: GlameColors.whiteGlame,
-                            backgroundColor: Colors.transparent,
-                            shape: const RoundedRectangleBorder(),
-                          ),
-                          icon: const Icon(Icons.close, size: 22),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
+                    const _GlameMenuSectionLabel('Навигация'),
                     _GlameMenuRoute('Главная', '/home'),
                     _GlameMenuRoute('Украшения', '/home?tab=1'),
                     _GlameMenuRoute('Мой стиль', '/home?tab=2'),
                     _GlameMenuRoute('Подбор', '/home?tab=3'),
                     _GlameMenuRoute('Профиль', '/home?tab=4'),
                     _GlameMenuRoute('Образы', '/home?tab=5'),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
+                    const _GlameMenuSectionLabel('Витрина'),
                     _GlameMenuRoute('Новинки', '/home?tab=6'),
-                    _GlameMenuRoute('Бренды', '/brands'),
+                    _GlameMenuRoute('Бренды', '/brands', showChevron: true),
                     _GlameMenuRoute('Пространства', '/spaces'),
                     _GlameMenuRoute('Подарочный сертификат', '/home?tab=8'),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
+                    Container(height: 1, color: GlameColors.borderGray),
+                    const SizedBox(height: 18),
+                    const _GlameMenuSectionLabel('Действия'),
                     _GlameMenuRoute('Корзина', '/home?tab=11'),
+                    _GlameMenuRoute('Войти', '/login', showChevron: true),
                   ],
                 ),
               ),
@@ -436,8 +474,9 @@ Future<void> showGlameNavigationMenu(BuildContext context) {
 class _GlameMenuRoute extends StatelessWidget {
   final String label;
   final String route;
+  final bool showChevron;
 
-  const _GlameMenuRoute(this.label, this.route);
+  const _GlameMenuRoute(this.label, this.route, {this.showChevron = false});
 
   @override
   Widget build(BuildContext context) {
@@ -448,13 +487,46 @@ class _GlameMenuRoute extends StatelessWidget {
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 9),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 24,
-            height: 1.05,
-            color: GlameColors.whiteGlame,
-          ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 24,
+                  height: 1.05,
+                  color: GlameColors.coldLightGray,
+                ),
+              ),
+            ),
+            if (showChevron)
+              const Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: GlameColors.steelGray,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GlameMenuSectionLabel extends StatelessWidget {
+  final String label;
+
+  const _GlameMenuSectionLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 10,
+          letterSpacing: 1.4,
+          color: GlameColors.steelGray,
         ),
       ),
     );

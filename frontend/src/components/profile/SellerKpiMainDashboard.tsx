@@ -15,6 +15,7 @@ import {
   YAxis,
 } from 'recharts';
 import { api, type SellerKpiDashboardResponse, type SellerKpiDashboardStore, type SellerKpiRow } from '@/lib/api';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -113,16 +114,20 @@ function sellerRowTone(row: SellerKpiRow) {
 }
 
 export default function SellerKpiMainDashboard() {
+  const { user, accountPreview } = useAuth();
   const [month, setMonth] = useState(currentMonth);
   const [data, setData] = useState<SellerKpiDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const previewUserId = user?.is_role_preview && user.role === 'manager' && accountPreview?.id ? accountPreview.id : undefined;
+  const isManagerScope = user?.role === 'manager' || Boolean(data?.managed_store_names?.length);
+  const isAdmin = user?.role === 'admin';
 
   const loadDashboard = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.getSellerKpiDashboard({ month });
+      const response = await api.getSellerKpiDashboard({ month, ...(previewUserId ? { preview_user_id: previewUserId } : {}) });
       setData(response);
     } catch (e: any) {
       if (e.response?.status === 404) {
@@ -193,7 +198,7 @@ export default function SellerKpiMainDashboard() {
   useEffect(() => {
     loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
+  }, [month, previewUserId]);
 
   const sellerRows = useMemo(() => [...(data?.sellers || [])]
     .sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0))
@@ -204,6 +209,7 @@ export default function SellerKpiMainDashboard() {
       avgCheckFact: Number(seller.checks || 0) > 0 ? Number(seller.revenue || 0) / Number(seller.checks || 0) : null,
       itemsPerCheckFact: Number(seller.checks || 0) > 0 ? Number(seller.items_sold || 0) / Number(seller.checks || 0) : null,
     })), [data?.sellers]);
+  const dataQuality = data?.data_quality;
   const attentionCount = useMemo(() => sellerRows.filter((seller) => seller.completion_percent === null || seller.completion_percent === undefined || seller.completion_percent < 85).length, [sellerRows]);
   const chartData = useMemo(() => (data?.stores || []).map((store) => ({
     name: store.store_name.replace('Ялта, ', 'Ялта '),
@@ -222,10 +228,15 @@ export default function SellerKpiMainDashboard() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-700">GLAME KPI Control Center</p>
-          <h1 className="mt-2 text-3xl font-semibold text-gray-950">Главный дашборд магазинов и продавцов</h1>
+          <h1 className="mt-2 text-3xl font-semibold text-gray-950">{isManagerScope ? 'Дашборд управляющего' : 'Главный дашборд магазинов и продавцов'}</h1>
           <p className="mt-2 max-w-3xl text-sm text-gray-600">
-            Сводка по всем магазинам: план-факт, прогноз месяца, сравнительный анализ, риски, продавцы и качество данных.
+            {isManagerScope
+              ? `Сводка только по вашим магазинам${data?.managed_store_names?.length ? `: ${data.managed_store_names.join(', ')}` : ''}.`
+              : 'Сводка по всем магазинам: план-факт, прогноз месяца, сравнительный анализ, риски, продавцы и качество данных.'}
           </p>
+          {user?.is_role_preview && accountPreview?.full_name && (
+            <p className="mt-2 text-sm text-gold-700">Проверка роли: показаны данные аккаунта {accountPreview.full_name}.</p>
+          )}
         </div>
         <div className="flex flex-wrap gap-3">
           <input
@@ -460,29 +471,29 @@ export default function SellerKpiMainDashboard() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+          {isAdmin && dataQuality && <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-gray-950">Качество данных</h2>
                 <p className="text-sm text-gray-500">Контроль, можно ли доверять управленческим выводам.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className={`rounded-2xl border px-4 py-3 ${data.data_quality.unmatched_sellers ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                <div className={`rounded-2xl border px-4 py-3 ${dataQuality.unmatched_sellers ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
                   <p className="text-xs uppercase tracking-wide">Без имени</p>
-                  <p className="text-2xl font-semibold">{data.data_quality.unmatched_sellers}</p>
+                  <p className="text-2xl font-semibold">{dataQuality.unmatched_sellers}</p>
                 </div>
-                <div className={`rounded-2xl border px-4 py-3 ${data.data_quality.duplicate_store_rows ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                <div className={`rounded-2xl border px-4 py-3 ${dataQuality.duplicate_store_rows ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
                   <p className="text-xs uppercase tracking-wide">Дубли магазинов</p>
-                  <p className="text-2xl font-semibold">{data.data_quality.duplicate_store_rows}</p>
+                  <p className="text-2xl font-semibold">{dataQuality.duplicate_store_rows}</p>
                 </div>
                 <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-700">
                   <p className="text-xs uppercase tracking-wide">Статус 1С seller field</p>
-                  <p className="text-sm font-semibold">{data.data_quality.seller_field_status || '—'}</p>
+                  <p className="text-sm font-semibold">{dataQuality.seller_field_status || '—'}</p>
                 </div>
               </div>
-              {data.data_quality.plan_warnings && data.data_quality.plan_warnings.length > 0 && (
+              {dataQuality.plan_warnings && dataQuality.plan_warnings.length > 0 && (
                 <div className="mt-4 space-y-2">
-                  {data.data_quality.plan_warnings.map((warning) => (
+                  {dataQuality.plan_warnings.map((warning) => (
                     <div key={`${warning.code}-${warning.store_name}-${warning.period}`} className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                       <span className="font-semibold">Data-warning по плану:</span> {warning.message}
                     </div>
@@ -490,7 +501,7 @@ export default function SellerKpiMainDashboard() {
                 </div>
               )}
             </div>
-          </div>
+          </div>}
         </>
       )}
     </section>

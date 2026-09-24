@@ -1,9 +1,9 @@
-import SellerTrainingPage from '@/components/training/SellerTrainingPage';
+import LearnerTrainingPage from '@/components/training/LearnerTrainingPage';
 
 export default function Page() {
   return (
-    <main className="min-h-screen bg-slate-50">
-      <SellerTrainingPage />
+    <main className="min-h-screen bg-[#f7f7f5]">
+      <LearnerTrainingPage />
     </main>
   );
 }

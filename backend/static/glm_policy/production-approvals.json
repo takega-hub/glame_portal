@@ -1,0 +1,12 @@
+{
+  "legal_approved": true,
+  "security_approved": true,
+  "treasury_approved": true,
+  "comment": "Internal approval refs recorded as SHA-256 fingerprints of final policy documents. Replace with external signed document refs when available.",
+  "legal_evidence_ref": "backend/static/glm_policy/legal-accounting-approval.md sha256:c77a1a2bc2818ffa17f57ceb8cc6de7dd36a07eec514d7cda60387ffb47e1c0c",
+  "security_evidence_ref": "backend/static/glm_policy/security-review-checklist.md sha256:ee1c442a761bd8a5b5b2c5cc25828a5963d83231222b6f1c61c7279ddaac2f25",
+  "treasury_evidence_ref": "backend/static/glm_policy/treasury-approval.md sha256:5c87c3aef4324962b800caddd39b43b38af0e15f42a07512faa555d2061f72d7",
+  "public_wording_evidence_ref": "backend/static/glm_policy/token-policy.md sha256:f7bd86568336866594a876c8759e80e83f9ccdfe334d160a17c1801938be581a; backend/static/glm_policy/risk-disclosure.md sha256:7ea3b8564d084523d06bec0dd97b2badc45ecf83f39baabbd1195d2d93a59208; backend/static/glm_policy/bridge-rules.md sha256:3395de6a8e44f85679726365dd7bc1b2aeb553c9f5c3805e4ed2d5522c0904b5; backend/static/glm_policy/faq.md sha256:5f1208d5a6311a670347d7af504b229c559a3a379a2a56f2e968ef64c7ea40a7; backend/static/glm_policy/launch-approval-packet.md sha256:e95bf8ea8a61407954090e5a9cd47b03e1f8e9cbe445a0ab150b82dfcc67a271",
+  "updated_at": "2026-07-18T11:04:54.153247+00:00",
+  "updated_by": "a51c940a-11e1-4e5c-8550-b9fb8a64e66a"
+}

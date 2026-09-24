@@ -192,7 +192,7 @@ if [[ "$WAIT_FOR_INFRA" == "true" ]]; then
   wait_for_infra
 fi
 
-start_service "backend" bash -c "cd '$BACKEND_DIR' || exit 1; source venv/bin/activate 2>/dev/null || true; exec env DATABASE_URL='$DATABASE_URL' QDRANT_URL='$QDRANT_URL' REDIS_URL='$REDIS_URL' ML_INFERENCE_URL='$ML_INFERENCE_URL' uvicorn app.main:app --host '$BACKEND_HOST' --port '$BACKEND_PORT'"
+start_service "backend" bash -c "cd '$BACKEND_DIR' || exit 1; source venv/bin/activate 2>/dev/null || true; exec uvicorn app.main:app --host '$BACKEND_HOST' --port '$BACKEND_PORT'"
 start_service "admin frontend" bash -c "cd '$FRONTEND_DIR' && exec env PORT='$ADMIN_PORT' npm run start"
 start_service "storefront" bash -c "cd '$STOREFRONT_APP_DIR' && exec env STOREFRONT_PORT='$STOREFRONT_PORT' STOREFRONT_DIR='$STOREFRONT_DIR' python3 '$STOREFRONT_APP_DIR/web/serve_storefront.py'"
 

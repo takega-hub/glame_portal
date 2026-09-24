@@ -17,9 +17,9 @@ class SellerKPIReceiptFactsTests(unittest.TestCase):
 
         self.assertIn("ANALYTICS_ELIGIBLE_PRODUCT_SQL", source)
         self.assertIn("COALESCE(SUM(CASE WHEN {ANALYTICS_ELIGIBLE_PRODUCT_SQL} THEN sr.revenue ELSE 0 END), 0)::float AS revenue", source)
-        self.assertIn("COUNT(DISTINCT CASE WHEN {ANALYTICS_ELIGIBLE_PRODUCT_SQL} THEN sr.document_id ELSE NULL END)::int AS checks", source)
+        self.assertIn("COUNT(DISTINCT CASE WHEN {KPI_SALE_CHECK_SQL} THEN sr.document_id ELSE NULL END)::int AS checks", source)
         self.assertIn("FROM sales_records sr", source)
-        self.assertIn("LOWER(COALESCE(s.name, sr.store_id)) = LOWER(:store_name)", source)
+        self.assertIn("STORE_EXPR = effective_store_name_sql", source)
 
     def test_dashboard_uses_direct_store_sales_facts_not_seller_row_sum(self):
         root = Path(__file__).resolve().parents[1]

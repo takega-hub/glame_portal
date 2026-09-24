@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 import type {
   InstagramPreviewItem,
   LookFeedPost,
@@ -8,7 +8,7 @@ import type {
   DirectorTask,
   DirectorKnowledge,
   DirectorSearchResult,
-} from '@/types';
+} from "@/types";
 
 // Prefer same-origin calls in the browser (nginx proxies /api -> backend in prod;
 // next.config.js rewrites /api -> backend in local dev).
@@ -18,32 +18,39 @@ import type {
 // NOTE (Windows dev):
 // Default to empty string in dev to use Next.js rewrites (proxy /api -> backend:8000).
 // Set NEXT_PUBLIC_API_URL=http://localhost:8000 if you want to bypass the proxy.
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export const apiClient = axios.create({
   baseURL: API_URL,
   withCredentials: true,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
   timeout: 300000, // 5 минут для долгих операций (генерация сообщений)
 });
 
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  const cookie = document.cookie
+    .split("; ")
+    .find((item) => item.startsWith(prefix));
+  return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : null;
+}
+
 // Interceptor для автоматической подстановки токена
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('glame_access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
-      delete config.headers['Content-Type'];
+    const csrfToken = getCookie("__Host-glame_csrf");
+    if (csrfToken) config.headers["X-CSRF-Token"] = csrfToken;
+    if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
     }
     return config;
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Interceptor для обработки 401 ошибок и обновления токена
@@ -56,34 +63,29 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('glame_refresh_token');
-        if (refreshToken) {
-          const response = await axios.post(`${API_URL}/api/auth/refresh`, null, {
-            params: { refresh_token: refreshToken },
-            withCredentials: true,
-          });
-          
-          const { access_token, refresh_token } = response.data;
-          localStorage.setItem('glame_access_token', access_token);
-          localStorage.setItem('glame_refresh_token', refresh_token);
-          
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          return apiClient(originalRequest);
-        }
+        await axios.post(`${API_URL}/api/auth/refresh`, null, {
+          withCredentials: true,
+          headers: (() => {
+            const csrfToken = getCookie("__Host-glame_csrf");
+            return csrfToken ? { "X-CSRF-Token": csrfToken } : {};
+          })(),
+        });
+        return apiClient(originalRequest);
       } catch (refreshError) {
-        localStorage.removeItem('glame_access_token');
-        localStorage.removeItem('glame_refresh_token');
-        localStorage.removeItem('glame_user');
-        
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = '/login';
+        localStorage.removeItem("glame_user");
+
+        if (
+          typeof window !== "undefined" &&
+          window.location.pathname !== "/login"
+        ) {
+          window.location.href = "/login";
         }
         return Promise.reject(refreshError);
       }
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export interface ChatRequest {
@@ -97,7 +99,7 @@ export interface StylistAvailability {
   timezone: string;
   timezone_label: string;
   working_hours: string;
-  status: 'open' | 'closed';
+  status: "open" | "closed";
   is_open: boolean;
   status_text: string;
   opens_at: string;
@@ -134,7 +136,7 @@ export interface StylistResponse {
     category?: string | null;
     tags?: string[];
     external_code?: string | null;
-  }>;  // Отдельный список товаров для карточек
+  }>; // Отдельный список товаров для карточек
   cta: string;
   session_id: string;
 }
@@ -349,7 +351,7 @@ export interface SyncProductsToKnowledgeResponse {
 
 export interface ModelSettingsResponse {
   default_model: string;
-  source: 'db' | 'env' | 'default';
+  source: "db" | "env" | "default";
 }
 
 export interface ModelSettingsUpdateRequest {
@@ -357,18 +359,18 @@ export interface ModelSettingsUpdateRequest {
 }
 
 export interface AiCoreSettingsResponse {
-  ai_core_runtime: 'openrouter' | 'hermes' | 'local';
-  source: 'db' | 'env' | 'default';
-  options: Array<'openrouter' | 'hermes' | 'local'>;
+  ai_core_runtime: "openrouter" | "hermes" | "local";
+  source: "db" | "env" | "default";
+  options: Array<"openrouter" | "hermes" | "local">;
 }
 
 export interface AiCoreSettingsUpdateRequest {
-  ai_core_runtime: 'openrouter' | 'hermes' | 'local';
+  ai_core_runtime: "openrouter" | "hermes" | "local";
 }
 
 export interface AiRuntimeInfoResponse {
-  ai_core_runtime: 'openrouter' | 'hermes' | 'local';
-  source: 'db' | 'env' | 'default';
+  ai_core_runtime: "openrouter" | "hermes" | "local";
+  source: "db" | "env" | "default";
   agent_id: string;
   model: string;
   profile?: string | null;
@@ -377,7 +379,7 @@ export interface AiRuntimeInfoResponse {
 
 export interface ImageGenerationModelSettingsResponse {
   image_generation_model: string;
-  source: 'db' | 'env' | 'default';
+  source: "db" | "env" | "default";
 }
 
 export interface ImageGenerationModelSettingsUpdateRequest {
@@ -386,7 +388,7 @@ export interface ImageGenerationModelSettingsUpdateRequest {
 
 export interface AiStylistSettingsResponse {
   enabled: boolean;
-  source: 'db' | 'default';
+  source: "db" | "default";
 }
 
 export interface AiStylistSettingsUpdateRequest {
@@ -402,7 +404,7 @@ export interface EmailServerSettingsResponse {
   use_ssl: boolean;
   use_starttls: boolean;
   password_set: boolean;
-  source: 'db' | 'env' | 'default';
+  source: "db" | "env" | "default";
 }
 
 export interface EmailServerSettingsUpdateRequest {
@@ -421,6 +423,22 @@ export interface EmailServerTestResponse {
   message: string;
 }
 
+export interface YooKassaSettingsResponse {
+  mode: "test" | "live";
+  source: "db" | "env" | "default";
+  test_configured: boolean;
+  live_configured: boolean;
+  active_configured: boolean;
+  active_shop_id?: string | null;
+  test_shop_id?: string | null;
+  live_shop_id?: string | null;
+  options: Array<"test" | "live">;
+}
+
+export interface YooKassaSettingsUpdateRequest {
+  mode: "test" | "live";
+}
+
 export interface OneCSeller {
   external_id: string | null;
   name: string;
@@ -428,6 +446,11 @@ export interface OneCSeller {
   email: string | null;
   phone: string | null;
   store: string | null;
+  stores?: string[];
+  role_label?: "Управляющий" | "Продавец";
+  store_external_id?: string | null;
+  store_assignment_source?: string | null;
+  store_assignment_updated_at?: string | null;
   position: string | null;
   is_deleted: boolean;
   raw?: Record<string, any>;
@@ -443,6 +466,7 @@ export interface OneCSellersResponse {
   sellers: OneCSeller[];
   discovered_endpoints?: string[];
   errors?: Array<Record<string, any>>;
+  store_assignment_source?: string | null;
 }
 
 export interface SellerKpiRow {
@@ -472,7 +496,7 @@ export interface SellerKpiRow {
 export interface SellerKpiTargetRow {
   key: string;
   label: string;
-  format: 'money' | 'number' | 'decimal' | 'percent';
+  format: "money" | "number" | "decimal" | "percent";
   editable_plan: boolean;
   plan: number | null;
   fact: number | null;
@@ -486,14 +510,13 @@ export interface SellerKpiTargetRow {
 
 export interface SellerKpiInsight {
   type: string;
-  severity: 'success' | 'info' | 'warning' | 'critical';
+  severity: "success" | "info" | "warning" | "critical";
   title: string;
   text: string;
   metric_key?: string;
   store_id?: string | null;
   seller_external_id?: string | null;
 }
-
 
 export interface SellerKpiAssortmentGuidanceRow {
   id?: string;
@@ -516,7 +539,7 @@ export interface SellerKpiAssortmentGuidanceRow {
 
 export interface SellerKpiAssortmentDiagnostic {
   type: string;
-  severity: 'success' | 'info' | 'warning' | 'critical';
+  severity: "success" | "info" | "warning" | "critical";
   title: string;
   text: string;
 }
@@ -536,7 +559,7 @@ export interface SellerKpiAssortmentGuidanceResponse {
 export interface SellerKpiTargetsResponse {
   success: boolean;
   month: string;
-  scope: 'all' | 'self';
+  scope: "all" | "self";
   elapsed_days: number;
   days_in_month: number;
   rows: SellerKpiTargetRow[];
@@ -548,10 +571,10 @@ export interface SellerKpiSnapshot {
   id: string;
   snapshot_date: string;
   month: string;
-  scope: 'all' | 'self' | string;
+  scope: "all" | "self" | string;
   rows: SellerKpiTargetRow[];
-  totals: SellerKpiResponse['totals'];
-  stores: SellerKpiResponse['stores'];
+  totals: SellerKpiResponse["totals"];
+  stores: SellerKpiResponse["stores"];
   sellers: SellerKpiRow[];
   insights: SellerKpiInsight[];
   created_at?: string | null;
@@ -566,7 +589,7 @@ export interface SellerKpiSnapshotsResponse {
 export interface SellerKpiResponse {
   success: boolean;
   month: string;
-  scope: 'all' | 'self';
+  scope: "all" | "self" | "managed";
   totals: {
     revenue: number;
     revenue_plan: number;
@@ -583,6 +606,40 @@ export interface SellerKpiResponse {
     checks: number;
   }>;
   seller_field_status?: string;
+  managed_store_names?: string[];
+}
+
+export interface AdaptiveDailyPlanResponse {
+  success: boolean;
+  calculation_date: string;
+  seller_name?: string | null;
+  store_name?: string | null;
+  monthly_plan: number;
+  working_monthly_target: number;
+  net_sales_fact: number;
+  returns_amount: number;
+  remaining_to_target: number;
+  daily_plan_math: number;
+  daily_plan_managerial: number;
+  required_daily_average: number;
+  forecast_month_total: number;
+  base_plan_completion_percent: number | null;
+  working_target_completion_percent: number | null;
+  target_gap_amount: number | null;
+  target_gap_percent: number | null;
+  coefficients: {
+    weekday: number;
+    calendar: number;
+    pacing: number;
+    season: number;
+    store: number;
+    remaining_weights_sum: number;
+    learned_weekdays: number[];
+    evidence?: Record<string, unknown>;
+  };
+  kpi_focus: { key: string; title: string; action: string };
+  warnings: string[];
+  explanation: string;
 }
 
 export interface SellerKpiPlanSourceDetail {
@@ -591,7 +648,7 @@ export interface SellerKpiPlanSourceDetail {
   source: string;
   period: string;
   store: string;
-  matching_status: 'matched_confirmed' | 'missing_or_unconfirmed' | string;
+  matching_status: "matched_confirmed" | "missing_or_unconfirmed" | string;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -604,7 +661,8 @@ export interface SellerKpiDashboardStore {
   revenue_plan_source?: string | null;
   revenue_plan_period?: string | null;
   revenue_plan_store?: string | null;
-  revenue_plan_matching_status?: 'matched_confirmed' | 'missing_or_unconfirmed' | string | null;
+  revenue_plan_matching_status?:
+    "matched_confirmed" | "missing_or_unconfirmed" | string | null;
   revenue_plan_source_detail?: SellerKpiPlanSourceDetail | null;
   completion_percent: number | null;
   forecast_revenue: number | null;
@@ -617,7 +675,7 @@ export interface SellerKpiDashboardStore {
   items_per_check: number | null;
   avg_sales_per_shift: number | null;
   sellers_count: number;
-  risk_level: 'ok' | 'warning' | 'critical';
+  risk_level: "ok" | "warning" | "critical";
 }
 
 export interface SellerKpiDashboardMetricCell {
@@ -648,9 +706,13 @@ export interface SellerKpiDashboardResponse {
   stores: SellerKpiDashboardStore[];
   sellers: SellerKpiRow[];
   metric_totals: Record<string, SellerKpiDashboardMetricCell>;
-  metric_matrix: Array<{ store_name: string; metrics: Record<string, SellerKpiDashboardMetricCell> }>;
+  metric_matrix: Array<{
+    store_name: string;
+    metrics: Record<string, SellerKpiDashboardMetricCell>;
+  }>;
   insights: SellerKpiInsight[];
-  data_quality: {
+  managed_store_names?: string[];
+  data_quality?: {
     unmatched_sellers: number;
     duplicate_store_rows: number;
     seller_field_status?: string | null;
@@ -690,13 +752,22 @@ export interface SellerShiftExcelImportResponse {
   deleted_previous?: number | null;
   period_month: string;
   store_name: string;
-  stats?: { parsed_shifts?: number; skipped_marks?: number; sellers_count?: number };
+  stats?: {
+    parsed_shifts?: number;
+    skipped_marks?: number;
+    sellers_count?: number;
+  };
   preview?: SellerShift[];
 }
 
 export interface PersonalTrainingSummaryResponse {
   found: boolean;
-  seller?: { id?: string; full_name?: string | null; email?: string | null; role?: string | null } | null;
+  seller?: {
+    id?: string;
+    full_name?: string | null;
+    email?: string | null;
+    role?: string | null;
+  } | null;
   summary: {
     level?: string | null;
     completed_steps: number;
@@ -704,19 +775,27 @@ export interface PersonalTrainingSummaryResponse {
     progress_percent: number;
     attestation_ready: boolean;
     achievements: Array<{ code?: string; title?: string }>;
-    weakest_competencies: Array<{ code?: string; label: string; percent: number }>;
+    weakest_competencies: Array<{
+      code?: string;
+      label: string;
+      percent: number;
+    }>;
     next_program_title?: string | null;
     next_action?: { label?: string; target_id?: string | null };
     recommended_training_focus: string;
     kpi_focus: string[];
-    priority: 'high' | 'medium' | 'observe' | string;
+    priority: "high" | "medium" | "observe" | string;
     manager_recommendation: string;
   };
-  programs: Array<{ program?: { title?: string }; progress?: { completed_steps: number; total_steps: number }; next_action?: { label?: string } }>;
+  programs: Array<{
+    program?: { title?: string };
+    progress?: { completed_steps: number; total_steps: number };
+    next_action?: { label?: string };
+  }>;
 }
 
 export interface ImageOptimizationStatusResponse {
-  status: 'idle' | 'running' | 'completed' | 'failed';
+  status: "idle" | "running" | "completed" | "failed";
   started_at?: string | null;
   finished_at?: string | null;
   scanned_files: number;
@@ -731,7 +810,7 @@ export interface ImageOptimizationStatusResponse {
   changed_extensions: number;
   db_rows_updated: number;
   min_original_bytes: number;
-  format: 'keep' | 'jpeg' | 'webp' | string;
+  format: "keep" | "jpeg" | "webp" | string;
   quality: number;
   max_side: number;
   dirs: string[];
@@ -764,15 +843,15 @@ export interface OpenRouterModelStat {
 export interface OpenRouterDayStat {
   date: string;
   total_cost: number;
-  by_model: Record<string, number>;  // модель -> стоимость за день
+  by_model: Record<string, number>; // модель -> стоимость за день
 }
 
 export interface OpenRouterStatsResponse {
-  avg_daily: number;  // средние дневные траты ($/день)
-  remaining_credits: number;  // текущий остаток аккаунта ($)
-  days_left: number;  // примерное число дней (остаток делить на средний расход)
-  by_model: OpenRouterModelStat[];  // разбивка по моделям
-  by_day: OpenRouterDayStat[];  // данные по дням для гистограммы
+  avg_daily: number; // средние дневные траты ($/день)
+  remaining_credits: number; // текущий остаток аккаунта ($)
+  days_left: number; // примерное число дней (остаток делить на средний расход)
+  by_model: OpenRouterModelStat[]; // разбивка по моделям
+  by_day: OpenRouterDayStat[]; // данные по дням для гистограммы
 }
 
 export interface OpenRouterTodaySummary {
@@ -847,13 +926,16 @@ export const api = {
   // Stylist API
   async chatWithStylist(request: ChatRequest): Promise<StylistResponse> {
     try {
-      const response = await apiClient.post<StylistResponse>('/api/stylist/chat', request);
+      const response = await apiClient.post<StylistResponse>(
+        "/api/stylist/chat",
+        request,
+      );
       return response.data;
     } catch (error: any) {
-      console.error('API Error:', error);
+      console.error("API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -865,61 +947,130 @@ export const api = {
   },
 
   async getStylistLiveStatus(): Promise<StylistAvailability> {
-    const response = await apiClient.get<StylistAvailability>('/api/stylist/live-status');
+    const response = await apiClient.get<StylistAvailability>(
+      "/api/stylist/live-status",
+    );
     return response.data;
   },
 
   async getTaskChatHistory(taskId: string): Promise<any[]> {
-    const response = await apiClient.get(`/api/agent-interactions/tasks/${taskId}/chat`);
+    const response = await apiClient.get(
+      `/api/agent-interactions/tasks/${taskId}/chat`,
+    );
     return response.data;
   },
 
   async getTaskLogs(taskId: string): Promise<any[]> {
-    const response = await apiClient.get(`/api/agent-interactions/tasks/${taskId}/logs`);
+    const response = await apiClient.get(
+      `/api/agent-interactions/tasks/${taskId}/logs`,
+    );
     return response.data;
   },
 
-  async chatWithAgent(taskId: string, message: string, model: string, meta: any): Promise<any> {
-    const response = await apiClient.post(`/api/agent-interactions/tasks/${taskId}/chat`, {
-      message,
-      model,
-      meta,
-    });
+  async getCrmPlan(taskId: string): Promise<any> {
+    const response = await apiClient.get(
+      `/api/agent-interactions/tasks/${taskId}/crm/plan`,
+    );
+    return response.data;
+  },
+
+  async finalizeCrmPlan(
+    taskId: string,
+    data: {
+      crm_plan?: Record<string, any>;
+      source_text?: string;
+      status?: string;
+    },
+  ): Promise<any> {
+    const response = await apiClient.post(
+      `/api/agent-interactions/tasks/${taskId}/crm/finalize-plan`,
+      data,
+    );
+    return response.data;
+  },
+
+  async createSellerCrmTasks(
+    taskId: string,
+    data: {
+      crm_plan?: Record<string, any>;
+      work_date?: string;
+      limit?: number;
+      assigned_seller_user_id?: string;
+      assigned_seller_external_id?: string;
+      assigned_seller_name?: string;
+      store_id?: string;
+      store_name?: string;
+    },
+  ): Promise<any> {
+    const response = await apiClient.post(
+      `/api/agent-interactions/tasks/${taskId}/crm/create-seller-tasks`,
+      data,
+    );
+    return response.data;
+  },
+
+  async chatWithAgent(
+    taskId: string,
+    message: string,
+    model: string,
+    meta: any,
+  ): Promise<any> {
+    const response = await apiClient.post(
+      `/api/agent-interactions/tasks/${taskId}/chat`,
+      {
+        message,
+        model,
+        meta,
+      },
+    );
     return response.data;
   },
 
   // Activate a version
-  async activateVersion(agentType: string, promptId: string): Promise<SystemPromptVersion> {
+  async activateVersion(
+    agentType: string,
+    promptId: string,
+  ): Promise<SystemPromptVersion> {
     const response = await apiClient.post<SystemPromptVersion>(
-      `/api/agent-system-prompts/${agentType}/versions/${promptId}/activate`
+      `/api/agent-system-prompts/${agentType}/versions/${promptId}/activate`,
     );
     return response.data;
   },
 
   // Update a version
-  async updateVersion(agentType: string, promptId: string, data: {
-    name?: string;
-    description?: string;
-    system_prompt?: string;
-    version_name?: string;
-  }): Promise<SystemPromptVersion> {
+  async updateVersion(
+    agentType: string,
+    promptId: string,
+    data: {
+      name?: string;
+      description?: string;
+      system_prompt?: string;
+      version_name?: string;
+    },
+  ): Promise<SystemPromptVersion> {
     const response = await apiClient.put<SystemPromptVersion>(
       `/api/agent-system-prompts/${agentType}/versions/${promptId}`,
-      data
+      data,
     );
     return response.data;
   },
 
   // Products API
-  async deleteTestProducts(): Promise<{ message: string; deleted_count: number }> {
+  async deleteTestProducts(): Promise<{
+    message: string;
+    deleted_count: number;
+  }> {
     try {
-      const response = await apiClient.delete<{ message: string; deleted_count: number }>('/api/products/test/all');
+      const response = await apiClient.delete<{
+        message: string;
+        deleted_count: number;
+      }>("/api/products/test/all");
       return response.data;
     } catch (error: any) {
-      console.error('Delete test products API Error:', error);
+      console.error("Delete test products API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -934,7 +1085,7 @@ export const api = {
     search?: string;
     variants_only?: boolean;
   }) {
-    const response = await apiClient.get('/api/products', { params });
+    const response = await apiClient.get("/api/products", { params });
     return response.data;
   },
 
@@ -953,12 +1104,14 @@ export const api = {
     color?: string;
     in_stock?: boolean;
   }): Promise<{ items: any[]; total: number; skip: number; limit: number }> {
-    const response = await apiClient.get('/api/products/paged', { params });
+    const response = await apiClient.get("/api/products/paged", { params });
     return response.data;
   },
 
   async getCharacteristicsValues(): Promise<Record<string, string[]>> {
-    const response = await apiClient.get('/api/products/characteristics/values');
+    const response = await apiClient.get(
+      "/api/products/characteristics/values",
+    );
     return response.data;
   },
 
@@ -972,40 +1125,51 @@ export const api = {
     return response.data;
   },
 
-  async getCatalogSections(): Promise<Array<{
-    id: string;
-    external_id: string;
-    external_code: string | null;
-    name: string;
-    parent_external_id: string | null;
-    description: string | null;
-    is_active: boolean;
-    sync_status: string | null;
-  }>> {
-    const response = await apiClient.get('/api/catalog-sections/');
+  async getCatalogSections(): Promise<
+    Array<{
+      id: string;
+      external_id: string;
+      external_code: string | null;
+      name: string;
+      parent_external_id: string | null;
+      description: string | null;
+      is_active: boolean;
+      sync_status: string | null;
+    }>
+  > {
+    const response = await apiClient.get("/api/catalog-sections/");
     return response.data;
   },
 
-  async syncProductsFromXML(xmlUrl: string, params?: {
-    updateExisting?: boolean;
-    asyncMode?: boolean;
-  }): Promise<{
+  async syncProductsFromXML(
+    xmlUrl: string,
+    params?: {
+      updateExisting?: boolean;
+      asyncMode?: boolean;
+    },
+  ): Promise<{
     status: string;
     message: string;
     task_id?: string;
     status_url?: string;
-    products?: { created?: number; updated?: number; skipped?: number; error_count?: number; deactivated?: number };
+    products?: {
+      created?: number;
+      updated?: number;
+      skipped?: number;
+      error_count?: number;
+      deactivated?: number;
+    };
   }> {
-    let normalized = (xmlUrl || '').trim();
+    let normalized = (xmlUrl || "").trim();
     if (normalized && !/\.xml(\?.*)?$/i.test(normalized)) {
-      const trimmed = normalized.replace(/\/+$/, '');
+      const trimmed = normalized.replace(/\/+$/, "");
       if (/\/uploaded\/?$/i.test(trimmed)) {
         normalized = `${trimmed}import.xml`;
       } else {
         normalized = `${trimmed}/uploaded/import.xml`;
       }
     }
-    const response = await apiClient.post('/api/products/sync-xml', null, {
+    const response = await apiClient.post("/api/products/sync-xml", null, {
       params: {
         xml_url: normalized,
         update_existing: params?.updateExisting ?? true,
@@ -1016,14 +1180,14 @@ export const api = {
   },
 
   async deleteAllProducts(confirm: boolean = true) {
-    const response = await apiClient.delete('/api/products/delete-all', {
+    const response = await apiClient.delete("/api/products/delete-all", {
       params: { confirm: confirm.toString() },
     });
     return response.data;
   },
 
   async getSyncProgress(taskId?: string) {
-    const response = await apiClient.get('/api/products/sync-1c/status', {
+    const response = await apiClient.get("/api/products/sync-1c/status", {
       params: taskId ? { task_id: taskId } : {},
     });
     return response.data;
@@ -1038,7 +1202,7 @@ export const api = {
     is_new?: boolean;
     digital_model?: string;
   }) {
-    const response = await apiClient.get('/api/looks', { params });
+    const response = await apiClient.get("/api/looks", { params });
     return response.data;
   },
 
@@ -1048,31 +1212,48 @@ export const api = {
     include_drafts?: boolean;
     is_new?: boolean;
   }): Promise<LookFeedPost[]> {
-    const response = await apiClient.get<LookFeedPost[]>('/api/looks/feed', { params });
+    const response = await apiClient.get<LookFeedPost[]>("/api/looks/feed", {
+      params,
+    });
     return response.data;
   },
 
-  async toggleLookLike(lookId: string): Promise<{ liked: boolean; like_count: number }> {
+  async toggleLookLike(
+    lookId: string,
+  ): Promise<{ liked: boolean; like_count: number }> {
     const response = await apiClient.post(`/api/looks/feed/${lookId}/like`);
     return response.data;
   },
 
-  async toggleLookFavorite(lookId: string): Promise<{ favorited: boolean; favorite_count: number }> {
+  async toggleLookFavorite(
+    lookId: string,
+  ): Promise<{ favorited: boolean; favorite_count: number }> {
     const response = await apiClient.post(`/api/looks/feed/${lookId}/favorite`);
     return response.data;
   },
 
-  async publishLookFeedPost(lookId: string, isPublished: boolean): Promise<LookFeedPost> {
-    const response = await apiClient.patch(`/api/looks/feed/${lookId}/publish`, {
-      is_published: isPublished,
-    });
+  async publishLookFeedPost(
+    lookId: string,
+    isPublished: boolean,
+  ): Promise<LookFeedPost> {
+    const response = await apiClient.patch(
+      `/api/looks/feed/${lookId}/publish`,
+      {
+        is_published: isPublished,
+      },
+    );
     return response.data;
   },
 
-  async previewInstagramLooks(limit: number = 12): Promise<InstagramPreviewItem[]> {
-    const response = await apiClient.get<InstagramPreviewItem[]>('/api/looks/instagram/preview', {
-      params: { limit },
-    });
+  async previewInstagramLooks(
+    limit: number = 12,
+  ): Promise<InstagramPreviewItem[]> {
+    const response = await apiClient.get<InstagramPreviewItem[]>(
+      "/api/looks/instagram/preview",
+      {
+        params: { limit },
+      },
+    );
     return response.data;
   },
 
@@ -1083,12 +1264,41 @@ export const api = {
     product_layout?: Array<Record<string, any>>;
     publish?: boolean;
   }): Promise<LookFeedPost> {
-    const response = await apiClient.post<LookFeedPost>('/api/looks/instagram/import', request);
+    const response = await apiClient.post<LookFeedPost>(
+      "/api/looks/instagram/import",
+      request,
+    );
+    return response.data;
+  },
+
+  async syncYandexDiskLooks(request?: {
+    public_url?: string;
+    limit?: number;
+    publish?: boolean;
+  }): Promise<{
+    imported: Array<Record<string, any>>;
+    skipped: Array<Record<string, any>>;
+    errors: Array<Record<string, any>>;
+    summary: { imported: number; skipped: number; errors: number };
+  }> {
+    const response = await apiClient.post(
+      "/api/looks/yandex-disk/sync",
+      {
+        public_url: request?.public_url,
+        limit: request?.limit ?? 2,
+        publish: request?.publish ?? false,
+      },
+      {
+        timeout: 300000,
+      },
+    );
     return response.data;
   },
 
   async getManualLookOptions(): Promise<ManualLookOptionsResponse> {
-    const response = await apiClient.get<ManualLookOptionsResponse>('/api/looks/manual/options');
+    const response = await apiClient.get<ManualLookOptionsResponse>(
+      "/api/looks/manual/options",
+    );
     return response.data;
   },
 
@@ -1102,15 +1312,14 @@ export const api = {
     radical?: string;
     style_dna_values?: string[];
     radical_values?: string[];
-    source_provider?: 'manual' | 'real_shoot';
+    source_provider?: "manual" | "real_shoot";
     current_name?: string;
     current_description?: string;
   }): Promise<{ name: string; description: string }> {
-    const response = await apiClient.post<{ name: string; description: string }>(
-      '/api/looks/manual/generate-copy',
-      request,
-      { timeout: 180000 }
-    );
+    const response = await apiClient.post<{
+      name: string;
+      description: string;
+    }>("/api/looks/manual/generate-copy", request, { timeout: 180000 });
     return response.data;
   },
 
@@ -1118,7 +1327,7 @@ export const api = {
     name?: string;
     description?: string;
     digital_model?: string;
-    source_provider: 'manual' | 'real_shoot';
+    source_provider: "manual" | "real_shoot";
     style?: string;
     mood?: string;
     style_values?: string[];
@@ -1140,49 +1349,71 @@ export const api = {
     video?: File | null;
   }): Promise<LookWithProducts> {
     const formData = new FormData();
-    formData.append('source_provider', request.source_provider);
+    formData.append("source_provider", request.source_provider);
     if (request.description?.trim()) {
-      formData.append('description', request.description.trim());
+      formData.append("description", request.description.trim());
     }
     if (request.name?.trim()) {
-      formData.append('name', request.name.trim());
+      formData.append("name", request.name.trim());
     }
     if (request.digital_model?.trim()) {
-      formData.append('digital_model', request.digital_model.trim());
+      formData.append("digital_model", request.digital_model.trim());
     }
     if (request.style?.trim()) {
-      formData.append('style', request.style.trim());
+      formData.append("style", request.style.trim());
     }
     if (request.mood?.trim()) {
-      formData.append('mood', request.mood.trim());
+      formData.append("mood", request.mood.trim());
     }
-    formData.append('style_values_json', JSON.stringify(request.style_values || []));
-    formData.append('mood_values_json', JSON.stringify(request.mood_values || []));
+    formData.append(
+      "style_values_json",
+      JSON.stringify(request.style_values || []),
+    );
+    formData.append(
+      "mood_values_json",
+      JSON.stringify(request.mood_values || []),
+    );
     if (request.style_dna?.trim()) {
-      formData.append('style_dna', request.style_dna.trim());
+      formData.append("style_dna", request.style_dna.trim());
     }
     if (request.radical?.trim()) {
-      formData.append('radical', request.radical.trim());
+      formData.append("radical", request.radical.trim());
     }
-    formData.append('style_dna_values_json', JSON.stringify(request.style_dna_values || []));
-    formData.append('radical_values_json', JSON.stringify(request.radical_values || []));
-    formData.append('is_new', request.is_new ? 'true' : 'false');
+    formData.append(
+      "style_dna_values_json",
+      JSON.stringify(request.style_dna_values || []),
+    );
+    formData.append(
+      "radical_values_json",
+      JSON.stringify(request.radical_values || []),
+    );
+    formData.append("is_new", request.is_new ? "true" : "false");
     if (request.main_image_ref) {
-      formData.append('main_image_ref', request.main_image_ref);
+      formData.append("main_image_ref", request.main_image_ref);
     }
-    formData.append('ordered_image_refs_json', JSON.stringify(request.ordered_image_refs || []));
-    formData.append('product_links_json', JSON.stringify(request.product_links || []));
+    formData.append(
+      "ordered_image_refs_json",
+      JSON.stringify(request.ordered_image_refs || []),
+    );
+    formData.append(
+      "product_links_json",
+      JSON.stringify(request.product_links || []),
+    );
     (request.photos || []).forEach((file) => {
-      formData.append('photos', file);
+      formData.append("photos", file);
     });
     if (request.video) {
-      formData.append('video', request.video);
+      formData.append("video", request.video);
     }
 
-    const response = await apiClient.post<LookWithProducts>('/api/looks/manual', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 180000,
-    });
+    const response = await apiClient.post<LookWithProducts>(
+      "/api/looks/manual",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 180000,
+      },
+    );
     return response.data;
   },
 
@@ -1196,64 +1427,86 @@ export const api = {
     video?: File | null;
   }): Promise<LookWithProducts> {
     const formData = new FormData();
-    formData.append('keep_image_urls_json', JSON.stringify(request.keep_image_urls || []));
+    formData.append(
+      "keep_image_urls_json",
+      JSON.stringify(request.keep_image_urls || []),
+    );
     if (request.main_image_ref) {
-      formData.append('main_image_ref', request.main_image_ref);
+      formData.append("main_image_ref", request.main_image_ref);
     }
-    formData.append('ordered_image_refs_json', JSON.stringify(request.ordered_image_refs || []));
-    formData.append('remove_video', request.remove_video ? 'true' : 'false');
+    formData.append(
+      "ordered_image_refs_json",
+      JSON.stringify(request.ordered_image_refs || []),
+    );
+    formData.append("remove_video", request.remove_video ? "true" : "false");
     (request.photos || []).forEach((file) => {
-      formData.append('photos', file);
+      formData.append("photos", file);
     });
     if (request.video) {
-      formData.append('video', request.video);
+      formData.append("video", request.video);
     }
-    const response = await apiClient.post<LookWithProducts>(`/api/looks/${request.look_id}/manual-media`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 180000,
-    });
+    const response = await apiClient.post<LookWithProducts>(
+      `/api/looks/${request.look_id}/manual-media`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 180000,
+      },
+    );
     return response.data;
   },
 
   async getDigitalModels(): Promise<DigitalModelInfo[]> {
-    const response = await apiClient.get<DigitalModelInfo[]>('/api/looks/models');
+    const response =
+      await apiClient.get<DigitalModelInfo[]>("/api/looks/models");
     return response.data;
   },
 
   async deleteModelPortfolioImage(modelId: string, imageUrl: string) {
-    const response = await apiClient.delete(`/api/looks/models/${encodeURIComponent(modelId)}/portfolio-image`, {
-      params: { image_url: imageUrl },
-    });
+    const response = await apiClient.delete(
+      `/api/looks/models/${encodeURIComponent(modelId)}/portfolio-image`,
+      {
+        params: { image_url: imageUrl },
+      },
+    );
     return response.data;
   },
 
   async createDigitalModel(name: string) {
     const formData = new FormData();
-    formData.append('name', name);
-    const response = await apiClient.post('/api/looks/models', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    formData.append("name", name);
+    const response = await apiClient.post("/api/looks/models", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;
   },
 
   async deleteDigitalModel(modelId: string) {
-    const response = await apiClient.delete(`/api/looks/models/${encodeURIComponent(modelId)}`);
+    const response = await apiClient.delete(
+      `/api/looks/models/${encodeURIComponent(modelId)}`,
+    );
     return response.data;
   },
 
   async uploadModelSourceImages(modelId: string, files: File[]) {
     const formData = new FormData();
     files.forEach((file) => {
-      formData.append('files', file);
+      formData.append("files", file);
     });
-    const response = await apiClient.post(`/api/looks/models/${encodeURIComponent(modelId)}/source-images`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await apiClient.post(
+      `/api/looks/models/${encodeURIComponent(modelId)}/source-images`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     return response.data;
   },
 
   async deleteModelSourceImage(modelId: string, filename: string) {
-    const response = await apiClient.delete(`/api/looks/models/${encodeURIComponent(modelId)}/source-images/${encodeURIComponent(filename)}`);
+    const response = await apiClient.delete(
+      `/api/looks/models/${encodeURIComponent(modelId)}/source-images/${encodeURIComponent(filename)}`,
+    );
     return response.data;
   },
 
@@ -1274,28 +1527,35 @@ export const api = {
     digital_model?: string;
   }) {
     try {
-      const response = await apiClient.post('/api/looks/generate', request, {
+      const response = await apiClient.post("/api/looks/generate", request, {
         timeout: 600000, // 10 минут для генерации образа (включая генерацию изображения)
       });
       return response.data;
     } catch (error: any) {
       // Обработка таймаутов
       if (
-        error.code === 'ECONNABORTED' ||
-        error.message?.includes('timeout') ||
-        error.message?.includes('Network Error')
+        error.code === "ECONNABORTED" ||
+        error.message?.includes("timeout") ||
+        error.message?.includes("Network Error")
       ) {
-        throw new Error('Генерация образа занимает больше времени, чем ожидалось. Пожалуйста, подождите - образ может быть создан в фоновом режиме. Проверьте список образов через несколько минут.');
+        throw new Error(
+          "Генерация образа занимает больше времени, чем ожидалось. Пожалуйста, подождите - образ может быть создан в фоновом режиме. Проверьте список образов через несколько минут.",
+        );
       }
       if ([502, 503, 504].includes(error.response?.status)) {
-        throw new Error('Генерация образа занимает больше времени, чем ожидает сервер. Образ мог быть создан в фоновом режиме. Проверьте список образов через несколько минут.');
+        throw new Error(
+          "Генерация образа занимает больше времени, чем ожидает сервер. Образ мог быть создан в фоновом режиме. Проверьте список образов через несколько минут.",
+        );
       }
       // Обработка ошибок сервера
       if (error.response?.status === 500) {
-        const detail = error.response?.data?.detail || 'Ошибка сервера при генерации образа';
+        const detail =
+          error.response?.data?.detail || "Ошибка сервера при генерации образа";
         // Если генерация началась, но не завершилась в срок, это может быть таймаут на сервере
-        if (detail.includes('timeout') || detail.includes('Timeout')) {
-          throw new Error('Генерация образа занимает больше времени, чем ожидалось. Пожалуйста, подождите - образ может быть создан в фоновом режиме. Проверьте список образов через несколько минут.');
+        if (detail.includes("timeout") || detail.includes("Timeout")) {
+          throw new Error(
+            "Генерация образа занимает больше времени, чем ожидалось. Пожалуйста, подождите - образ может быть создан в фоновом режиме. Проверьте список образов через несколько минут.",
+          );
         }
         throw new Error(`Ошибка сервера: ${detail}`);
       }
@@ -1306,65 +1566,87 @@ export const api = {
   async generateLookImage(
     lookId: string,
     useDefaultModel: boolean = false,
-    digitalModel?: string
-  ): Promise<{ look_id: string; image_url: string; use_default_model: boolean }> {
-    const response = await apiClient.post<{ look_id: string; image_url: string; use_default_model: boolean }>(
-      `/api/looks/${lookId}/generate-image`,
-      null,
-      {
-        params: { use_default_model: useDefaultModel, digital_model: digitalModel },
-        timeout: 300000, // 5 минут для генерации изображения (увеличено из-за длительной генерации)
-      }
-    );
+    digitalModel?: string,
+  ): Promise<{
+    look_id: string;
+    image_url: string;
+    use_default_model: boolean;
+  }> {
+    const response = await apiClient.post<{
+      look_id: string;
+      image_url: string;
+      use_default_model: boolean;
+    }>(`/api/looks/${lookId}/generate-image`, null, {
+      params: {
+        use_default_model: useDefaultModel,
+        digital_model: digitalModel,
+      },
+      timeout: 300000, // 5 минут для генерации изображения (увеличено из-за длительной генерации)
+    });
     return response.data;
   },
 
   async tryOnLook(lookId: string, photo: File, userId?: string) {
     const formData = new FormData();
-    formData.append('photo', photo);
+    formData.append("photo", photo);
     if (userId) {
-      formData.append('user_id', userId);
+      formData.append("user_id", userId);
     }
-    
-    const response = await apiClient.post(`/api/looks/${lookId}/try-on`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+
+    const response = await apiClient.post(
+      `/api/looks/${lookId}/try-on`,
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 180000, // 3 минуты для примерки
       },
-      timeout: 180000, // 3 минуты для примерки
-    });
+    );
     return response.data;
   },
 
   async approveLook(lookId: string, userId?: string) {
-    const response = await apiClient.post(`/api/looks/${lookId}/approve`, {}, {
-      params: userId ? { user_id: userId } : {},
-    });
+    const response = await apiClient.post(
+      `/api/looks/${lookId}/approve`,
+      {},
+      {
+        params: userId ? { user_id: userId } : {},
+      },
+    );
     return response.data;
   },
 
-  async updateLook(lookId: string, request: {
-    name?: string;
-    style?: string;
-    mood?: string;
-    style_values?: string[];
-    mood_values?: string[];
-    style_dna?: string;
-    radical?: string;
-    style_dna_values?: string[];
-    radical_values?: string[];
-    is_new?: boolean;
-    description?: string;
-    product_ids?: string[];
-    product_layout?: Array<Record<string, any>>;
-    regenerate_image?: boolean;
-    use_default_model?: boolean;
-    digital_model?: string;
-  }) {
+  async updateLook(
+    lookId: string,
+    request: {
+      name?: string;
+      style?: string;
+      mood?: string;
+      style_values?: string[];
+      mood_values?: string[];
+      style_dna?: string;
+      radical?: string;
+      style_dna_values?: string[];
+      radical_values?: string[];
+      is_new?: boolean;
+      description?: string;
+      product_ids?: string[];
+      product_layout?: Array<Record<string, any>>;
+      regenerate_image?: boolean;
+      use_default_model?: boolean;
+      digital_model?: string;
+    },
+  ) {
     // Если запрашивается перегенерация изображения, используем отдельный endpoint
     if (request.regenerate_image) {
-      return await api.generateLookImage(lookId, request.use_default_model || false, request.digital_model);
+      return await api.generateLookImage(
+        lookId,
+        request.use_default_model || false,
+        request.digital_model,
+      );
     }
-    
+
     const response = await apiClient.put(`/api/looks/${lookId}`, request, {
       timeout: 30000, // 30 секунд для обычного обновления
     });
@@ -1377,151 +1659,205 @@ export const api = {
   },
 
   async deleteTestLooks(confirm: boolean = false) {
-    const response = await apiClient.delete('/api/looks', {
+    const response = await apiClient.delete("/api/looks", {
       params: { confirm },
     });
     return response.data;
   },
 
   async setMainImage(lookId: string, imageIndex: number) {
-    const response = await apiClient.put(`/api/looks/${lookId}/set-main-image`, null, {
-      params: { image_index: imageIndex },
-    });
+    const response = await apiClient.put(
+      `/api/looks/${lookId}/set-main-image`,
+      null,
+      {
+        params: { image_index: imageIndex },
+      },
+    );
     return response.data;
   },
 
   async deleteLookImage(lookId: string, imageIndex: number) {
-    const response = await apiClient.delete(`/api/looks/${lookId}/image/${imageIndex}`);
+    const response = await apiClient.delete(
+      `/api/looks/${lookId}/image/${imageIndex}`,
+    );
     return response.data;
   },
 
   async analyzePhoto(photo: File) {
     const formData = new FormData();
-    formData.append('photo', photo);
-    
-    const response = await apiClient.post('/api/looks/analyze-photo', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+    formData.append("photo", photo);
+
+    const response = await apiClient.post(
+      "/api/looks/analyze-photo",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 60000, // 1 минута для анализа
       },
-      timeout: 60000, // 1 минута для анализа
-    });
+    );
     return response.data;
   },
 
   // Look Try-On API
   async uploadUserPhoto(photo: File) {
     const formData = new FormData();
-    formData.append('photo', photo);
+    formData.append("photo", photo);
 
-    const response = await apiClient.post('/api/look-tryon/upload-photo', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+    const response = await apiClient.post(
+      "/api/look-tryon/upload-photo",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       },
-    });
+    );
     return response.data;
   },
 
   async analyzeUserPhoto(photo: File) {
     const formData = new FormData();
-    formData.append('photo', photo);
-    
-    const response = await apiClient.post('/api/look-tryon/analyze', formData, {
+    formData.append("photo", photo);
+
+    const response = await apiClient.post("/api/look-tryon/analyze", formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
       timeout: 60000,
     });
     return response.data;
   },
 
-  async generateLookWithTryOn(request: {
-    look_id?: string;
-    user_request?: string;
-  }, photo: File) {
+  async generateLookWithTryOn(
+    request: {
+      look_id?: string;
+      user_request?: string;
+    },
+    photo: File,
+  ) {
     const formData = new FormData();
-    formData.append('photo', photo);
+    formData.append("photo", photo);
 
     // Добавляем параметры в FormData
     if (request.look_id) {
-      formData.append('look_id', request.look_id);
+      formData.append("look_id", request.look_id);
     }
     if (request.user_request) {
-      formData.append('user_request', request.user_request);
+      formData.append("user_request", request.user_request);
     }
-    
-    const response = await apiClient.post('/api/look-tryon/generate', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+
+    const response = await apiClient.post(
+      "/api/look-tryon/generate",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        timeout: 180000, // 3 минуты
       },
-      timeout: 180000, // 3 минуты
-    });
+    );
     return response.data;
   },
 
   // Content API
-  async generateContent(request: ContentGenerateRequest): Promise<ContentResponse> {
+  async generateContent(
+    request: ContentGenerateRequest,
+  ): Promise<ContentResponse> {
     try {
-      const response = await apiClient.post<ContentResponse>('/api/content/generate', request);
+      const response = await apiClient.post<ContentResponse>(
+        "/api/content/generate",
+        request,
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Content API Error:', error);
+      console.error("Content API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
   },
 
-  async generateContentPlan(request: ContentPlanGenerateRequest): Promise<ContentPlanGenerateResponse> {
+  async generateContentPlan(
+    request: ContentPlanGenerateRequest,
+  ): Promise<ContentPlanGenerateResponse> {
     try {
       // Генерация плана через LLM может занимать время, увеличиваем таймаут до 5 минут
       const response = await apiClient.post<ContentPlanGenerateResponse>(
-        '/api/content/plans/generate',
+        "/api/content/plans/generate",
         request,
         {
           timeout: 300000, // 5 минут
-        }
+        },
       );
       return response.data;
     } catch (error: any) {
-      console.error('Content Plan Generation API Error:', error);
+      console.error("Content Plan Generation API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
-      } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-        throw new Error('Превышено время ожидания. Генерация плана занимает слишком много времени. Попробуйте уменьшить период или количество каналов.');
-      } else if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
-        throw new Error('Соединение с backend разорвано. Убедитесь, что backend запущен и доступен на http://localhost:8000');
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
+      } else if (
+        error.code === "ECONNABORTED" ||
+        error.message?.includes("timeout")
+      ) {
+        throw new Error(
+          "Превышено время ожидания. Генерация плана занимает слишком много времени. Попробуйте уменьшить период или количество каналов.",
+        );
+      } else if (
+        error.code === "ECONNRESET" ||
+        error.message?.includes("socket hang up")
+      ) {
+        throw new Error(
+          "Соединение с backend разорвано. Убедитесь, что backend запущен и доступен на http://localhost:8000",
+        );
       }
       throw error;
     }
   },
 
   async getContentPlan(planId: string): Promise<ContentPlanDTO> {
-    const response = await apiClient.get<ContentPlanDTO>(`/api/content/plans/${planId}`);
+    const response = await apiClient.get<ContentPlanDTO>(
+      `/api/content/plans/${planId}`,
+    );
     return response.data;
   },
 
-  async updateContentPlan(planId: string, request: ContentPlanUpdateRequest): Promise<ContentPlanDTO> {
-    const response = await apiClient.put<ContentPlanDTO>(`/api/content/plans/${planId}`, request);
+  async updateContentPlan(
+    planId: string,
+    request: ContentPlanUpdateRequest,
+  ): Promise<ContentPlanDTO> {
+    const response = await apiClient.put<ContentPlanDTO>(
+      `/api/content/plans/${planId}`,
+      request,
+    );
     return response.data;
   },
 
-  async listContentPlans(params?: { 
-    skip?: number; 
-    limit?: number; 
+  async listContentPlans(params?: {
+    skip?: number;
+    limit?: number;
     status?: string;
     search?: string;
     start_date_from?: string;
     start_date_to?: string;
   }): Promise<ContentPlanDTO[]> {
-    const response = await apiClient.get<ContentPlanDTO[]>('/api/content/plans', { params });
+    const response = await apiClient.get<ContentPlanDTO[]>(
+      "/api/content/plans",
+      { params },
+    );
     return response.data;
   },
 
-  async deleteContentPlan(planId: string): Promise<{ message: string; plan_id: string }> {
-    const response = await apiClient.delete<{ message: string; plan_id: string }>(`/api/content/plans/${planId}`);
+  async deleteContentPlan(
+    planId: string,
+  ): Promise<{ message: string; plan_id: string }> {
+    const response = await apiClient.delete<{
+      message: string;
+      plan_id: string;
+    }>(`/api/content/plans/${planId}`);
     return response.data;
   },
 
@@ -1533,59 +1869,95 @@ export const api = {
       search?: string;
       scheduled_from?: string;
       scheduled_to?: string;
-    }
+    },
   ): Promise<ContentItemDTO[]> {
-    const response = await apiClient.get<ContentItemDTO[]>(`/api/content/plans/${planId}/items`, { params });
+    const response = await apiClient.get<ContentItemDTO[]>(
+      `/api/content/plans/${planId}/items`,
+      { params },
+    );
     return response.data;
   },
 
-  async createContentItem(planId: string, request: ContentItemCreateRequest): Promise<ContentItemDTO> {
-    const response = await apiClient.post<ContentItemDTO>(`/api/content/plans/${planId}/items`, request);
+  async createContentItem(
+    planId: string,
+    request: ContentItemCreateRequest,
+  ): Promise<ContentItemDTO> {
+    const response = await apiClient.post<ContentItemDTO>(
+      `/api/content/plans/${planId}/items`,
+      request,
+    );
     return response.data;
   },
 
-  async updateContentItem(planId: string, itemId: string, request: ContentItemUpdateRequest): Promise<ContentItemDTO> {
-    const response = await apiClient.put<ContentItemDTO>(`/api/content/plans/${planId}/items/${itemId}`, request);
+  async updateContentItem(
+    planId: string,
+    itemId: string,
+    request: ContentItemUpdateRequest,
+  ): Promise<ContentItemDTO> {
+    const response = await apiClient.put<ContentItemDTO>(
+      `/api/content/plans/${planId}/items/${itemId}`,
+      request,
+    );
     return response.data;
   },
 
-  async deleteContentItem(planId: string, itemId: string): Promise<{ message: string; item_id: string }> {
-    const response = await apiClient.delete<{ message: string; item_id: string }>(`/api/content/plans/${planId}/items/${itemId}`);
+  async deleteContentItem(
+    planId: string,
+    itemId: string,
+  ): Promise<{ message: string; item_id: string }> {
+    const response = await apiClient.delete<{
+      message: string;
+      item_id: string;
+    }>(`/api/content/plans/${planId}/items/${itemId}`);
     return response.data;
   },
 
   async bulkUpdateItemsStatus(
     planId: string,
     itemIds: string[],
-    status: string
+    status: string,
   ): Promise<{ message: string; updated_count: number; status: string }> {
-    const response = await apiClient.put<{ message: string; updated_count: number; status: string }>(
-      `/api/content/plans/${planId}/items/bulk/status`,
-      { item_ids: itemIds, status }
-    );
+    const response = await apiClient.put<{
+      message: string;
+      updated_count: number;
+      status: string;
+    }>(`/api/content/plans/${planId}/items/bulk/status`, {
+      item_ids: itemIds,
+      status,
+    });
     return response.data;
   },
 
   async bulkDeleteItems(
     planId: string,
-    itemIds: string[]
+    itemIds: string[],
   ): Promise<{ message: string; deleted_count: number }> {
-    const response = await apiClient.post<{ message: string; deleted_count: number }>(
-      `/api/content/plans/${planId}/items/bulk/delete`,
-      { item_ids: itemIds }
-    );
+    const response = await apiClient.post<{
+      message: string;
+      deleted_count: number;
+    }>(`/api/content/plans/${planId}/items/bulk/delete`, { item_ids: itemIds });
     return response.data;
   },
 
   async bulkGenerateContent(
     planId: string,
     itemIds: string[],
-    feedback?: string
-  ): Promise<{ message: string; generated_count: number; failed_count: number; errors?: Array<{ item_id: string; error: string }> }> {
-    const response = await apiClient.post<{ message: string; generated_count: number; failed_count: number; errors?: Array<{ item_id: string; error: string }> }>(
-      `/api/content/plans/${planId}/items/bulk/generate`,
-      { item_ids: itemIds, feedback }
-    );
+    feedback?: string,
+  ): Promise<{
+    message: string;
+    generated_count: number;
+    failed_count: number;
+    errors?: Array<{ item_id: string; error: string }>;
+  }> {
+    const response = await apiClient.post<{
+      message: string;
+      generated_count: number;
+      failed_count: number;
+      errors?: Array<{ item_id: string; error: string }>;
+    }>(`/api/content/plans/${planId}/items/bulk/generate`, {
+      item_ids: itemIds,
+      feedback,
+    });
     return response.data;
   },
 
@@ -1596,11 +1968,17 @@ export const api = {
     status?: string;
     plan_id?: string;
   }): Promise<ContentItemDTO[]> {
-    const response = await apiClient.get<ContentItemDTO[]>('/api/content/calendar', { params });
+    const response = await apiClient.get<ContentItemDTO[]>(
+      "/api/content/calendar",
+      { params },
+    );
     return response.data;
   },
 
-  async generateContentForItem(itemId: string, feedback?: string): Promise<GenerateItemContentResponse> {
+  async generateContentForItem(
+    itemId: string,
+    feedback?: string,
+  ): Promise<GenerateItemContentResponse> {
     try {
       // Если feedback не указан, передаем пустой объект вместо null
       const requestBody = feedback ? { feedback } : {};
@@ -1609,29 +1987,38 @@ export const api = {
         requestBody,
         {
           timeout: 120000, // 2 минуты для генерации контента
-        }
+        },
       );
       return response.data;
     } catch (error: any) {
-      console.error('Generate Content For Item API Error:', error);
+      console.error("Generate Content For Item API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
   },
 
-  async applyGeneratedContent(itemId: string, generated: Record<string, any>): Promise<ApplyGeneratedContentResponse> {
+  async applyGeneratedContent(
+    itemId: string,
+    generated: Record<string, any>,
+  ): Promise<ApplyGeneratedContentResponse> {
     const response = await apiClient.post<ApplyGeneratedContentResponse>(
       `/api/content/items/${itemId}/apply`,
-      { generated }
+      { generated },
     );
     return response.data;
   },
 
-  async publishContentItem(itemId: string, request?: PublishItemRequest): Promise<PublishItemResponse> {
-    const response = await apiClient.post<PublishItemResponse>(`/api/content/items/${itemId}/publish`, request || {});
+  async publishContentItem(
+    itemId: string,
+    request?: PublishItemRequest,
+  ): Promise<PublishItemResponse> {
+    const response = await apiClient.post<PublishItemResponse>(
+      `/api/content/items/${itemId}/publish`,
+      request || {},
+    );
     return response.data;
   },
 
@@ -1649,56 +2036,77 @@ export const api = {
     revisionDescription?: string,
     options?: {
       no_text_on_image?: boolean;
-      style_intensity?: 'classic' | 'bold' | 'edgy';
-    }
+      style_intensity?: "classic" | "bold" | "edgy";
+    },
   ): Promise<{
     item_id: string;
     media: ContentItemMediaEntry;
     active_media_id?: string | null;
     message: string;
   }> {
-    const response = await apiClient.post(`/api/content/items/${itemId}/generate-photo`, {
-      revision_description: revisionDescription || undefined,
-      no_text_on_image: options?.no_text_on_image ?? true,
-      style_intensity: options?.style_intensity ?? 'classic',
-    });
+    const response = await apiClient.post(
+      `/api/content/items/${itemId}/generate-photo`,
+      {
+        revision_description: revisionDescription || undefined,
+        no_text_on_image: options?.no_text_on_image ?? true,
+        style_intensity: options?.style_intensity ?? "classic",
+      },
+    );
     return response.data;
   },
 
-  async uploadItemMedia(itemId: string, file: File, note?: string): Promise<{
+  async uploadItemMedia(
+    itemId: string,
+    file: File,
+    note?: string,
+  ): Promise<{
     item_id: string;
     media: ContentItemMediaEntry;
     active_media_id?: string | null;
     message: string;
   }> {
     const form = new FormData();
-    form.append('file', file);
+    form.append("file", file);
     if (note?.trim()) {
-      form.append('note', note.trim());
+      form.append("note", note.trim());
     }
-    const response = await apiClient.post(`/api/content/items/${itemId}/media/upload`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    const response = await apiClient.post(
+      `/api/content/items/${itemId}/media/upload`,
+      form,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     return response.data;
   },
 
-  async setActiveItemMedia(itemId: string, mediaId: string): Promise<{
+  async setActiveItemMedia(
+    itemId: string,
+    mediaId: string,
+  ): Promise<{
     item_id: string;
     media: ContentItemMediaEntry;
     active_media_id?: string | null;
     message: string;
   }> {
-    const response = await apiClient.post(`/api/content/items/${itemId}/media/${mediaId}/set-active`);
+    const response = await apiClient.post(
+      `/api/content/items/${itemId}/media/${mediaId}/set-active`,
+    );
     return response.data;
   },
 
-  async deleteItemMedia(itemId: string, mediaId: string): Promise<{
+  async deleteItemMedia(
+    itemId: string,
+    mediaId: string,
+  ): Promise<{
     item_id: string;
     deleted: boolean;
     active_media_id?: string | null;
     message: string;
   }> {
-    const response = await apiClient.delete(`/api/content/items/${itemId}/media/${mediaId}`);
+    const response = await apiClient.delete(
+      `/api/content/items/${itemId}/media/${mediaId}`,
+    );
     return response.data;
   },
 
@@ -1708,19 +2116,22 @@ export const api = {
     revisionDescription?: string,
     options?: {
       no_text_on_image?: boolean;
-      style_intensity?: 'classic' | 'bold' | 'edgy';
-    }
+      style_intensity?: "classic" | "bold" | "edgy";
+    },
   ): Promise<{
     item_id: string;
     media: ContentItemMediaEntry;
     active_media_id?: string | null;
     message: string;
   }> {
-    const response = await apiClient.post(`/api/content/items/${itemId}/media/${mediaId}/regenerate`, {
-      revision_description: revisionDescription || undefined,
-      no_text_on_image: options?.no_text_on_image ?? true,
-      style_intensity: options?.style_intensity ?? 'classic',
-    });
+    const response = await apiClient.post(
+      `/api/content/items/${itemId}/media/${mediaId}/regenerate`,
+      {
+        revision_description: revisionDescription || undefined,
+        no_text_on_image: options?.no_text_on_image ?? true,
+        style_intensity: options?.style_intensity ?? "classic",
+      },
+    );
     return response.data;
   },
 
@@ -1729,78 +2140,106 @@ export const api = {
   },
 
   async getYandexCalendars(): Promise<YandexCalendarsResponse> {
-    const response = await apiClient.get<YandexCalendarsResponse>('/api/content/yandex/calendars');
+    const response = await apiClient.get<YandexCalendarsResponse>(
+      "/api/content/yandex/calendars",
+    );
     return response.data;
   },
 
-  async syncPlanToYandex(planId: string, request: YandexSyncRequest): Promise<any> {
-    const response = await apiClient.post(`/api/content/plans/${planId}/sync/yandex`, request);
+  async syncPlanToYandex(
+    planId: string,
+    request: YandexSyncRequest,
+  ): Promise<any> {
+    const response = await apiClient.post(
+      `/api/content/plans/${planId}/sync/yandex`,
+      request,
+    );
     return response.data;
   },
 
   // Knowledge Base API
-  async uploadKnowledge(request: KnowledgeUploadRequest, collectionName: string = 'brand_philosophy'): Promise<KnowledgeUploadResponse> {
+  async uploadKnowledge(
+    request: KnowledgeUploadRequest,
+    collectionName: string = "brand_philosophy",
+  ): Promise<KnowledgeUploadResponse> {
     try {
-      const response = await apiClient.post<KnowledgeUploadResponse>('/api/knowledge/upload', request, {
-        params: { collection_name: collectionName },
-      });
+      const response = await apiClient.post<KnowledgeUploadResponse>(
+        "/api/knowledge/upload",
+        request,
+        {
+          params: { collection_name: collectionName },
+        },
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Knowledge Upload API Error:', error);
+      console.error("Knowledge Upload API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
   },
 
-  async checkKnowledgeDuplicates(collectionName: string, filenames: string[]): Promise<KnowledgeCheckDuplicatesResponse> {
+  async checkKnowledgeDuplicates(
+    collectionName: string,
+    filenames: string[],
+  ): Promise<KnowledgeCheckDuplicatesResponse> {
     if (filenames.length === 0) {
       return { duplicates: [] };
     }
     const response = await apiClient.get<KnowledgeCheckDuplicatesResponse>(
-      '/api/knowledge/documents/check-duplicates',
-      { params: { collection_name: collectionName, filenames: filenames.join(',') } }
+      "/api/knowledge/documents/check-duplicates",
+      {
+        params: {
+          collection_name: collectionName,
+          filenames: filenames.join(","),
+        },
+      },
     );
     return response.data;
   },
 
   async uploadKnowledgeFromFile(
     file: File,
-    collectionName: string = 'brand_philosophy',
-    replaceDuplicates: boolean = false
+    collectionName: string = "brand_philosophy",
+    replaceDuplicates: boolean = false,
   ): Promise<KnowledgeUploadResponse> {
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      
+      formData.append("file", file);
+
       console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
-      
+
       const response = await apiClient.post<KnowledgeUploadResponse>(
-        '/api/knowledge/upload/file',
+        "/api/knowledge/upload/file",
         formData,
         {
-          params: { collection_name: collectionName, replace_duplicates: replaceDuplicates },
+          params: {
+            collection_name: collectionName,
+            replace_duplicates: replaceDuplicates,
+          },
           headers: {
-            'Content-Type': 'multipart/form-data',
+            "Content-Type": "multipart/form-data",
           },
           timeout: 300000, // 5 минут для больших PDF файлов с AI обработкой
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
-              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              const percentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total,
+              );
               console.log(`Upload progress: ${percentCompleted}%`);
             }
           },
-        }
+        },
       );
-      console.log('Upload completed:', response.data);
+      console.log("Upload completed:", response.data);
       return response.data;
     } catch (error: any) {
-      console.error('Knowledge File Upload API Error:', error);
+      console.error("Knowledge File Upload API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -1808,79 +2247,106 @@ export const api = {
 
   async uploadKnowledgeBatch(
     files: File[],
-    collectionName: string = 'brand_philosophy',
-    replaceDuplicates: boolean = false
+    collectionName: string = "brand_philosophy",
+    replaceDuplicates: boolean = false,
   ): Promise<KnowledgeBatchUploadResponse> {
     if (files.length === 0) {
       return { total_files: 0, succeeded: 0, failed: 0, results: [] };
     }
     const formData = new FormData();
-    files.forEach((file) => formData.append('files', file));
+    files.forEach((file) => formData.append("files", file));
     const response = await apiClient.post<KnowledgeBatchUploadResponse>(
-      '/api/knowledge/upload/batch',
+      "/api/knowledge/upload/batch",
       formData,
       {
-        params: { collection_name: collectionName, replace_duplicates: replaceDuplicates },
-        headers: { 'Content-Type': 'multipart/form-data' },
+        params: {
+          collection_name: collectionName,
+          replace_duplicates: replaceDuplicates,
+        },
+        headers: { "Content-Type": "multipart/form-data" },
         timeout: 600000, // 10 минут для пакетной загрузки
         onUploadProgress: (e) => {
-          if (e.total) console.log(`Batch upload: ${Math.round((e.loaded / e.total) * 100)}%`);
+          if (e.total)
+            console.log(
+              `Batch upload: ${Math.round((e.loaded / e.total) * 100)}%`,
+            );
         },
-      }
+      },
     );
     return response.data;
   },
 
-  async searchKnowledge(query: string, limit: number = 5, scoreThreshold: number = 0.5, collectionName: string = 'brand_philosophy'): Promise<KnowledgeSearchResult> {
+  async searchKnowledge(
+    query: string,
+    limit: number = 5,
+    scoreThreshold: number = 0.5,
+    collectionName: string = "brand_philosophy",
+  ): Promise<KnowledgeSearchResult> {
     try {
-      const response = await apiClient.get<KnowledgeSearchResult>('/api/knowledge/search', {
-        params: {
-          query,
-          limit,
-          score_threshold: scoreThreshold,
-          collection_name: collectionName,
+      const response = await apiClient.get<KnowledgeSearchResult>(
+        "/api/knowledge/search",
+        {
+          params: {
+            query,
+            limit,
+            score_threshold: scoreThreshold,
+            collection_name: collectionName,
+          },
         },
-      });
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Knowledge Search API Error:', error);
+      console.error("Knowledge Search API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
   },
 
-  async getKnowledgeStats(collectionName: string = 'brand_philosophy'): Promise<KnowledgeStats> {
+  async getKnowledgeStats(
+    collectionName: string = "brand_philosophy",
+  ): Promise<KnowledgeStats> {
     try {
-      const response = await apiClient.get<KnowledgeStats>('/api/knowledge/stats', {
-        params: { collection_name: collectionName },
-      });
+      const response = await apiClient.get<KnowledgeStats>(
+        "/api/knowledge/stats",
+        {
+          params: { collection_name: collectionName },
+        },
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Knowledge Stats API Error:', error);
+      console.error("Knowledge Stats API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
   },
 
-  async getKnowledgeDocuments(skip: number = 0, limit: number = 100, status?: string, collectionName?: string): Promise<KnowledgeDocument[]> {
+  async getKnowledgeDocuments(
+    skip: number = 0,
+    limit: number = 100,
+    status?: string,
+    collectionName?: string,
+  ): Promise<KnowledgeDocument[]> {
     try {
       const params: any = { skip, limit };
       if (status) params.status = status;
       if (collectionName) params.collection_name = collectionName;
-      
-      const response = await apiClient.get<KnowledgeDocument[]>('/api/knowledge/documents', { params });
+
+      const response = await apiClient.get<KnowledgeDocument[]>(
+        "/api/knowledge/documents",
+        { params },
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Knowledge Documents API Error:', error);
+      console.error("Knowledge Documents API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -1888,13 +2354,15 @@ export const api = {
 
   async getKnowledgeDocument(documentId: string): Promise<KnowledgeDocument> {
     try {
-      const response = await apiClient.get<KnowledgeDocument>(`/api/knowledge/documents/${documentId}`);
+      const response = await apiClient.get<KnowledgeDocument>(
+        `/api/knowledge/documents/${documentId}`,
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Knowledge Document API Error:', error);
+      console.error("Knowledge Document API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -1902,38 +2370,51 @@ export const api = {
 
   async changeKnowledgeDocumentCollection(
     documentId: string,
-    collectionName: string
+    collectionName: string,
   ): Promise<KnowledgeDocument> {
     const response = await apiClient.patch<KnowledgeDocument>(
       `/api/knowledge/documents/${documentId}/collection`,
-      { collection_name: collectionName }
+      { collection_name: collectionName },
     );
     return response.data;
   },
 
-  async deleteKnowledgeDocument(documentId: string): Promise<{ success: boolean; message: string }> {
+  async deleteKnowledgeDocument(
+    documentId: string,
+  ): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await apiClient.delete<{ success: boolean; message: string }>(`/api/knowledge/documents/${documentId}`);
+      const response = await apiClient.delete<{
+        success: boolean;
+        message: string;
+      }>(`/api/knowledge/documents/${documentId}`);
       return response.data;
     } catch (error: any) {
-      console.error('Delete Knowledge Document API Error:', error);
+      console.error("Delete Knowledge Document API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
   },
 
-  async clearKnowledgeCollection(collectionName: string): Promise<{ success: boolean; collection_name: string; deleted_history_records: number }> {
+  async clearKnowledgeCollection(
+    collectionName: string,
+  ): Promise<{
+    success: boolean;
+    collection_name: string;
+    deleted_history_records: number;
+  }> {
     try {
-      const response = await apiClient.delete(`/api/knowledge/collections/${collectionName}/clear`);
+      const response = await apiClient.delete(
+        `/api/knowledge/collections/${collectionName}/clear`,
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Clear Knowledge Collection API Error:', error);
+      console.error("Clear Knowledge Collection API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -1945,216 +2426,423 @@ export const api = {
     limit?: number;
   }): Promise<SyncProductsToKnowledgeResponse> {
     const response = await apiClient.post<SyncProductsToKnowledgeResponse>(
-      '/api/knowledge/sync/products',
+      "/api/knowledge/sync/products",
       {},
       {
         params,
         timeout: 300000, // 5 минут (embeddings + upsert могут быть медленными)
-      }
+      },
     );
     return response.data;
   },
 
   async getModelSettings(): Promise<ModelSettingsResponse> {
-    const response = await apiClient.get<ModelSettingsResponse>('/api/settings/model');
+    const response = await apiClient.get<ModelSettingsResponse>(
+      "/api/settings/model",
+    );
     return response.data;
   },
 
-  async setModelSettings(request: ModelSettingsUpdateRequest): Promise<ModelSettingsResponse> {
-    const response = await apiClient.put<ModelSettingsResponse>('/api/settings/model', request);
+  async setModelSettings(
+    request: ModelSettingsUpdateRequest,
+  ): Promise<ModelSettingsResponse> {
+    const response = await apiClient.put<ModelSettingsResponse>(
+      "/api/settings/model",
+      request,
+    );
     return response.data;
   },
 
   async getAiCoreSettings(): Promise<AiCoreSettingsResponse> {
-    const response = await apiClient.get<AiCoreSettingsResponse>('/api/settings/ai-core');
+    const response = await apiClient.get<AiCoreSettingsResponse>(
+      "/api/settings/ai-core",
+    );
     return response.data;
   },
 
-  async setAiCoreSettings(request: AiCoreSettingsUpdateRequest): Promise<AiCoreSettingsResponse> {
-    const response = await apiClient.put<AiCoreSettingsResponse>('/api/settings/ai-core', request);
+  async setAiCoreSettings(
+    request: AiCoreSettingsUpdateRequest,
+  ): Promise<AiCoreSettingsResponse> {
+    const response = await apiClient.put<AiCoreSettingsResponse>(
+      "/api/settings/ai-core",
+      request,
+    );
     return response.data;
   },
 
   async getEmailServerSettings(): Promise<EmailServerSettingsResponse> {
-    const response = await apiClient.get<EmailServerSettingsResponse>('/api/settings/email-server');
+    const response = await apiClient.get<EmailServerSettingsResponse>(
+      "/api/settings/email-server",
+    );
     return response.data;
   },
 
-  async setEmailServerSettings(request: EmailServerSettingsUpdateRequest): Promise<EmailServerSettingsResponse> {
-    const response = await apiClient.put<EmailServerSettingsResponse>('/api/settings/email-server', request);
+  async setEmailServerSettings(
+    request: EmailServerSettingsUpdateRequest,
+  ): Promise<EmailServerSettingsResponse> {
+    const response = await apiClient.put<EmailServerSettingsResponse>(
+      "/api/settings/email-server",
+      request,
+    );
     return response.data;
   },
 
-  async testEmailServerSettings(toEmail: string): Promise<EmailServerTestResponse> {
-    const response = await apiClient.post<EmailServerTestResponse>('/api/settings/email-server/test', {
-      to_email: toEmail,
-    });
+  async testEmailServerSettings(
+    toEmail: string,
+  ): Promise<EmailServerTestResponse> {
+    const response = await apiClient.post<EmailServerTestResponse>(
+      "/api/settings/email-server/test",
+      {
+        to_email: toEmail,
+      },
+    );
+    return response.data;
+  },
+
+  async getYooKassaSettings(): Promise<YooKassaSettingsResponse> {
+    const response = await apiClient.get<YooKassaSettingsResponse>(
+      "/api/settings/yookassa",
+    );
+    return response.data;
+  },
+
+  async setYooKassaSettings(
+    request: YooKassaSettingsUpdateRequest,
+  ): Promise<YooKassaSettingsResponse> {
+    const response = await apiClient.put<YooKassaSettingsResponse>(
+      "/api/settings/yookassa",
+      request,
+    );
     return response.data;
   },
 
   async getAiRuntimeInfo(agentId: string): Promise<AiRuntimeInfoResponse> {
-    const response = await apiClient.get<AiRuntimeInfoResponse>(`/api/settings/ai-runtime/${encodeURIComponent(agentId)}`);
+    const response = await apiClient.get<AiRuntimeInfoResponse>(
+      `/api/settings/ai-runtime/${encodeURIComponent(agentId)}`,
+    );
     return response.data;
   },
 
-  async getOpenRouterModels(params?: { force_refresh?: boolean }): Promise<OpenRouterModelsResponse> {
-    const response = await apiClient.get<OpenRouterModelsResponse>('/api/settings/openrouter/models', { params });
+  async getOpenRouterModels(params?: {
+    force_refresh?: boolean;
+  }): Promise<OpenRouterModelsResponse> {
+    const response = await apiClient.get<OpenRouterModelsResponse>(
+      "/api/settings/openrouter/models",
+      { params },
+    );
     return response.data;
   },
 
-  async getOpenRouterImageModels(params?: { force_refresh?: boolean }): Promise<OpenRouterModelsResponse> {
-    const response = await apiClient.get<OpenRouterModelsResponse>('/api/settings/openrouter/image-models', { params });
+  async getOpenRouterImageModels(params?: {
+    force_refresh?: boolean;
+  }): Promise<OpenRouterModelsResponse> {
+    const response = await apiClient.get<OpenRouterModelsResponse>(
+      "/api/settings/openrouter/image-models",
+      { params },
+    );
     return response.data;
   },
 
-  async getOpenRouterStats(params?: { period?: 'today' | 'yesterday' | 'week' | 'month' }): Promise<OpenRouterStatsResponse> {
-    const response = await apiClient.get<OpenRouterStatsResponse>('/api/settings/openrouter/stats', { params });
+  async getOpenRouterStats(params?: {
+    period?: "today" | "yesterday" | "week" | "month";
+  }): Promise<OpenRouterStatsResponse> {
+    const response = await apiClient.get<OpenRouterStatsResponse>(
+      "/api/settings/openrouter/stats",
+      { params },
+    );
     return response.data;
   },
 
   async getOpenRouterToday(): Promise<OpenRouterTodaySummary> {
-    const response = await apiClient.get<OpenRouterTodaySummary>('/api/settings/openrouter/today');
+    const response = await apiClient.get<OpenRouterTodaySummary>(
+      "/api/settings/openrouter/today",
+    );
     return response.data;
   },
 
   async getOpenRouterCredits(): Promise<OpenRouterCreditsInfo> {
-    const response = await apiClient.get<OpenRouterCreditsInfo>('/api/settings/openrouter/credits');
+    const response = await apiClient.get<OpenRouterCreditsInfo>(
+      "/api/settings/openrouter/credits",
+    );
     return response.data;
   },
 
   async getImageGenerationModelSettings(): Promise<ImageGenerationModelSettingsResponse> {
-    const response = await apiClient.get<ImageGenerationModelSettingsResponse>('/api/settings/image-generation-model');
+    const response = await apiClient.get<ImageGenerationModelSettingsResponse>(
+      "/api/settings/image-generation-model",
+    );
     return response.data;
   },
 
-  async setImageGenerationModelSettings(request: ImageGenerationModelSettingsUpdateRequest): Promise<ImageGenerationModelSettingsResponse> {
-    const response = await apiClient.put<ImageGenerationModelSettingsResponse>('/api/settings/image-generation-model', request);
+  async setImageGenerationModelSettings(
+    request: ImageGenerationModelSettingsUpdateRequest,
+  ): Promise<ImageGenerationModelSettingsResponse> {
+    const response = await apiClient.put<ImageGenerationModelSettingsResponse>(
+      "/api/settings/image-generation-model",
+      request,
+    );
     return response.data;
   },
 
   async getImageOptimizationStatus(): Promise<ImageOptimizationStatusResponse> {
-    const response = await apiClient.get<ImageOptimizationStatusResponse>('/api/settings/image-optimization/status');
+    const response = await apiClient.get<ImageOptimizationStatusResponse>(
+      "/api/settings/image-optimization/status",
+    );
     return response.data;
   },
 
   async runImageOptimization(): Promise<ImageOptimizationStatusResponse> {
-    const response = await apiClient.post<ImageOptimizationStatusResponse>('/api/settings/image-optimization/run');
+    const response = await apiClient.post<ImageOptimizationStatusResponse>(
+      "/api/settings/image-optimization/run",
+    );
     return response.data;
   },
 
-  async changePassword(currentPassword: string | null, newPassword: string): Promise<{ message: string }> {
-    const response = await apiClient.post<{ message: string }>('/api/auth/change-password', {
-      current_password: currentPassword ?? undefined,
-      new_password: newPassword,
-    });
+  async changePassword(
+    currentPassword: string | null,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    const response = await apiClient.post<{ message: string }>(
+      "/api/auth/change-password",
+      {
+        current_password: currentPassword ?? undefined,
+        new_password: newPassword,
+      },
+    );
     return response.data;
   },
 
-  async getOneCSellers(params?: { limit?: number }): Promise<OneCSellersResponse> {
-    const response = await apiClient.get<OneCSellersResponse>('/api/admin/1c/sellers', { params });
+  async getOneCSellers(params?: {
+    limit?: number;
+  }): Promise<OneCSellersResponse> {
+    const response = await apiClient.get<OneCSellersResponse>(
+      "/api/admin/1c/sellers",
+      { params },
+    );
     return response.data;
   },
 
-  async getSellerKpi(params?: { month?: string; store_name?: string }): Promise<SellerKpiResponse> {
-    const response = await apiClient.get<SellerKpiResponse>('/api/admin/1c/sellers/kpi', { params });
+  async getSellerKpi(params?: {
+    month?: string;
+    store_name?: string;
+  }): Promise<SellerKpiResponse> {
+    const response = await apiClient.get<SellerKpiResponse>(
+      "/api/admin/1c/sellers/kpi",
+      { params },
+    );
     return response.data;
   },
 
-  async getSellerKpiDashboard(params?: { month?: string }): Promise<SellerKpiDashboardResponse> {
-    const response = await apiClient.get<SellerKpiDashboardResponse>('/api/admin/1c/sellers/kpi/dashboard', { params });
+  async getAdaptiveDailyPlan(params: {
+    month?: string;
+    seller_external_id?: string | null;
+    seller_name?: string | null;
+    store_name?: string | null;
+  }): Promise<AdaptiveDailyPlanResponse> {
+    const response = await apiClient.get<AdaptiveDailyPlanResponse>(
+      "/api/admin/1c/sellers/kpi/daily-plan",
+      { params },
+    );
     return response.data;
   },
 
-  async getSellerKpiTargets(params?: { month?: string; store_name?: string }): Promise<SellerKpiTargetsResponse> {
-    const response = await apiClient.get<SellerKpiTargetsResponse>('/api/admin/1c/sellers/kpi/targets', { params });
+  async getSellerKpiDashboard(params?: {
+    month?: string;
+    preview_user_id?: string;
+  }): Promise<SellerKpiDashboardResponse> {
+    const response = await apiClient.get<SellerKpiDashboardResponse>(
+      "/api/admin/1c/sellers/kpi/dashboard",
+      { params },
+    );
     return response.data;
   },
 
-  async saveSellerKpiTargets(payload: { month: string; store_name?: string; metrics: Record<string, number | string | null> }): Promise<{ success: boolean; saved: number; month: string }> {
-    const response = await apiClient.put<{ success: boolean; saved: number; month: string }>('/api/admin/1c/sellers/kpi/targets', payload);
+  async getSellerKpiTargets(params?: {
+    month?: string;
+    store_name?: string;
+  }): Promise<SellerKpiTargetsResponse> {
+    const response = await apiClient.get<SellerKpiTargetsResponse>(
+      "/api/admin/1c/sellers/kpi/targets",
+      { params },
+    );
     return response.data;
   },
 
-
-  async getSellerKpiAssortmentGuidance(params?: { month?: string; store_name?: string; seller_personal_plan?: number | null }): Promise<SellerKpiAssortmentGuidanceResponse> {
-    const response = await apiClient.get<SellerKpiAssortmentGuidanceResponse>('/api/admin/1c/sellers/kpi/assortment-guidance', { params });
+  async saveSellerKpiTargets(payload: {
+    month: string;
+    store_name?: string;
+    metrics: Record<string, number | string | null>;
+  }): Promise<{ success: boolean; saved: number; month: string }> {
+    const response = await apiClient.put<{
+      success: boolean;
+      saved: number;
+      month: string;
+    }>("/api/admin/1c/sellers/kpi/targets", payload);
     return response.data;
   },
 
-  async saveSellerKpiAssortmentGuidance(payload: { month: string; store_name: string; rows: SellerKpiAssortmentGuidanceRow[]; store_revenue_plan?: number | null }): Promise<{ success: boolean; saved: number; month: string; store_name: string }> {
-    const response = await apiClient.put<{ success: boolean; saved: number; month: string; store_name: string }>('/api/admin/1c/sellers/kpi/assortment-guidance', payload);
+  async getSellerKpiAssortmentGuidance(params?: {
+    month?: string;
+    store_name?: string;
+    seller_personal_plan?: number | null;
+  }): Promise<SellerKpiAssortmentGuidanceResponse> {
+    const response = await apiClient.get<SellerKpiAssortmentGuidanceResponse>(
+      "/api/admin/1c/sellers/kpi/assortment-guidance",
+      { params },
+    );
     return response.data;
   },
 
-  async getSellerKpiPlanMonths(params?: { limit?: number }): Promise<{ success: boolean; months: Array<{ month: string; metrics_count: number; updated_at?: string | null }> }> {
-    const response = await apiClient.get<{ success: boolean; months: Array<{ month: string; metrics_count: number; updated_at?: string | null }> }>('/api/admin/1c/sellers/plan-months', { params });
+  async saveSellerKpiAssortmentGuidance(payload: {
+    month: string;
+    store_name: string;
+    rows: SellerKpiAssortmentGuidanceRow[];
+    store_revenue_plan?: number | null;
+  }): Promise<{
+    success: boolean;
+    saved: number;
+    month: string;
+    store_name: string;
+  }> {
+    const response = await apiClient.put<{
+      success: boolean;
+      saved: number;
+      month: string;
+      store_name: string;
+    }>("/api/admin/1c/sellers/kpi/assortment-guidance", payload);
     return response.data;
   },
 
-  async getSellerKpiSnapshots(params?: { month?: string; limit?: number }): Promise<SellerKpiSnapshotsResponse> {
-    const response = await apiClient.get<SellerKpiSnapshotsResponse>('/api/admin/1c/sellers/kpi/snapshots', { params });
+  async getSellerKpiPlanMonths(params?: {
+    limit?: number;
+  }): Promise<{
+    success: boolean;
+    months: Array<{
+      month: string;
+      metrics_count: number;
+      updated_at?: string | null;
+    }>;
+  }> {
+    const response = await apiClient.get<{
+      success: boolean;
+      months: Array<{
+        month: string;
+        metrics_count: number;
+        updated_at?: string | null;
+      }>;
+    }>("/api/admin/1c/sellers/plan-months", { params });
     return response.data;
   },
 
-  async getSellerShifts(params?: { start_date?: string; end_date?: string; store_name?: string }): Promise<SellerShiftsResponse> {
-    const response = await apiClient.get<SellerShiftsResponse>('/api/admin/1c/sellers/shifts', { params });
+  async getSellerKpiSnapshots(params?: {
+    month?: string;
+    limit?: number;
+  }): Promise<SellerKpiSnapshotsResponse> {
+    const response = await apiClient.get<SellerKpiSnapshotsResponse>(
+      "/api/admin/1c/sellers/kpi/snapshots",
+      { params },
+    );
     return response.data;
   },
 
-  async importSellerShiftsExcel(payload: { filename: string; content_base64: string; store_name: string; dry_run?: boolean; replace_existing?: boolean }): Promise<SellerShiftExcelImportResponse> {
-    const response = await apiClient.post<SellerShiftExcelImportResponse>('/api/admin/1c/sellers/shifts/import-excel', payload);
+  async getSellerShifts(params?: {
+    start_date?: string;
+    end_date?: string;
+    store_name?: string;
+  }): Promise<SellerShiftsResponse> {
+    const response = await apiClient.get<SellerShiftsResponse>(
+      "/api/admin/1c/sellers/shifts",
+      { params },
+    );
     return response.data;
   },
 
-  async getSellerTrainingSummary(payload: { seller_external_id?: string | null; seller_name?: string | null; store_name?: string | null; kpi?: Record<string, any> }): Promise<PersonalTrainingSummaryResponse> {
-    const response = await apiClient.post<PersonalTrainingSummaryResponse>('/api/admin/consultant-training/personal-summary', payload);
+  async importSellerShiftsExcel(payload: {
+    filename: string;
+    content_base64: string;
+    store_name: string;
+    dry_run?: boolean;
+    replace_existing?: boolean;
+  }): Promise<SellerShiftExcelImportResponse> {
+    const response = await apiClient.post<SellerShiftExcelImportResponse>(
+      "/api/admin/1c/sellers/shifts/import-excel",
+      payload,
+    );
+    return response.data;
+  },
+
+  async getSellerTrainingSummary(payload: {
+    seller_external_id?: string | null;
+    seller_name?: string | null;
+    store_name?: string | null;
+    kpi?: Record<string, any>;
+  }): Promise<PersonalTrainingSummaryResponse> {
+    const response = await apiClient.post<PersonalTrainingSummaryResponse>(
+      "/api/admin/consultant-training/personal-summary",
+      payload,
+    );
     return response.data;
   },
 
   async saveSellerShift(payload: SellerShift): Promise<{ success: boolean }> {
-    const response = await apiClient.post<{ success: boolean }>('/api/admin/1c/sellers/shifts', payload);
+    const response = await apiClient.post<{ success: boolean }>(
+      "/api/admin/1c/sellers/shifts",
+      payload,
+    );
     return response.data;
   },
 
   async deleteSellerShift(shiftId: string): Promise<{ success: boolean }> {
-    const response = await apiClient.delete<{ success: boolean }>(`/api/admin/1c/sellers/shifts/${shiftId}`);
+    const response = await apiClient.delete<{ success: boolean }>(
+      `/api/admin/1c/sellers/shifts/${shiftId}`,
+    );
     return response.data;
   },
 
-  async replaceKnowledgeDocument(documentId: string, file: File, collectionName?: string): Promise<KnowledgeUploadResponse> {
+  async replaceKnowledgeDocument(
+    documentId: string,
+    file: File,
+    collectionName?: string,
+  ): Promise<KnowledgeUploadResponse> {
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      
+      formData.append("file", file);
+
       const response = await apiClient.post<KnowledgeUploadResponse>(
         `/api/knowledge/documents/${documentId}/replace`,
         formData,
         {
-          params: collectionName ? { collection_name: collectionName } : undefined,
+          params: collectionName
+            ? { collection_name: collectionName }
+            : undefined,
           headers: {
-            'Content-Type': 'multipart/form-data',
+            "Content-Type": "multipart/form-data",
           },
-        }
+        },
       );
       return response.data;
     } catch (error: any) {
-      console.error('Replace Knowledge Document API Error:', error);
+      console.error("Replace Knowledge Document API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
   },
 
   // 1C Sync API
-  async syncFromFile(file: File, updateExisting: boolean = true, deactivateMissing: boolean = false): Promise<OneCSyncResponse> {
+  async syncFromFile(
+    file: File,
+    updateExisting: boolean = true,
+    deactivateMissing: boolean = false,
+  ): Promise<OneCSyncResponse> {
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      
+      formData.append("file", file);
+
       const response = await apiClient.post<OneCSyncResponse>(
-        '/api/1c/sync/file',
+        "/api/1c/sync/file",
         formData,
         {
           params: {
@@ -2162,23 +2850,25 @@ export const api = {
             deactivate_missing: deactivateMissing,
           },
           headers: {
-            'Content-Type': 'multipart/form-data',
+            "Content-Type": "multipart/form-data",
           },
           timeout: 300000, // 5 минут для больших файлов
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
-              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              const percentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total,
+              );
               console.log(`Upload progress: ${percentCompleted}%`);
             }
           },
-        }
+        },
       );
       return response.data;
     } catch (error: any) {
-      console.error('1C Sync File Upload API Error:', error);
+      console.error("1C Sync File Upload API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -2186,13 +2876,15 @@ export const api = {
 
   async getSyncStatus(): Promise<OneCSyncStatus> {
     try {
-      const response = await apiClient.get<OneCSyncStatus>('/api/1c/sync/status');
+      const response = await apiClient.get<OneCSyncStatus>(
+        "/api/1c/sync/status",
+      );
       return response.data;
     } catch (error: any) {
-      console.error('1C Sync Status API Error:', error);
+      console.error("1C Sync Status API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -2201,11 +2893,11 @@ export const api = {
   async syncFromYml(
     ymlUrl: string,
     updateExisting: boolean = true,
-    deactivateMissing: boolean = false
+    deactivateMissing: boolean = false,
   ): Promise<OneCSyncResponse> {
     try {
       const response = await apiClient.post<OneCSyncResponse>(
-        '/api/1c/sync/yml',
+        "/api/1c/sync/yml",
         {
           yml_url: ymlUrl,
           update_existing: updateExisting,
@@ -2213,14 +2905,14 @@ export const api = {
         },
         {
           timeout: 300000, // 5 минут для больших файлов
-        }
+        },
       );
       return response.data;
     } catch (error: any) {
-      console.error('YML Sync API Error:', error);
+      console.error("YML Sync API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -2231,54 +2923,69 @@ export const api = {
     skip?: number;
     limit?: number;
     min_length?: number;
-  }): Promise<Array<{
-    id: string;
-    name: string;
-    brand: string | null;
-    category: string | null;
-    price: number;
-    tags: string[];
-    has_description: boolean;
-    description_length: number;
-    external_code: string | null;
-  }>> {
+  }): Promise<
+    Array<{
+      id: string;
+      name: string;
+      brand: string | null;
+      category: string | null;
+      price: number;
+      tags: string[];
+      has_description: boolean;
+      description_length: number;
+      external_code: string | null;
+    }>
+  > {
     try {
-      const response = await apiClient.get('/api/content/products/without-description', { params });
+      const response = await apiClient.get(
+        "/api/content/products/without-description",
+        { params },
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Get Products Without Description API Error:', error);
+      console.error("Get Products Without Description API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
   },
 
-  async searchProductByCodeOrName(query: string, limit?: number): Promise<Array<{
-    id: string;
-    name: string;
-    brand: string | null;
-    category: string | null;
-    price: number;
-    tags: string[];
-    has_description: boolean;
-    description_length: number;
-    external_code: string | null;
-  }>> {
+  async searchProductByCodeOrName(
+    query: string,
+    limit?: number,
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      brand: string | null;
+      category: string | null;
+      price: number;
+      tags: string[];
+      has_description: boolean;
+      description_length: number;
+      external_code: string | null;
+    }>
+  > {
     try {
-      console.log('API: Searching products with query:', query, 'limit:', limit || 10);
-      const response = await apiClient.get('/api/content/products/search', {
+      console.log(
+        "API: Searching products with query:",
+        query,
+        "limit:",
+        limit || 10,
+      );
+      const response = await apiClient.get("/api/content/products/search", {
         params: { query: query.trim(), limit: limit || 10 },
       });
-      console.log('API: Search response:', response.data);
+      console.log("API: Search response:", response.data);
       return response.data || [];
     } catch (error: any) {
-      console.error('Search Product By Code Or Name API Error:', error);
+      console.error("Search Product By Code Or Name API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
-        console.error('Response headers:', error.response.headers);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
+        console.error("Response headers:", error.response.headers);
       }
       throw error;
     }
@@ -2288,7 +2995,7 @@ export const api = {
     product_id: string;
     rewrite_existing?: boolean;
     seo_keywords?: string[];
-    target_length?: 'short' | 'medium' | 'long';
+    target_length?: "short" | "medium" | "long";
   }): Promise<{
     product_id: string;
     product_name: string;
@@ -2299,35 +3006,45 @@ export const api = {
     rewritten: boolean;
   }> {
     try {
-      const response = await apiClient.post('/api/content/products/generate-description', request, {
-        timeout: 120000, // 2 минуты для генерации описания
-      });
+      const response = await apiClient.post(
+        "/api/content/products/generate-description",
+        request,
+        {
+          timeout: 120000, // 2 минуты для генерации описания
+        },
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Generate Product Description API Error:', error);
+      console.error("Generate Product Description API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
   },
 
-  async applyProductDescription(productId: string, description: string): Promise<{
+  async applyProductDescription(
+    productId: string,
+    description: string,
+  ): Promise<{
     product_id: string;
     product_name: string;
     message: string;
   }> {
     try {
-      const response = await apiClient.post(`/api/content/products/${productId}/apply-description`, {
-        description,
-      });
+      const response = await apiClient.post(
+        `/api/content/products/${productId}/apply-description`,
+        {
+          description,
+        },
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Apply Product Description API Error:', error);
+      console.error("Apply Product Description API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -2336,7 +3053,7 @@ export const api = {
   async batchGenerateDescriptions(request: {
     product_ids: string[];
     rewrite_existing?: boolean;
-    target_length?: 'short' | 'medium' | 'long';
+    target_length?: "short" | "medium" | "long";
   }): Promise<{
     total: number;
     success: number;
@@ -2355,19 +3072,23 @@ export const api = {
     }>;
   }> {
     try {
-      const response = await apiClient.post('/api/content/products/batch-generate-descriptions', request.product_ids, {
-        params: {
-          rewrite_existing: request.rewrite_existing || false,
-          target_length: request.target_length || 'medium',
+      const response = await apiClient.post(
+        "/api/content/products/batch-generate-descriptions",
+        request.product_ids,
+        {
+          params: {
+            rewrite_existing: request.rewrite_existing || false,
+            target_length: request.target_length || "medium",
+          },
+          timeout: 600000, // 10 минут для массовой генерации
         },
-        timeout: 600000, // 10 минут для массовой генерации
-      });
+      );
       return response.data;
     } catch (error: any) {
-      console.error('Batch Generate Descriptions API Error:', error);
+      console.error("Batch Generate Descriptions API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -2377,12 +3098,12 @@ export const api = {
     prompt: string;
     reference_image_urls?: string[];
     model_profile?: string;
-    provider?: 'auto' | 'openrouter' | 'platform' | 'comfyui';
+    provider?: "auto" | "openrouter" | "platform" | "comfyui";
     variants?: number;
     variant_options?: Array<{
-      provider?: 'auto' | 'openrouter' | 'platform' | 'comfyui';
+      provider?: "auto" | "openrouter" | "platform" | "comfyui";
       prompt?: string;
-      style_intensity?: 'classic' | 'bold' | 'edgy';
+      style_intensity?: "classic" | "bold" | "edgy";
       model_profile?: string;
       reference_image_urls?: string[];
       aspect_ratio?: string;
@@ -2415,9 +3136,13 @@ export const api = {
     succeeded: number;
     failed: number;
   }> {
-    const response = await apiClient.post('/api/content/image-generation/generate', request, {
-      timeout: 600000,
-    });
+    const response = await apiClient.post(
+      "/api/content/image-generation/generate",
+      request,
+      {
+        timeout: 600000,
+      },
+    );
     return response.data;
   },
 
@@ -2426,68 +3151,95 @@ export const api = {
     article: string,
     signal?: AbortSignal,
     revisionDescription?: string,
-    promptOverride?: string
-  ): Promise<{ urls: string[]; provider?: { runtime?: string; model?: string; profile?: string; quality?: string }; prompt_used?: string | null }> {
+    promptOverride?: string,
+  ): Promise<{
+    urls: string[];
+    provider?: {
+      runtime?: string;
+      model?: string;
+      profile?: string;
+      quality?: string;
+    };
+    prompt_used?: string | null;
+  }> {
     const form = new FormData();
-    form.append('article', article.trim());
+    form.append("article", article.trim());
     if (revisionDescription?.trim()) {
-      form.append('revision_description', revisionDescription.trim());
+      form.append("revision_description", revisionDescription.trim());
     }
     if (promptOverride?.trim()) {
-      form.append('prompt_override', promptOverride.trim());
+      form.append("prompt_override", promptOverride.trim());
     }
     if (files.length === 1) {
-      form.append('file', files[0]);
+      form.append("file", files[0]);
     } else {
-      files.forEach((f) => form.append('files', f));
+      files.forEach((f) => form.append("files", f));
     }
-    const response = await apiClient.post<{ urls: string[]; provider?: { runtime?: string; model?: string; profile?: string; quality?: string }; prompt_used?: string | null }>(
-      '/api/content/jewelry-photo/process',
-      form,
-      {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 360000,
-        signal,
-      }
-    );
+    const response = await apiClient.post<{
+      urls: string[];
+      provider?: {
+        runtime?: string;
+        model?: string;
+        profile?: string;
+        quality?: string;
+      };
+      prompt_used?: string | null;
+    }>("/api/content/jewelry-photo/process", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 360000,
+      signal,
+    });
     return response.data;
   },
 
   async applyJewelryPhotoToProduct(
     article: string,
-    imageUrls: string[]
+    imageUrls: string[],
   ): Promise<{ success: boolean; product_id: string; images_count: number }> {
-    const response = await apiClient.post<{ success: boolean; product_id: string; images_count: number }>(
-      '/api/content/jewelry-photo/apply',
-      { article: article.trim(), image_urls: imageUrls }
-    );
+    const response = await apiClient.post<{
+      success: boolean;
+      product_id: string;
+      images_count: number;
+    }>("/api/content/jewelry-photo/apply", {
+      article: article.trim(),
+      image_urls: imageUrls,
+    });
     return response.data;
   },
 
-  async getJewelryPhotoHistory(): Promise<{ items: Array<{ article: string; urls: string[]; updated_at: string }> }> {
-    const response = await apiClient.get<{ items: Array<{ article: string; urls: string[]; updated_at: string }> }>(
-      '/api/content/jewelry-photo/history'
-    );
+  async getJewelryPhotoHistory(): Promise<{
+    items: Array<{ article: string; urls: string[]; updated_at: string }>;
+  }> {
+    const response = await apiClient.get<{
+      items: Array<{ article: string; urls: string[]; updated_at: string }>;
+    }>("/api/content/jewelry-photo/history");
     return response.data;
   },
 
   async deleteJewelryPhotoFile(url: string): Promise<{ deleted: boolean }> {
-    const response = await apiClient.delete<{ deleted: boolean }>('/api/content/jewelry-photo/file', {
-      params: { url },
-    });
+    const response = await apiClient.delete<{ deleted: boolean }>(
+      "/api/content/jewelry-photo/file",
+      {
+        params: { url },
+      },
+    );
     return response.data;
   },
 
   // Analytics API
   async getDashboardMetrics(days: number = 30): Promise<any> {
-    const response = await apiClient.get('/api/analytics/dashboard', {
-      params: { days }
+    const response = await apiClient.get("/api/analytics/dashboard", {
+      params: { days },
     });
     return response.data;
   },
 
-  async getAppAdminKpiDashboard(params?: { days?: number; start_date?: string; end_date?: string }): Promise<any> {
-    const response = await apiClient.get('/api/admin/app/kpi/dashboard', {
+  async getAppAdminKpiDashboard(params?: {
+    days?: number;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<any> {
+    const response = await apiClient.get("/api/admin/app/kpi/dashboard", {
       params: {
         days: params?.days,
         start_date: params?.start_date,
@@ -2498,169 +3250,296 @@ export const api = {
   },
 
   async getAiStylistSettings(): Promise<AiStylistSettingsResponse> {
-    const response = await apiClient.get<AiStylistSettingsResponse>('/api/settings/ai-stylist');
+    const response = await apiClient.get<AiStylistSettingsResponse>(
+      "/api/settings/ai-stylist",
+    );
     return response.data;
   },
 
-  async setAiStylistSettings(request: AiStylistSettingsUpdateRequest): Promise<AiStylistSettingsResponse> {
-    const response = await apiClient.put<AiStylistSettingsResponse>('/api/settings/ai-stylist', request);
+  async setAiStylistSettings(
+    request: AiStylistSettingsUpdateRequest,
+  ): Promise<AiStylistSettingsResponse> {
+    const response = await apiClient.put<AiStylistSettingsResponse>(
+      "/api/settings/ai-stylist",
+      request,
+    );
     return response.data;
   },
 
   async uploadAppAdminMedia(
-    kind: 'banner' | 'lookbook' | 'promotion' | 'news' | 'store' | 'home_slide' | 'certificate_texture',
-    file: File
-  ): Promise<{ url: string }> {
+    kind:
+      | "banner"
+      | "lookbook"
+      | "promotion"
+      | "news"
+      | "store"
+      | "home_slide"
+      | "certificate_texture",
+    file: File,
+  ): Promise<{
+    url: string;
+    content_type?: string;
+    optimization?: {
+      original_bytes: number;
+      optimized_bytes: number;
+      original_width: number;
+      original_height: number;
+      width: number;
+      height: number;
+      quality: number;
+    };
+  }> {
     const form = new FormData();
-    form.append('kind', kind);
-    form.append('file', file);
-    const response = await apiClient.post<{ url: string }>('/api/admin/app/media/upload', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    form.append("kind", kind);
+    form.append("file", file);
+    const response = await apiClient.post<{
+      url: string;
+      content_type?: string;
+      optimization?: {
+        original_bytes: number;
+        optimized_bytes: number;
+        original_width: number;
+        original_height: number;
+        width: number;
+        height: number;
+        quality: number;
+      };
+    }>("/api/admin/app/media/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;
   },
 
   async listGiftCertificateTextures(): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/admin/app/gift-certificate-textures');
+    const response = await apiClient.get<any[]>(
+      "/api/admin/app/gift-certificate-textures",
+    );
     return response.data;
   },
 
   async listAppBanners(includeInactive: boolean = false): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/admin/app/banners', {
+    const response = await apiClient.get<any[]>("/api/admin/app/banners", {
       params: { include_inactive: includeInactive },
     });
     return response.data;
   },
   async createAppBanner(payload: any): Promise<{ id: string }> {
-    const response = await apiClient.post<{ id: string }>('/api/admin/app/banners', payload);
+    const response = await apiClient.post<{ id: string }>(
+      "/api/admin/app/banners",
+      payload,
+    );
     return response.data;
   },
-  async updateAppBanner(id: string, payload: any): Promise<{ success: boolean }> {
-    const response = await apiClient.put<{ success: boolean }>(`/api/admin/app/banners/${id}`, payload);
+  async updateAppBanner(
+    id: string,
+    payload: any,
+  ): Promise<{ success: boolean }> {
+    const response = await apiClient.put<{ success: boolean }>(
+      `/api/admin/app/banners/${id}`,
+      payload,
+    );
     return response.data;
   },
   async deleteAppBanner(id: string): Promise<{ deleted: boolean }> {
-    const response = await apiClient.delete<{ deleted: boolean }>(`/api/admin/app/banners/${id}`);
+    const response = await apiClient.delete<{ deleted: boolean }>(
+      `/api/admin/app/banners/${id}`,
+    );
     return response.data;
   },
 
-  async listAppHomeSlides(includeInactive: boolean = true, blockKey: string = 'style_inside'): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/admin/app/home-slides', {
+  async listAppHomeSlides(
+    includeInactive: boolean = true,
+    blockKey: string = "style_inside",
+  ): Promise<any[]> {
+    const response = await apiClient.get<any[]>("/api/admin/app/home-slides", {
       params: { include_inactive: includeInactive, block_key: blockKey },
     });
     return response.data;
   },
   async createAppHomeSlide(payload: any): Promise<{ id: string }> {
-    const response = await apiClient.post<{ id: string }>('/api/admin/app/home-slides', payload);
+    const response = await apiClient.post<{ id: string }>(
+      "/api/admin/app/home-slides",
+      payload,
+    );
     return response.data;
   },
-  async updateAppHomeSlide(id: string, payload: any): Promise<{ success: boolean }> {
-    const response = await apiClient.put<{ success: boolean }>(`/api/admin/app/home-slides/${id}`, payload);
+  async updateAppHomeSlide(
+    id: string,
+    payload: any,
+  ): Promise<{ success: boolean }> {
+    const response = await apiClient.put<{ success: boolean }>(
+      `/api/admin/app/home-slides/${id}`,
+      payload,
+    );
     return response.data;
   },
   async deleteAppHomeSlide(id: string): Promise<{ deleted: boolean }> {
-    const response = await apiClient.delete<{ deleted: boolean }>(`/api/admin/app/home-slides/${id}`);
+    const response = await apiClient.delete<{ deleted: boolean }>(
+      `/api/admin/app/home-slides/${id}`,
+    );
     return response.data;
   },
 
   async listAppStores(includeInactive: boolean = true): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/admin/app/stores', {
+    const response = await apiClient.get<any[]>("/api/admin/app/stores", {
       params: { include_inactive: includeInactive },
     });
     return response.data;
   },
-  async createAppStore(payload: any): Promise<{ id: string }> {
-    const response = await apiClient.post<{ id: string }>('/api/admin/app/stores', payload);
+  async listAppStockStores(): Promise<any[]> {
+    const response = await apiClient.get<any[]>("/api/admin/app/stock-stores");
     return response.data;
   },
-  async updateAppStore(id: string, payload: any): Promise<{ success: boolean }> {
-    const response = await apiClient.put<{ success: boolean }>(`/api/admin/app/stores/${id}`, payload);
+  async createAppStore(payload: any): Promise<{ id: string }> {
+    const response = await apiClient.post<{ id: string }>(
+      "/api/admin/app/stores",
+      payload,
+    );
+    return response.data;
+  },
+  async updateAppStore(
+    id: string,
+    payload: any,
+  ): Promise<{ success: boolean }> {
+    const response = await apiClient.put<{ success: boolean }>(
+      `/api/admin/app/stores/${id}`,
+      payload,
+    );
     return response.data;
   },
   async deleteAppStore(id: string): Promise<{ deleted: boolean }> {
-    const response = await apiClient.delete<{ deleted: boolean }>(`/api/admin/app/stores/${id}`);
+    const response = await apiClient.delete<{ deleted: boolean }>(
+      `/api/admin/app/stores/${id}`,
+    );
     return response.data;
   },
 
   async listAppLookbooks(includeUnpublished: boolean = true): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/admin/app/lookbooks', {
+    const response = await apiClient.get<any[]>("/api/admin/app/lookbooks", {
       params: { include_unpublished: includeUnpublished },
     });
     return response.data;
   },
   async createAppLookbook(payload: any): Promise<{ id: string }> {
-    const response = await apiClient.post<{ id: string }>('/api/admin/app/lookbooks', payload);
+    const response = await apiClient.post<{ id: string }>(
+      "/api/admin/app/lookbooks",
+      payload,
+    );
     return response.data;
   },
-  async updateAppLookbook(id: string, payload: any): Promise<{ success: boolean }> {
-    const response = await apiClient.put<{ success: boolean }>(`/api/admin/app/lookbooks/${id}`, payload);
+  async updateAppLookbook(
+    id: string,
+    payload: any,
+  ): Promise<{ success: boolean }> {
+    const response = await apiClient.put<{ success: boolean }>(
+      `/api/admin/app/lookbooks/${id}`,
+      payload,
+    );
     return response.data;
   },
   async deleteAppLookbook(id: string): Promise<{ deleted: boolean }> {
-    const response = await apiClient.delete<{ deleted: boolean }>(`/api/admin/app/lookbooks/${id}`);
+    const response = await apiClient.delete<{ deleted: boolean }>(
+      `/api/admin/app/lookbooks/${id}`,
+    );
     return response.data;
   },
 
   async listAppPromotions(status?: string): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/admin/app/promotions', {
+    const response = await apiClient.get<any[]>("/api/admin/app/promotions", {
       params: { status },
     });
     return response.data;
   },
   async createAppPromotion(payload: any): Promise<{ id: string }> {
-    const response = await apiClient.post<{ id: string }>('/api/admin/app/promotions', payload);
+    const response = await apiClient.post<{ id: string }>(
+      "/api/admin/app/promotions",
+      payload,
+    );
     return response.data;
   },
-  async updateAppPromotion(id: string, payload: any): Promise<{ success: boolean }> {
-    const response = await apiClient.put<{ success: boolean }>(`/api/admin/app/promotions/${id}`, payload);
+  async updateAppPromotion(
+    id: string,
+    payload: any,
+  ): Promise<{ success: boolean }> {
+    const response = await apiClient.put<{ success: boolean }>(
+      `/api/admin/app/promotions/${id}`,
+      payload,
+    );
     return response.data;
   },
   async deleteAppPromotion(id: string): Promise<{ deleted: boolean }> {
-    const response = await apiClient.delete<{ deleted: boolean }>(`/api/admin/app/promotions/${id}`);
+    const response = await apiClient.delete<{ deleted: boolean }>(
+      `/api/admin/app/promotions/${id}`,
+    );
     return response.data;
   },
 
   async listAppNews(status?: string): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/admin/app/news', {
+    const response = await apiClient.get<any[]>("/api/admin/app/news", {
       params: { status },
     });
     return response.data;
   },
   async createAppNews(payload: any): Promise<{ id: string }> {
-    const response = await apiClient.post<{ id: string }>('/api/admin/app/news', payload);
+    const response = await apiClient.post<{ id: string }>(
+      "/api/admin/app/news",
+      payload,
+    );
     return response.data;
   },
   async updateAppNews(id: string, payload: any): Promise<{ success: boolean }> {
-    const response = await apiClient.put<{ success: boolean }>(`/api/admin/app/news/${id}`, payload);
+    const response = await apiClient.put<{ success: boolean }>(
+      `/api/admin/app/news/${id}`,
+      payload,
+    );
     return response.data;
   },
   async deleteAppNews(id: string): Promise<{ deleted: boolean }> {
-    const response = await apiClient.delete<{ deleted: boolean }>(`/api/admin/app/news/${id}`);
+    const response = await apiClient.delete<{ deleted: boolean }>(
+      `/api/admin/app/news/${id}`,
+    );
     return response.data;
   },
 
   async getCdekSettings(): Promise<any> {
-    const response = await apiClient.get<any>('/api/admin/shipping/cdek/settings');
+    const response = await apiClient.get<any>(
+      "/api/admin/shipping/cdek/settings",
+    );
     return response.data;
   },
   async updateCdekSettings(payload: any): Promise<{ success: boolean }> {
-    const response = await apiClient.put<{ success: boolean }>('/api/admin/shipping/cdek/settings', payload);
+    const response = await apiClient.put<{ success: boolean }>(
+      "/api/admin/shipping/cdek/settings",
+      payload,
+    );
     return response.data;
   },
   async getCdekOptions(): Promise<any> {
-    const response = await apiClient.get<any>('/api/admin/shipping/cdek/options');
+    const response = await apiClient.get<any>(
+      "/api/admin/shipping/cdek/options",
+    );
     return response.data;
   },
   async searchCdekCities(query: string, size: number = 20): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/admin/shipping/cdek/search/cities', {
-      params: { q: query, size },
-    });
+    const response = await apiClient.get<any[]>(
+      "/api/admin/shipping/cdek/search/cities",
+      {
+        params: { q: query, size },
+      },
+    );
     return response.data;
   },
-  async searchCdekOffices(cityCode: number, query: string = '', size: number = 200): Promise<any[]> {
-    const response = await apiClient.get<any[]>('/api/admin/shipping/cdek/search/offices', {
-      params: { city_code: cityCode, q: query, size },
-    });
+  async searchCdekOffices(
+    cityCode: number,
+    query: string = "",
+    size: number = 200,
+  ): Promise<any[]> {
+    const response = await apiClient.get<any[]>(
+      "/api/admin/shipping/cdek/search/offices",
+      {
+        params: { city_code: cityCode, q: query, size },
+      },
+    );
     return response.data;
   },
 
@@ -2669,10 +3548,16 @@ export const api = {
     startDate?: string,
     endDate?: string,
     cjmStage?: string,
-    channel?: string
+    channel?: string,
   ): Promise<any> {
-    const response = await apiClient.get('/api/analytics/conversion', {
-      params: { days, start_date: startDate, end_date: endDate, cjm_stage: cjmStage, channel }
+    const response = await apiClient.get("/api/analytics/conversion", {
+      params: {
+        days,
+        start_date: startDate,
+        end_date: endDate,
+        cjm_stage: cjmStage,
+        channel,
+      },
     });
     return response.data;
   },
@@ -2682,10 +3567,16 @@ export const api = {
     startDate?: string,
     endDate?: string,
     userId?: string,
-    channel?: string
+    channel?: string,
   ): Promise<any> {
-    const response = await apiClient.get('/api/analytics/aov', {
-      params: { days, start_date: startDate, end_date: endDate, user_id: userId, channel }
+    const response = await apiClient.get("/api/analytics/aov", {
+      params: {
+        days,
+        start_date: startDate,
+        end_date: endDate,
+        user_id: userId,
+        channel,
+      },
     });
     return response.data;
   },
@@ -2694,10 +3585,15 @@ export const api = {
     days?: number,
     startDate?: string,
     endDate?: string,
-    userId?: string
+    userId?: string,
   ): Promise<any> {
-    const response = await apiClient.get('/api/analytics/engagement', {
-      params: { days, start_date: startDate, end_date: endDate, user_id: userId }
+    const response = await apiClient.get("/api/analytics/engagement", {
+      params: {
+        days,
+        start_date: startDate,
+        end_date: endDate,
+        user_id: userId,
+      },
     });
     return response.data;
   },
@@ -2707,10 +3603,16 @@ export const api = {
     startDate?: string,
     endDate?: string,
     contentItemId?: string,
-    channel?: string
+    channel?: string,
   ): Promise<any> {
-    const response = await apiClient.get('/api/analytics/content-performance', {
-      params: { days, start_date: startDate, end_date: endDate, content_item_id: contentItemId, channel }
+    const response = await apiClient.get("/api/analytics/content-performance", {
+      params: {
+        days,
+        start_date: startDate,
+        end_date: endDate,
+        content_item_id: contentItemId,
+        channel,
+      },
     });
     return response.data;
   },
@@ -2720,7 +3622,7 @@ export const api = {
     latitude: number,
     longitude: number,
     radiusKm: number = 50,
-    limit: number = 5
+    limit: number = 5,
   ): Promise<{
     latitude: number;
     longitude: number;
@@ -2737,20 +3639,20 @@ export const api = {
     }>;
   }> {
     try {
-      const response = await apiClient.get('/api/stores/nearest', {
+      const response = await apiClient.get("/api/stores/nearest", {
         params: {
           latitude,
           longitude,
           radius_km: radiusKm,
-          limit
-        }
+          limit,
+        },
       });
       return response.data;
     } catch (error: any) {
-      console.error('Get Nearest Stores API Error:', error);
+      console.error("Get Nearest Stores API Error:", error);
       if (error.response) {
-        console.error('Response data:', error.response.data);
-        console.error('Response status:', error.response.status);
+        console.error("Response data:", error.response.data);
+        console.error("Response status:", error.response.status);
       }
       throw error;
     }
@@ -2768,9 +3670,26 @@ export interface OneCSyncResponse {
     deactivated: number;
   };
   details?: {
-    products?: { created?: number; updated?: number; skipped?: number; error_count?: number; deactivated?: number };
-    stocks?: { created?: number; updated?: number; skipped?: number; error_count?: number } | null;
-    stores?: { created?: number; updated?: number; skipped?: number; error_count?: number; deactivated?: number } | null;
+    products?: {
+      created?: number;
+      updated?: number;
+      skipped?: number;
+      error_count?: number;
+      deactivated?: number;
+    };
+    stocks?: {
+      created?: number;
+      updated?: number;
+      skipped?: number;
+      error_count?: number;
+    } | null;
+    stores?: {
+      created?: number;
+      updated?: number;
+      skipped?: number;
+      error_count?: number;
+      deactivated?: number;
+    } | null;
   };
 }
 
@@ -2786,7 +3705,12 @@ export interface OneCSyncStatus {
 export interface GenerateMessageRequest {
   client_id: string;
   event: {
-    type: 'brand_arrival' | 'loyalty_level_up' | 'bonus_balance' | 'no_purchase_180' | 'holiday_male';
+    type:
+      | "brand_arrival"
+      | "loyalty_level_up"
+      | "bonus_balance"
+      | "no_purchase_180"
+      | "holiday_male";
     brand?: string;
     store?: string;
     metadata?: Record<string, any>;
@@ -2797,7 +3721,7 @@ export interface GenerateMessageResponse {
   client_id: string;
   phone?: string;
   name?: string;
-  gender?: 'male' | 'female' | null;  // Пол клиента, определенный по имени
+  gender?: "male" | "female" | null; // Пол клиента, определенный по имени
   segment: string;
   reason: string;
   message: string;
@@ -2826,7 +3750,12 @@ export interface SearchCriteria {
 
 export interface BatchGenerateRequest {
   event: {
-    type: 'brand_arrival' | 'loyalty_level_up' | 'bonus_balance' | 'no_purchase_180' | 'holiday_male';
+    type:
+      | "brand_arrival"
+      | "loyalty_level_up"
+      | "bonus_balance"
+      | "no_purchase_180"
+      | "holiday_male";
     brand?: string;
     store?: string;
     metadata?: Record<string, any>;
@@ -2863,9 +3792,10 @@ export interface CustomerMessageItem {
   event_type: string | null;
   event_brand: string | null;
   event_store: string | null;
-  message_kind?: 'individual' | 'broadcast';
+  message_kind?: "individual" | "broadcast" | "crm_call" | string;
   generation_id?: string | null;
-  status: 'new' | 'sent';
+  payload?: Record<string, any> | null;
+  status: string;
   sent_at: string | null;
   created_at: string;
 }
@@ -2891,11 +3821,26 @@ export interface GenerationHistoryRecord {
   error_message?: string | null;
 }
 
+export interface SmsAeroImportResponse {
+  status: string;
+  filename: string;
+  parsed: number;
+  technical_excluded: number;
+  eligible: number;
+  matched: number;
+  imported: number;
+  unmatched: number;
+  status_counts: Record<string, number>;
+  campaign_name?: string | null;
+}
+
 export const communication = {
-  async generateMessage(request: GenerateMessageRequest): Promise<GenerateMessageResponse> {
+  async generateMessage(
+    request: GenerateMessageRequest,
+  ): Promise<GenerateMessageResponse> {
     const response = await apiClient.post<GenerateMessageResponse>(
-      '/api/communication/generate-message',
-      request
+      "/api/communication/generate-message",
+      request,
     );
     return response.data;
   },
@@ -2905,16 +3850,18 @@ export const communication = {
     limit?: number,
     offset?: number,
     params?: {
-      kind?: 'all' | 'broadcast' | 'individual';
+      kind?: "all" | "broadcast" | "individual";
       date_from?: string;
       date_to?: string;
       sort_by?: string;
       desc?: boolean;
-    }
+    },
   ): Promise<CustomerMessagesListResponse> {
     const response = await apiClient.get<CustomerMessagesListResponse>(
       `/api/communication/customers/${customerId}/messages`,
-      { params: { limit: limit ?? 50, offset: offset ?? 0, ...(params || {}) } }
+      {
+        params: { limit: limit ?? 50, offset: offset ?? 0, ...(params || {}) },
+      },
     );
     return response.data;
   },
@@ -2925,50 +3872,71 @@ export const communication = {
 
   async markMessageSent(messageId: string): Promise<{ sent_at: string }> {
     const response = await apiClient.post<{ status: string; sent_at: string }>(
-      `/api/communication/messages/${messageId}/send`
+      `/api/communication/messages/${messageId}/send`,
     );
     return { sent_at: response.data.sent_at };
   },
 
-  async batchGenerate(request: BatchGenerateRequest): Promise<BatchGenerateResponse> {
+  async batchGenerate(
+    request: BatchGenerateRequest,
+  ): Promise<BatchGenerateResponse> {
     const response = await apiClient.post<BatchGenerateResponse>(
-      '/api/communication/batch-generate',
+      "/api/communication/batch-generate",
       request,
       {
         timeout: 300000, // 5 минут для генерации сообщений
-      }
+      },
     );
     return response.data;
   },
 
-  async startBatchGenerateAsync(request: BatchGenerateRequest): Promise<BatchGenerateAsyncResponse> {
+  async startBatchGenerateAsync(
+    request: BatchGenerateRequest,
+  ): Promise<BatchGenerateAsyncResponse> {
     const response = await apiClient.post<BatchGenerateAsyncResponse>(
-      '/api/communication/batch-generate-async',
+      "/api/communication/batch-generate-async",
       request,
       {
         timeout: 30000,
-      }
+      },
     );
     return response.data;
   },
 
-  async getClientsByBrand(brand: string, limit: number = 100): Promise<{ client_ids: string[]; count: number }> {
-    const response = await apiClient.get('/api/communication/clients/by-brand', {
-      params: { brand, limit }
-    });
+  async getClientsByBrand(
+    brand: string,
+    limit: number = 100,
+  ): Promise<{ client_ids: string[]; count: number }> {
+    const response = await apiClient.get(
+      "/api/communication/clients/by-brand",
+      {
+        params: { brand, limit },
+      },
+    );
     return response.data;
   },
 
-  async getAvailableBrands(limit: number = 100): Promise<{ brands: Array<{ brand: string; client_count: number }>; count: number }> {
-    const response = await apiClient.get<{ status: string; brands: Array<{ brand: string; client_count: number }>; count: number }>(
-      '/api/communication/brands/available',
-      { params: { limit } }
-    );
-    return { brands: response.data.brands ?? [], count: response.data.count ?? 0 };
+  async getAvailableBrands(
+    limit: number = 100,
+  ): Promise<{
+    brands: Array<{ brand: string; client_count: number }>;
+    count: number;
+  }> {
+    const response = await apiClient.get<{
+      status: string;
+      brands: Array<{ brand: string; client_count: number }>;
+      count: number;
+    }>("/api/communication/brands/available", { params: { limit } });
+    return {
+      brands: response.data.brands ?? [],
+      count: response.data.count ?? 0,
+    };
   },
 
   async getClientData(clientId: string): Promise<any> {
-    const response = await apiClient.get(`/api/communication/clients/${clientId}/data`);
+    const response = await apiClient.get(
+      `/api/communication/clients/${clientId}/data`,
+    );
     return response.data.client;
   },
 
@@ -2983,57 +3951,96 @@ export const communication = {
     limit?: number;
     offset?: number;
   }): Promise<{ total: number; items: GenerationHistoryRecord[] }> {
-    const response = await apiClient.get('/api/communication/generations', { params });
+    const response = await apiClient.get("/api/communication/generations", {
+      params,
+    });
     return response.data;
   },
 
   async getGeneration(id: string): Promise<GenerationHistoryRecord> {
-    const response = await apiClient.get(`/api/communication/generations/${id}`);
+    const response = await apiClient.get(
+      `/api/communication/generations/${id}`,
+    );
     return response.data;
   },
 
   async exportGenerations(ids: string[], columns?: string[]): Promise<Blob> {
     const response = await apiClient.post(
-      '/api/communication/generations/export',
+      "/api/communication/generations/export",
       { ids, columns },
-      { responseType: 'blob' }
+      { responseType: "blob" },
     );
     return response.data;
   },
 
-  async getGenerationResult(id: string): Promise<{ status?: string; messages: any[]; count?: number }> {
-    const response = await apiClient.get(`/api/communication/generations/${id}/result`);
+  async getGenerationResult(
+    id: string,
+  ): Promise<{ status?: string; messages: any[]; count?: number }> {
+    const response = await apiClient.get(
+      `/api/communication/generations/${id}/result`,
+    );
     // Унифицируем структуру
     const data = response.data || {};
     return {
       status: data.status,
       messages: data.messages || [],
-      count: data.count ?? (Array.isArray(data.messages) ? data.messages.length : undefined),
+      count:
+        data.count ??
+        (Array.isArray(data.messages) ? data.messages.length : undefined),
     };
   },
 
-  async updateGenerationMessage(genId: string, clientId: string, data: { message: string, cta?: string }): Promise<{ status: string; message: string }> {
+  async updateGenerationMessage(
+    genId: string,
+    clientId: string,
+    data: { message: string; cta?: string },
+  ): Promise<{ status: string; message: string }> {
     const response = await apiClient.put<{ status: string; message: string }>(
       `/api/communication/generations/${genId}/messages/${clientId}`,
-      data
+      data,
     );
     return response.data;
   },
 
   async sendGenerationSms(
     genId: string,
-    data: { date_send?: string; periodicity?: string }
+    data: { date_send?: string; periodicity?: string },
   ): Promise<{ status: string; message: string }> {
     const response = await apiClient.post<{ status: string; message: string }>(
       `/api/communication/generations/${genId}/send`,
-      data
+      data,
     );
     return response.data;
   },
 
-  async deleteGenerationFiles(ids: string[]): Promise<{ deleted: string[]; failed: Record<string, string> }> {
-    const response = await apiClient.post(`/api/communication/generations/delete-files`, { ids });
-    return { deleted: response.data.deleted || [], failed: response.data.failed || {} };
+  async deleteGenerationFiles(
+    ids: string[],
+  ): Promise<{ deleted: string[]; failed: Record<string, string> }> {
+    const response = await apiClient.post(
+      `/api/communication/generations/delete-files`,
+      { ids },
+    );
+    return {
+      deleted: response.data.deleted || [],
+      failed: response.data.failed || {},
+    };
+  },
+
+  async importSmsAeroBroadcast(data: {
+    file: File;
+    campaign_name?: string;
+    event_store?: string;
+  }): Promise<SmsAeroImportResponse> {
+    const form = new FormData();
+    form.append("file", data.file);
+    if (data.campaign_name) form.append("campaign_name", data.campaign_name);
+    if (data.event_store) form.append("event_store", data.event_store);
+    const response = await apiClient.post<SmsAeroImportResponse>(
+      "/api/communication/sms-aero/import",
+      form,
+      { timeout: 300000 },
+    );
+    return response.data;
   },
 };
 
@@ -3069,10 +4076,13 @@ export interface PromptGenerationRequest {
 
 export const systemPrompts = {
   // Get all prompt versions
-  async getVersions(agentType: string, includeInactive: boolean = true): Promise<SystemPromptVersion[]> {
+  async getVersions(
+    agentType: string,
+    includeInactive: boolean = true,
+  ): Promise<SystemPromptVersion[]> {
     const response = await apiClient.get<SystemPromptVersion[]>(
       `/api/agent-system-prompts/${agentType}/versions`,
-      { params: { include_inactive: includeInactive } }
+      { params: { include_inactive: includeInactive } },
     );
     return response.data;
   },
@@ -3080,39 +4090,48 @@ export const systemPrompts = {
   // Get active prompt
   async getActive(agentType: string): Promise<SystemPromptVersion | null> {
     const response = await apiClient.get<SystemPromptVersion | null>(
-      `/api/agent-system-prompts/${agentType}/active`
+      `/api/agent-system-prompts/${agentType}/active`,
     );
     return response.data;
   },
 
   // Create new version
-  async createVersion(agentType: string, data: {
-    name: string;
-    system_prompt: string;
-    description?: string;
-    version_name?: string;
-    metadata?: Record<string, any>;
-  }): Promise<SystemPromptVersion> {
+  async createVersion(
+    agentType: string,
+    data: {
+      name: string;
+      system_prompt: string;
+      description?: string;
+      version_name?: string;
+      metadata?: Record<string, any>;
+    },
+  ): Promise<SystemPromptVersion> {
     const response = await apiClient.post<SystemPromptVersion>(
       `/api/agent-system-prompts/${agentType}/versions`,
-      data
+      data,
     );
     return response.data;
   },
 
   // Activate version
-  async activateVersion(agentType: string, promptId: string): Promise<SystemPromptVersion> {
+  async activateVersion(
+    agentType: string,
+    promptId: string,
+  ): Promise<SystemPromptVersion> {
     const response = await apiClient.post<SystemPromptVersion>(
-      `/api/agent-system-prompts/${agentType}/versions/${promptId}/activate`
+      `/api/agent-system-prompts/${agentType}/versions/${promptId}/activate`,
     );
     return response.data;
   },
 
   // Submit for marketer review
-  async submitForReview(agentType: string, promptId: string): Promise<SystemPromptVersion> {
+  async submitForReview(
+    agentType: string,
+    promptId: string,
+  ): Promise<SystemPromptVersion> {
     const response = await apiClient.put<SystemPromptVersion>(
       `/api/agent-system-prompts/${agentType}/versions/${promptId}/marketer-review`,
-      { status: 'pending' }
+      { status: "pending" },
     );
     return response.data;
   },
@@ -3121,42 +4140,50 @@ export const systemPrompts = {
   async reviewAsMarketer(
     agentType: string,
     promptId: string,
-    status: 'approved' | 'rejected' | 'needs_revision',
-    feedback?: string
+    status: "approved" | "rejected" | "needs_revision",
+    feedback?: string,
   ): Promise<SystemPromptVersion> {
     const response = await apiClient.put<SystemPromptVersion>(
       `/api/agent-system-prompts/${agentType}/versions/${promptId}/marketer-review`,
-      { status, feedback }
+      { status, feedback },
     );
     return response.data;
   },
 
   // Get version history
-  async getVersionHistory(agentType: string, promptId: string): Promise<Array<{
-    id: string;
-    change_type: string;
-    change_comment?: string;
-    changed_by?: string;
-    changed_at: string;
-    previous_value?: Record<string, any>;
-    new_value?: Record<string, any>;
-  }>> {
+  async getVersionHistory(
+    agentType: string,
+    promptId: string,
+  ): Promise<
+    Array<{
+      id: string;
+      change_type: string;
+      change_comment?: string;
+      changed_by?: string;
+      changed_at: string;
+      previous_value?: Record<string, any>;
+      new_value?: Record<string, any>;
+    }>
+  > {
     const response = await apiClient.get(
-      `/api/agent-system-prompts/${agentType}/versions/${promptId}/history`
+      `/api/agent-system-prompts/${agentType}/versions/${promptId}/history`,
     );
     return response.data;
   },
 
   // Generate prompt from description
-  async generateFromDescription(agentType: string, data: {
-    user_description: string;
-    target_tone?: string;
-    target_audience?: string;
-    constraints?: string[];
-  }): Promise<PromptGenerationRequest> {
+  async generateFromDescription(
+    agentType: string,
+    data: {
+      user_description: string;
+      target_tone?: string;
+      target_audience?: string;
+      constraints?: string[];
+    },
+  ): Promise<PromptGenerationRequest> {
     const response = await apiClient.post<PromptGenerationRequest>(
       `/api/agent-system-prompts/${agentType}/generate-from-description`,
-      data
+      data,
     );
     return response.data;
   },
@@ -3165,11 +4192,11 @@ export const systemPrompts = {
   async getGenerationRequests(
     agentType: string,
     limit: number = 20,
-    status?: string
+    status?: string,
   ): Promise<PromptGenerationRequest[]> {
     const response = await apiClient.get<PromptGenerationRequest[]>(
       `/api/agent-system-prompts/${agentType}/generation-requests`,
-      { params: { status, limit } }
+      { params: { status, limit } },
     );
     return response.data;
   },
@@ -3178,11 +4205,11 @@ export const systemPrompts = {
   async createFromGenerationRequest(
     agentType: string,
     requestId: string,
-    name: string
+    name: string,
   ): Promise<SystemPromptVersion> {
     const response = await apiClient.post<SystemPromptVersion>(
       `/api/agent-system-prompts/${agentType}/generation-requests/${requestId}/create-prompt`,
-      { name }
+      { name },
     );
     return response.data;
   },
@@ -3197,11 +4224,11 @@ export const systemPrompts = {
       system_prompt?: string;
       version_name?: string;
       metadata?: Record<string, any>;
-    }
+    },
   ): Promise<SystemPromptVersion> {
     const response = await apiClient.put<SystemPromptVersion>(
       `/api/agent-system-prompts/${agentType}/versions/${promptId}`,
-      data
+      data,
     );
     return response.data;
   },
@@ -3229,6 +4256,228 @@ export interface AgentInteractionTask {
   completed_at?: string;
   deadline_at?: string;
 }
+
+export interface CrmProjectTopic {
+  task_id: string;
+  title: string;
+  project_type: string;
+  status: string;
+  channel?: string | null;
+  history_count: number;
+  discussion_result?: string | null;
+  crm_plan_status?: string | null;
+  last_message_at?: string | null;
+  created_at: string;
+}
+
+export interface TrafficProjectTopic {
+  task_id: string;
+  title: string;
+  campaign_code?: string | null;
+  channel?: string | null;
+  status: string;
+  history_count: number;
+  discussion_result?: string | null;
+  last_message_at?: string | null;
+  created_at: string;
+}
+
+export interface ContentProjectTopic {
+  task_id: string;
+  title: string;
+  content_type?: string | null;
+  platform?: string | null;
+  status: string;
+  history_count: number;
+  discussion_result?: string | null;
+  last_message_at?: string | null;
+  created_at: string;
+}
+
+export interface CampaignMediaAsset {
+  id: string;
+  url: string;
+  title: string;
+  kind: string;
+  source: string;
+  usage: string;
+}
+
+export interface CampaignMediaResponse {
+  task_id: string;
+  assets: CampaignMediaAsset[];
+  available_assets: CampaignMediaAsset[];
+  maps_card_url?: string | null;
+  note: string;
+}
+
+export interface TrafficCampaignBrief {
+  campaign_code?: string | null;
+  store_name: string;
+  maps_card_url: string;
+  goal: string;
+  daily_budget_rub: number;
+  test_days: number;
+  radius_km: number;
+  schedule: string[];
+  kpi: Record<string, string>;
+  card_checklist: Record<string, boolean>;
+}
+
+export interface TrafficCampaignBriefResponse {
+  task_id: string;
+  brief: TrafficCampaignBrief;
+  ready_for_approval: boolean;
+  missing_requirements: string[];
+}
+
+export interface YandexBusinessFeedPreview {
+  total_active: number;
+  included: number;
+  skipped: number;
+  categories: number;
+  skipped_items: Array<{ name: string; reason: string }>;
+}
+
+export interface YandexBusinessFeedFilters {
+  brands: string[];
+  categories: string[];
+  stores: Array<{ name: string; external_id: string }>;
+  min_price?: number | null;
+  max_price?: number | null;
+}
+
+export interface YandexBusinessFeedFilterParams {
+  min_price?: number;
+  max_price?: number;
+  availability?: "all" | "in_stock" | "out_of_stock" | "unknown";
+  brands?: string;
+  categories?: string;
+  store_id?: string;
+}
+
+export interface YandexBusinessFeedPublicSettings extends YandexBusinessFeedFilterParams {
+  public_url: string;
+}
+
+export type AdvertisingPlatform =
+  "yandex_direct" | "yandex_business" | "yandex_maps";
+
+export interface AdvertisingConnectionInput {
+  platform: AdvertisingPlatform;
+  name: string;
+  account_login?: string | null;
+  client_login?: string | null;
+  organization_name?: string | null;
+  metrika_counter_id?: string | null;
+  permissions?: Record<string, any>;
+  is_active?: boolean;
+}
+
+export interface AdvertisingConnection extends AdvertisingConnectionInput {
+  id: string;
+  status: string;
+  auth_mode: string;
+  last_sync_at?: string | null;
+  last_sync_status?: string | null;
+  last_sync_summary?: Record<string, any> | null;
+  oauth_configured: boolean;
+}
+
+export interface AdvertisingOAuthReadiness {
+  configured: boolean;
+  client_id_configured: boolean;
+  client_secret_configured?: boolean;
+  redirect_uri_configured: boolean;
+  client_id?: string;
+  redirect_uri?: string;
+  message: string;
+}
+
+export interface AdvertisingAuthorizationLink {
+  authorization_url: string;
+  callback_url: string;
+  expires_at: string;
+  instruction: string;
+}
+
+export const advertisingConnections = {
+  async list(): Promise<AdvertisingConnection[]> {
+    const response = await apiClient.get<AdvertisingConnection[]>(
+      "/api/marketing/advertising-connections",
+    );
+    return response.data;
+  },
+  async oauthReadiness(): Promise<AdvertisingOAuthReadiness> {
+    const response = await apiClient.get<AdvertisingOAuthReadiness>(
+      "/api/marketing/advertising-connections/oauth-readiness",
+    );
+    return response.data;
+  },
+  async saveOAuthSettings(data: {
+    client_id: string;
+    client_secret?: string;
+  }): Promise<AdvertisingOAuthReadiness> {
+    const response = await apiClient.put<AdvertisingOAuthReadiness>(
+      "/api/marketing/advertising-connections/oauth-settings",
+      data,
+    );
+    return response.data;
+  },
+  async create(
+    data: AdvertisingConnectionInput,
+  ): Promise<AdvertisingConnection> {
+    const response = await apiClient.post<AdvertisingConnection>(
+      "/api/marketing/advertising-connections",
+      data,
+    );
+    return response.data;
+  },
+  async update(
+    id: string,
+    data: AdvertisingConnectionInput,
+  ): Promise<AdvertisingConnection> {
+    const response = await apiClient.patch<AdvertisingConnection>(
+      `/api/marketing/advertising-connections/${id}`,
+      data,
+    );
+    return response.data;
+  },
+  async sync(id: string, force = false): Promise<AdvertisingConnection> {
+    const response = await apiClient.post<AdvertisingConnection>(
+      `/api/marketing/advertising-connections/${id}/sync`,
+      { force },
+    );
+    return response.data;
+  },
+  async createTestDirectCampaign(
+    id: string,
+    name?: string,
+  ): Promise<
+    AdvertisingConnection & {
+      test_campaign_id: string;
+      test_campaign_name: string;
+    }
+  > {
+    const response = await apiClient.post<
+      AdvertisingConnection & {
+        test_campaign_id: string;
+        test_campaign_name: string;
+      }
+    >(`/api/marketing/advertising-connections/${id}/test-direct-campaign`, {
+      name,
+    });
+    return response.data;
+  },
+  async createAuthorizationLink(
+    id: string,
+  ): Promise<AdvertisingAuthorizationLink> {
+    const response = await apiClient.post<AdvertisingAuthorizationLink>(
+      `/api/marketing/advertising-connections/${id}/authorization-link`,
+    );
+    return response.data;
+  },
+};
 
 export interface MassMailingSegmentInfo {
   id: string;
@@ -3258,56 +4507,249 @@ export interface MassMailingRunResponse {
 }
 
 export const agentInteractions = {
-  async getTaskSegment(taskId: string): Promise<{ id?: string; name?: string; customer_count?: number; message?: string }> {
-    const response = await apiClient.get<{ id?: string; name?: string; customer_count?: number; message?: string }>(
-      `/api/agent-interactions/tasks/${taskId}/segment`
+  async previewYandexBusinessFeed(
+    params?: YandexBusinessFeedFilterParams,
+  ): Promise<YandexBusinessFeedPreview> {
+    const response = await apiClient.get<YandexBusinessFeedPreview>(
+      "/api/agent-interactions/traffic/yandex-business-feed/preview",
+      { params },
     );
     return response.data;
   },
-  async bindTaskSegment(taskId: string, segmentId: string): Promise<MassMailingSegmentInfo> {
+  async getYandexBusinessFeedFilters(): Promise<YandexBusinessFeedFilters> {
+    const response = await apiClient.get<YandexBusinessFeedFilters>(
+      "/api/agent-interactions/traffic/yandex-business-feed/filters",
+    );
+    return response.data;
+  },
+  async getYandexBusinessFeedPublicSettings(): Promise<YandexBusinessFeedPublicSettings> {
+    const response = await apiClient.get<YandexBusinessFeedPublicSettings>(
+      "/api/agent-interactions/traffic/yandex-business-feed/public-settings",
+    );
+    return response.data;
+  },
+  async saveYandexBusinessFeedPublicSettings(
+    data: YandexBusinessFeedFilterParams,
+  ): Promise<YandexBusinessFeedPublicSettings> {
+    const response = await apiClient.put<YandexBusinessFeedPublicSettings>(
+      "/api/agent-interactions/traffic/yandex-business-feed/public-settings",
+      data,
+    );
+    return response.data;
+  },
+  async getTrafficCampaignBrief(
+    taskId: string,
+  ): Promise<TrafficCampaignBriefResponse> {
+    const response = await apiClient.get<TrafficCampaignBriefResponse>(
+      `/api/agent-interactions/traffic/projects/${taskId}/brief`,
+    );
+    return response.data;
+  },
+  async saveTrafficCampaignBrief(
+    taskId: string,
+    brief: TrafficCampaignBrief,
+  ): Promise<TrafficCampaignBriefResponse> {
+    const response = await apiClient.put<TrafficCampaignBriefResponse>(
+      `/api/agent-interactions/traffic/projects/${taskId}/brief`,
+      brief,
+    );
+    return response.data;
+  },
+  async submitTrafficCampaignForApproval(
+    taskId: string,
+  ): Promise<TrafficCampaignBriefResponse> {
+    const response = await apiClient.post<TrafficCampaignBriefResponse>(
+      `/api/agent-interactions/traffic/projects/${taskId}/submit-for-approval`,
+    );
+    return response.data;
+  },
+  async listTrafficProjects(
+    limit: number = 50,
+  ): Promise<TrafficProjectTopic[]> {
+    const response = await apiClient.get<TrafficProjectTopic[]>(
+      "/api/agent-interactions/traffic/projects",
+      {
+        params: { limit },
+      },
+    );
+    return response.data;
+  },
+  async deleteTrafficProject(
+    taskId: string,
+  ): Promise<{ status: string; task_id: string }> {
+    const response = await apiClient.delete<{
+      status: string;
+      task_id: string;
+    }>(`/api/agent-interactions/traffic/projects/${taskId}`);
+    return response.data;
+  },
+  async listContentProjects(
+    limit: number = 50,
+  ): Promise<ContentProjectTopic[]> {
+    const response = await apiClient.get<ContentProjectTopic[]>(
+      "/api/agent-interactions/content/projects",
+      {
+        params: { limit },
+      },
+    );
+    return response.data;
+  },
+  async deleteContentProject(
+    taskId: string,
+  ): Promise<{ status: string; task_id: string }> {
+    const response = await apiClient.delete<{
+      status: string;
+      task_id: string;
+    }>(`/api/agent-interactions/content/projects/${taskId}`);
+    return response.data;
+  },
+  async getContentProjectCampaignMedia(
+    taskId: string,
+    params?: { query?: string; category?: string },
+  ): Promise<CampaignMediaResponse> {
+    const response = await apiClient.get<CampaignMediaResponse>(
+      `/api/agent-interactions/content/projects/${taskId}/campaign-media`,
+      { params },
+    );
+    return response.data;
+  },
+  async saveContentProjectCampaignMediaSelection(
+    taskId: string,
+    assetIds: string[],
+    assets: CampaignMediaAsset[] = [],
+  ): Promise<CampaignMediaResponse> {
+    const response = await apiClient.put<CampaignMediaResponse>(
+      `/api/agent-interactions/content/projects/${taskId}/campaign-media/selection`,
+      { asset_ids: assetIds, assets },
+    );
+    return response.data;
+  },
+  async addContentProjectCampaignMediaUpload(
+    taskId: string,
+    data: { url: string; title: string; kind?: string },
+  ): Promise<CampaignMediaResponse> {
+    const response = await apiClient.post<CampaignMediaResponse>(
+      `/api/agent-interactions/content/projects/${taskId}/campaign-media/uploads`,
+      data,
+    );
+    return response.data;
+  },
+  async removeContentProjectCampaignMediaAsset(
+    taskId: string,
+    assetId: string,
+  ): Promise<CampaignMediaResponse> {
+    const response = await apiClient.delete<CampaignMediaResponse>(
+      `/api/agent-interactions/content/projects/${taskId}/campaign-media/${encodeURIComponent(assetId)}`,
+    );
+    return response.data;
+  },
+  async listCrmProjects(limit: number = 50): Promise<CrmProjectTopic[]> {
+    const response = await apiClient.get<CrmProjectTopic[]>(
+      "/api/agent-interactions/crm/projects",
+      {
+        params: { limit },
+      },
+    );
+    return response.data;
+  },
+  async deleteCrmProject(
+    taskId: string,
+  ): Promise<{ status: string; task_id: string }> {
+    const response = await apiClient.delete<{
+      status: string;
+      task_id: string;
+    }>(`/api/agent-interactions/crm/projects/${taskId}`);
+    return response.data;
+  },
+  async getTaskSegment(
+    taskId: string,
+  ): Promise<{
+    id?: string;
+    name?: string;
+    customer_count?: number;
+    message?: string;
+  }> {
+    const response = await apiClient.get<{
+      id?: string;
+      name?: string;
+      customer_count?: number;
+      message?: string;
+    }>(`/api/agent-interactions/tasks/${taskId}/segment`);
+    return response.data;
+  },
+  async bindTaskSegment(
+    taskId: string,
+    segmentId: string,
+  ): Promise<MassMailingSegmentInfo> {
     const response = await apiClient.put<MassMailingSegmentInfo>(
       `/api/agent-interactions/tasks/${taskId}/segment`,
-      { segment_id: segmentId }
+      { segment_id: segmentId },
     );
     return response.data;
   },
-  async chat(taskId: string, data: {
-    message: string;
-    model?: string;
-    metadata?: {
-      step_type?: 'planning' | 'segmentation' | 'content' | 'analytics' | 'distribution' | 'other';
-      task_type?: string;
-      dialog_model?: string;
-      analytics_model?: string;
-      attachments?: Array<{ name?: string; kind?: string; size?: number }>;
-      extra?: Record<string, any>;
-    };
-  }): Promise<{ reply: string; used_brand_context?: any[]; used_history_fragments?: any[]; user_log_id?: string; assistant_log_id?: string }> {
+  async chat(
+    taskId: string,
+    data: {
+      message: string;
+      model?: string;
+      metadata?: {
+        step_type?:
+          | "planning"
+          | "segmentation"
+          | "content"
+          | "analytics"
+          | "distribution"
+          | "other";
+        task_type?: string;
+        dialog_model?: string;
+        analytics_model?: string;
+        attachments?: Array<{ name?: string; kind?: string; size?: number }>;
+        extra?: Record<string, any>;
+      };
+    },
+  ): Promise<{
+    reply: string;
+    used_brand_context?: any[];
+    used_history_fragments?: any[];
+    user_log_id?: string;
+    assistant_log_id?: string;
+  }> {
     const response = await apiClient.post(
       `/api/agent-interactions/tasks/${taskId}/chat`,
-      data
+      data,
     );
     return response.data;
   },
 
-  async getChatHistory(taskId: string, limit: number = 200): Promise<ChatHistoryItem[]> {
+  async getChatHistory(
+    taskId: string,
+    limit: number = 200,
+    includeBeforeReset: boolean = false,
+  ): Promise<ChatHistoryItem[]> {
     const response = await apiClient.get<ChatHistoryItem[]>(
       `/api/agent-interactions/tasks/${taskId}/chat`,
-      { params: { limit } }
+      { params: { limit, include_before_reset: includeBeforeReset } },
     );
     return response.data;
   },
-  async deleteChatMessage(taskId: string, logId: string): Promise<{ status: string; id: string }> {
+  async deleteChatMessage(
+    taskId: string,
+    logId: string,
+  ): Promise<{ status: string; id: string }> {
     const response = await apiClient.delete<{ status: string; id: string }>(
-      `/api/agent-interactions/tasks/${taskId}/chat/${logId}`
+      `/api/agent-interactions/tasks/${taskId}/chat/${logId}`,
     );
     return response.data;
   },
   // Get tasks for an agent
-  async getTasks(agentType: string, status?: string, limit: number = 20): Promise<AgentInteractionTask[]> {
+  async getTasks(
+    agentType: string,
+    status?: string,
+    limit: number = 20,
+  ): Promise<AgentInteractionTask[]> {
     const response = await apiClient.get<AgentInteractionTask[]>(
       `/api/agent-interactions/${agentType}/tasks`,
-      { params: { status, limit } }
+      { params: { status, limit } },
     );
     return response.data;
   },
@@ -3327,8 +4769,8 @@ export const agentInteractions = {
     timeout_seconds?: number;
   }): Promise<AgentInteractionTask> {
     const response = await apiClient.post<AgentInteractionTask>(
-      '/api/agent-interactions/tasks',
-      data
+      "/api/agent-interactions/tasks",
+      data,
     );
     return response.data;
   },
@@ -3336,15 +4778,18 @@ export const agentInteractions = {
   // Get task details
   async getTask(taskId: string): Promise<AgentInteractionTask> {
     const response = await apiClient.get<AgentInteractionTask>(
-      `/api/agent-interactions/tasks/${taskId}`
+      `/api/agent-interactions/tasks/${taskId}`,
     );
     return response.data;
   },
 
-  async updateTask(taskId: string, data: Partial<AgentInteractionTask>): Promise<AgentInteractionTask> {
+  async updateTask(
+    taskId: string,
+    data: Partial<AgentInteractionTask>,
+  ): Promise<AgentInteractionTask> {
     const response = await apiClient.patch<AgentInteractionTask>(
       `/api/agent-interactions/tasks/${taskId}`,
-      data
+      data,
     );
     return response.data;
   },
@@ -3358,67 +4803,134 @@ export const agentInteractions = {
     limit?: number;
   }): Promise<AgentInteractionTask[]> {
     const response = await apiClient.get<AgentInteractionTask[]>(
-      '/api/agent-interactions/tasks',
-      { params }
+      "/api/agent-interactions/tasks",
+      { params },
     );
     return response.data;
   },
 
   // Queue a task
-  async queueTask(taskId: string): Promise<{ message: string; task_id: string; priority: number; status: string }> {
-    const response = await apiClient.post<{ message: string; task_id: string; priority: number; status: string }>(
-      `/api/agent-interactions/tasks/${taskId}/queue`
-    );
+  async queueTask(
+    taskId: string,
+  ): Promise<{
+    message: string;
+    task_id: string;
+    priority: number;
+    status: string;
+  }> {
+    const response = await apiClient.post<{
+      message: string;
+      task_id: string;
+      priority: number;
+      status: string;
+    }>(`/api/agent-interactions/tasks/${taskId}/queue`);
     return response.data;
   },
 
   // Process a task
-  async processTask(taskId: string): Promise<{ message: string; task_id: string; result_summary: Record<string, any> }> {
-    const response = await apiClient.post<{ message: string; task_id: string; result_summary: Record<string, any> }>(
-      `/api/agent-interactions/tasks/${taskId}/process`
-    );
+  async processTask(
+    taskId: string,
+  ): Promise<{
+    message: string;
+    task_id: string;
+    result_summary: Record<string, any>;
+  }> {
+    const response = await apiClient.post<{
+      message: string;
+      task_id: string;
+      result_summary: Record<string, any>;
+    }>(`/api/agent-interactions/tasks/${taskId}/process`);
     return response.data;
   },
 
-  async approveTask(taskId: string, comment?: string): Promise<{ message: string; task_id: string; new_status: string }> {
-    const response = await apiClient.post<{ message: string; task_id: string; new_status: string }>(
-      `/api/agent-interactions/tasks/${taskId}/approve`,
-      { comment: comment || null }
-    );
+  async approveTask(
+    taskId: string,
+    comment?: string,
+  ): Promise<{ message: string; task_id: string; new_status: string }> {
+    const response = await apiClient.post<{
+      message: string;
+      task_id: string;
+      new_status: string;
+    }>(`/api/agent-interactions/tasks/${taskId}/approve`, {
+      comment: comment || null,
+    });
     return response.data;
   },
 
-  async rejectTask(taskId: string, comment?: string): Promise<{ message: string; task_id: string; new_status: string; rejection_comment?: string | null }> {
-    const response = await apiClient.post<{ message: string; task_id: string; new_status: string; rejection_comment?: string | null }>(
-      `/api/agent-interactions/tasks/${taskId}/reject`,
-      { comment: comment || null }
-    );
+  async rejectTask(
+    taskId: string,
+    comment?: string,
+  ): Promise<{
+    message: string;
+    task_id: string;
+    new_status: string;
+    rejection_comment?: string | null;
+  }> {
+    const response = await apiClient.post<{
+      message: string;
+      task_id: string;
+      new_status: string;
+      rejection_comment?: string | null;
+    }>(`/api/agent-interactions/tasks/${taskId}/reject`, {
+      comment: comment || null,
+    });
     return response.data;
   },
 
-  async reviseTask(taskId: string, comment?: string): Promise<{ message: string; task_id: string; new_status: string; revision_comment?: string | null }> {
-    const response = await apiClient.post<{ message: string; task_id: string; new_status: string; revision_comment?: string | null }>(
-      `/api/agent-interactions/tasks/${taskId}/revise`,
-      { comment: comment || null }
-    );
+  async reviseTask(
+    taskId: string,
+    comment?: string,
+  ): Promise<{
+    message: string;
+    task_id: string;
+    new_status: string;
+    revision_comment?: string | null;
+  }> {
+    const response = await apiClient.post<{
+      message: string;
+      task_id: string;
+      new_status: string;
+      revision_comment?: string | null;
+    }>(`/api/agent-interactions/tasks/${taskId}/revise`, {
+      comment: comment || null,
+    });
     return response.data;
   },
 
   // Cancel a task
-  async cancelTask(taskId: string, reason?: string): Promise<{ message: string; task_id: string; status: string; reason?: string | null }> {
-    const response = await apiClient.post<{ message: string; task_id: string; status: string; reason?: string | null }>(
+  async cancelTask(
+    taskId: string,
+    reason?: string,
+  ): Promise<{
+    message: string;
+    task_id: string;
+    status: string;
+    reason?: string | null;
+  }> {
+    const response = await apiClient.post<{
+      message: string;
+      task_id: string;
+      status: string;
+      reason?: string | null;
+    }>(
       `/api/agent-interactions/tasks/${taskId}/cancel`,
-      reason ? { reason } : undefined
+      reason ? { reason } : undefined,
     );
     return response.data;
   },
 
   // Delete a task (soft delete)
-  async deleteTask(taskId: string, reason?: string): Promise<{ message: string; task_id: string; status: string }> {
-    const response = await apiClient.delete<{ message: string; task_id: string; status: string }>(
-      `/api/agent-interactions/tasks/${taskId}`,
-      { params: reason ? { reason } : {} }
-    );
+  async deleteTask(
+    taskId: string,
+    reason?: string,
+  ): Promise<{ message: string; task_id: string; status: string }> {
+    const response = await apiClient.delete<{
+      message: string;
+      task_id: string;
+      status: string;
+    }>(`/api/agent-interactions/tasks/${taskId}`, {
+      params: reason ? { reason } : {},
+    });
     return response.data;
   },
 
@@ -3426,37 +4938,43 @@ export const agentInteractions = {
   async getTaskLogs(taskId: string, limit: number = 100): Promise<TaskLog[]> {
     const response = await apiClient.get<TaskLog[]>(
       `/api/agent-interactions/tasks/${taskId}/logs`,
-      { params: { limit } }
+      { params: { limit } },
     );
     return response.data;
   },
 
-  async prepareMassMailing(taskId: string, data: {
-    plan_text: string;
-    plan_title?: string;
-    brand?: string;
-    event_type?: string;
-    message_count?: number;
-    metadata?: Record<string, any>;
-  }): Promise<MassMailingPrepareResponse> {
+  async prepareMassMailing(
+    taskId: string,
+    data: {
+      plan_text: string;
+      plan_title?: string;
+      brand?: string;
+      event_type?: string;
+      message_count?: number;
+      metadata?: Record<string, any>;
+    },
+  ): Promise<MassMailingPrepareResponse> {
     const response = await apiClient.post<MassMailingPrepareResponse>(
       `/api/agent-interactions/tasks/${taskId}/mass-mailing/prepare`,
-      data
+      data,
     );
     return response.data;
   },
 
-  async runMassMailing(taskId: string, data: {
-    segment_id: string;
-    event_type: string;
-    brand?: string;
-    message_count?: number;
-    auto_detect_store?: boolean;
-    metadata?: Record<string, any>;
-  }): Promise<MassMailingRunResponse> {
+  async runMassMailing(
+    taskId: string,
+    data: {
+      segment_id: string;
+      event_type: string;
+      brand?: string;
+      message_count?: number;
+      auto_detect_store?: boolean;
+      metadata?: Record<string, any>;
+    },
+  ): Promise<MassMailingRunResponse> {
     const response = await apiClient.post<MassMailingRunResponse>(
       `/api/agent-interactions/tasks/${taskId}/mass-mailing/run`,
-      data
+      data,
     );
     return response.data;
   },
@@ -3474,7 +4992,7 @@ export interface TaskLog {
 
 export interface ChatHistoryItem {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   created_at?: string | null;
 }
@@ -3486,7 +5004,7 @@ export interface SegmentRulesFilter {
 }
 
 export interface SegmentRules {
-  logic: 'AND' | 'OR';
+  logic: "AND" | "OR";
   filters: SegmentRulesFilter[];
 }
 
@@ -3503,21 +5021,36 @@ export interface SegmentOut {
 
 export const customerSegmentation = {
   async getSegments(): Promise<SegmentOut[]> {
-    const response = await apiClient.get<SegmentOut[]>('/api/customer-segmentation/segments');
+    const response = await apiClient.get<SegmentOut[]>(
+      "/api/customer-segmentation/segments",
+    );
     return response.data;
   },
-  async createSegment(data: { name: string; description?: string; rules: SegmentRules }): Promise<SegmentOut> {
-    const response = await apiClient.post<SegmentOut>('/api/customer-segmentation/segments', data);
+  async createSegment(data: {
+    name: string;
+    description?: string;
+    rules: SegmentRules;
+  }): Promise<SegmentOut> {
+    const response = await apiClient.post<SegmentOut>(
+      "/api/customer-segmentation/segments",
+      data,
+    );
     return response.data;
   },
-  async updateSegment(segmentId: string, data: Partial<{ name: string; description: string; rules: SegmentRules }>): Promise<SegmentOut> {
-    const response = await apiClient.put<SegmentOut>(`/api/customer-segmentation/segments/${segmentId}`, data);
+  async updateSegment(
+    segmentId: string,
+    data: Partial<{ name: string; description: string; rules: SegmentRules }>,
+  ): Promise<SegmentOut> {
+    const response = await apiClient.put<SegmentOut>(
+      `/api/customer-segmentation/segments/${segmentId}`,
+      data,
+    );
     return response.data;
   },
   async calculateSegmentCount(rules: SegmentRules): Promise<{ count: number }> {
     const response = await apiClient.post<{ count: number }>(
-      '/api/customer-segmentation/segments/calculate-count',
-      rules
+      "/api/customer-segmentation/segments/calculate-count",
+      rules,
     );
     return response.data;
   },
@@ -3534,59 +5067,650 @@ export interface SegmentAnalysisItem {
 }
 
 export const aiMarketer = {
-  async getBoardState(boardId: string, params?: { limit?: number }): Promise<{ board_id: string; tasks: AgentInteractionTask[]; stats: Record<string, number> }> {
-    const response = await apiClient.get<{ board_id: string; tasks: AgentInteractionTask[]; stats: Record<string, number> }>(
-      `/api/ai-marketer/boards/${boardId}`,
-      { params }
-    );
+  async getBoardState(
+    boardId: string,
+    params?: { limit?: number },
+  ): Promise<{
+    board_id: string;
+    tasks: AgentInteractionTask[];
+    stats: Record<string, number>;
+  }> {
+    const response = await apiClient.get<{
+      board_id: string;
+      tasks: AgentInteractionTask[];
+      stats: Record<string, number>;
+    }>(`/api/ai-marketer/boards/${boardId}`, { params });
     return response.data;
   },
-  async ensureBoardTask(boardId: string, data: {
-    source_agent?: string;
-    target_agent: string;
-    task_type: string;
-    input_data?: Record<string, any>;
-    task_context?: Record<string, any>;
-    target_metrics?: Record<string, any>;
-    requirements?: Record<string, any>;
-    constraints?: Record<string, any>;
-    priority?: number;
-    deadline_at?: string;
-    idempotency_key?: string;
-  }): Promise<{ created: boolean; task: AgentInteractionTask }> {
-    const response = await apiClient.post<{ created: boolean; task: AgentInteractionTask }>(
-      `/api/ai-marketer/boards/${boardId}/tasks/ensure`,
-      data
-    );
+  async ensureBoardTask(
+    boardId: string,
+    data: {
+      source_agent?: string;
+      target_agent: string;
+      task_type: string;
+      input_data?: Record<string, any>;
+      task_context?: Record<string, any>;
+      target_metrics?: Record<string, any>;
+      requirements?: Record<string, any>;
+      constraints?: Record<string, any>;
+      priority?: number;
+      deadline_at?: string;
+      idempotency_key?: string;
+    },
+  ): Promise<{ created: boolean; task: AgentInteractionTask }> {
+    const response = await apiClient.post<{
+      created: boolean;
+      task: AgentInteractionTask;
+    }>(`/api/ai-marketer/boards/${boardId}/tasks/ensure`, data);
     return response.data;
   },
-  async autoGenerateSegments(): Promise<{ success: boolean; stats: Record<string, any> }> {
-    const response = await apiClient.post<{ success: boolean; stats: Record<string, any> }>(
-      '/api/ai-marketer/segments/auto-generate',
-      {}
-    );
+  async autoGenerateSegments(): Promise<{
+    success: boolean;
+    stats: Record<string, any>;
+  }> {
+    const response = await apiClient.post<{
+      success: boolean;
+      stats: Record<string, any>;
+    }>("/api/ai-marketer/segments/auto-generate", {});
     return response.data;
   },
   async getSegmentsAnalysis(): Promise<{ segments: SegmentAnalysisItem[] }> {
     const response = await apiClient.get<{ segments: SegmentAnalysisItem[] }>(
-      '/api/ai-marketer/segments/analysis'
+      "/api/ai-marketer/segments/analysis",
     );
     return response.data;
   },
 };
 
 export const adminCustomers = {
-  async getOverview(): Promise<{ total_customers: number; total_revenue: number }> {
-    const response = await apiClient.get<{ total_customers: number; total_revenue: number }>(
-      '/api/admin/customers/analytics/overview'
+  async getOverview(): Promise<{
+    total_customers: number;
+    total_revenue: number;
+  }> {
+    const response = await apiClient.get<{
+      total_customers: number;
+      total_revenue: number;
+    }>("/api/admin/customers/analytics/overview");
+    return response.data;
+  },
+  async exportXlsx(params?: {
+    segment?: string;
+    search?: string;
+  }): Promise<Blob> {
+    const response = await apiClient.get("/api/admin/customers/export", {
+      params,
+      responseType: "blob",
+    });
+    return response.data;
+  },
+};
+
+export interface CrmCustomerSummary {
+  id: string;
+  full_name?: string | null;
+  phone?: string | null;
+  city?: string | null;
+  birth_date?: string | null;
+  preferred_store_name?: string | null;
+  secondary_store_name?: string | null;
+  total_purchases: number;
+  total_spent: number;
+  average_check?: number | null;
+  last_purchase_date?: string | null;
+  customer_segment?: string | null;
+  loyalty_points: number;
+  questionnaire?: {
+    contact_channels?: string[];
+    do_not_contact?: boolean;
+    marketing_consent?: boolean;
+    recommended_contact_channel?: string | null;
+    purchase_for?: string[];
+    glame_values?: string[];
+    discovery_channels?: string[];
+    submitted_at?: string | null;
+  };
+  contact_instruction?: string | null;
+}
+
+export interface CrmTaskEventDto {
+  id: string;
+  event_type: string;
+  actor_user_id?: string | null;
+  actor_name?: string | null;
+  previous_status?: string | null;
+  next_status?: string | null;
+  payload: Record<string, any>;
+  created_at?: string | null;
+}
+
+export interface CrmTaskDto {
+  id: string;
+  customer_id: string;
+  customer?: CrmCustomerSummary | null;
+  assigned_seller_user_id?: string | null;
+  assigned_seller_external_id?: string | null;
+  assigned_seller_name?: string | null;
+  store_id?: string | null;
+  store_name?: string | null;
+  work_date: string;
+  due_date?: string | null;
+  priority: number;
+  crm_group: string;
+  reason?: string | null;
+  seller_action?: string | null;
+  script_key?: string | null;
+  script_text?: string | null;
+  status: string;
+  seller_outcome?: string | null;
+  seller_comment?: string | null;
+  next_action_date?: string | null;
+  campaign_id?: string | null;
+  campaign_name?: string | null;
+  source: string;
+  source_row_id?: string | null;
+  source_idempotency_key?: string | null;
+  source_payload: Record<string, any>;
+  last_contacted_at?: string | null;
+  completed_at?: string | null;
+  attributed_purchase_count: number;
+  attributed_revenue_kopecks: number;
+  attributed_purchase_ids: string[];
+  attributed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  events: CrmTaskEventDto[];
+  recent_messages: Array<Record<string, any>>;
+}
+
+export interface CrmTaskListResponse {
+  items: CrmTaskDto[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CrmDashboardResponse {
+  total: number;
+  active: number;
+  completed: number;
+  overdue: number;
+  without_comment: number;
+  postponed: number;
+  attributed_purchase_count: number;
+  attributed_revenue_kopecks: number;
+  by_status: Record<string, number>;
+  by_seller: Array<Record<string, any>>;
+  by_group: Record<string, number>;
+}
+
+export interface CrmCampaignAnalyticsPurchase {
+  task_id: string;
+  customer_id: string;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  store_name?: string | null;
+  seller_name?: string | null;
+  contact_date?: string | null;
+  purchase_count: number;
+  revenue_kopecks: number;
+  purchase_ids: string[];
+}
+
+export interface CrmCampaignAnalyticsChannel {
+  channel: string;
+  label: string;
+  recipients: number;
+  contacted: number;
+  purchases: number;
+  revenue_kopecks: number;
+  conversion_rate: number;
+}
+
+export interface CrmCampaignAnalyticsItem {
+  campaign_id?: string | null;
+  campaign_name: string;
+  source: string;
+  recipients: number;
+  contacted: number;
+  completed: number;
+  purchases: number;
+  buyers: number;
+  revenue_kopecks: number;
+  conversion_rate: number;
+  revenue_per_contact_kopecks: number;
+  by_channel: CrmCampaignAnalyticsChannel[];
+  purchases_list: CrmCampaignAnalyticsPurchase[];
+}
+
+export interface CrmCampaignAnalyticsResponse {
+  window_days: number;
+  total_campaigns: number;
+  total_recipients: number;
+  total_contacted: number;
+  total_purchases: number;
+  total_revenue_kopecks: number;
+  campaigns: CrmCampaignAnalyticsItem[];
+}
+
+export interface CrmTaskResultPayload {
+  seller_outcome: string;
+  seller_comment: string;
+  next_action_date?: string | null;
+}
+
+export interface CrmTaskImportResponse {
+  created: number;
+  updated: number;
+  skipped: number;
+  not_found_customers: number;
+  errors: Array<Record<string, any>>;
+  tasks: CrmTaskDto[];
+}
+
+export interface CrmTouchpointGenerationResponse {
+  work_date: string;
+  warranty_days: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<Record<string, any>>;
+  by_rule: Record<string, any>;
+}
+
+export interface CrmBirthdayGenerationResponse {
+  work_date: string;
+  days_ahead: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<Record<string, any>>;
+  by_tier: Record<string, any>;
+}
+
+export interface CrmNewArrivalGenerationResponse {
+  work_date: string;
+  received_since: string;
+  created: number;
+  updated: number;
+  dry_run?: boolean;
+  tasks_previewed?: number;
+  skipped: number;
+  errors: Array<Record<string, any>>;
+  by_arrival: Record<string, any>;
+  receipt_sync?: Record<string, any>;
+  transfer_sync?: Record<string, any>;
+  push_drafts?: Array<Record<string, any>>;
+  push_auto_send?: boolean;
+}
+
+export interface CrmOptionItem {
+  value: string;
+  label: string;
+  user_id?: string | null;
+  store_name?: string | null;
+  seller_name?: string | null;
+  external_id?: string | null;
+  city?: string | null;
+  tasks_count?: number;
+  customers_count?: number;
+}
+
+export interface CrmOptionsResponse {
+  stores: CrmOptionItem[];
+  sellers: CrmOptionItem[];
+  campaigns?: CrmOptionItem[];
+  customer_segments?: CrmOptionItem[];
+}
+
+export const sellerCrm = {
+  async listTasks(params?: {
+    date?: string;
+    status?: string;
+    crm_group?: string;
+    include_overdue?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<CrmTaskListResponse> {
+    const response = await apiClient.get<CrmTaskListResponse>(
+      "/api/seller/crm/tasks",
+      { params },
     );
     return response.data;
   },
-  async exportXlsx(params?: { segment?: string; search?: string }): Promise<Blob> {
-    const response = await apiClient.get('/api/admin/customers/export', {
-      params,
-      responseType: 'blob',
-    });
+  async getTask(id: string): Promise<CrmTaskDto> {
+    const response = await apiClient.get<CrmTaskDto>(
+      `/api/seller/crm/tasks/${id}`,
+    );
+    return response.data;
+  },
+  async startTask(id: string): Promise<CrmTaskDto> {
+    const response = await apiClient.patch<CrmTaskDto>(
+      `/api/seller/crm/tasks/${id}/start`,
+      {},
+    );
+    return response.data;
+  },
+  async updateResult(
+    id: string,
+    payload: CrmTaskResultPayload,
+  ): Promise<CrmTaskDto> {
+    const response = await apiClient.patch<CrmTaskDto>(
+      `/api/seller/crm/tasks/${id}/result`,
+      payload,
+    );
+    return response.data;
+  },
+  async postponeTask(
+    id: string,
+    payload: { next_action_date: string; seller_comment: string },
+  ): Promise<CrmTaskDto> {
+    const response = await apiClient.patch<CrmTaskDto>(
+      `/api/seller/crm/tasks/${id}/postpone`,
+      payload,
+    );
+    return response.data;
+  },
+  async completeTask(id: string): Promise<CrmTaskDto> {
+    const response = await apiClient.patch<CrmTaskDto>(
+      `/api/seller/crm/tasks/${id}/complete`,
+      {},
+    );
+    return response.data;
+  },
+};
+
+export type CustomerRequestDto = {
+  id: string;
+  client_id?: string | null;
+  request_type: string;
+  physical_store?: string | null;
+  crm_store?: string | null;
+  assigned_consultant_id?: string | null;
+  status: string;
+  priority: string;
+  product_name?: string | null;
+  sku?: string | null;
+  size?: string | null;
+  brand?: string | null;
+  original_comment?: string | null;
+  photo_urls?: string[];
+  structured_context?: Record<string, any>;
+  next_action?: string | null;
+  next_action_at?: string | null;
+  closed_at?: string | null;
+  created_at?: string | null;
+};
+
+export const customerRequests = {
+  async list(params?: {
+    status?: string;
+    request_type?: string;
+  }): Promise<{ items: CustomerRequestDto[] }> {
+    return (await apiClient.get("/api/customer-requests", { params })).data;
+  },
+  async summary(): Promise<{
+    open: number;
+    overdue: number;
+    by_type: Record<string, number>;
+  }> {
+    return (await apiClient.get("/api/customer-requests/summary")).data;
+  },
+  async create(payload: Record<string, any>): Promise<CustomerRequestDto> {
+    return (await apiClient.post("/api/customer-requests", payload)).data;
+  },
+  async updateStatus(
+    id: string,
+    payload: Record<string, any>,
+  ): Promise<CustomerRequestDto> {
+    return (
+      await apiClient.patch(`/api/customer-requests/${id}/status`, payload)
+    ).data;
+  },
+  async update(
+    id: string,
+    payload: Record<string, any>,
+  ): Promise<CustomerRequestDto> {
+    return (await apiClient.patch(`/api/customer-requests/${id}`, payload))
+      .data;
+  },
+  async uploadPhotos(id: string, files: File[]): Promise<CustomerRequestDto> {
+    const form = new FormData();
+    files.forEach((file) => form.append("files", file));
+    return (await apiClient.post(`/api/customer-requests/${id}/photos`, form))
+      .data;
+  },
+  async issueCompensationCertificate(
+    id: string,
+    payload: { amount_rub: number; expires_in_days?: number; comment?: string },
+  ): Promise<{
+    certificate: {
+      id: string;
+      number: string;
+      pin: string;
+      amount_rub: number;
+      status: string;
+      expires_at?: string | null;
+    };
+    crm_task_id: string;
+    created: boolean;
+    auto_sent: boolean;
+  }> {
+    return (
+      await apiClient.post(
+        `/api/customer-requests/${id}/compensation-certificate`,
+        payload,
+      )
+    ).data;
+  },
+  async get(
+    id: string,
+  ): Promise<
+    CustomerRequestDto & {
+      audit: Array<{
+        id: string;
+        action: string;
+        old_status?: string | null;
+        new_status?: string | null;
+        comment?: string | null;
+        created_at?: string | null;
+      }>;
+    }
+  > {
+    return (await apiClient.get(`/api/customer-requests/${id}`)).data;
+  },
+  async clients(
+    q: string,
+  ): Promise<{
+    items: Array<{
+      id: string;
+      name: string;
+      phone?: string | null;
+      city?: string | null;
+    }>;
+  }> {
+    return (
+      await apiClient.get("/api/customer-requests/clients", { params: { q } })
+    ).data;
+  },
+  async runControl(): Promise<{
+    checked: number;
+    tasks_created: number;
+    arrivals_matched?: number;
+  }> {
+    return (await apiClient.post("/api/customer-requests/control/run")).data;
+  },
+  async analytics(): Promise<{
+    open: number;
+    completed: number;
+    by_type: Record<string, number>;
+    quality_alerts: Array<{
+      sku_or_brand: string;
+      reason: string;
+      count: number;
+    }>;
+  }> {
+    return (await apiClient.get("/api/customer-requests/analytics")).data;
+  },
+};
+
+export const adminCrm = {
+  async listTasks(params?: Record<string, any>): Promise<CrmTaskListResponse> {
+    const response = await apiClient.get<CrmTaskListResponse>(
+      "/api/admin/crm/tasks",
+      { params },
+    );
+    return response.data;
+  },
+  async getTask(id: string): Promise<CrmTaskDto> {
+    const response = await apiClient.get<CrmTaskDto>(
+      `/api/admin/crm/tasks/${id}`,
+    );
+    return response.data;
+  },
+  async options(): Promise<CrmOptionsResponse> {
+    const response = await apiClient.get<CrmOptionsResponse>(
+      "/api/admin/crm/tasks/options",
+    );
+    return response.data;
+  },
+  async dashboard(params?: Record<string, any>): Promise<CrmDashboardResponse> {
+    const response = await apiClient.get<CrmDashboardResponse>(
+      "/api/admin/crm/tasks/dashboard",
+      { params },
+    );
+    return response.data;
+  },
+  async analytics(
+    params?: Record<string, any>,
+  ): Promise<CrmCampaignAnalyticsResponse> {
+    const response = await apiClient.get<CrmCampaignAnalyticsResponse>(
+      "/api/admin/crm/tasks/analytics",
+      { params },
+    );
+    return response.data;
+  },
+  async importTasks(
+    payload: Record<string, any>,
+  ): Promise<CrmTaskImportResponse> {
+    const response = await apiClient.post<CrmTaskImportResponse>(
+      "/api/admin/crm/tasks/import",
+      payload,
+    );
+    return response.data;
+  },
+  async assignTask(
+    id: string,
+    payload: Record<string, any>,
+  ): Promise<CrmTaskDto> {
+    const response = await apiClient.patch<CrmTaskDto>(
+      `/api/admin/crm/tasks/${id}/assign`,
+      payload,
+    );
+    return response.data;
+  },
+  async startTask(id: string): Promise<CrmTaskDto> {
+    const response = await apiClient.patch<CrmTaskDto>(
+      `/api/admin/crm/tasks/${id}/start`,
+      {},
+    );
+    return response.data;
+  },
+  async updateResult(
+    id: string,
+    payload: CrmTaskResultPayload,
+  ): Promise<CrmTaskDto> {
+    const response = await apiClient.patch<CrmTaskDto>(
+      `/api/admin/crm/tasks/${id}/result`,
+      payload,
+    );
+    return response.data;
+  },
+  async completeTask(id: string): Promise<CrmTaskDto> {
+    const response = await apiClient.patch<CrmTaskDto>(
+      `/api/admin/crm/tasks/${id}/complete`,
+      {},
+    );
+    return response.data;
+  },
+  async deleteTask(
+    id: string,
+  ): Promise<{
+    deleted: boolean;
+    task_id: string;
+    customer_id?: string | null;
+    campaign_id?: string | null;
+  }> {
+    const response = await apiClient.delete<{
+      deleted: boolean;
+      task_id: string;
+      customer_id?: string | null;
+      campaign_id?: string | null;
+    }>(`/api/admin/crm/tasks/${id}`);
+    return response.data;
+  },
+  async attributePurchases(
+    payload: Record<string, any>,
+  ): Promise<{
+    updated: number;
+    purchase_count: number;
+    revenue_kopecks: number;
+  }> {
+    const response = await apiClient.post<{
+      updated: number;
+      purchase_count: number;
+      revenue_kopecks: number;
+    }>("/api/admin/crm/tasks/attribute-purchases", payload);
+    return response.data;
+  },
+  async generateTouchpoints(payload: {
+    work_date?: string | null;
+    warranty_days?: number;
+    limit_documents_per_rule?: number;
+  }): Promise<CrmTouchpointGenerationResponse> {
+    const response = await apiClient.post<CrmTouchpointGenerationResponse>(
+      "/api/admin/crm/tasks/touchpoints/generate",
+      payload,
+    );
+    return response.data;
+  },
+  async generateBirthdayTasks(payload: {
+    work_date?: string | null;
+    days_ahead?: number;
+    limit?: number;
+  }): Promise<CrmBirthdayGenerationResponse> {
+    const response = await apiClient.post<CrmBirthdayGenerationResponse>(
+      "/api/admin/crm/tasks/birthday/generate",
+      payload,
+    );
+    return response.data;
+  },
+  async createBirthdayVipPreview(
+    payload: { work_date?: string | null } = {},
+  ): Promise<CrmTaskDto> {
+    const response = await apiClient.post<CrmTaskDto>(
+      "/api/admin/crm/tasks/birthday/preview-vip",
+      payload,
+    );
+    return response.data;
+  },
+  async generateNewArrivalTasks(payload: {
+    work_date?: string | null;
+    lookback_hours?: number;
+    limit_arrivals?: number;
+    limit_clients_per_arrival?: number;
+    use_polling_fallback?: boolean;
+    source?: "primary_receipt_only";
+    batch_id?: string | null;
+    create_seller_tasks?: boolean;
+    prepare_push?: boolean;
+    send_push?: boolean;
+    dry_run?: boolean;
+    anatoliy_technical_approved?: boolean;
+  }): Promise<CrmNewArrivalGenerationResponse> {
+    const response = await apiClient.post<CrmNewArrivalGenerationResponse>(
+      "/api/admin/crm/tasks/new-arrivals/generate",
+      payload,
+    );
     return response.data;
   },
 };
@@ -3608,7 +5732,9 @@ export interface RoleAccess {
 export interface StaffUser {
   id: string;
   email: string | null;
+  phone?: string | null;
   full_name?: string | null;
+  staff_login?: string | null;
   role: string | null;
   role_label?: string | null;
   is_customer: boolean;
@@ -3653,9 +5779,9 @@ export interface LiveStylistConversation {
   id: string;
   source?: string | null;
   scenario?: string | null;
-  status: 'requested' | 'in_progress' | 'completed' | string;
+  status: "requested" | "in_progress" | "completed" | string;
   status_label: string;
-  priority: 'normal' | 'high' | string;
+  priority: "normal" | "high" | string;
   priority_label: string;
   unread_for_stylist_count: number;
   unread_for_customer_count: number;
@@ -3664,15 +5790,25 @@ export interface LiveStylistConversation {
   last_message_at?: string | null;
   first_response_at?: string | null;
   closed_at?: string | null;
-  result_purchase_status: 'unknown' | 'not_purchased' | 'purchased_recommended' | 'purchased_other' | string;
+  result_purchase_status:
+    | "unknown"
+    | "not_purchased"
+    | "purchased_recommended"
+    | "purchased_other"
+    | string;
   result_purchase_status_label: string;
   result_order_id?: string | null;
-  result_source?: 'auto' | 'manual' | string | null;
+  result_source?: "auto" | "manual" | string | null;
   recommended_product_ids: string[];
   internal_notes?: string | null;
   result_notes?: string | null;
   needs_attention: boolean;
-  attention_reason?: 'overdue_first_response' | 'unassigned_request' | 'unread_customer_message' | string | null;
+  attention_reason?:
+    | "overdue_first_response"
+    | "unassigned_request"
+    | "unread_customer_message"
+    | string
+    | null;
   waiting_minutes: number;
   first_response_due_at?: string | null;
   customer: LiveStylistUserInfo;
@@ -3770,6 +5906,23 @@ export interface LiveStylistConversationAuditEvent {
   payload: Record<string, any>;
 }
 
+export interface OnlineStaffUser {
+  id: string;
+  email: string | null;
+  full_name?: string | null;
+  role?: string | null;
+  role_label?: string | null;
+  current_path?: string | null;
+  last_seen_at: string;
+  seconds_ago: number;
+}
+
+export interface OnlinePresenceResponse {
+  online_count: number;
+  window_seconds: number;
+  users: OnlineStaffUser[];
+}
+
 export interface LiveStylistInboxBadge {
   total_unread_messages: number;
   requested_conversations: number;
@@ -3784,21 +5937,30 @@ export interface LiveStylistInboxBadge {
 
 export const adminAccess = {
   async getSections(): Promise<AdminSection[]> {
-    const response = await apiClient.get<AdminSection[]>('/api/admin/access/sections');
+    const response = await apiClient.get<AdminSection[]>(
+      "/api/admin/access/sections",
+    );
     return response.data;
   },
   async getRoles(): Promise<RoleAccess[]> {
-    const response = await apiClient.get<RoleAccess[]>('/api/admin/access/roles');
+    const response = await apiClient.get<RoleAccess[]>(
+      "/api/admin/access/roles",
+    );
     return response.data;
   },
   async updateRole(roleKey: string, sectionIds: string[]): Promise<RoleAccess> {
-    const response = await apiClient.put<RoleAccess>(`/api/admin/access/roles/${roleKey}`, {
-      section_ids: sectionIds,
-    });
+    const response = await apiClient.put<RoleAccess>(
+      `/api/admin/access/roles/${roleKey}`,
+      {
+        section_ids: sectionIds,
+      },
+    );
     return response.data;
   },
   async getStaff(): Promise<StaffUser[]> {
-    const response = await apiClient.get<StaffUser[]>('/api/admin/access/staff');
+    const response = await apiClient.get<StaffUser[]>(
+      "/api/admin/access/staff",
+    );
     return response.data;
   },
   async createStaff(payload: {
@@ -3807,18 +5969,45 @@ export const adminAccess = {
     full_name?: string;
     role: string;
   }): Promise<StaffUser> {
-    const response = await apiClient.post<StaffUser>('/api/admin/access/staff', payload);
+    const response = await apiClient.post<StaffUser>(
+      "/api/admin/access/staff",
+      payload,
+    );
     return response.data;
   },
   async updateStaff(
     id: string,
-    payload: { email?: string; password?: string; full_name?: string; role?: string }
+    payload: {
+      email?: string;
+      password?: string;
+      full_name?: string;
+      role?: string;
+    },
   ): Promise<StaffUser> {
-    const response = await apiClient.put<StaffUser>(`/api/admin/access/staff/${id}`, payload);
+    const response = await apiClient.put<StaffUser>(
+      `/api/admin/access/staff/${id}`,
+      payload,
+    );
     return response.data;
   },
   async deleteStaff(id: string): Promise<void> {
     await apiClient.delete(`/api/admin/access/staff/${id}`);
+  },
+  async heartbeatPresence(path?: string): Promise<{ status: string }> {
+    const response = await apiClient.post<{ status: string }>(
+      "/api/admin/access/presence/heartbeat",
+      { path },
+    );
+    return response.data;
+  },
+  async getOnlinePresence(params?: {
+    window_seconds?: number;
+  }): Promise<OnlinePresenceResponse> {
+    const response = await apiClient.get<OnlinePresenceResponse>(
+      "/api/admin/access/presence/online",
+      { params },
+    );
+    return response.data;
   },
 };
 
@@ -3830,7 +6019,9 @@ export interface PlatformRestartResponse {
 
 export const adminSystem = {
   async restartPlatform(): Promise<PlatformRestartResponse> {
-    const response = await apiClient.post<PlatformRestartResponse>('/api/admin/system/restart');
+    const response = await apiClient.post<PlatformRestartResponse>(
+      "/api/admin/system/restart",
+    );
     return response.data;
   },
 };
@@ -3845,31 +6036,49 @@ export const liveStylistAdmin = {
     attention_only?: boolean;
     limit?: number;
   }): Promise<LiveStylistConversation[]> {
-    const response = await apiClient.get<LiveStylistConversation[]>('/api/admin/live-stylist/conversations', { params });
+    const response = await apiClient.get<LiveStylistConversation[]>(
+      "/api/admin/live-stylist/conversations",
+      { params },
+    );
     return response.data;
   },
   async getConversation(id: string): Promise<LiveStylistConversationDetail> {
-    const response = await apiClient.get<LiveStylistConversationDetail>(`/api/admin/live-stylist/conversations/${id}`);
+    const response = await apiClient.get<LiveStylistConversationDetail>(
+      `/api/admin/live-stylist/conversations/${id}`,
+    );
     return response.data;
   },
   async getInboxBadge(): Promise<LiveStylistInboxBadge> {
-    const response = await apiClient.get<LiveStylistInboxBadge>('/api/admin/live-stylist/inbox-badge');
+    const response = await apiClient.get<LiveStylistInboxBadge>(
+      "/api/admin/live-stylist/inbox-badge",
+    );
     return response.data;
   },
   async listStylists(): Promise<LiveStylistUserInfo[]> {
-    const response = await apiClient.get<LiveStylistUserInfo[]>('/api/admin/live-stylist/stylists');
+    const response = await apiClient.get<LiveStylistUserInfo[]>(
+      "/api/admin/live-stylist/stylists",
+    );
     return response.data;
   },
-  async searchProducts(query: string, limit: number = 8): Promise<LiveStylistAttachableProduct[]> {
-    const response = await apiClient.get<LiveStylistAttachableProduct[]>('/api/admin/live-stylist/products/search', {
-      params: { query, limit },
-    });
+  async searchProducts(
+    query: string,
+    limit: number = 8,
+  ): Promise<LiveStylistAttachableProduct[]> {
+    const response = await apiClient.get<LiveStylistAttachableProduct[]>(
+      "/api/admin/live-stylist/products/search",
+      {
+        params: { query, limit },
+      },
+    );
     return response.data;
   },
-  async assignConversation(conversationId: string, stylistUserId?: string | null): Promise<LiveStylistConversation> {
+  async assignConversation(
+    conversationId: string,
+    stylistUserId?: string | null,
+  ): Promise<LiveStylistConversation> {
     const response = await apiClient.post<LiveStylistConversation>(
       `/api/admin/live-stylist/conversations/${conversationId}/assign`,
-      { stylist_user_id: stylistUserId ?? undefined }
+      { stylist_user_id: stylistUserId ?? undefined },
     );
     return response.data;
   },
@@ -3884,18 +6093,21 @@ export const liveStylistAdmin = {
       result_order_id?: string | null;
       result_notes?: string | null;
       recommended_product_ids?: string[];
-    }
+    },
   ): Promise<LiveStylistConversation> {
     const response = await apiClient.patch<LiveStylistConversation>(
       `/api/admin/live-stylist/conversations/${conversationId}`,
-      payload
+      payload,
     );
     return response.data;
   },
-  async sendMessage(conversationId: string, text: string): Promise<LiveStylistConversationDetail> {
+  async sendMessage(
+    conversationId: string,
+    text: string,
+  ): Promise<LiveStylistConversationDetail> {
     const response = await apiClient.post<LiveStylistConversationDetail>(
       `/api/admin/live-stylist/conversations/${conversationId}/messages`,
-      { text }
+      { text },
     );
     return response.data;
   },
@@ -3905,42 +6117,47 @@ export const liveStylistAdmin = {
       text?: string;
       product_ids?: string[];
       photos?: File[];
-    }
+    },
   ): Promise<LiveStylistConversationDetail> {
     const form = new FormData();
-    if ((payload.text || '').trim()) {
-      form.append('text', (payload.text || '').trim());
+    if ((payload.text || "").trim()) {
+      form.append("text", (payload.text || "").trim());
     }
     if (payload.product_ids?.length) {
-      form.append('product_ids', payload.product_ids.join(','));
+      form.append("product_ids", payload.product_ids.join(","));
     }
     const photos = payload.photos || [];
     if (photos.length === 1) {
-      form.append('photo', photos[0]);
+      form.append("photo", photos[0]);
     } else {
       for (const photo of photos) {
-        form.append('photos', photo);
+        form.append("photos", photo);
       }
     }
     const response = await apiClient.post<LiveStylistConversationDetail>(
       `/api/admin/live-stylist/conversations/${conversationId}/messages/compose`,
       form,
       {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      }
+        headers: { "Content-Type": "multipart/form-data" },
+      },
     );
     return response.data;
   },
-  async setTypingState(conversationId: string, isTyping: boolean): Promise<{ ok: boolean; is_typing: boolean }> {
+  async setTypingState(
+    conversationId: string,
+    isTyping: boolean,
+  ): Promise<{ ok: boolean; is_typing: boolean }> {
     const response = await apiClient.post<{ ok: boolean; is_typing: boolean }>(
       `/api/admin/live-stylist/conversations/${conversationId}/typing`,
-      { is_typing: isTyping }
+      { is_typing: isTyping },
     );
     return response.data;
   },
-  async clearConversationMessages(conversationId: string): Promise<LiveStylistConversationDetail> {
+  async clearConversationMessages(
+    conversationId: string,
+  ): Promise<LiveStylistConversationDetail> {
     const response = await apiClient.delete<LiveStylistConversationDetail>(
-      `/api/admin/live-stylist/conversations/${conversationId}/messages`
+      `/api/admin/live-stylist/conversations/${conversationId}/messages`,
     );
     return response.data;
   },
@@ -3952,14 +6169,17 @@ export const director = {
     message: string,
     sessionId?: string | null,
     category?: string | null,
-    model?: string | null
+    model?: string | null,
   ): Promise<DirectorChatResponse> {
-    const response = await apiClient.post<DirectorChatResponse>('/api/director/chat', {
-      message,
-      session_id: sessionId || undefined,
-      category: category || undefined,
-      model: model || undefined,
-    });
+    const response = await apiClient.post<DirectorChatResponse>(
+      "/api/director/chat",
+      {
+        message,
+        session_id: sessionId || undefined,
+        category: category || undefined,
+        model: model || undefined,
+      },
+    );
     return response.data;
   },
 
@@ -3971,7 +6191,7 @@ export const director = {
       message?: string;
       addToKnowledge?: boolean;
       knowledgeCategory?: string;
-    }
+    },
   ): Promise<{
     user_message: DirectorChatMessage;
     director_message: DirectorChatMessage;
@@ -3979,13 +6199,13 @@ export const director = {
     knowledge: Record<string, any> | null;
   }> {
     const form = new FormData();
-    form.append('file', file);
-    if (params?.sessionId) form.append('session_id', params.sessionId);
-    if (params?.message?.trim()) form.append('message', params.message.trim());
-    form.append('add_to_knowledge', String(Boolean(params?.addToKnowledge)));
-    form.append('knowledge_category', params?.knowledgeCategory || 'document');
-    const response = await apiClient.post('/api/director/chat/upload', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    form.append("file", file);
+    if (params?.sessionId) form.append("session_id", params.sessionId);
+    if (params?.message?.trim()) form.append("message", params.message.trim());
+    form.append("add_to_knowledge", String(Boolean(params?.addToKnowledge)));
+    form.append("knowledge_category", params?.knowledgeCategory || "document");
+    const response = await apiClient.post("/api/director/chat/upload", form, {
+      headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;
   },
@@ -3995,12 +6215,16 @@ export const director = {
     title: string,
     description?: string | null,
     priority?: string,
-    sourceMessageId?: string | null
-  ): Promise<{ task: DirectorTask; subtasks: any[]; assigned_agents: string[] }> {
-    const response = await apiClient.post('/api/director/tasks', {
+    sourceMessageId?: string | null,
+  ): Promise<{
+    task: DirectorTask;
+    subtasks: any[];
+    assigned_agents: string[];
+  }> {
+    const response = await apiClient.post("/api/director/tasks", {
       title,
       description: description || undefined,
-      priority: priority || 'P2',
+      priority: priority || "P2",
       source_message_id: sourceMessageId || undefined,
     });
     return response.data;
@@ -4014,7 +6238,7 @@ export const director = {
     limit?: number;
     offset?: number;
   }): Promise<{ tasks: DirectorTask[]; total: number }> {
-    const response = await apiClient.get('/api/director/tasks', { params });
+    const response = await apiClient.get("/api/director/tasks", { params });
     return response.data;
   },
 
@@ -4022,22 +6246,34 @@ export const director = {
   async tasksKanban(params?: {
     board?: string;
     limit?: number;
-  }): Promise<{ columns: Array<{ id: string; title: string; cards: any[] }>; total: number; stats: Record<string, number> }> {
-    const response = await apiClient.get('/api/director/tasks/kanban', { params });
+  }): Promise<{
+    columns: Array<{ id: string; title: string; cards: any[] }>;
+    total: number;
+    stats: Record<string, number>;
+  }> {
+    const response = await apiClient.get("/api/director/tasks/kanban", {
+      params,
+    });
     return response.data;
   },
 
   /** Лента хода работы директора: агенты и инструменты */
-  async workActivity(params?: { limit?: number }): Promise<{ activity: any[]; total: number }> {
-    const response = await apiClient.get('/api/director/activity', { params });
+  async workActivity(params?: {
+    limit?: number;
+  }): Promise<{ activity: any[]; total: number }> {
+    const response = await apiClient.get("/api/director/activity", { params });
     return response.data;
   },
 
   /** Переместить карточку на канбан-доске директора */
-  async moveTaskCard(source: string, taskId: string, columnId: string): Promise<{ task: any }> {
+  async moveTaskCard(
+    source: string,
+    taskId: string,
+    columnId: string,
+  ): Promise<{ task: any }> {
     const response = await apiClient.patch(
       `/api/director/tasks/${source}/${taskId}/kanban`,
-      { column_id: columnId }
+      { column_id: columnId },
     );
     return response.data;
   },
@@ -4046,14 +6282,14 @@ export const director = {
   async approveTaskCard(
     source: string,
     taskId: string,
-    params?: { comment?: string | null; sessionId?: string | null }
+    params?: { comment?: string | null; sessionId?: string | null },
   ): Promise<{ task: any; director_message: DirectorChatMessage }> {
     const response = await apiClient.post(
       `/api/director/tasks/${source}/${taskId}/approve`,
       {
         comment: params?.comment || null,
         session_id: params?.sessionId || null,
-      }
+      },
     );
     return response.data;
   },
@@ -4062,14 +6298,14 @@ export const director = {
   async reviseTaskCard(
     source: string,
     taskId: string,
-    params?: { comment?: string | null; sessionId?: string | null }
+    params?: { comment?: string | null; sessionId?: string | null },
   ): Promise<{ task: any; director_message: DirectorChatMessage }> {
     const response = await apiClient.post(
       `/api/director/tasks/${source}/${taskId}/revise`,
       {
         comment: params?.comment || null,
         session_id: params?.sessionId || null,
-      }
+      },
     );
     return response.data;
   },
@@ -4077,14 +6313,14 @@ export const director = {
   /** Получить контекст памяти */
   async getMemory(
     memoryType?: string,
-    limit?: number
+    limit?: number,
   ): Promise<{
     memories: DirectorChatMessage[];
     medium_term: any[];
     long_term: any[];
     context: any;
   }> {
-    const response = await apiClient.get('/api/director/memory', {
+    const response = await apiClient.get("/api/director/memory", {
       params: { memory_type: memoryType, limit },
     });
     return response.data;
@@ -4096,12 +6332,12 @@ export const director = {
     content: string,
     category?: string,
     source?: string | null,
-    sourceMessageId?: string | null
+    sourceMessageId?: string | null,
   ): Promise<{ knowledge: DirectorKnowledge }> {
-    const response = await apiClient.post('/api/director/knowledge', {
+    const response = await apiClient.post("/api/director/knowledge", {
       title,
       content,
-      category: category || 'fact',
+      category: category || "fact",
       source: source || undefined,
       source_message_id: sourceMessageId || undefined,
     });
@@ -4112,9 +6348,9 @@ export const director = {
   async searchKnowledge(
     query: string,
     category?: string,
-    limit?: number
+    limit?: number,
   ): Promise<{ results: DirectorKnowledge[]; total: number }> {
-    const response = await apiClient.get('/api/director/knowledge/search', {
+    const response = await apiClient.get("/api/director/knowledge/search", {
       params: { query, category, limit },
     });
     return response.data;
@@ -4130,7 +6366,9 @@ export const director = {
     page?: number;
     limit?: number;
   }): Promise<DirectorSearchResult> {
-    const response = await apiClient.get('/api/director/chat/search', { params });
+    const response = await apiClient.get("/api/director/chat/search", {
+      params,
+    });
     return response.data;
   },
 
@@ -4141,8 +6379,15 @@ export const director = {
     category?: string;
     limit?: number;
     offset?: number;
-  }): Promise<{ messages: DirectorChatMessage[]; total: number; limit: number; offset: number }> {
-    const response = await apiClient.get('/api/director/chat/history', { params });
+  }): Promise<{
+    messages: DirectorChatMessage[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const response = await apiClient.get("/api/director/chat/history", {
+      params,
+    });
     return response.data;
   },
 
@@ -4158,7 +6403,7 @@ export const director = {
     archived_knowledge: number;
     session_id?: string | null;
   }> {
-    const response = await apiClient.delete('/api/director/chat/history', {
+    const response = await apiClient.delete("/api/director/chat/history", {
       params: {
         session_id: params?.session_id || undefined,
         include_memory: params?.include_memory ?? true,
@@ -4172,14 +6417,25 @@ export const director = {
     category?: string;
     limit?: number;
     offset?: number;
-  }): Promise<{ knowledge: DirectorKnowledge[]; total: number; limit: number; offset: number }> {
-    const response = await apiClient.get('/api/director/knowledge/list', { params });
+  }): Promise<{
+    knowledge: DirectorKnowledge[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const response = await apiClient.get("/api/director/knowledge/list", {
+      params,
+    });
     return response.data;
   },
 
   /** Удалить знание */
-  async deleteKnowledge(knowledgeId: string): Promise<{ status: string; knowledge_id: string }> {
-    const response = await apiClient.delete(`/api/director/knowledge/${knowledgeId}`);
+  async deleteKnowledge(
+    knowledgeId: string,
+  ): Promise<{ status: string; knowledge_id: string }> {
+    const response = await apiClient.delete(
+      `/api/director/knowledge/${knowledgeId}`,
+    );
     return response.data;
   },
 
@@ -4190,7 +6446,7 @@ export const director = {
     data_context: string;
     active_tasks_count: number;
   }> {
-    const response = await apiClient.get('/api/director/greeting', {
+    const response = await apiClient.get("/api/director/greeting", {
       params: { session_id: sessionId || undefined },
     });
     return response.data;

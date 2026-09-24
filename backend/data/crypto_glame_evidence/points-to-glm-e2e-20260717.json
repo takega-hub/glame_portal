@@ -1,0 +1,68 @@
+{
+  "schema": "glame_points_to_glm_e2e_evidence_v1",
+  "operation": {
+    "id": "a469ea16-8ce5-4d2c-ba2a-ccfd2618bd27",
+    "direction": "points_to_glm",
+    "status": "processed",
+    "points_amount": 100,
+    "glm_amount": 100,
+    "ton_status": "settled",
+    "ton_tx_hash": "M6dz6aQW2FXuS4vvQZsh5js6RXna2gsq4EeKLQwYdBw=",
+    "onec_status": "success",
+    "onec_document_id": "a136ad9e-81c1-11f1-86ad-fa163e4cc04e",
+    "created_at": "2026-07-17T09:26:40.604570+00:00",
+    "updated_at": "2026-07-17T09:26:46.333666+00:00"
+  },
+  "transaction": {
+    "id": "29e88731-b453-4a61-92c7-1ab2e4c8cf03",
+    "type": "claim",
+    "status": "processed",
+    "amount": 100,
+    "reason": "points_to_ton_bridge",
+    "ton_auto_transfer": {
+      "status": "settled",
+      "updated_at": "2026-07-17T09:26:46.335755+00:00",
+      "amount_glm": 100,
+      "amount_base_units": "100000000000",
+      "hot_wallet_address": "UQA5EmFpVIEJea3jgPdErJyH19lJHs9HUuarIvXbQpBz2Mok",
+      "hot_jetton_wallet_address": "EQDQ1H4oUg0AbDJaSkw2iuk1Z-VuxpsaYIK8G2aRnQArAHh-",
+      "destination_wallet_address": "0:eb330157b6d58a6486ff0d21283787772889acc146dd1c38a8c2c52bff8de994",
+      "query_id": "1784280406",
+      "seqno": 2,
+      "tx_hash": "M6dz6aQW2FXuS4vvQZsh5js6RXna2gsq4EeKLQwYdBw=",
+      "external_message_hash": null,
+      "signer_mode": "external_signer",
+      "wallet_version": "w5r1",
+      "send_response": {
+        "status": "sent",
+        "signer_mode": "external_signer",
+        "tx_hash": null,
+        "external_message_hash": null,
+        "seqno": 2,
+        "query_id": "1784280406",
+        "signer_request_id": "1784280406"
+      },
+      "settled_at": "2026-07-17T09:26:52.636986+00:00"
+    },
+    "onec_spend_document_id": "a136ad9e-81c1-11f1-86ad-fa163e4cc04e",
+    "wallet_app": "telegram-wallet"
+  },
+  "bridge_reconciliation": {
+    "checked_bridge_operations": 16,
+    "pending_count": 0,
+    "ton_sent_waiting_count": 0,
+    "ton_processed_without_tx_count": 0,
+    "onec_spend_failed_count": 0,
+    "issues_count": 0,
+    "issues": []
+  },
+  "replay_idempotency": {
+    "status": "ok",
+    "issues_count": 0,
+    "checked": {
+      "bridge_operations": 16,
+      "transactions": 16,
+      "ton_tx_hashes": 12
+    }
+  }
+}

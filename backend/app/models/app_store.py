@@ -20,6 +20,7 @@ class AppStore(Base):
     image_urls = Column(JSON, nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
+    stock_store_external_id = Column(String(255), nullable=True, index=True)
     sort_order = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
     updated_by_user_id = Column(UUID(as_uuid=True), nullable=True)

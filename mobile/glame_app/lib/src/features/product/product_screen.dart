@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/analytics/analytics_service.dart';
 import '../../core/formatters/rub.dart';
+import '../../core/layout/glame_layout.dart';
 import '../../core/theme/glame_theme.dart';
 import 'product_providers.dart';
 import '../auth/auth_controller.dart';
@@ -190,31 +191,59 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
 
           _trackRecentlyViewed(item, images, priceLabel);
 
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: _buildProductScroll(
-                context,
-                name: name,
-                productBrand: productBrand,
-                article: article,
-                priceLabel: priceLabel,
-                basePriceKopeks: basePrice is num ? basePrice.toInt() : null,
-                loyaltyPoints: loyaltyPoints,
-                images: images,
-                category: category,
-                specifications: specs is Map
-                    ? Map<String, dynamic>.from(specs)
-                    : const <String, dynamic>{},
-                productDescription: productDescription,
-                stock: stock,
-                product: item,
-                variantsData: variantsData,
-                isWishlisted: isWishlisted,
-                looksAsync: looksAsync,
-                recommendationsAsync: recommendationsAsync,
-              ),
+          final isDesktop = GlameLayout.isDesktop(context);
+          final productScroll = GlameContentWidth(
+            maxWidth: 1240,
+            child: _buildProductScroll(
+              context,
+              name: name,
+              productBrand: productBrand,
+              article: article,
+              priceLabel: priceLabel,
+              basePriceKopeks: basePrice is num ? basePrice.toInt() : null,
+              loyaltyPoints: loyaltyPoints,
+              images: images,
+              category: category,
+              specifications: specs is Map
+                  ? Map<String, dynamic>.from(specs)
+                  : const <String, dynamic>{},
+              productDescription: productDescription,
+              stock: stock,
+              product: item,
+              variantsData: variantsData,
+              isWishlisted: isWishlisted,
+              looksAsync: looksAsync,
+              recommendationsAsync: recommendationsAsync,
+              showInlineActions: isDesktop,
             ),
+          );
+          if (isDesktop) return productScroll;
+
+          final available = stock != null && stock > 0;
+          return Column(
+            children: [
+              Expanded(child: productScroll),
+              _ProductPurchaseDock(
+                label: available
+                    ? 'Добавить в корзину'
+                    : 'Сообщить о поступлении',
+                isWishlisted: isWishlisted,
+                onMainTap: () {
+                  if (available) {
+                    _addToCart(context);
+                  } else {
+                    _showArrivalSubscriptionSheet(
+                      context,
+                      product: item,
+                      variantsData: variantsData,
+                    );
+                  }
+                },
+                onFavoriteTap: () => ref
+                    .read(wishlistControllerProvider.notifier)
+                    .toggle(widget.productId),
+              ),
+            ],
           );
         },
       ),
@@ -239,38 +268,82 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     required bool isWishlisted,
     required AsyncValue<List<dynamic>> looksAsync,
     required AsyncValue<List<dynamic>> recommendationsAsync,
+    required bool showInlineActions,
   }) {
+    final isDesktop = GlameLayout.isDesktop(context);
+    final topInfo = _buildTopInfoBlock(
+      context,
+      name: name,
+      article: article,
+      priceLabel: priceLabel,
+      basePriceKopeks: basePriceKopeks,
+      loyaltyPoints: loyaltyPoints,
+      stock: stock,
+    );
+    final actions = showInlineActions
+        ? _buildActionButtons(
+            context,
+            stock,
+            isWishlisted,
+            product: product,
+            variantsData: variantsData,
+          )
+        : null;
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 28),
+      padding: EdgeInsets.fromLTRB(
+        isDesktop ? 28 : 12,
+        isDesktop ? 28 : 6,
+        isDesktop ? 28 : 12,
+        isDesktop ? 52 : 28,
+      ),
       children: [
-        _buildImageGallery(
-          context,
-          images,
-          brand: productBrand,
-          name: name,
-          article: article,
-          isWishlisted: isWishlisted,
-        ),
-        const SizedBox(height: 14),
-        _buildTopInfoBlock(
-          context,
-          name: name,
-          article: article,
-          priceLabel: priceLabel,
-          basePriceKopeks: basePriceKopeks,
-          loyaltyPoints: loyaltyPoints,
-          stock: stock,
-        ),
-        const SizedBox(height: 14),
-        _buildActionButtons(
-          context,
-          stock,
-          isWishlisted,
-          product: product,
-          variantsData: variantsData,
-        ),
-        const SizedBox(height: 14),
-        _buildBenefitsBlock(),
+        if (isDesktop)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 13,
+                child: _buildImageGallery(
+                  context,
+                  images,
+                  brand: productBrand,
+                  name: name,
+                  article: article,
+                  isWishlisted: isWishlisted,
+                ),
+              ),
+              const SizedBox(width: 44),
+              Expanded(
+                flex: 8,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    topInfo,
+                    const SizedBox(height: 28),
+                    actions!,
+                    const SizedBox(height: 24),
+                    _buildBenefitsBlock(),
+                  ],
+                ),
+              ),
+            ],
+          )
+        else ...[
+          _buildImageGallery(
+            context,
+            images,
+            brand: productBrand,
+            name: name,
+            article: article,
+            isWishlisted: isWishlisted,
+          ),
+          const SizedBox(height: 14),
+          topInfo,
+          if (actions != null) ...[const SizedBox(height: 14), actions],
+          const SizedBox(height: 14),
+          _buildBenefitsBlock(),
+        ],
         const SizedBox(height: 12),
         _buildStylistBlock(name, priceLabel, images, productDescription),
         const SizedBox(height: 14),
@@ -630,7 +703,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        available ? 'В наличии' : 'Нет в наличии',
+                        available ? 'В наличии' : 'Скоро в наличии',
                         style: const TextStyle(
                           fontSize: 11,
                           color: GlameColors.textPrimary,
@@ -692,7 +765,7 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12),
             child: Text(
-              'Оставьте контакт, и мы сообщим, когда изделие вернется. Это поможет прогнозировать спрос.',
+              'Оставьте контакт, и мы сообщим, когда изделие вернется.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 10,
@@ -1689,62 +1762,43 @@ class _ProductScreenState extends ConsumerState<ProductScreen> {
     final items = recommendations
         .map((item) => _recommendationProduct(item))
         .whereType<Map<String, dynamic>>()
-        .take(3)
+        .take(12)
         .toList();
-    final displayItems = items.isNotEmpty
-        ? items
-        : <Map<String, dynamic>>[
-            {'name': 'Серьги SOLIS', 'price': 1890000},
-            {'name': 'Серьги ECLIPSE', 'price': 1690000},
-            {'name': 'Серьги ORBIT', 'price': 1790000},
-          ];
+    if (items.isEmpty) return const SizedBox.shrink();
     return _ProductSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader(
-            title: 'ПОХОЖИЕ ПО НАСТРОЕНИЮ',
-            action: 'Смотреть все',
-            onActionTap: () => context.go('/home?tab=1'),
-          ),
+          const _BlockTitle('ПОХОЖИЕ ПО НАСТРОЕНИЮ'),
           const SizedBox(height: 14),
           SizedBox(
             height: 224,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                ...List.generate(3, (index) {
-                  final item = index < displayItems.length
-                      ? displayItems[index]
-                      : null;
+                ...items.map((item) {
                   return Padding(
                     padding: const EdgeInsets.only(right: 10),
                     child: SizedBox(
                       width: 148,
                       child: GestureDetector(
-                        onTap: item == null
-                            ? null
-                            : () {
-                                final productId = _extractProductId(item);
-                                if (productId != null) {
-                                  context.push(
-                                    '/product/${Uri.encodeComponent(productId)}',
-                                  );
-                                }
-                              },
+                        onTap: () {
+                          final productId = _extractProductId(item);
+                          if (productId != null) {
+                            context.push(
+                              '/product/${Uri.encodeComponent(productId)}',
+                            );
+                          }
+                        },
                         child: _SimilarTile(
                           imageUrl: _productImageUrl(item),
-                          title: (item?['name'] as String?) ?? 'GLAME',
-                          price: formatRubFromKopeks(item?['price']),
+                          title: (item['name'] as String?) ?? 'GLAME',
+                          price: formatRubFromKopeks(item['price']),
                         ),
                       ),
                     ),
                   );
                 }),
-                GestureDetector(
-                  onTap: () => context.go('/home?tab=1'),
-                  child: const SizedBox(width: 96, child: _MoreTile()),
-                ),
               ],
             ),
           ),
@@ -1839,6 +1893,77 @@ class _ProductHeroOverlayIcon extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: Icon(icon, size: 15, color: GlameColors.textPrimary),
+      ),
+    );
+  }
+}
+
+class _ProductPurchaseDock extends StatelessWidget {
+  final String label;
+  final bool isWishlisted;
+  final VoidCallback onMainTap;
+  final VoidCallback onFavoriteTap;
+
+  const _ProductPurchaseDock({
+    required this.label,
+    required this.isWishlisted,
+    required this.onMainTap,
+    required this.onFavoriteTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: GlameColors.surface2,
+      elevation: 12,
+      shadowColor: Colors.black.withValues(alpha: 0.14),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: onMainTap,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: GlameColors.textPrimary,
+                      foregroundColor: GlameColors.surface2,
+                      shape: const RoundedRectangleBorder(),
+                    ),
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 56,
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: onFavoriteTap,
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    foregroundColor: GlameColors.textPrimary,
+                    side: const BorderSide(color: GlameColors.textPrimary),
+                    shape: const RoundedRectangleBorder(),
+                  ),
+                  child: Icon(
+                    isWishlisted ? Icons.favorite : Icons.favorite_border,
+                    size: 23,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2027,50 +2152,6 @@ class _BlockTitle extends StatelessWidget {
         letterSpacing: 0.4,
         color: GlameColors.textPrimary,
       ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String action;
-  final VoidCallback? onActionTap;
-
-  const _SectionHeader({
-    required this.title,
-    required this.action,
-    this.onActionTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _BlockTitle(title)),
-        InkWell(
-          onTap: onActionTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Row(
-              children: [
-                Text(
-                  action,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: GlameColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.arrow_forward,
-                  size: 18,
-                  color: GlameColors.textSecondary,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -2878,10 +2959,7 @@ class _SimilarTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: GlameColors.surface,
-        borderRadius: BorderRadius.circular(8),
-      ),
+      decoration: BoxDecoration(color: GlameColors.surface),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2890,11 +2968,10 @@ class _SimilarTile extends StatelessWidget {
             child: Container(
               width: double.infinity,
               color: GlameColors.surface2,
-              padding: const EdgeInsets.all(6),
               child: imageUrl != null
                   ? CachedNetworkImage(
                       imageUrl: imageUrl!,
-                      fit: BoxFit.contain,
+                      fit: BoxFit.cover,
                       placeholder: (_, _) =>
                           Container(color: GlameColors.surface2),
                       errorWidget: (_, _, _) =>
@@ -2930,37 +3007,6 @@ class _SimilarTile extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _MoreTile extends StatelessWidget {
-  const _MoreTile();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: GlameColors.surface,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.arrow_forward, size: 26, color: GlameColors.textPrimary),
-            SizedBox(height: 18),
-            Text(
-              'ЕЩЁ',
-              style: TextStyle(
-                fontSize: 14,
-                letterSpacing: 1,
-                color: GlameColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -3021,16 +3067,19 @@ class _LookBundleViewState extends State<_LookBundleView> {
           children: [
             Expanded(
               flex: 7,
-              child: cover != null
-                  ? CachedNetworkImage(
-                      imageUrl: cover,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) =>
-                          Container(color: GlameColors.surface),
-                      errorWidget: (_, _, _) =>
-                          Container(color: GlameColors.surface),
-                    )
-                  : Container(color: GlameColors.surface),
+              child: InkWell(
+                onTap: () => _showLookDetails(context, cover, products),
+                child: cover != null
+                    ? CachedNetworkImage(
+                        imageUrl: cover,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) =>
+                            Container(color: GlameColors.surface),
+                        errorWidget: (_, _, _) =>
+                            Container(color: GlameColors.surface),
+                      )
+                    : Container(color: GlameColors.surface),
+              ),
             ),
             SizedBox(width: spacing),
             Expanded(
@@ -3058,7 +3107,11 @@ class _LookBundleViewState extends State<_LookBundleView> {
                               availabilityLabel:
                                   _bundleProductAvailabilityLabel(product),
                               selected: selected,
-                              onTap: productId == null
+                              onOpen: productId == null
+                                  ? null
+                                  : () =>
+                                        _showProductDetails(context, product!),
+                              onToggle: productId == null
                                   ? null
                                   : () => _toggleSelection(product),
                             ),
@@ -3108,6 +3161,266 @@ class _LookBundleViewState extends State<_LookBundleView> {
       },
     );
   }
+
+  Future<void> _showProductDetails(
+    BuildContext context,
+    Map<String, dynamic> product,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _BundleProductSheet(
+        product: product,
+        selected: _selectedIds.contains(_extractProductId(product)),
+        onToggle: () {
+          _toggleSelection(product);
+          Navigator.of(sheetContext).pop();
+        },
+        onOpenProduct: () {
+          final productId = _extractProductId(product);
+          Navigator.of(sheetContext).pop();
+          if (productId != null) context.push('/product/$productId');
+        },
+      ),
+    );
+  }
+
+  Future<void> _showLookDetails(
+    BuildContext context,
+    String? imageUrl,
+    List<Map<String, dynamic>> products,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _BundleLookSheet(
+        look: widget.look,
+        imageUrl: imageUrl,
+        productCount: products.length,
+        onOpenLook: () {
+          final lookId = _lookBundleId(widget.look);
+          Navigator.of(sheetContext).pop();
+          if (lookId != null) context.push('/look/$lookId');
+        },
+      ),
+    );
+  }
+}
+
+class _BundleProductSheet extends StatelessWidget {
+  final Map<String, dynamic> product;
+  final bool selected;
+  final VoidCallback onToggle;
+  final VoidCallback onOpenProduct;
+
+  const _BundleProductSheet({
+    required this.product,
+    required this.selected,
+    required this.onToggle,
+    required this.onOpenProduct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = _productImageUrl(product);
+    final title = _bundleProductName(product);
+    final price = _bundleProductPriceLabel(product) ?? 'Цена уточняется';
+    final availability = _bundleProductAvailabilityLabel(product);
+
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+        ),
+        child: SingleChildScrollView(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            decoration: const BoxDecoration(
+              color: GlameColors.surface2,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _SheetDragHandle(),
+                const SizedBox(height: 18),
+                if (imageUrl != null) _BundleSheetImage(imageUrl: imageUrl),
+                if (imageUrl != null) const SizedBox(height: 16),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    height: 1.15,
+                    color: GlameColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  price,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: GlameColors.textPrimary,
+                  ),
+                ),
+                if (availability != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    availability,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: availability == 'В наличии'
+                          ? GlameColors.gold
+                          : GlameColors.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton.icon(
+                    onPressed: onToggle,
+                    icon: Icon(selected ? Icons.check : Icons.add, size: 18),
+                    label: Text(
+                      selected ? 'Убрать из комплекта' : 'Добавить в комплект',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: TextButton(
+                    onPressed: onOpenProduct,
+                    child: const Text('Открыть карточку изделия'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BundleLookSheet extends StatelessWidget {
+  final Map<String, dynamic> look;
+  final String? imageUrl;
+  final int productCount;
+  final VoidCallback onOpenLook;
+
+  const _BundleLookSheet({
+    required this.look,
+    required this.imageUrl,
+    required this.productCount,
+    required this.onOpenLook,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final description = _lookBundleDescription(look);
+
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+        ),
+        child: SingleChildScrollView(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            decoration: const BoxDecoration(
+              color: GlameColors.surface2,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _SheetDragHandle(),
+                const SizedBox(height: 18),
+                if (imageUrl != null) _BundleSheetImage(imageUrl: imageUrl!),
+                if (imageUrl != null) const SizedBox(height: 16),
+                Text(
+                  _lookBundleName(look),
+                  style: const TextStyle(
+                    fontSize: 22,
+                    color: GlameColors.textPrimary,
+                  ),
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      height: 1.35,
+                      color: GlameColors.textSecondary,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  '$productCount ${_productCountLabel(productCount)} в образе',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: GlameColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: _lookBundleId(look) == null ? null : onOpenLook,
+                    child: const Text('Открыть образ'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetDragHandle extends StatelessWidget {
+  const _SheetDragHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(width: 36, height: 3, color: GlameColors.lightGray),
+    );
+  }
+}
+
+class _BundleSheetImage extends StatelessWidget {
+  final String imageUrl;
+
+  const _BundleSheetImage({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 3 / 4,
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => Container(color: GlameColors.surface),
+        errorWidget: (_, _, _) => Container(color: GlameColors.surface),
+      ),
+    );
+  }
 }
 
 class _LookBundlePrice extends StatelessWidget {
@@ -3120,7 +3433,7 @@ class _LookBundlePrice extends StatelessWidget {
   Widget build(BuildContext context) {
     if (total <= 0) {
       return const Text(
-        'Нажмите на фото, чтобы добавить товары в комплект',
+        'Нажмите +, чтобы добавить товары в комплект',
         style: TextStyle(fontSize: 12, color: GlameColors.textSecondary),
       );
     }
@@ -3239,14 +3552,16 @@ class _SetTile extends StatelessWidget {
   final String? priceLabel;
   final String? availabilityLabel;
   final bool selected;
-  final VoidCallback? onTap;
+  final VoidCallback? onOpen;
+  final VoidCallback? onToggle;
 
   const _SetTile({
     this.imageUrl,
     this.priceLabel,
     this.availabilityLabel,
     this.selected = false,
-    this.onTap,
+    this.onOpen,
+    this.onToggle,
   });
 
   @override
@@ -3263,7 +3578,7 @@ class _SetTile extends StatelessWidget {
         children: [
           Expanded(
             child: InkWell(
-              onTap: onTap,
+              onTap: onOpen,
               splashColor: GlameColors.textPrimary.withValues(alpha: 0.12),
               highlightColor: GlameColors.textPrimary.withValues(alpha: 0.05),
               child: Stack(
@@ -3291,27 +3606,33 @@ class _SetTile extends StatelessWidget {
                     ),
                   ),
                   if (hasData)
-                    Center(
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? GlameColors.gold
-                              : GlameColors.surface2.withValues(alpha: 0.92),
-                          shape: BoxShape.circle,
-                          border: Border.all(
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: InkWell(
+                        onTap: onToggle,
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
                             color: selected
                                 ? GlameColors.gold
-                                : GlameColors.lightGray,
+                                : GlameColors.surface2.withValues(alpha: 0.92),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: selected
+                                  ? GlameColors.gold
+                                  : GlameColors.lightGray,
+                            ),
                           ),
-                        ),
-                        child: Icon(
-                          selected ? Icons.check : Icons.add,
-                          size: selected ? 20 : 24,
-                          color: selected
-                              ? GlameColors.black
-                              : GlameColors.textPrimary,
+                          child: Icon(
+                            selected ? Icons.check : Icons.add,
+                            size: selected ? 20 : 24,
+                            color: selected
+                                ? GlameColors.black
+                                : GlameColors.textPrimary,
+                          ),
                         ),
                       ),
                     ),
@@ -3362,7 +3683,55 @@ String? _bundleProductAvailabilityLabel(Map<String, dynamic>? product) {
   if (product == null) return null;
   final stock = product['stock'];
   final amount = stock is num ? stock.toDouble() : null;
-  return (amount != null && amount > 0) ? 'В наличии' : 'Нет в наличии';
+  return (amount != null && amount > 0) ? 'В наличии' : 'Скоро в наличии';
+}
+
+String _bundleProductName(Map<String, dynamic> product) {
+  for (final key in const ['name', 'title', 'product_name']) {
+    final value = product[key];
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+  }
+  return 'Украшение GLAME';
+}
+
+String _lookBundleName(Map<String, dynamic> look) {
+  for (final key in const ['name', 'title', 'look_name']) {
+    final value = look[key];
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+  }
+  return 'Образ GLAME';
+}
+
+String _lookBundleDescription(Map<String, dynamic> look) {
+  for (final key in const ['description', 'caption', 'look_description']) {
+    final value = look[key];
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+  }
+  return '';
+}
+
+String? _lookBundleId(Map<String, dynamic> look) {
+  for (final key in const ['id', 'look_id']) {
+    final value = look[key];
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+    if (value is num) return value.toInt().toString();
+  }
+  return null;
+}
+
+String _productCountLabel(int value) {
+  final lastTwo = value % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return 'изделий';
+  switch (value % 10) {
+    case 1:
+      return 'изделие';
+    case 2:
+    case 3:
+    case 4:
+      return 'изделия';
+    default:
+      return 'изделий';
+  }
 }
 
 class _VariantsSelector extends ConsumerWidget {

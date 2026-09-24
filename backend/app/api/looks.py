@@ -27,6 +27,8 @@ from app.models.user import User
 from app.services.instagram_service import InstagramService
 from app.services.llm_service import llm_service
 from app.agents.stylist_agent import StylistAgent
+from app.services.upload_security import validate_image_upload
+from app.services.yandex_looks_import_service import YANDEX_LOOKS_PUBLIC_URL, import_yandex_looks
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +206,10 @@ async def _save_manual_look_upload(file: UploadFile, folder: str, allowed_types:
         raise HTTPException(status_code=400, detail="Один из файлов пустой")
     if len(file_bytes) > max_bytes:
         raise HTTPException(status_code=400, detail="Файл превышает допустимый размер")
+    if content_type.startswith("image/"):
+        detected_type = validate_image_upload(file_bytes, content_type, max_bytes=max_bytes)
+        if detected_type not in allowed_types:
+            raise HTTPException(status_code=400, detail="Формат изображения не разрешён для этого поля")
 
     target_dir = _preferred_static_root() / "look_images" / folder
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -624,6 +630,12 @@ class LookImportRequest(BaseModel):
     publish: bool = False
 
 
+class YandexLooksSyncRequest(BaseModel):
+    public_url: Optional[str] = None
+    limit: Optional[int] = None
+    publish: bool = True
+
+
 class ManualLookCopyRequest(BaseModel):
     product_ids: List[str] = []
     style: Optional[str] = None
@@ -665,6 +677,36 @@ def _look_media_items(look: Look) -> List[dict]:
     if not media_items and look.try_on_image_url:
         media_items.append({"type": "image", "url": look.try_on_image_url, "source": "try_on"})
     return media_items
+
+
+def _look_main_image_url(look: Look) -> Optional[str]:
+    image_urls = look.image_urls if isinstance(look.image_urls, list) else []
+    if image_urls:
+        current_idx = look.current_image_index if look.current_image_index is not None else 0
+        if 0 <= current_idx < len(image_urls):
+            image_data = image_urls[current_idx]
+            if isinstance(image_data, dict):
+                url = str(image_data.get("url") or "").strip()
+            else:
+                url = str(image_data or "").strip()
+            if url:
+                return url
+    return str(look.image_url or "").strip() or None
+
+
+def _look_media_items_with_main_first(look: Look) -> List[dict]:
+    items = _look_media_items(look)
+    main_url = _look_main_image_url(look)
+    if not items or not main_url:
+        return items
+
+    main_index = next(
+        (idx for idx, item in enumerate(items) if isinstance(item, dict) and str(item.get("url") or "").strip() == main_url),
+        None,
+    )
+    if main_index is None or main_index == 0:
+        return items
+    return [items[main_index], *items[:main_index], *items[main_index + 1 :]]
 
 
 def _normalize_look_image_items(image_urls: Any) -> List[dict]:
@@ -989,9 +1031,10 @@ async def _serialize_feed_look(db: AsyncSession, look: Look, current_user: Optio
         "description": look.description,
         "product_ids": [str(pid) for pid in (look.product_ids or [])],
         "product_layout": look.product_layout or [],
-        "media_items": _look_media_items(look),
+        "media_items": _look_media_items_with_main_first(look),
         "image_url": look.image_url,
         "image_urls": look.image_urls or [],
+        "current_image_index": look.current_image_index,
         "style": look.style,
         "mood": look.mood,
         "style_values": _look_multi_value_payload(look, "style_values"),
@@ -1262,6 +1305,24 @@ async def import_instagram_media(request: LookImportRequest, db: AsyncSession = 
     await db.commit()
     await db.refresh(look)
     return await _serialize_feed_look(db, look)
+
+
+@router.post(
+    "/yandex-disk/sync",
+    response_model=dict,
+    dependencies=[Depends(require_any_role(["admin", "content_manager", "ai_marketer"]))],
+)
+async def sync_yandex_disk_looks(request: YandexLooksSyncRequest, db: AsyncSession = Depends(get_db)):
+    limit = max(1, min(int(request.limit), 1000)) if request.limit is not None else None
+    public_url = (request.public_url or YANDEX_LOOKS_PUBLIC_URL).strip()
+    if not public_url:
+        raise HTTPException(status_code=400, detail="Не указана публичная ссылка Яндекс.Диска")
+    return await import_yandex_looks(
+        db,
+        public_url=public_url,
+        limit=limit,
+        publish=bool(request.publish),
+    )
 
 
 @router.get("/manual/options", response_model=dict)
@@ -1678,7 +1739,7 @@ async def get_looks(
             "try_on_image_url": try_on_image_url,
             "generation_metadata": look.generation_metadata or {},
             "caption": look.caption,
-            "media_items": _look_media_items(look),
+            "media_items": _look_media_items_with_main_first(look),
             "product_layout": look.product_layout or [],
             "source_provider": look.source_provider,
             "source_media_id": look.source_media_id,
@@ -1986,6 +2047,7 @@ async def delete_digital_model(
 async def upload_model_source_images(
     model_id: str,
     files: List[UploadFile] = File(..., description="Исходные фотографии модели (JPG, PNG, WebP)"),
+    _current_user: User = Depends(require_any_role(["admin", "manager"])),
 ):
     """
     Загружает исходные фотографии для цифровой модели в static/models/{model_id}
@@ -2028,6 +2090,7 @@ async def upload_model_source_images(
         
         try:
             content = await file.read()
+            validate_image_upload(content, file.content_type, max_bytes=15 * 1024 * 1024)
             with open(target_path, "wb") as f:
                 f.write(content)
             uploaded_files.append({
@@ -2052,6 +2115,7 @@ async def upload_model_source_images(
 async def delete_model_source_image(
     model_id: str,
     filename: str,
+    _current_user: User = Depends(require_any_role(["admin", "manager"])),
 ):
     """
     Удаляет исходное фото модели из static/models/{model_id}
@@ -2155,7 +2219,7 @@ async def get_look(look_id: UUID, db: AsyncSession = Depends(get_db)):
             "product_layout": look.product_layout or [],
             "source_provider": look.source_provider,
             "is_new": bool(look.is_new),
-            "media_items": _look_media_items(look),
+            "media_items": _look_media_items_with_main_first(look),
             "products": [_product_payload(p) for p in products]
         }
     except HTTPException:
@@ -2395,7 +2459,7 @@ async def update_look(
             "product_layout": look.product_layout or [],
             "source_provider": look.source_provider,
             "is_new": bool(look.is_new),
-            "media_items": _look_media_items(look),
+            "media_items": _look_media_items_with_main_first(look),
             "products": [_product_payload(p) for p in products]
         }
     except HTTPException:
@@ -2549,7 +2613,7 @@ async def update_manual_look_media(
             "product_layout": look.product_layout or [],
             "source_provider": look.source_provider,
             "is_new": bool(look.is_new),
-            "media_items": _look_media_items(look),
+            "media_items": _look_media_items_with_main_first(look),
             "products": [_product_payload(p) for p in products],
         }
     except HTTPException:

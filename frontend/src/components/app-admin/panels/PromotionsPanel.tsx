@@ -9,6 +9,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 
 const STATUSES: AppPublicationStatus[] = ['draft', 'published', 'archived'];
+const DISCOUNT_KINDS = [
+  { value: 'none', label: 'Без расчета в корзине' },
+  { value: 'cheapest_for_fixed_price_per_group', label: '3=2 / дешевые за фиксированную цену' },
+] as const;
+
+function toKopeksFromRub(value: string): number {
+  const normalized = value.replace(',', '.').trim();
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.round(parsed * 100);
+}
+
+function kopeksToRubInput(value?: number | null): string {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return '0';
+  return String(amount / 100);
+}
 
 export default function PromotionsPanel() {
   const [loading, setLoading] = useState(true);
@@ -26,6 +43,11 @@ export default function PromotionsPanel() {
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const [status, setStatus] = useState<AppPublicationStatus>('draft');
+  const [isCartDiscount, setIsCartDiscount] = useState(false);
+  const [discountKind, setDiscountKind] = useState<AppPromotion['discount_kind']>('none');
+  const [groupSize, setGroupSize] = useState('3');
+  const [discountedItemsPerGroup, setDiscountedItemsPerGroup] = useState('1');
+  const [discountedItemPriceRub, setDiscountedItemPriceRub] = useState('1');
 
   const resetForm = () => {
     setSelectedId(null);
@@ -35,6 +57,11 @@ export default function PromotionsPanel() {
     setStartsAt('');
     setEndsAt('');
     setStatus('draft');
+    setIsCartDiscount(false);
+    setDiscountKind('none');
+    setGroupSize('3');
+    setDiscountedItemsPerGroup('1');
+    setDiscountedItemPriceRub('1');
   };
 
   const load = async () => {
@@ -62,6 +89,11 @@ export default function PromotionsPanel() {
     setStartsAt(selected.starts_at || '');
     setEndsAt(selected.ends_at || '');
     setStatus((selected.status as AppPublicationStatus) || 'draft');
+    setIsCartDiscount(Boolean(selected.is_cart_discount));
+    setDiscountKind(selected.discount_kind || 'none');
+    setGroupSize(String(selected.group_size || 3));
+    setDiscountedItemsPerGroup(String(selected.discounted_items_per_group || 1));
+    setDiscountedItemPriceRub(kopeksToRubInput(selected.discounted_item_price ?? 100));
   }, [selectedId]);
 
   const onUpload = async (file: File) => {
@@ -88,6 +120,11 @@ export default function PromotionsPanel() {
         starts_at: startsAt.trim() ? startsAt.trim() : null,
         ends_at: endsAt.trim() ? endsAt.trim() : null,
         status,
+        is_cart_discount: isCartDiscount,
+        discount_kind: isCartDiscount ? discountKind || 'none' : 'none',
+        group_size: Number(groupSize) || 3,
+        discounted_items_per_group: Number(discountedItemsPerGroup) || 1,
+        discounted_item_price: toKopeksFromRub(discountedItemPriceRub),
       };
       if (selectedId) {
         await api.updateAppPromotion(selectedId, payload);
@@ -173,6 +210,11 @@ export default function PromotionsPanel() {
                     </div>
                   </div>
                   <div className="mt-1 text-xs text-gray-600 line-clamp-1">{p.body}</div>
+                  {p.is_cart_discount ? (
+                    <div className="mt-1 text-xs font-medium text-emerald-700">
+                      Расчетная акция: {p.discount_kind === 'cheapest_for_fixed_price_per_group' ? '3=2' : p.discount_kind}
+                    </div>
+                  ) : null}
                 </button>
                 <Button variant="destructive" onClick={() => onDelete(p.id)} disabled={saving}>
                   Удалить
@@ -217,6 +259,70 @@ export default function PromotionsPanel() {
               <div>
                 <div className="text-xs text-gray-700">Окончание (ISO)</div>
                 <Input value={endsAt} onChange={(e) => setEndsAt(e.target.value)} placeholder="2026-04-01T23:59:59+03:00" />
+              </div>
+            </div>
+
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                <input
+                  type="checkbox"
+                  checked={isCartDiscount}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsCartDiscount(checked);
+                    if (checked && (!discountKind || discountKind === 'none')) {
+                      setDiscountKind('cheapest_for_fixed_price_per_group');
+                    }
+                  }}
+                />
+                Учитывать акцию при расчете корзины
+              </label>
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <div className="text-xs text-gray-700">Правило скидки</div>
+                  <select
+                    className="mt-1 h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-black"
+                    value={discountKind || 'none'}
+                    onChange={(e) => setDiscountKind(e.target.value as AppPromotion['discount_kind'])}
+                    disabled={!isCartDiscount}
+                  >
+                    {DISCOUNT_KINDS.map((kind) => (
+                      <option key={kind.value} value={kind.value}>
+                        {kind.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-700">Цена скидочного товара, руб</div>
+                  <Input
+                    value={discountedItemPriceRub}
+                    onChange={(e) => setDiscountedItemPriceRub(e.target.value)}
+                    disabled={!isCartDiscount || discountKind === 'none'}
+                    placeholder="1"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-700">Размер группы товаров</div>
+                  <Input
+                    value={groupSize}
+                    onChange={(e) => setGroupSize(e.target.value)}
+                    disabled={!isCartDiscount || discountKind === 'none'}
+                    placeholder="3"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-700">Скидочных товаров в группе</div>
+                  <Input
+                    value={discountedItemsPerGroup}
+                    onChange={(e) => setDiscountedItemsPerGroup(e.target.value)}
+                    disabled={!isCartDiscount || discountKind === 'none'}
+                    placeholder="1"
+                  />
+                </div>
+              </div>
+              <div className="mt-2 text-xs leading-5 text-gray-600">
+                Для акции 3=2 установите группу 3, скидочных товаров 1, цену 1 руб. При 6 товарах в корзине за 1 рубль станут два самых дешевых товара.
               </div>
             </div>
 

@@ -31,6 +31,9 @@ out/
 build/
 dist/
 *.log
+*.out
+nohup.out
+backend/nohup.out
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

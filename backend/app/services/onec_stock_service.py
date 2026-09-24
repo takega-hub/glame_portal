@@ -16,6 +16,7 @@ from app.models.product import Product
 from app.models.product_stock import ProductStock
 from app.models.store import Store
 from app.services.commerceml_xml_service import CommerceMLXMLService
+from app.services.product_arrival_notification_service import ProductArrivalNotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,41 @@ class OneCStockService:
     """
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    def _stock_event_type(self, previous_quantity: float, new_quantity: float, product: Product) -> str:
+        if previous_quantity <= 0 and new_quantity > 0:
+            created_at = getattr(product, "created_at", None)
+            if created_at:
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+                age_days = (datetime.now(timezone.utc) - created_at.astimezone(timezone.utc)).days
+                if age_days <= 30:
+                    return "NEW_TO_STORE"
+                return "RESTOCK"
+            return "RESTOCK"
+        if new_quantity > previous_quantity:
+            return "RESTOCK"
+        return "REPLENISHMENT"
+
+    async def _record_stock_arrival_event(
+        self,
+        *,
+        product: Product,
+        store_id: str,
+        previous_quantity: float,
+        new_quantity: float,
+        source: str,
+        source_sync_id: str,
+        received_at: datetime,
+        raw_payload: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        # CRM "Новое поступление" по бизнес-правилу GLAME должно рождаться
+        # только из первичного прихода закупки/приходной накладной на основной склад.
+        # Синхронизация остатков и движения по магазинам отражают доступность/
+        # перемещения, поэтому здесь не создаём события нового поступления.
+        # Когда появится отдельный импорт приходных накладных закупки, он должен
+        # писать product_stock_arrival_events самостоятельно.
+        return False
 
     async def __aenter__(self):
         return self
@@ -168,6 +204,12 @@ class OneCStockService:
                 if product.external_id:
                     product_by_external_id[str(product.external_id)] = product
 
+        previous_quantities: Dict[tuple[Any, str], float] = {}
+        if not dry_run:
+            existing_result = await self.db.execute(select(ProductStock))
+            for stock in existing_result.scalars().all():
+                previous_quantities[(stock.product_id, stock.store_id)] = float(stock.available_quantity or 0)
+
         if replace_all and not dry_run:
             existing_result = await self.db.execute(select(ProductStock))
             for stock in existing_result.scalars().all():
@@ -186,6 +228,8 @@ class OneCStockService:
         product_by_id: Dict[Any, Product] = {}
         stores_found = set()
         now = datetime.now(timezone.utc)
+        source_sync_id = now.strftime("%Y%m%d%H%M%S")
+        arrival_events_created = 0
 
         for (product_external_id, store_id), quantity in balances.items():
             product = product_by_external_id.get(product_external_id)
@@ -217,6 +261,7 @@ class OneCStockService:
                 )
             )
             stock = stock_result.scalar_one_or_none()
+            previous_quantity = float(previous_quantities.get((product.id, store_id), 0.0))
             if stock:
                 stock.quantity = quantity
                 stock.available_quantity = quantity
@@ -238,13 +283,34 @@ class OneCStockService:
                 )
                 created += 1
 
+            if await self._record_stock_arrival_event(
+                product=product,
+                store_id=store_id,
+                previous_quantity=previous_quantity,
+                new_quantity=quantity,
+                source="odata_stock_sync",
+                source_sync_id=source_sync_id,
+                received_at=now,
+                raw_payload={
+                    "sync_source": "odata",
+                    "replace_all": replace_all,
+                    "previous_quantity": previous_quantity,
+                    "new_quantity": quantity,
+                },
+            ):
+                arrival_events_created += 1
+
             if (created + updated) % 500 == 0:
                 await self.db.flush()
 
         if dry_run:
             await self.db.rollback()
+            arrival_result = None
         else:
             await self.db.commit()
+            arrival_result = await ProductArrivalNotificationService(self.db).process_pending(
+                product_ids=product_by_id.keys()
+            )
         logger.info(
             "OData stock sync finished: dry_run=%s movements=%s balances=%s matched=%s created=%s updated=%s unmatched=%s",
             dry_run,
@@ -274,6 +340,8 @@ class OneCStockService:
             "replace_all": replace_all,
             "dry_run": dry_run,
             "period_from": period_from.isoformat() if period_from else None,
+            "arrival_notifications": arrival_result,
+            "arrival_events_created": arrival_events_created,
         }
 
     async def sync_stores_from_xml(self, xml_content: bytes) -> Dict[str, Any]:
@@ -374,6 +442,9 @@ class OneCStockService:
         updated = 0
         skipped = 0
         errors: List[str] = []
+        now = datetime.now(timezone.utc)
+        source_sync_id = now.strftime("%Y%m%d%H%M%S")
+        arrival_events_created = 0
         
         try:
             logger.info(f"Получено {len(offers_data)} предложений для синхронизации остатков")
@@ -400,11 +471,18 @@ class OneCStockService:
                     # Если есть characteristic_id (вариант товара), ищем ТОЛЬКО по артикулу варианта
                     # НЕ ищем по базовому артикулу, так как остатки должны быть у варианта, а не у родителя
                     if characteristic_id and article:
+                        if offer_id:
+                            result = await self.db.execute(
+                                select(Product).where(Product.external_id == offer_id)
+                            )
+                            product = result.scalar_one_or_none()
+
                         # Пробуем точное совпадение артикула варианта
-                        result = await self.db.execute(
-                            select(Product).where(Product.article == article)
-                        )
-                        product = result.scalar_one_or_none()
+                        if not product:
+                            result = await self.db.execute(
+                                select(Product).where(Product.article == article)
+                            )
+                            product = result.scalars().first()
                         
                         if not product:
                             skipped += 1
@@ -422,7 +500,7 @@ class OneCStockService:
                             result = await self.db.execute(
                                 select(Product).where(Product.article == article)
                             )
-                            product = result.scalar_one_or_none()
+                            product = result.scalars().first()
                     
                     if not product:
                         skipped += 1
@@ -447,10 +525,12 @@ class OneCStockService:
                                     )
                                 )
                                 stock = stock_result.scalar_one_or_none()
+                                previous_quantity = float(stock.available_quantity or 0) if stock else 0.0
                                 
                                 if stock:
                                     stock.quantity = quantity_float
                                     stock.available_quantity = quantity_float
+                                    stock.last_synced_at = now
                                     updated += 1
                                 else:
                                     # Создаем новый остаток для этого склада
@@ -460,9 +540,27 @@ class OneCStockService:
                                         quantity=quantity_float,
                                         reserved_quantity=0.0,
                                         available_quantity=quantity_float,
+                                        last_synced_at=now,
                                     )
                                     self.db.add(new_stock)
                                     created += 1
+
+                                if await self._record_stock_arrival_event(
+                                    product=product,
+                                    store_id=store_id_1c,
+                                    previous_quantity=previous_quantity,
+                                    new_quantity=quantity_float,
+                                    source="offers_xml_stock_sync",
+                                    source_sync_id=source_sync_id,
+                                    received_at=now,
+                                    raw_payload={
+                                        "sync_source": "offers_xml",
+                                        "offer_id": offer_id,
+                                        "previous_quantity": previous_quantity,
+                                        "new_quantity": quantity_float,
+                                    },
+                                ):
+                                    arrival_events_created += 1
                                 
                             except (ValueError, TypeError) as e:
                                 logger.warning(f"Ошибка обработки остатка для склада {store_id_1c}: {e}")
@@ -489,10 +587,12 @@ class OneCStockService:
                                 )
                             )
                             stock = stock_result.scalar_one_or_none()
+                            previous_quantity = float(stock.available_quantity or 0) if stock else 0.0
                             
                             if stock:
                                 stock.quantity = quantity_float
                                 stock.available_quantity = quantity_float
+                                stock.last_synced_at = now
                                 updated += 1
                             else:
                                 # Создаем новый остаток
@@ -502,9 +602,26 @@ class OneCStockService:
                                     quantity=quantity_float,
                                     reserved_quantity=0.0,
                                     available_quantity=quantity_float,
+                                    last_synced_at=now,
                                 )
                                 self.db.add(new_stock)
                                 created += 1
+                            if await self._record_stock_arrival_event(
+                                product=product,
+                                store_id=default_store_id,
+                                previous_quantity=previous_quantity,
+                                new_quantity=quantity_float,
+                                source="offers_xml_stock_sync",
+                                source_sync_id=source_sync_id,
+                                received_at=now,
+                                raw_payload={
+                                    "sync_source": "offers_xml",
+                                    "offer_id": offer_id,
+                                    "previous_quantity": previous_quantity,
+                                    "new_quantity": quantity_float,
+                                },
+                            ):
+                                arrival_events_created += 1
                         except (ValueError, TypeError) as e:
                             logger.warning(f"Ошибка обработки общего остатка: {e}")
                             skipped += 1
@@ -520,6 +637,7 @@ class OneCStockService:
                     errors.append(error_msg)
             
             await self.db.commit()
+            arrival_result = await ProductArrivalNotificationService(self.db).process_pending()
             
             logger.info(f"Синхронизация остатков завершена: создано {created}, обновлено {updated}, пропущено {skipped}")
             logger.info(f"Найдено складов в offers.xml: {len(stores_found)} - {', '.join(sorted(stores_found))}")
@@ -533,6 +651,8 @@ class OneCStockService:
                 "stores_count": len(stores_found),
                 "errors": errors[:20],
                 "error_count": len(errors),
+                "arrival_notifications": arrival_result,
+                "arrival_events_created": arrival_events_created,
             }
             
         except Exception as e:

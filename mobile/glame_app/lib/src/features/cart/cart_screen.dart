@@ -7,6 +7,7 @@ import '../../core/network/asset_url.dart';
 import '../../core/formatters/rub.dart';
 import '../../core/theme/glame_theme.dart';
 import 'cart_controller.dart';
+import '../wishlist/wishlist_controller.dart';
 
 class CartScreen extends ConsumerWidget {
   final bool showAppBar;
@@ -140,6 +141,7 @@ class _CartItemRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(cartControllerProvider.notifier);
+    final wishlist = ref.watch(wishlistControllerProvider);
     final id = (item['id'] as String?) ?? '';
     final qty = (item['quantity'] as int?) ?? 0;
     final unit = (item['unit_price'] as int?) ?? 0;
@@ -147,6 +149,9 @@ class _CartItemRow extends ConsumerWidget {
     final p = product is Map
         ? Map<String, dynamic>.from(product)
         : <String, dynamic>{};
+    final productId = '${p['id'] ?? item['product_id'] ?? ''}'.trim();
+    final stock = _cartStockAmount(p);
+    final isLastAvailable = stock == 1;
     final name = (p['name'] as String?) ?? '';
     final images = p['images'];
     final imageUrl = (images is List && images.isNotEmpty)
@@ -165,8 +170,8 @@ class _CartItemRow extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 78,
-              height: 96,
+              width: 106,
+              height: 132,
               decoration: BoxDecoration(
                 color: GlameColors.nearBlack,
                 border: Border.all(color: GlameColors.borderGray),
@@ -203,7 +208,17 @@ class _CartItemRow extends ConsumerWidget {
                       color: GlameColors.coldLightGray,
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  if (isLastAvailable) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Осталась последняя',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: GlameColors.gold,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Container(
@@ -220,14 +235,14 @@ class _CartItemRow extends ConsumerWidget {
                               icon: const Icon(Icons.remove, size: 18),
                               color: GlameColors.whiteGlame,
                               constraints: const BoxConstraints(
-                                minWidth: 36,
-                                minHeight: 36,
+                                minWidth: 30,
+                                minHeight: 30,
                               ),
                               padding: EdgeInsets.zero,
                             ),
                             Container(
-                              width: 40,
-                              height: 36,
+                              width: 32,
+                              height: 30,
                               alignment: Alignment.center,
                               decoration: const BoxDecoration(
                                 border: Border(
@@ -244,6 +259,7 @@ class _CartItemRow extends ConsumerWidget {
                                 style: Theme.of(context).textTheme.bodyMedium
                                     ?.copyWith(
                                       fontWeight: FontWeight.w600,
+                                      fontSize: 13,
                                       color: GlameColors.whiteGlame,
                                     ),
                               ),
@@ -254,8 +270,8 @@ class _CartItemRow extends ConsumerWidget {
                               icon: const Icon(Icons.add, size: 18),
                               color: GlameColors.whiteGlame,
                               constraints: const BoxConstraints(
-                                minWidth: 36,
-                                minHeight: 36,
+                                minWidth: 30,
+                                minHeight: 30,
                               ),
                               padding: EdgeInsets.zero,
                             ),
@@ -263,13 +279,49 @@ class _CartItemRow extends ConsumerWidget {
                         ),
                       ),
                       const Spacer(),
-                      TextButton(
-                        onPressed: () => controller.removeItem(id),
-                        style: TextButton.styleFrom(
-                          foregroundColor: GlameColors.whiteGlame,
-                          padding: EdgeInsets.zero,
+                      IconButton(
+                        tooltip: wishlist.contains(productId)
+                            ? 'В избранном'
+                            : 'В избранное',
+                        onPressed: productId.isEmpty
+                            ? null
+                            : () async {
+                                await ref
+                                    .read(wishlistControllerProvider.notifier)
+                                    .ensureAdded(productId);
+                                await controller.removeItem(id);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Перенесено в избранное'),
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: Icon(
+                          wishlist.contains(productId)
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          size: 19,
                         ),
-                        child: const Text('Удалить'),
+                        color: GlameColors.whiteGlame,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        tooltip: 'Удалить из корзины',
+                        onPressed: () => controller.removeItem(id),
+                        icon: const Icon(Icons.delete_outline, size: 19),
+                        color: GlameColors.coldLightGray,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        padding: EdgeInsets.zero,
                       ),
                     ],
                   ),
@@ -281,6 +333,22 @@ class _CartItemRow extends ConsumerWidget {
       ),
     );
   }
+}
+
+num? _cartStockAmount(Map<String, dynamic> product) {
+  final direct = product['stock'] ?? product['quantity'];
+  if (direct is num) return direct;
+  if (direct is String) return num.tryParse(direct.trim().replaceAll(',', '.'));
+
+  final specifications = product['specifications'];
+  if (specifications is Map) {
+    final quantity = specifications['quantity'];
+    if (quantity is num) return quantity;
+    if (quantity is String) {
+      return num.tryParse(quantity.trim().replaceAll(',', '.'));
+    }
+  }
+  return null;
 }
 
 class _Totals extends StatelessWidget {

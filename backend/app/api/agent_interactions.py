@@ -3,7 +3,8 @@ API endpoints для межагентного взаимодействия.
 Включает создание задач, валидацию, приоритизацию и логирование.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Body, Request
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, asc, and_, func, or_, text as sql_text
 from pydantic import BaseModel, Field
@@ -48,9 +49,26 @@ from app.services.llm_service import llm_service
 from app.services.ai_core_runtime import generate_agent_text
 from app.services.hermes_web_ui_mirror import mirror_agent_task_turn_to_hermes_web_ui
 from app.models.customer_message import CustomerMessage
+from app.models.crm_task import CrmTask, CrmTaskEvent
+from app.models.user_segment import UserSegment
+from app.models.product import Product
+from app.models.product_stock import ProductStock
+from app.models.store import Store
+from app.models.app_setting import AppSetting
+from app.models.app_store import AppStore
+from app.models.look import Look
+from app.models.content_item import ContentItem
 from app.agents.contracts import prompt_agent_id
 from app.services.agent_execution_dispatcher import agent_execution_dispatcher, resolve_execution_agent_id
 from app.services.hermes_task_execution_service import HermesTaskExecutionService
+from app.services.ai_crm_plan_service import (
+    GLAME_CRM_OPERATING_CONTEXT,
+    crm_plan_to_seller_task_defaults,
+    extract_crm_plan_from_text,
+    normalize_crm_plan,
+)
+from app.services.yandex_business_feed_service import build_yandex_business_feed
+# GLAME CRM OPERATING CONTEXT includes no_comfort_budget_for_crimea guardrail.
 import uuid
 
 router = APIRouter(tags=["agent-interactions"])
@@ -1059,6 +1077,12 @@ async def process_agent_task(
 
     execution_agent = _execution_agent_id(task.target_agent)
 
+    if execution_agent == "content-agent" and task.task_type in {"advertising_creatives", "content_production"}:
+        # Hermes receives a self-contained passport, so attach approved GLAME media
+        # before handing the task to its isolated profile.
+        await _attach_campaign_media_to_task(db, task)
+        await db.refresh(task)
+
     hermes_task_service = HermesTaskExecutionService()
     if await hermes_task_service.execute(task, db):
         return {
@@ -1319,6 +1343,89 @@ async def process_agent_task(
             db.add(task)
             await db.commit()
             raise HTTPException(status_code=500, detail=f"Ошибка обработки: {str(e)}")
+    if execution_agent == "traffic-growth-agent":
+        try:
+            await db.refresh(task)
+            task.status = InteractionStatus.PROCESSING.value
+            task.started_at = datetime.utcnow()
+            db.add(task)
+            db.add(AgentInteractionLog(task_id=task.id, agent_name="traffic-growth-agent", event_type="start", event_data={"task_type": task.task_type}, message="started"))
+            await db.commit()
+
+            input_data = task.input_data or {}
+            context = task.task_context or {}
+            visits_snapshot = context.get("visits_snapshot") or input_data.get("visits_snapshot") or 0
+            channel = str(input_data.get("channel") or "growth")
+            goal = str(input_data.get("description") or input_data.get("title") or "Подготовить безопасную стратегию роста").strip()
+            agent = MarketingAgent(db)
+            return_brief_instruction = "" if task.task_type != "return_strategy" else "\nСформируй ТЗ для AI CRM в структуре: цель; сегмент и исключения; необходимые согласия; рекомендуемый канал и частота; оффер/промокод; 2–3 черновика сообщений; UTM и KPI; риски и пункты для отдельного согласования."
+            enriched_goal = f"{goal}\n\nКонтекст GLAME: визитов за 14 дней — {visits_snapshot}; канал — {channel}. Нужен только план на согласование: без рассылок, запуска рекламы и изменения ставок.{return_brief_instruction}"
+            result = await agent.suggest_campaign_strategy(
+                goal=enriched_goal,
+                target_audience=input_data.get("target_audience"),
+                budget=input_data.get("daily_budget_rub"),
+                timeframe="ближайшие 14 дней",
+            )
+            strategy = str(result.get("strategy") or "Агент не сформировал текст стратегии.")
+            crm_handoff_task_id = None
+            if task.task_type == "return_strategy":
+                user_assignment = str(input_data.get("user_assignment") or "").strip()
+                crm_task = AgentInteractionTask(
+                    source_agent="traffic-growth-agent",
+                    target_agent="crm-agent",
+                    task_type="crm_retargeting_brief",
+                    task_context={
+                        "board": "crm",
+                        "traffic_project_hidden": True,
+                        "parent_traffic_task_id": str(task.id),
+                        "handoff_type": "traffic_to_crm_return_strategy",
+                        "channel": channel,
+                        "execution_guard": "brief_only_no_sending",
+                    },
+                    input_data={
+                        "title": f"CRM-ТЗ: {input_data.get('title') or channel}",
+                        "description": "Подготовить CRM-план по ТЗ Traffic & Growth. Ничего не отправлять и не создавать аудитории во внешних рекламных кабинетах без отдельного согласования.",
+                        "user_assignment": user_assignment,
+                        "traffic_strategy": strategy,
+                        "analytics_snapshot": {"visits_14_days": visits_snapshot, "channel": channel},
+                        "channel": channel,
+                        "expected_result": "Сегмент и исключения, проверка согласий, канал, частота, черновики сообщений/оффера, UTM/промокод, KPI и список пунктов для согласования. Без отправки.",
+                        "source_board": "traffic",
+                    },
+                    requirements={"requires_consent_check": True, "must_not_send": True, "must_not_publish_externally": True},
+                    constraints={"external_actions": "forbidden_until_separate_approval"},
+                    priority=2,
+                    status=InteractionStatus.PENDING_APPROVAL.value,
+                )
+                db.add(crm_task)
+                await db.flush()
+                crm_handoff_task_id = str(crm_task.id)
+                db.add(AgentInteractionLog(task_id=crm_task.id, agent_name="traffic-growth-agent", event_type="traffic_handoff_created", event_data={"parent_traffic_task_id": str(task.id), "channel": channel, "safety": "brief_only_no_sending"}, message="ТЗ на возврат пользователей передано AI CRM для подготовки плана без отправки."))
+            task.output_data = {
+                "summary": strategy,
+                "strategy": strategy,
+                "task_type": task.task_type,
+                "channel": channel,
+                "visits_snapshot": visits_snapshot,
+                "crm_handoff_task_id": crm_handoff_task_id,
+                "safety": "analysis_only_no_external_actions",
+            }
+            task.output_metadata = {**(task.output_metadata or {}), "processed_by": "traffic-growth-agent", "processed_at": datetime.utcnow().isoformat(), "execution_mode": "analysis_only"}
+            task.status = InteractionStatus.COMPLETED.value
+            task.completed_at = datetime.utcnow()
+            db.add(task)
+            db.add(AgentInteractionLog(task_id=task.id, agent_name="traffic-growth-agent", event_type="dialog_message", event_data={"role": "assistant", "kind": "assistant_reply", "source": "task_process"}, message=strategy))
+            db.add(AgentInteractionLog(task_id=task.id, agent_name="traffic-growth-agent", event_type="completed", event_data={"task_type": task.task_type, "channel": channel, "crm_handoff_task_id": crm_handoff_task_id, "safety": "analysis_only_no_external_actions"}, message="completed"))
+            await db.commit()
+            return {"message": "Стратегия подготовлена", "task_id": str(task_id), "result": task.output_data}
+        except Exception as e:
+            await db.rollback()
+            db.add(AgentInteractionLog(task_id=task.id, agent_name="traffic-growth-agent", event_type="failed", event_data={"error": str(e)}, message="failed"))
+            task.status = InteractionStatus.FAILED.value
+            task.error_message = str(e)
+            db.add(task)
+            await db.commit()
+            raise HTTPException(status_code=500, detail=f"Ошибка подготовки стратегии: {str(e)}")
     if task.target_agent == "analytics-agent":
         try:
             await db.refresh(task)
@@ -1892,6 +1999,1257 @@ class ChatWithAgentResponse(BaseModel):
     assistant_log_id: Optional[str] = None
 
 
+class CrmPlanRequest(BaseModel):
+    crm_plan: Optional[Dict[str, Any]] = None
+    source_text: Optional[str] = None
+    status: Optional[str] = None
+
+
+class CrmSellerTaskCreateRequest(BaseModel):
+    crm_plan: Optional[Dict[str, Any]] = None
+    work_date: Optional[date] = None
+    limit: int = Field(default=100, ge=1, le=1000)
+    assigned_seller_user_id: Optional[UUID] = None
+    assigned_seller_external_id: Optional[str] = None
+    assigned_seller_name: Optional[str] = None
+    store_id: Optional[str] = None
+    store_name: Optional[str] = None
+
+
+class CrmPlanResponse(BaseModel):
+    task_id: str
+    crm_plan: Dict[str, Any]
+
+
+class CrmSellerTaskCreateResponse(BaseModel):
+    created: int
+    skipped: int
+    errors: List[Dict[str, Any]] = []
+    task_ids: List[str] = []
+    crm_plan: Dict[str, Any]
+
+
+class CrmProjectTopicResponse(BaseModel):
+    task_id: str
+    title: str
+    project_type: str
+    status: str
+    channel: Optional[str] = None
+    history_count: int = 0
+    discussion_result: Optional[str] = None
+    crm_plan_status: Optional[str] = None
+    last_message_at: Optional[str] = None
+    created_at: str
+
+
+class TrafficProjectTopicResponse(BaseModel):
+    """A Traffic & Growth campaign workspace backed by one agent task."""
+
+    task_id: str
+    title: str
+    campaign_code: Optional[str] = None
+    channel: Optional[str] = None
+    status: str
+    history_count: int = 0
+    discussion_result: Optional[str] = None
+    last_message_at: Optional[str] = None
+    created_at: str
+
+
+class ContentProjectTopicResponse(BaseModel):
+    """A Brand Media workspace backed by one agent task."""
+
+    task_id: str
+    title: str
+    content_type: Optional[str] = None
+    platform: Optional[str] = None
+    status: str
+    history_count: int = 0
+    discussion_result: Optional[str] = None
+    last_message_at: Optional[str] = None
+    created_at: str
+
+
+class CampaignMediaAssetResponse(BaseModel):
+    id: str
+    url: str
+    title: str
+    kind: str
+    source: str
+    usage: str
+
+
+class CampaignMediaResponse(BaseModel):
+    task_id: str
+    assets: List[CampaignMediaAssetResponse] = []
+    available_assets: List[CampaignMediaAssetResponse] = []
+    maps_card_url: Optional[str] = None
+    note: str
+
+
+class CampaignMediaSelectionRequest(BaseModel):
+    asset_ids: List[str] = Field(default_factory=list, max_length=100)
+    assets: List[CampaignMediaAssetResponse] = Field(default_factory=list, max_length=100)
+
+
+class CampaignMediaUploadRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2000)
+    title: str = Field(default="Пользовательское фото", min_length=1, max_length=255)
+    kind: str = Field(default="custom", max_length=64)
+
+
+class TrafficCampaignBriefRequest(BaseModel):
+    campaign_code: Optional[str] = Field(default=None, max_length=100)
+    store_name: str = Field(default="GLAME Ялта", min_length=2, max_length=255)
+    maps_card_url: str = Field(default="", max_length=2000)
+    goal: str = Field(default="Открыть карточку, построить маршрут, позвонить и прийти в магазин", max_length=1000)
+    daily_budget_rub: float = Field(default=2000, ge=0, le=1_000_000)
+    test_days: int = Field(default=14, ge=1, le=90)
+    radius_km: float = Field(default=1, ge=0.1, le=50)
+    schedule: List[str] = Field(default_factory=lambda: ["10:30–13:00", "15:30–18:30", "18:30–21:30"])
+    kpi: Dict[str, str] = Field(default_factory=lambda: {
+        "primary": "Построения маршрута и подтверждённые визиты",
+        "secondary": "Открытия карточки, звонки и продажи с источником",
+    })
+    card_checklist: Dict[str, bool] = Field(default_factory=dict)
+
+
+class TrafficCampaignBriefResponse(BaseModel):
+    task_id: str
+    brief: Dict[str, Any]
+    ready_for_approval: bool
+    missing_requirements: List[str]
+
+
+class YandexBusinessFeedPreviewResponse(BaseModel):
+    total_active: int
+    included: int
+    skipped: int
+    categories: int
+    skipped_items: List[Dict[str, str]] = []
+
+
+class YandexBusinessFeedFiltersResponse(BaseModel):
+    brands: List[str] = []
+    categories: List[str] = []
+    stores: List[Dict[str, str]] = []
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+
+
+class YandexBusinessFeedPublicSettingsInput(BaseModel):
+    min_price: Optional[float] = Field(None, ge=0)
+    max_price: Optional[float] = Field(None, ge=0)
+    availability: str = "all"
+    brands: Optional[str] = None
+    categories: Optional[str] = None
+    store_id: Optional[str] = None
+
+
+class YandexBusinessFeedPublicSettingsResponse(YandexBusinessFeedPublicSettingsInput):
+    public_url: str
+
+
+def _is_crm_agent_task(task: AgentInteractionTask) -> bool:
+    text_value = f"{task.target_agent} {task.source_agent} {task.task_type} {(task.task_context or {}).get('board')} {(task.input_data or {}).get('source_board')}".lower()
+    return any(key in text_value for key in ["crm-agent", "communication-agent", "crm", "mailing", "segment"])
+
+
+def _crm_project_title(task: AgentInteractionTask) -> str:
+    input_data = task.input_data or {}
+    task_context = task.task_context or {}
+    output_data = task.output_data or {}
+    crm_plan = output_data.get("crm_plan") if isinstance(output_data.get("crm_plan"), dict) else {}
+    return (
+        input_data.get("title")
+        or task_context.get("title")
+        or crm_plan.get("campaign_name")
+        or crm_plan.get("goal")
+        or task.task_type.replace("_", " ")
+    )
+
+
+def _crm_project_type(task: AgentInteractionTask) -> str:
+    haystack = " ".join(
+        str(value or "")
+        for value in [
+            task.task_type,
+            (task.input_data or {}).get("title"),
+            (task.input_data or {}).get("description"),
+            (task.input_data or {}).get("channel"),
+            (task.task_context or {}).get("title"),
+            (task.task_context or {}).get("channel"),
+        ]
+    ).lower()
+    if any(token in haystack for token in ["sms", "смс", "рассыл"]):
+        return "sms_mailing"
+    if any(token in haystack for token in ["call", "звон", "созвон"]):
+        return "calls"
+    return "crm_project"
+
+
+def _crm_project_channel(task: AgentInteractionTask) -> Optional[str]:
+    crm_plan = ((task.output_data or {}).get("crm_plan") or {}) if isinstance((task.output_data or {}).get("crm_plan"), dict) else {}
+    scenario = crm_plan.get("scenario") if isinstance(crm_plan.get("scenario"), dict) else {}
+    return (
+        scenario.get("channel")
+        or (task.input_data or {}).get("channel")
+        or (task.task_context or {}).get("channel")
+    )
+
+
+def _crm_project_result(task: AgentInteractionTask) -> Optional[str]:
+    output_data = task.output_data or {}
+    crm_plan = output_data.get("crm_plan") if isinstance(output_data.get("crm_plan"), dict) else {}
+    if crm_plan:
+        parts = [
+            crm_plan.get("next_action"),
+            crm_plan.get("goal"),
+            (crm_plan.get("segment") or {}).get("segment_name") if isinstance(crm_plan.get("segment"), dict) else None,
+        ]
+        result = " • ".join(str(part) for part in parts if part)
+        if result:
+            return result[:500]
+    for key in ["summary", "result", "discussion_result"]:
+        if output_data.get(key):
+            return str(output_data[key])[:500]
+    return None
+
+
+@router.get("/crm/projects", response_model=List[CrmProjectTopicResponse])
+async def list_crm_project_topics(
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Список тем/проектов AI CRM с историей обсуждений и зафиксированным результатом."""
+    result = await db.execute(
+        select(AgentInteractionTask)
+        .where(
+            or_(
+                AgentInteractionTask.target_agent.in_(["crm-agent", "communication-agent"]),
+                AgentInteractionTask.source_agent.in_(["crm-board", "communication-agent"]),
+                AgentInteractionTask.task_type.ilike("%crm%"),
+                AgentInteractionTask.task_type.ilike("%mailing%"),
+                AgentInteractionTask.task_type.ilike("%segment%"),
+            ),
+            AgentInteractionTask.status != "deleted",
+        )
+        .order_by(desc(func.coalesce(AgentInteractionTask.updated_at, AgentInteractionTask.created_at)))
+        .limit(limit)
+    )
+    tasks = [
+        task for task in result.scalars().all()
+        if _is_crm_agent_task(task) and task.status != "deleted" and not (task.task_context or {}).get("crm_project_hidden")
+    ]
+    if not tasks:
+        return []
+
+    task_ids = [task.id for task in tasks]
+    log_counts: Dict[str, int] = {}
+    last_log_at: Dict[str, str] = {}
+    counts_result = await db.execute(
+        select(
+            AgentInteractionLog.task_id,
+            func.count(AgentInteractionLog.id),
+            func.max(AgentInteractionLog.created_at),
+        )
+        .where(
+            AgentInteractionLog.task_id.in_(task_ids),
+            AgentInteractionLog.event_type == "dialog_message",
+        )
+        .group_by(AgentInteractionLog.task_id)
+    )
+    for task_id_value, count_value, last_at in counts_result.all():
+        key = str(task_id_value)
+        log_counts[key] = int(count_value or 0)
+        if last_at:
+            last_log_at[key] = last_at.isoformat()
+
+    projects: List[CrmProjectTopicResponse] = []
+    for task in tasks:
+        output_data = task.output_data or {}
+        crm_plan = output_data.get("crm_plan") if isinstance(output_data.get("crm_plan"), dict) else {}
+        projects.append(
+            CrmProjectTopicResponse(
+                task_id=str(task.id),
+                title=_crm_project_title(task),
+                project_type=_crm_project_type(task),
+                status=task.status,
+                channel=_crm_project_channel(task),
+                history_count=log_counts.get(str(task.id), 0),
+                discussion_result=_crm_project_result(task),
+                crm_plan_status=crm_plan.get("status") if crm_plan else None,
+                last_message_at=last_log_at.get(str(task.id)),
+                created_at=task.created_at.isoformat() if task.created_at else datetime.now(timezone.utc).isoformat(),
+            )
+        )
+    return projects
+
+
+@router.delete("/crm/projects/{task_id}")
+async def delete_crm_project_topic(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Скрыть CRM-проект из панели, сохранив его переписку в базе."""
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_crm_agent_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является CRM-проектом")
+    task.task_context = {**(task.task_context or {}), "crm_project_hidden": True}
+    task.updated_at = datetime.now(timezone.utc)
+    db.add(AgentInteractionLog(
+        task_id=task.id,
+        agent_name=str(getattr(current_user, "email", None) or "crm-board"),
+        event_type="crm_project_hidden",
+        event_data={"hidden": True},
+        message="CRM-проект удалён из списка; история сообщений сохранена",
+        execution_context={"source": "crm_board"},
+    ))
+    await db.commit()
+    return {"status": "deleted", "task_id": str(task.id)}
+
+
+def _is_traffic_agent_task(task: AgentInteractionTask) -> bool:
+    """Keep the project list scoped to traffic work, rather than all marketing tasks."""
+
+    text_value = " ".join(
+        str(value or "")
+        for value in [
+            task.target_agent,
+            task.source_agent,
+            task.task_type,
+            (task.task_context or {}).get("board"),
+            (task.input_data or {}).get("source_board"),
+        ]
+    ).lower()
+    return any(key in text_value for key in ["traffic-growth", "traffic", "growth", "retarget", "ads"])
+
+
+def _is_brand_media_task(task: AgentInteractionTask) -> bool:
+    """Keep Brand Media projects separate from Personal Media and generic plans."""
+
+    text_value = " ".join(
+        str(value or "")
+        for value in [
+            task.target_agent,
+            task.source_agent,
+            task.task_type,
+            (task.task_context or {}).get("board"),
+            (task.input_data or {}).get("source_board"),
+        ]
+    ).lower()
+    return (
+        task.target_agent in {"brand-media-agent", "content-agent"}
+        or "brand-media" in text_value
+        or task.task_type in {"advertising_creatives", "content_generation", "content_review", "calendar_plan_generation"}
+    )
+
+
+def _content_project_title(task: AgentInteractionTask) -> str:
+    input_data = task.input_data or {}
+    task_context = task.task_context or {}
+    return input_data.get("title") or task_context.get("title") or task.task_type.replace("_", " ")
+
+
+def _content_project_result(task: AgentInteractionTask) -> Optional[str]:
+    output_data = task.output_data or {}
+    for key in ["summary", "result", "text", "discussion_result", "report"]:
+        if output_data.get(key):
+            return str(output_data[key])[:500]
+    return None
+
+
+@router.get("/content/projects", response_model=List[ContentProjectTopicResponse])
+async def list_content_project_topics(
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """List independent Brand Media topics with their discussion history."""
+
+    result = await db.execute(
+        select(AgentInteractionTask)
+        .where(
+            or_(
+                AgentInteractionTask.target_agent.in_(["brand-media-agent", "content-agent"]),
+                AgentInteractionTask.source_agent.in_(["content-board", "traffic-growth-agent"]),
+                AgentInteractionTask.task_type.in_(["advertising_creatives", "content_generation", "content_review", "calendar_plan_generation"]),
+            ),
+            AgentInteractionTask.status != "deleted",
+        )
+        .order_by(desc(func.coalesce(AgentInteractionTask.updated_at, AgentInteractionTask.created_at)))
+        .limit(limit)
+    )
+    tasks = [
+        task for task in result.scalars().all()
+        if _is_brand_media_task(task) and not (task.task_context or {}).get("content_project_hidden")
+    ]
+    if not tasks:
+        return []
+
+    task_ids = [task.id for task in tasks]
+    log_counts: Dict[str, int] = {}
+    last_log_at: Dict[str, str] = {}
+    counts_result = await db.execute(
+        select(AgentInteractionLog.task_id, func.count(AgentInteractionLog.id), func.max(AgentInteractionLog.created_at))
+        .where(AgentInteractionLog.task_id.in_(task_ids), AgentInteractionLog.event_type == "dialog_message")
+        .group_by(AgentInteractionLog.task_id)
+    )
+    for task_id_value, count_value, last_at in counts_result.all():
+        log_counts[str(task_id_value)] = int(count_value or 0)
+        if last_at:
+            last_log_at[str(task_id_value)] = last_at.isoformat()
+
+    return [
+        ContentProjectTopicResponse(
+            task_id=str(task.id),
+            title=_content_project_title(task),
+            content_type=(task.input_data or {}).get("content_type") or task.task_type,
+            platform=(task.input_data or {}).get("platform") or (task.input_data or {}).get("channel"),
+            status=task.status,
+            history_count=log_counts.get(str(task.id), 0),
+            discussion_result=_content_project_result(task),
+            last_message_at=last_log_at.get(str(task.id)),
+            created_at=task.created_at.isoformat() if task.created_at else datetime.now(timezone.utc).isoformat(),
+        )
+        for task in tasks
+    ]
+
+
+@router.delete("/content/projects/{task_id}")
+async def delete_content_project_topic(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Hide a Brand Media project from the board without losing its audit trail."""
+
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_brand_media_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является проектом AI Brand Media")
+    task.task_context = {**(task.task_context or {}), "content_project_hidden": True}
+    task.updated_at = datetime.now(timezone.utc)
+    db.add(AgentInteractionLog(
+        task_id=task.id,
+        agent_name=str(getattr(current_user, "email", None) or "content-board"),
+        event_type="content_project_hidden",
+        event_data={"hidden": True},
+        message="Контент-проект удалён из списка; история сообщений сохранена",
+        execution_context={"source": "content_board"},
+    ))
+    await db.commit()
+    return {"status": "deleted", "task_id": str(task.id)}
+
+
+def _normalize_media_urls(value: Any) -> List[str]:
+    raw = value if isinstance(value, list) else []
+    return [str(url).strip() for url in raw if str(url or "").strip()]
+
+
+def _store_media_files() -> List[Path]:
+    """Return one preferred rendition per admin-uploaded store image."""
+
+    store_dir = Path(__file__).resolve().parents[2] / "static" / "app_admin_media" / "store"
+    if not store_dir.is_dir():
+        return []
+    preferred: Dict[str, Path] = {}
+    extension_rank = {".webp": 0, ".jpg": 1, ".jpeg": 1, ".png": 2}
+    for path in store_dir.iterdir():
+        if not path.is_file() or path.suffix.lower() not in extension_rank:
+            continue
+        current = preferred.get(path.stem)
+        if current is None or extension_rank[path.suffix.lower()] < extension_rank[current.suffix.lower()]:
+            preferred[path.stem] = path
+    return sorted(preferred.values(), key=lambda path: path.stat().st_mtime, reverse=True)
+
+
+def _static_media_files(folder: str, limit: int = 200) -> List[Path]:
+    root = Path(__file__).resolve().parents[2] / "static" / folder
+    if not root.is_dir():
+        return []
+    allowed = {".webp", ".jpg", ".jpeg", ".png"}
+    return sorted(
+        [path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in allowed],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )[:limit]
+
+
+async def _collect_campaign_media(db: AsyncSession, task: AgentInteractionTask, product_query: Optional[str] = None, asset_category: Optional[str] = None) -> Dict[str, Any]:
+    """Select GLAME-owned store and catalogue imagery for an internal creative brief."""
+
+    input_data = task.input_data or {}
+    city = str(input_data.get("city") or "Ялта").lower()
+    stores_result = await db.execute(
+        select(AppStore)
+        .where(AppStore.is_active.is_(True))
+        .order_by(AppStore.sort_order.asc(), AppStore.updated_at.desc())
+    )
+    stores = stores_result.scalars().all()
+    matching_stores = [store for store in stores if city in f"{store.city} {store.title}".lower()]
+    selected_stores = matching_stores or stores[:1]
+    assets: List[Dict[str, str]] = []
+    seen_urls: set[str] = set()
+    for store in selected_stores[:2]:
+        urls = _normalize_media_urls(store.image_urls)
+        if not urls and store.image_url:
+            urls = [str(store.image_url).strip()]
+        for index, url in enumerate(urls[:8]):
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            kind = "store_card" if index == 0 else ("store_hero" if index == 1 else "store_gallery")
+            assets.append({
+                "id": f"store:{store.id}:{index}",
+                "url": url,
+                "title": f"{store.title} — {'карточка' if index == 0 else 'фото пространства'}",
+                "kind": kind,
+                "source": "glame_store_media",
+                "usage": "GLAME-owned: можно использовать в креативах после согласования",
+            })
+
+    # The admin upload folder is the source of truth for space photos that
+    # have not yet been bound to an AppStore card.
+    for index, path in enumerate(_store_media_files()[:200]):
+        url = f"/static/app_admin_media/store/{path.name}"
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        label = path.stem.replace("_", " ").replace("-", " ")
+        assets.append({
+            "id": f"store-file:{path.stem}",
+            "url": url,
+            "title": f"Пространство GLAME — {label}",
+            "kind": "store_gallery",
+            "source": "glame_admin_store_media",
+            "usage": "Загружено через админку GLAME: можно выбрать для этой кампании",
+        })
+
+    products_statement = select(Product).where(Product.is_active.is_(True))
+    if product_query:
+        needle = f"%{product_query.strip()}%"
+        products_statement = products_statement.where(or_(Product.name.ilike(needle), Product.article.ilike(needle), Product.external_code.ilike(needle), Product.vendor_code.ilike(needle)))
+    product_limit = 2000 if asset_category == "product" and not product_query else (300 if product_query else 80)
+    product_max_assets = 2000 if asset_category == "product" else 12
+    products_result = await db.execute(products_statement.order_by(Product.updated_at.desc().nulls_last()).limit(product_limit))
+    for product in products_result.scalars().all():
+        images = _normalize_media_urls(product.images)
+        if not images:
+            continue
+        url = images[0]
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        assets.append({
+            "id": f"product:{product.id}:0",
+            "url": url,
+            "title": product.name,
+            "kind": "product",
+            "source": "glame_catalogue",
+            "usage": "Из каталога GLAME: сверить наличие и цену перед публикацией",
+        })
+        if len([asset for asset in assets if asset["kind"] == "product"]) >= product_max_assets:
+            break
+
+    looks_result = await db.execute(select(Look).order_by(Look.updated_at.desc().nulls_last()).limit(80))
+    look_count = 0
+    for look in looks_result.scalars().all():
+        look_urls = _normalize_media_urls(look.image_urls)
+        look_urls.extend(_normalize_media_urls([
+            look.image_url,
+            look.try_on_image_url,
+            *[item.get("url") for item in (look.media_items or []) if isinstance(item, dict)],
+        ]))
+        for index, url in enumerate(dict.fromkeys(look_urls)):
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            assets.append({
+                "id": f"look:{look.id}:{index}",
+                "url": url,
+                "title": f"Образ: {look.name}",
+                "kind": "look",
+                "source": "glame_looks",
+                "usage": "Образ GLAME: проверить права модели и публикационный статус перед использованием",
+            })
+            look_count += 1
+            if look_count >= 15:
+                break
+        if look_count >= 15:
+            break
+
+    for path in _static_media_files("look_images"):
+        relative = path.relative_to(Path(__file__).resolve().parents[2] / "static").as_posix()
+        url = f"/static/{relative}"
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        assets.append({
+            "id": f"look-file:{relative}",
+            "url": url,
+            "title": f"Образ / генерация: {path.stem.replace('_', ' ')}",
+            "kind": "look",
+            "source": "glame_look_files",
+            "usage": "Файл из папки образов GLAME: проверьте соответствие кампании перед использованием",
+        })
+
+    content_result = await db.execute(select(ContentItem).order_by(ContentItem.updated_at.desc().nulls_last()).limit(80))
+    generated_count = 0
+    for item in content_result.scalars().all():
+        generated = item.generated if isinstance(item.generated, dict) else {}
+        media = generated.get("media") if isinstance(generated.get("media"), dict) else {}
+        for index, media_item in enumerate(media.get("items") or []):
+            if not isinstance(media_item, dict) or not str(media_item.get("url") or "").strip():
+                continue
+            url = str(media_item["url"]).strip()
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            assets.append({
+                "id": f"generation:{item.id}:{index}",
+                "url": url,
+                "title": item.topic or item.hook or "Сгенерированный контент GLAME",
+                "kind": "generation",
+                "source": "glame_content_generation",
+                "usage": "Сгенерированный материал: проверить бренд-соответствие и права перед рекламным использованием",
+            })
+            generated_count += 1
+            if generated_count >= 15:
+                break
+        if generated_count >= 15:
+            break
+
+    for folder, title_prefix in [("content_post_images", "Генерация для поста"), ("content_media", "Контент-медиа")]:
+        for path in _static_media_files(folder):
+            relative = path.relative_to(Path(__file__).resolve().parents[2] / "static").as_posix()
+            url = f"/static/{relative}"
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            assets.append({
+                "id": f"generation-file:{relative}",
+                "url": url,
+                "title": f"{title_prefix}: {path.stem.replace('_', ' ')}",
+                "kind": "generation",
+                "source": "glame_generation_files",
+                "usage": "Файл из папки генераций GLAME: проверьте бренд-соответствие перед рекламным использованием",
+            })
+
+    task_context = task.task_context or {}
+    custom_assets = task_context.get("campaign_media_custom") if isinstance(task_context.get("campaign_media_custom"), list) else []
+    for custom in custom_assets:
+        if not isinstance(custom, dict) or not str(custom.get("url") or "").strip():
+            continue
+        asset_id = str(custom.get("id") or f"custom:{hashlib.sha1(str(custom.get('url')).encode()).hexdigest()[:12]}")
+        if str(custom.get("url")).strip() in seen_urls:
+            continue
+        seen_urls.add(str(custom.get("url")).strip())
+        assets.append({
+            "id": asset_id,
+            "url": str(custom.get("url")).strip(),
+            "title": str(custom.get("title") or "Пользовательское фото"),
+            "kind": str(custom.get("kind") or "custom"),
+            "source": "campaign_upload",
+            "usage": "Добавлено пользователем для этой кампании",
+        })
+
+    excluded_ids = {str(value) for value in (task_context.get("campaign_media_excluded_ids") or [])}
+    selected_ids_raw = task_context.get("campaign_media_selected_ids")
+    selected_ids = {str(value) for value in selected_ids_raw} if isinstance(selected_ids_raw, list) else None
+    available_assets = [asset for asset in assets if asset["id"] not in excluded_ids]
+    selected_assets = available_assets if selected_ids is None else [asset for asset in available_assets if asset["id"] in selected_ids]
+    campaign_brief = input_data.get("campaign_brief") if isinstance(input_data.get("campaign_brief"), dict) else {}
+    maps_card_url = campaign_brief.get("maps_card_url") or input_data.get("maps_card_url")
+    return {
+        "assets": selected_assets,
+        "available_assets": available_assets,
+        "maps_card_url": maps_card_url,
+        "note": "Источники: пространства GLAME, товары, образы, генерации и загруженные для кампании файлы. Фото Яндекс Карт не копируются автоматически: ссылка дана только для ручной проверки и загрузки правомерного оригинала в GLAME.",
+    }
+
+
+async def _attach_campaign_media_to_task(db: AsyncSession, task: AgentInteractionTask) -> Dict[str, Any]:
+    media = await _collect_campaign_media(db, task)
+    task.task_context = {**(task.task_context or {}), "campaign_media": media}
+    task.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return media
+
+
+@router.get("/content/projects/{task_id}/campaign-media", response_model=CampaignMediaResponse)
+async def get_content_project_campaign_media(
+    task_id: UUID,
+    query: Optional[str] = Query(None, max_length=120),
+    category: Optional[str] = Query(None, max_length=32),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Preview the GLAME-owned visual references available to a Brand Media project."""
+
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_brand_media_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является проектом AI Brand Media")
+    media = await _collect_campaign_media(db, task, product_query=query, asset_category=category)
+    if category and category != "all":
+        media["available_assets"] = [asset for asset in media["available_assets"] if (asset["kind"].startswith("store") if category == "store" else asset["kind"] == category)]
+    if not query and not category:
+        await _attach_campaign_media_to_task(db, task)
+    return CampaignMediaResponse(task_id=str(task.id), **media)
+
+
+@router.put("/content/projects/{task_id}/campaign-media/selection", response_model=CampaignMediaResponse)
+async def save_content_project_campaign_media_selection(
+    task_id: UUID,
+    request: CampaignMediaSelectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_brand_media_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является проектом AI Brand Media")
+    context = task.task_context or {}
+    existing_media = await _collect_campaign_media(db, task)
+    existing_ids = {asset["id"] for asset in existing_media["available_assets"]}
+    custom = list(context.get("campaign_media_custom") or [])
+    for asset in request.assets:
+        if asset.id in existing_ids or any(str(item.get("id")) == asset.id for item in custom if isinstance(item, dict)):
+            continue
+        custom.append({"id": asset.id, "url": asset.url, "title": asset.title, "kind": asset.kind, "source": asset.source})
+    task.task_context = {**context, "campaign_media_custom": custom, "campaign_media_selected_ids": list(dict.fromkeys(request.asset_ids))}
+    media = await _attach_campaign_media_to_task(db, task)
+    return CampaignMediaResponse(task_id=str(task.id), **media)
+
+
+@router.post("/content/projects/{task_id}/campaign-media/uploads", response_model=CampaignMediaResponse)
+async def add_content_project_campaign_media_upload(
+    task_id: UUID,
+    request: CampaignMediaUploadRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_brand_media_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является проектом AI Brand Media")
+    context = task.task_context or {}
+    custom = list(context.get("campaign_media_custom") or [])
+    existing_media = await _collect_campaign_media(db, task)
+    asset = {"id": f"custom:{uuid.uuid4()}", "url": request.url.strip(), "title": request.title.strip(), "kind": request.kind.strip() or "custom"}
+    custom.append(asset)
+    selected = list(context.get("campaign_media_selected_ids") or [item["id"] for item in existing_media["assets"]])
+    if asset["id"] not in selected:
+        selected.append(asset["id"])
+    task.task_context = {**context, "campaign_media_custom": custom, "campaign_media_selected_ids": selected}
+    media = await _attach_campaign_media_to_task(db, task)
+    return CampaignMediaResponse(task_id=str(task.id), **media)
+
+
+@router.delete("/content/projects/{task_id}/campaign-media/{asset_id}", response_model=CampaignMediaResponse)
+async def remove_content_project_campaign_media_asset(
+    task_id: UUID,
+    asset_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_brand_media_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является проектом AI Brand Media")
+    context = task.task_context or {}
+    existing_media = await _collect_campaign_media(db, task)
+    custom = [item for item in (context.get("campaign_media_custom") or []) if str(item.get("id")) != asset_id] if isinstance(context.get("campaign_media_custom"), list) else []
+    selected = [str(item) for item in (context.get("campaign_media_selected_ids") or [item["id"] for item in existing_media["assets"]]) if str(item) != asset_id]
+    excluded = list(dict.fromkeys([*(context.get("campaign_media_excluded_ids") or []), asset_id]))
+    task.task_context = {**context, "campaign_media_custom": custom, "campaign_media_selected_ids": selected, "campaign_media_excluded_ids": excluded}
+    media = await _attach_campaign_media_to_task(db, task)
+    return CampaignMediaResponse(task_id=str(task.id), **media)
+
+
+def _traffic_project_title(task: AgentInteractionTask) -> str:
+    input_data = task.input_data or {}
+    task_context = task.task_context or {}
+    return input_data.get("title") or task_context.get("title") or task.task_type.replace("_", " ")
+
+
+def _traffic_project_result(task: AgentInteractionTask) -> Optional[str]:
+    output_data = task.output_data or {}
+    for key in ["summary", "result", "discussion_result", "analysis", "strategy"]:
+        if output_data.get(key):
+            return str(output_data[key])[:500]
+    return None
+
+
+TRAFFIC_CARD_CHECKLIST = {
+    "address": "проверен адрес ялтинского магазина",
+    "hours": "проверен график работы",
+    "phone": "проверен телефон",
+    "route": "проверена кнопка построения маршрута",
+    "entrance_photo": "добавлены/проверены фото фасада и входа",
+    "interior_photo": "добавлены/проверены фото интерьера и витрины",
+    "reviews": "проверены свежие отзывы и ответы",
+}
+
+GLAME_YALTA_MAPS_CARD_URL = "https://yandex.ru/maps/org/glame/29233737183/?ll=34.161214%2C44.487821&z=17"
+
+TRAFFIC_CAMPAIGN_DEFAULTS: Dict[str, Dict[str, Any]] = {
+    "GLAME_YALTA_MAPS": {"daily_budget_rub": 700, "radius_km": 1},
+    "GLAME_YALTA_SEARCH_HOT": {"daily_budget_rub": 500, "radius_km": 10},
+    "GLAME_YALTA_GEO_NOW": {"daily_budget_rub": 500, "radius_km": 1},
+    "GLAME_YALTA_TOURIST_GEO": {"daily_budget_rub": 0, "radius_km": 3},
+    "GLAME_YALTA_GIFT": {"daily_budget_rub": 300, "radius_km": 3},
+}
+
+
+def _default_traffic_campaign_brief(task: AgentInteractionTask) -> Dict[str, Any]:
+    input_data = task.input_data or {}
+    task_context = task.task_context or {}
+    campaign_code = input_data.get("campaign_code") or task_context.get("campaign_code")
+    defaults: Dict[str, Any] = {"campaign_code": campaign_code}
+    defaults.update(TRAFFIC_CAMPAIGN_DEFAULTS.get(str(campaign_code), {}))
+    if campaign_code == "GLAME_YALTA_MAPS":
+        defaults["maps_card_url"] = GLAME_YALTA_MAPS_CARD_URL
+    return TrafficCampaignBriefRequest(
+        **defaults,
+    ).model_dump() if hasattr(TrafficCampaignBriefRequest, "model_validate") else TrafficCampaignBriefRequest(
+        **defaults,
+    ).dict()
+
+
+def _traffic_brief_requirements(brief: Dict[str, Any]) -> List[str]:
+    missing: List[str] = []
+    if not str(brief.get("maps_card_url") or "").strip():
+        missing.append("ссылка на подтверждённую карточку GLAME в Яндекс Картах")
+    if float(brief.get("daily_budget_rub") or 0) <= 0:
+        missing.append("дневной бюджет")
+    if int(brief.get("test_days") or 0) <= 0:
+        missing.append("срок теста")
+    checklist = brief.get("card_checklist") if isinstance(brief.get("card_checklist"), dict) else {}
+    for key, label in TRAFFIC_CARD_CHECKLIST.items():
+        if checklist.get(key) is not True:
+            missing.append(label)
+    return missing
+
+
+def _feed_filter_values(values: Optional[str]) -> List[str]:
+    return [item.strip() for item in (values or "").split(",") if item.strip()][:50]
+
+
+YANDEX_BUSINESS_PUBLIC_FEED_SETTINGS_KEY = "yandex_business_public_feed_glame_yalta"
+
+
+def _normalize_yandex_business_feed_settings(values: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    values = values or {}
+    min_price = values.get("min_price")
+    max_price = values.get("max_price")
+    try:
+        min_price = float(min_price) if min_price is not None else None
+        max_price = float(max_price) if max_price is not None else None
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Цена фильтра должна быть числом")
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise HTTPException(status_code=422, detail="Минимальная цена не может быть больше максимальной")
+    availability = str(values.get("availability") or "all")
+    if availability not in {"all", "in_stock", "out_of_stock", "unknown"}:
+        raise HTTPException(status_code=422, detail="Неизвестный фильтр наличия")
+    return {
+        "min_price": min_price,
+        "max_price": max_price,
+        "availability": availability,
+        "brands": ",".join(_feed_filter_values(values.get("brands"))),
+        "categories": ",".join(_feed_filter_values(values.get("categories"))),
+        "store_id": str(values.get("store_id") or "").strip()[:255] or None,
+    }
+
+
+async def _yandex_business_public_feed_settings(db: AsyncSession) -> Dict[str, Any]:
+    item = (await db.execute(select(AppSetting).where(AppSetting.key == YANDEX_BUSINESS_PUBLIC_FEED_SETTINGS_KEY))).scalar_one_or_none()
+    try:
+        stored = json.loads(item.value) if item and item.value else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        stored = {}
+    return _normalize_yandex_business_feed_settings(stored if isinstance(stored, dict) else {})
+
+
+def _yandex_business_public_feed_url(request: Request) -> str:
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip()
+    scheme = forwarded_proto if forwarded_proto in {"http", "https"} else request.url.scheme
+    host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+    if not host or any(char.isspace() for char in host):
+        raise HTTPException(status_code=400, detail="Не удалось определить публичный адрес фида")
+    return f"{scheme}://{host}/api/agent-interactions/traffic/yandex-business-feed/glame-yalta.yml"
+
+
+async def _build_yandex_business_feed(
+    db: AsyncSession,
+    *,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    availability: str = "all",
+    brands: Optional[str] = None,
+    categories: Optional[str] = None,
+    store_id: Optional[str] = None,
+) -> tuple[bytes, Dict[str, Any]]:
+    if min_price is not None and min_price < 0:
+        raise HTTPException(status_code=422, detail="Минимальная цена не может быть отрицательной")
+    if max_price is not None and max_price < 0:
+        raise HTTPException(status_code=422, detail="Максимальная цена не может быть отрицательной")
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise HTTPException(status_code=422, detail="Минимальная цена не может быть больше максимальной")
+    if availability not in {"all", "in_stock", "out_of_stock", "unknown"}:
+        raise HTTPException(status_code=422, detail="Неизвестный фильтр наличия")
+    statement = select(Product).where(Product.is_active.is_(True))
+    if min_price is not None:
+        statement = statement.where(Product.price >= int(round(min_price * 100)))
+    if max_price is not None:
+        statement = statement.where(Product.price <= int(round(max_price * 100)))
+    brand_values = _feed_filter_values(brands)
+    category_values = _feed_filter_values(categories)
+    if brand_values:
+        statement = statement.where(Product.brand.in_(brand_values))
+    if category_values:
+        statement = statement.where(Product.category.in_(category_values))
+    products_result = await db.execute(statement.order_by(Product.category.asc().nulls_last(), Product.name.asc()))
+    products = products_result.scalars().all()
+    selected_store = None
+    store_id = str(store_id or "").strip() or None
+    if store_id:
+        selected_store = (await db.execute(select(Store).where(Store.external_id == store_id, Store.is_active.is_(True)).limit(1))).scalar_one_or_none()
+        if not selected_store:
+            raise HTTPException(status_code=422, detail="Выбранный магазин не найден или отключён.")
+    stock_statement = select(ProductStock.product_id, func.sum(ProductStock.available_quantity))
+    if store_id:
+        stock_statement = stock_statement.where(ProductStock.store_id == store_id)
+    stocks_result = await db.execute(stock_statement.group_by(ProductStock.product_id))
+    stock_by_product_id = {str(product_id): float(stock) if stock is not None else None for product_id, stock in stocks_result.all()}
+    if store_id:
+        products = [product for product in products if (stock_by_product_id.get(str(product.id)) or 0) > 0]
+    elif availability != "all":
+        def matches_availability(product: Product) -> bool:
+            stock = stock_by_product_id.get(str(product.id))
+            return (availability == "in_stock" and stock is not None and stock > 0) or (availability == "out_of_stock" and stock is not None and stock <= 0) or (availability == "unknown" and stock is None)
+        products = [product for product in products if matches_availability(product)]
+    xml, report = build_yandex_business_feed(products, stock_by_product_id)
+    report["filters"] = {"min_price": min_price, "max_price": max_price, "availability": "in_stock" if store_id else availability, "brands": brand_values, "categories": category_values, "store_id": store_id, "store_name": selected_store.name if selected_store else None}
+    return xml, report
+
+
+@router.get("/traffic/projects", response_model=List[TrafficProjectTopicResponse])
+async def list_traffic_project_topics(
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """List Traffic & Growth campaign workspaces with their own chat history."""
+
+    result = await db.execute(
+        select(AgentInteractionTask)
+        .where(
+            or_(
+                AgentInteractionTask.target_agent == "traffic-growth-agent",
+                AgentInteractionTask.source_agent == "traffic-board",
+                AgentInteractionTask.task_type.ilike("%traffic%"),
+                AgentInteractionTask.task_type.ilike("%growth%"),
+                AgentInteractionTask.task_type.ilike("%retarget%"),
+            ),
+            AgentInteractionTask.status != "deleted",
+        )
+        .order_by(desc(func.coalesce(AgentInteractionTask.updated_at, AgentInteractionTask.created_at)))
+        .limit(limit)
+    )
+    tasks = [
+        task for task in result.scalars().all()
+        if _is_traffic_agent_task(task) and not (task.task_context or {}).get("traffic_project_hidden")
+    ]
+    if not tasks:
+        return []
+
+    task_ids = [task.id for task in tasks]
+    log_counts: Dict[str, int] = {}
+    last_log_at: Dict[str, str] = {}
+    counts_result = await db.execute(
+        select(
+            AgentInteractionLog.task_id,
+            func.count(AgentInteractionLog.id),
+            func.max(AgentInteractionLog.created_at),
+        )
+        .where(
+            AgentInteractionLog.task_id.in_(task_ids),
+            AgentInteractionLog.event_type == "dialog_message",
+        )
+        .group_by(AgentInteractionLog.task_id)
+    )
+    for task_id_value, count_value, last_at in counts_result.all():
+        key = str(task_id_value)
+        log_counts[key] = int(count_value or 0)
+        if last_at:
+            last_log_at[key] = last_at.isoformat()
+
+    projects: List[TrafficProjectTopicResponse] = []
+    for task in tasks:
+        input_data = task.input_data or {}
+        task_context = task.task_context or {}
+        projects.append(
+            TrafficProjectTopicResponse(
+                task_id=str(task.id),
+                title=_traffic_project_title(task),
+                campaign_code=input_data.get("campaign_code") or task_context.get("campaign_code"),
+                channel=input_data.get("channel") or task_context.get("channel"),
+                status=task.status,
+                history_count=log_counts.get(str(task.id), 0),
+                discussion_result=_traffic_project_result(task),
+                last_message_at=last_log_at.get(str(task.id)),
+                created_at=task.created_at.isoformat() if task.created_at else datetime.now(timezone.utc).isoformat(),
+            )
+        )
+    return projects
+
+
+@router.get("/traffic/yandex-business-feed/filters", response_model=YandexBusinessFeedFiltersResponse)
+async def yandex_business_feed_filters(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Return available catalogue facets without exposing product data."""
+    active_filter = Product.is_active.is_(True)
+    brands_result = await db.execute(select(Product.brand).where(active_filter, Product.brand.isnot(None)).distinct().order_by(Product.brand.asc()))
+    categories_result = await db.execute(select(Product.category).where(active_filter, Product.category.isnot(None)).distinct().order_by(Product.category.asc()))
+    stores_result = await db.execute(select(Store.name, Store.external_id).where(Store.is_active.is_(True), Store.external_id.isnot(None)).order_by(Store.name.asc()))
+    prices_result = await db.execute(select(func.min(Product.price), func.max(Product.price)).where(active_filter, Product.price.isnot(None), Product.price > 0))
+    min_price, max_price = prices_result.one()
+    return YandexBusinessFeedFiltersResponse(
+        brands=[str(value).strip() for (value,) in brands_result.all() if str(value).strip()],
+        categories=[str(value).strip() for (value,) in categories_result.all() if str(value).strip()],
+        stores=[{"name": str(name).strip(), "external_id": str(external_id).strip()} for name, external_id in stores_result.all() if str(name).strip() and str(external_id).strip()],
+        min_price=float(min_price) / 100 if min_price is not None else None,
+        max_price=float(max_price) / 100 if max_price is not None else None,
+    )
+
+
+@router.get("/traffic/yandex-business-feed/public-settings", response_model=YandexBusinessFeedPublicSettingsResponse)
+async def get_yandex_business_public_feed_settings(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Требуется авторизация")
+    return YandexBusinessFeedPublicSettingsResponse(
+        **await _yandex_business_public_feed_settings(db),
+        public_url=_yandex_business_public_feed_url(request),
+    )
+
+
+@router.put("/traffic/yandex-business-feed/public-settings", response_model=YandexBusinessFeedPublicSettingsResponse)
+async def save_yandex_business_public_feed_settings(
+    body: YandexBusinessFeedPublicSettingsInput,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Требуется авторизация")
+    settings = _normalize_yandex_business_feed_settings(body.model_dump())
+    item = (await db.execute(select(AppSetting).where(AppSetting.key == YANDEX_BUSINESS_PUBLIC_FEED_SETTINGS_KEY))).scalar_one_or_none()
+    serialized = json.dumps(settings, ensure_ascii=False, separators=(",", ":"))
+    if item:
+        item.value = serialized
+    else:
+        db.add(AppSetting(key=YANDEX_BUSINESS_PUBLIC_FEED_SETTINGS_KEY, value=serialized))
+    await db.commit()
+    return YandexBusinessFeedPublicSettingsResponse(**settings, public_url=_yandex_business_public_feed_url(request))
+
+
+@router.get("/traffic/yandex-business-feed/glame-yalta.yml")
+async def public_yandex_business_feed_glame_yalta(
+    db: AsyncSession = Depends(get_db),
+):
+    """Stable unauthenticated YML endpoint consumed by Yandex Business once per day."""
+    settings = await _yandex_business_public_feed_settings(db)
+    xml, _ = await _build_yandex_business_feed(db, **settings)
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=300", "Content-Disposition": 'inline; filename="glame-yalta-yandex-business.yml"'},
+    )
+
+
+@router.get("/traffic/yandex-business-feed/preview", response_model=YandexBusinessFeedPreviewResponse)
+async def preview_yandex_business_feed(
+    min_price: Optional[float] = Query(None, ge=0),
+    max_price: Optional[float] = Query(None, ge=0),
+    availability: str = Query("all"),
+    brands: Optional[str] = Query(None),
+    categories: Optional[str] = Query(None),
+    store_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Validate the live GLAME catalogue before downloading a Yandex Business YML file."""
+
+    _, report = await _build_yandex_business_feed(db, min_price=min_price, max_price=max_price, availability=availability, brands=brands, categories=categories, store_id=store_id)
+    return report
+
+
+@router.get("/traffic/yandex-business-feed.xml")
+async def download_yandex_business_feed(
+    min_price: Optional[float] = Query(None, ge=0),
+    max_price: Optional[float] = Query(None, ge=0),
+    availability: str = Query("all"),
+    brands: Optional[str] = Query(None),
+    categories: Optional[str] = Query(None),
+    store_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Download a generated YML file; it does not publish or upload anything externally."""
+
+    xml, _ = await _build_yandex_business_feed(db, min_price=min_price, max_price=max_price, availability=availability, brands=brands, categories=categories, store_id=store_id)
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Content-Disposition": 'attachment; filename="glame-yandex-business-price-list.xml"'},
+    )
+
+
+@router.get("/traffic/projects/{task_id}/brief", response_model=TrafficCampaignBriefResponse)
+async def get_traffic_campaign_brief(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Return the launch brief. It remains internal to GLAME until approved."""
+
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_traffic_agent_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является рекламным проектом")
+    brief = (task.task_context or {}).get("traffic_campaign_brief")
+    if not isinstance(brief, dict):
+        brief = _default_traffic_campaign_brief(task)
+    missing = _traffic_brief_requirements(brief)
+    return TrafficCampaignBriefResponse(
+        task_id=str(task.id),
+        brief=brief,
+        ready_for_approval=not missing,
+        missing_requirements=missing,
+    )
+
+
+@router.put("/traffic/projects/{task_id}/brief", response_model=TrafficCampaignBriefResponse)
+async def update_traffic_campaign_brief(
+    task_id: UUID,
+    request: TrafficCampaignBriefRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Save a draft campaign brief; this endpoint never calls a Yandex API."""
+
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_traffic_agent_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является рекламным проектом")
+    if task.status in {InteractionStatus.QUEUED.value, InteractionStatus.PROCESSING.value, InteractionStatus.COMPLETED.value}:
+        raise HTTPException(status_code=400, detail="Нельзя менять бриф после передачи задачи в выполнение")
+
+    brief = request.model_dump() if hasattr(request, "model_dump") else request.dict()
+    task.task_context = {**(task.task_context or {}), "traffic_campaign_brief": brief}
+    task.updated_at = datetime.now(timezone.utc)
+    db.add(AgentInteractionLog(
+        task_id=task.id,
+        agent_name=str(getattr(current_user, "email", None) or current_user.id),
+        event_type="traffic_campaign_brief_saved",
+        event_data={"campaign_code": brief.get("campaign_code"), "daily_budget_rub": brief.get("daily_budget_rub")},
+        message="Черновик рекламной кампании обновлён в Traffic & Growth Board",
+        execution_context={"source": "traffic_board", "external_ad_action": False},
+    ))
+    await db.commit()
+    missing = _traffic_brief_requirements(brief)
+    return TrafficCampaignBriefResponse(task_id=str(task.id), brief=brief, ready_for_approval=not missing, missing_requirements=missing)
+
+
+@router.post("/traffic/projects/{task_id}/submit-for-approval", response_model=TrafficCampaignBriefResponse)
+async def submit_traffic_campaign_for_approval(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Move a complete campaign brief to approval without publishing any advertisement."""
+
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_traffic_agent_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является рекламным проектом")
+    brief = (task.task_context or {}).get("traffic_campaign_brief")
+    if not isinstance(brief, dict):
+        brief = _default_traffic_campaign_brief(task)
+    missing = _traffic_brief_requirements(brief)
+    if missing:
+        raise HTTPException(status_code=400, detail={"message": "Бриф ещё не готов к согласованию", "missing_requirements": missing})
+
+    task.status = InteractionStatus.PENDING_APPROVAL.value
+    task.task_context = {**(task.task_context or {}), "traffic_campaign_brief": brief}
+    task.input_data = {**(task.input_data or {}), "approval_status": "pending_approval"}
+    task.updated_at = datetime.now(timezone.utc)
+    db.add(AgentInteractionLog(
+        task_id=task.id,
+        agent_name=str(getattr(current_user, "email", None) or current_user.id),
+        event_type="traffic_campaign_submitted_for_approval",
+        event_data={"campaign_code": brief.get("campaign_code"), "external_ad_action": False},
+        message="Рекламная кампания передана на согласование; публикация в Яндексе не выполнялась",
+        execution_context={"source": "traffic_board", "external_ad_action": False},
+    ))
+    await db.commit()
+    return TrafficCampaignBriefResponse(task_id=str(task.id), brief=brief, ready_for_approval=True, missing_requirements=[])
+
+
+@router.delete("/traffic/projects/{task_id}")
+async def delete_traffic_project_topic(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Hide a traffic project from its board without deleting the audit trail."""
+
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_traffic_agent_task(task):
+        raise HTTPException(status_code=400, detail="Задача не является рекламным проектом")
+    task.task_context = {**(task.task_context or {}), "traffic_project_hidden": True}
+    task.updated_at = datetime.now(timezone.utc)
+    db.add(AgentInteractionLog(
+        task_id=task.id,
+        agent_name=str(getattr(current_user, "email", None) or "traffic-board"),
+        event_type="traffic_project_hidden",
+        event_data={"hidden": True},
+        message="Рекламный проект удалён из списка; история сообщений сохранена",
+        execution_context={"source": "traffic_board"},
+    ))
+    await db.commit()
+    return {"status": "deleted", "task_id": str(task.id)}
+
+
+async def _get_agent_task_or_404(db: AsyncSession, task_id: UUID) -> AgentInteractionTask:
+    result = await db.execute(select(AgentInteractionTask).where(AgentInteractionTask.id == task_id))
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+    return task
+
+
+async def _latest_assistant_dialog_text(db: AsyncSession, task_id: UUID) -> str:
+    result = await db.execute(
+        select(AgentInteractionLog)
+        .where(
+            AgentInteractionLog.task_id == task_id,
+            AgentInteractionLog.event_type == "dialog_message",
+        )
+        .order_by(desc(AgentInteractionLog.created_at))
+        .limit(20)
+    )
+    for log in result.scalars().all():
+        event_data = log.event_data or {}
+        role = event_data.get("role")
+        if role == "assistant" or event_data.get("kind") in {"assistant_reply", "assistant_draft"}:
+            return log.message or ""
+    return ""
+
+
 class ChatHistoryItem(BaseModel):
     id: str
     role: str
@@ -1899,10 +3257,138 @@ class ChatHistoryItem(BaseModel):
     created_at: Optional[str] = None
 
 
+@router.get("/tasks/{task_id}/crm/plan", response_model=CrmPlanResponse)
+async def get_crm_plan(
+    task_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_crm_agent_task(task):
+        raise HTTPException(status_code=400, detail="Задача не относится к AI CRM")
+    output_data = dict(task.output_data or {})
+    plan = normalize_crm_plan(output_data.get("crm_plan") or {}, fallback_text=str(task.input_data or {}))
+    return CrmPlanResponse(task_id=str(task.id), crm_plan=plan)
+
+
+@router.post("/tasks/{task_id}/crm/finalize-plan", response_model=CrmPlanResponse)
+async def finalize_crm_plan(
+    task_id: UUID,
+    body: CrmPlanRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_crm_agent_task(task):
+        raise HTTPException(status_code=400, detail="Задача не относится к AI CRM")
+    source_text = body.source_text or await _latest_assistant_dialog_text(db, task_id)
+    if body.crm_plan:
+        plan = normalize_crm_plan(body.crm_plan, fallback_text=source_text)
+    else:
+        plan = extract_crm_plan_from_text(source_text)
+    if body.status:
+        plan["status"] = body.status
+    output_data = dict(task.output_data or {})
+    output_data["crm_plan"] = normalize_crm_plan(plan, fallback_text=source_text)
+    output_data["crm_plan_updated_at"] = datetime.now(timezone.utc).isoformat()
+    task.output_data = output_data
+    task.updated_at = datetime.now(timezone.utc)
+    db.add(AgentInteractionLog(
+        task_id=task.id,
+        agent_name=task.target_agent or "crm-agent",
+        event_type="crm_plan_finalized",
+        event_data={"role": "assistant", "crm_plan": output_data["crm_plan"]},
+        message="CRM-план зафиксирован на платформе",
+        execution_context={"source": "ai_crm_agent_bridge"},
+    ))
+    await db.commit()
+    await db.refresh(task)
+    return CrmPlanResponse(task_id=str(task.id), crm_plan=output_data["crm_plan"])
+
+
+@router.post("/tasks/{task_id}/crm/create-seller-tasks", response_model=CrmSellerTaskCreateResponse)
+async def create_seller_crm_tasks_from_plan(
+    task_id: UUID,
+    body: CrmSellerTaskCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    task = await _get_agent_task_or_404(db, task_id)
+    if not _is_crm_agent_task(task):
+        raise HTTPException(status_code=400, detail="Задача не относится к AI CRM")
+    output_data = dict(task.output_data or {})
+    plan = normalize_crm_plan(body.crm_plan or output_data.get("crm_plan") or {}, fallback_text=str(task.input_data or {}))
+    segment_id = (plan.get("segment") or {}).get("segment_id")
+    if not segment_id:
+        raise HTTPException(status_code=400, detail="В CRM-плане нет segment.segment_id")
+    defaults = crm_plan_to_seller_task_defaults(plan)
+    if body.work_date:
+        defaults["work_date"] = body.work_date
+    result = await db.execute(select(UserSegment).where(UserSegment.segment_id == UUID(str(segment_id))).limit(body.limit))
+    links = result.scalars().all()
+    created = 0
+    skipped = 0
+    errors: List[Dict[str, Any]] = []
+    task_ids: List[str] = []
+    for link in links:
+        try:
+            idempotency = f"ai_crm_plan:{task.id}:{segment_id}:{link.user_id}:{defaults['work_date'].isoformat()}"
+            existing_result = await db.execute(select(CrmTask).where(CrmTask.source_idempotency_key == idempotency))
+            existing = existing_result.scalar_one_or_none()
+            if existing:
+                skipped += 1
+                task_ids.append(str(existing.id))
+                continue
+            crm_task = CrmTask(
+                customer_id=link.user_id,
+                assigned_seller_user_id=body.assigned_seller_user_id,
+                assigned_seller_external_id=body.assigned_seller_external_id,
+                assigned_seller_name=body.assigned_seller_name,
+                store_id=body.store_id,
+                store_name=body.store_name,
+                created_by_user_id=getattr(current_user, "id", None),
+                source_idempotency_key=idempotency,
+                source_row_id=str(link.id),
+                **defaults,
+            )
+            db.add(crm_task)
+            await db.flush()
+            db.add(CrmTaskEvent(
+                task_id=crm_task.id,
+                event_type="created_from_ai_crm_plan",
+                actor_user_id=getattr(current_user, "id", None),
+                actor_name=getattr(current_user, "full_name", None) or getattr(current_user, "email", None),
+                previous_status=None,
+                next_status=crm_task.status,
+                payload={"agent_task_id": str(task.id), "segment_id": str(segment_id)},
+            ))
+            created += 1
+            task_ids.append(str(crm_task.id))
+        except Exception as exc:
+            errors.append({"user_id": str(getattr(link, "user_id", "")), "error": str(exc)})
+    plan["status"] = "ready_for_sellers" if created or skipped else plan.get("status", "approved")
+    output_data["crm_plan"] = plan
+    output_data["seller_crm_task_ids"] = task_ids
+    output_data["seller_crm_tasks_created_at"] = datetime.now(timezone.utc).isoformat()
+    task.output_data = output_data
+    task.updated_at = datetime.now(timezone.utc)
+    db.add(AgentInteractionLog(
+        task_id=task.id,
+        agent_name=task.target_agent or "crm-agent",
+        event_type="seller_crm_tasks_created",
+        event_data={"created": created, "skipped": skipped, "task_ids": task_ids, "errors": errors},
+        message=f"Созданы CRM-задачи продавцам: {created}, пропущено дублей: {skipped}",
+        execution_context={"source": "ai_crm_agent_bridge"},
+    ))
+    await db.commit()
+    return CrmSellerTaskCreateResponse(created=created, skipped=skipped, errors=errors, task_ids=task_ids, crm_plan=plan)
+
+
 @router.get("/tasks/{task_id}/chat", response_model=List[ChatHistoryItem])
 async def get_task_chat_history(
     task_id: UUID,
     limit: int = Query(200, ge=1, le=1000),
+    include_before_reset: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
@@ -1931,7 +3417,7 @@ async def get_task_chat_history(
         AgentInteractionLog.task_id == task.id,
         AgentInteractionLog.event_type == "dialog_message",
     ]
-    if reset_log and reset_log.created_at:
+    if not include_before_reset and reset_log and reset_log.created_at:
         conditions.append(AgentInteractionLog.created_at >= reset_log.created_at)
 
     result = await db.execute(
@@ -2200,6 +3686,11 @@ async def chat_with_agent(
         context_blocks.append(f"=== ИСТОРИЯ ЗАДАЧИ ===\n{history_ctx_text}")
     if prompt_agent_type == "analytics-agent":
         context_blocks.append(await _get_analytics_agent_context_text(db, 14))
+    if prompt_agent_type == "crm-agent":
+        context_blocks.append(GLAME_CRM_OPERATING_CONTEXT)
+        output_plan = (task.output_data or {}).get("crm_plan") if isinstance(task.output_data, dict) else None
+        if output_plan:
+            context_blocks.append(f"=== ТЕКУЩИЙ СОХРАНЕННЫЙ CRM-ПЛАН ===\n{json.dumps(output_plan, ensure_ascii=False, default=str)}")
     if prompt_agent_type == "assortment-agent":
         context_blocks.append(await _get_assortment_agent_context_text(db, f"{task_title}\n{body.message}", 90))
 

@@ -122,6 +122,19 @@ class TonGlmAutoTransferService:
             "security_approved": payload.get("security_approved"),
             "treasury_approved": payload.get("treasury_approved"),
             "comment": payload.get("comment"),
+            "legal_evidence_ref": payload.get("legal_evidence_ref"),
+            "security_evidence_ref": payload.get("security_evidence_ref"),
+            "treasury_evidence_ref": payload.get("treasury_evidence_ref"),
+            "public_wording_evidence_ref": payload.get("public_wording_evidence_ref"),
+            "offline_evidence_ready": all(
+                bool(str(payload.get(key) or "").strip())
+                for key in (
+                    "legal_evidence_ref",
+                    "security_evidence_ref",
+                    "treasury_evidence_ref",
+                    "public_wording_evidence_ref",
+                )
+            ),
             "updated_at": payload.get("updated_at"),
             "updated_by": payload.get("updated_by"),
         }
@@ -134,14 +147,38 @@ class TonGlmAutoTransferService:
         treasury_approved: bool,
         comment: str | None,
         admin_user_id: UUID,
+        legal_evidence_ref: str | None = None,
+        security_evidence_ref: str | None = None,
+        treasury_evidence_ref: str | None = None,
+        public_wording_evidence_ref: str | None = None,
     ) -> dict[str, Any]:
         path = TonGlmAutoTransferService.APPROVALS_FILE
         path.parent.mkdir(parents=True, exist_ok=True)
+        existing_payload: dict[str, Any] = {}
+        if path.exists():
+            try:
+                existing_raw = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(existing_raw, dict):
+                    existing_payload = existing_raw
+            except Exception:
+                existing_payload = {}
+
+        def evidence_ref(value: str | None, key: str) -> str | None:
+            normalized = (value or "").strip()
+            if normalized:
+                return normalized
+            existing = str(existing_payload.get(key) or "").strip()
+            return existing or None
+
         payload = {
             "legal_approved": bool(legal_approved),
             "security_approved": bool(security_approved),
             "treasury_approved": bool(treasury_approved),
             "comment": (comment or "").strip() or None,
+            "legal_evidence_ref": evidence_ref(legal_evidence_ref, "legal_evidence_ref"),
+            "security_evidence_ref": evidence_ref(security_evidence_ref, "security_evidence_ref"),
+            "treasury_evidence_ref": evidence_ref(treasury_evidence_ref, "treasury_evidence_ref"),
+            "public_wording_evidence_ref": evidence_ref(public_wording_evidence_ref, "public_wording_evidence_ref"),
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "updated_by": str(admin_user_id),
         }
@@ -732,12 +769,15 @@ class TonGlmAutoTransferService:
                 production_signer_endpoint_configured=bool(config.get("production_signer_endpoint_configured")),
                 production_approvals_ready=bool(config.get("production_approvals_ready")),
             )
-        if claim.status != "pending" or claim.transaction_type != "claim" or claim.reason != "points_to_ton_bridge":
-            return await mark("skipped_not_points_to_ton")
+        if claim.status != "pending" or claim.transaction_type != "claim" or claim.reason not in {"points_to_ton_bridge", "buy_glm_with_ton"}:
+            return await mark("skipped_not_auto_transfer_claim")
         existing_transfer = await self._settle_existing_transfer(claim=claim, meta=meta, config=config)
         if existing_transfer is not None:
             return existing_transfer
-        if str(meta.get("onec_spend_sync_status") or "") not in {"success", "manual_spend_document_recorded"}:
+        if claim.reason == "buy_glm_with_ton":
+            if str(meta.get("ton_payment_status") or "") != "verified":
+                return await mark("blocked_ton_payment_not_ready", ton_payment_status=meta.get("ton_payment_status"))
+        elif str(meta.get("onec_spend_sync_status") or "") not in {"success", "manual_spend_document_recorded"}:
             return await mark("blocked_1c_not_ready", onec_spend_sync_status=meta.get("onec_spend_sync_status"))
         amount = int(claim.amount or 0)
         if amount <= 0 or amount > int(config["max_amount_glm"]):
@@ -784,7 +824,8 @@ class TonGlmAutoTransferService:
         destination = self._claim_wallet(meta)
         forward_payload = Cell()
         forward_payload.bits.write_uint(0, 32)
-        forward_payload.bits.write_string(f"GLAME points_to_glm {claim.id}")
+        transfer_reason = "buy_glm_with_ton" if claim.reason == "buy_glm_with_ton" else "points_to_glm"
+        forward_payload.bits.write_string(f"GLAME {transfer_reason} {claim.id}")
 
         body = Cell()
         body.bits.write_uint(JETTON_TRANSFER_OP, 32)
@@ -804,7 +845,7 @@ class TonGlmAutoTransferService:
                 hot_wallet_address=hot_wallet_address,
                 hot_jetton_wallet=hot_jetton_wallet,
                 query_id=query_id,
-                comment=f"GLAME points_to_glm {claim.id}",
+                comment=f"GLAME {transfer_reason} {claim.id}",
                 config=config,
             )
             seqno = int(send_payload.get("seqno") or 0)
@@ -814,7 +855,7 @@ class TonGlmAutoTransferService:
                 amount_base_units=amount_base_units,
                 destination=destination,
                 query_id=query_id,
-                comment=f"GLAME points_to_glm {claim.id}",
+                comment=f"GLAME {transfer_reason} {claim.id}",
                 config=config,
             )
             seqno = int(send_payload.get("seqno") or 0)
@@ -896,7 +937,7 @@ class TonGlmAutoTransferService:
                 .where(
                     GlameTokenTransaction.transaction_type == "claim",
                     GlameTokenTransaction.status == "pending",
-                    GlameTokenTransaction.reason == "points_to_ton_bridge",
+                    GlameTokenTransaction.reason.in_(("points_to_ton_bridge", "buy_glm_with_ton")),
                 )
                 .order_by(GlameTokenTransaction.created_at.asc(), GlameTokenTransaction.id.asc())
                 .limit(max(1, int(limit or 20)))

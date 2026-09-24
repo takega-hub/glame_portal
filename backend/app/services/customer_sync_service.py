@@ -26,6 +26,7 @@ from app.services.sales_product_link_service import SalesProductLinkService
 from app.services.purchase_product_fields import derive_purchase_brand, derive_purchase_category
 from app.services.sales_record_filters import is_analytics_eligible_product
 from app.services.referral_service import ReferralService, REFERRED_CLIENT_WELCOME_BONUS_POINTS
+from app.services.crm_interaction_attribution_service import CrmInteractionAttributionService
 from app.agents.communication_agent import CommunicationAgent
 from app.services.user_deletion_service import UserDeletionService
 
@@ -1699,6 +1700,18 @@ class CustomerSyncService:
             await self.db.commit()
             linked_count = await self.backfill_purchase_product_links(user_id=target_user_id)
             stats["linked_products"] = linked_count
+            try:
+                attribution_user_ids = [target_user_id] if target_user_id else None
+                stats["crm_interaction_attribution"] = await CrmInteractionAttributionService(
+                    self.db
+                ).update_purchase_conversions(user_ids=attribution_user_ids)
+            except Exception as attribution_error:
+                logger.warning(
+                    "Не удалось обновить результаты CRM-взаимодействий после синхронизации покупок: %s",
+                    attribution_error,
+                    exc_info=True,
+                )
+                stats["crm_interaction_attribution"] = {"error": str(attribution_error)}
             logger.info(
                 "Синхронизация истории покупок завершена: создано=%s обновлено=%s связаны_товары=%s ошибок=%s",
                 stats["created"],

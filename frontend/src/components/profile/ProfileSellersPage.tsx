@@ -14,8 +14,32 @@ const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOStr
 const STORE_OPTIONS = [
   { value: 'ТРК Центрум', label: 'Центрум — ТРК Центрум' },
   { value: 'Ялта, Набережная 18', label: 'Ялта — Набережная Ленина, 18' },
-  { value: 'Меганом', label: 'Меганом' },
+  { value: 'Мрия', label: 'МРИЯ' },
 ];
+
+// Role previews are applied in the browser, while API requests still carry the
+// administrator session. Keep the same approved manager scope in that mode.
+function approvedManagerStores(fullName?: string | null) {
+  const normalized = normalizeText(fullName || '');
+  if (normalized.includes('бешлиева')) return ['ТРК Центрум'];
+  if (normalized.includes('рогалевич')) return ['Мрия', 'Ялта, Набережная 18'];
+  return [];
+}
+
+function storeOptionForName(storeName: string) {
+  return STORE_OPTIONS.find((store) => store.value === storeName) || { value: storeName, label: storeName };
+}
+
+function defaultShiftHoursForStore(storeName?: string | null) {
+  const normalized = normalizeText(storeName || '');
+  if (normalized.includes('центрум') || normalized.includes('centrum')) {
+    return { starts_at: '10:00', ends_at: '21:00' };
+  }
+  if (normalized.includes('мрия') || normalized.includes('mriya')) {
+    return { starts_at: '10:00', ends_at: '20:00' };
+  }
+  return { starts_at: '10:00', ends_at: '22:00' };
+}
 
 const KNOWN_SELLER_NAMES_BY_EXTERNAL_ID: Record<string, string> = {
   '6ded351c-4a43-11f1-9b6c-fa163e4cc04e': 'Максимычева Евгения',
@@ -46,6 +70,14 @@ type TabKey = 'kpi' | 'schedule' | 'list';
 
 function sellerKey(seller: OneCSeller, index: number) {
   return seller.external_id || seller.code || seller.email || `${seller.name}-${index}`;
+}
+
+function sellerStoreScopeKey(value?: string | null) {
+  const normalized = normalizeText(value || '');
+  if (normalized.includes('центрум') || normalized.includes('centrum')) return 'centrum';
+  if (normalized.includes('мрия') || normalized.includes('mriya')) return 'mriya';
+  if (normalized.includes('ялта') || normalized.includes('yalta')) return 'yalta';
+  return normalized;
 }
 
 function formatMoney(value?: number | null) {
@@ -183,6 +215,7 @@ export default function ProfileSellersPage() {
   const [kpiSnapshots, setKpiSnapshots] = useState<SellerKpiSnapshot[]>([]);
   const [planInputs, setPlanInputs] = useState<Record<string, string>>({});
   const [savingTargets, setSavingTargets] = useState(false);
+  const [targetPlanModalOpen, setTargetPlanModalOpen] = useState(false);
   const [targetOrder, setTargetOrder] = useState<string[]>([]);
   const [draggedMetric, setDraggedMetric] = useState<string | null>(null);
 
@@ -210,6 +243,18 @@ export default function ProfileSellersPage() {
   const canEditSchedule = role === 'admin' || role === 'manager';
   const canEditPlans = role === 'admin';
   const canViewManagerAnalytics = role === 'admin' || role === 'manager';
+  const managerStoreNames = useMemo(
+    () => {
+      if (role !== 'manager') return [];
+      const apiStores = (kpi?.managed_store_names || []).filter(Boolean);
+      return apiStores.length ? apiStores : approvedManagerStores(user?.full_name);
+    },
+    [kpi?.managed_store_names, role, user?.full_name]
+  );
+  const storeOptions = useMemo(
+    () => (managerStoreNames.length ? managerStoreNames.map(storeOptionForName) : STORE_OPTIONS),
+    [managerStoreNames]
+  );
 
   const loadSellers = async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -287,19 +332,29 @@ export default function ProfileSellersPage() {
   }, [month, selectedStoreName]);
 
   useEffect(() => {
+    if (isSellerView || role !== 'manager' || !selectedStoreName || !managerStoreNames.length) return;
+    if (!managerStoreNames.includes(selectedStoreName)) {
+      setSelectedStoreName(managerStoreNames[0]);
+    }
+  }, [isSellerView, managerStoreNames, role, selectedStoreName]);
+
+  useEffect(() => {
     loadShifts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleStart, scheduleEnd, selectedStoreName]);
 
   const filteredSellers = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return sellers;
-    return sellers.filter((seller) =>
-      [seller.name, seller.email, seller.phone, seller.store, seller.position, seller.code]
+    const allowedManagerStores = new Set(managerStoreNames.map(sellerStoreScopeKey).filter(Boolean));
+    return sellers.filter((seller) => {
+      const sellerStores = seller.stores?.length ? seller.stores : [seller.store || ''];
+      if (role === 'manager' && (!allowedManagerStores.size || !sellerStores.some((store) => allowedManagerStores.has(sellerStoreScopeKey(store))))) return false;
+      if (!q) return true;
+      return [seller.name, seller.email, seller.phone, seller.store, seller.position, seller.code]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q))
-    );
-  }, [query, sellers]);
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [managerStoreNames, query, role, sellers]);
 
   const orderedTargetRows = useMemo(() => {
     const rows = kpiTargets?.rows || [];
@@ -427,9 +482,38 @@ export default function ProfileSellersPage() {
   const scheduleStoreName = isSellerView ? (currentSellerKpi?.store_name || currentSellerProfile?.store || '') : selectedStoreName;
   const scheduleDates = useMemo(() => dateRange(scheduleStart, scheduleEnd), [scheduleStart, scheduleEnd]);
 
+  useEffect(() => {
+    if (shiftForm.id) return;
+    const defaults = defaultShiftHoursForStore(scheduleStoreName);
+    setShiftForm((current) => ({
+      ...current,
+      store_name: scheduleStoreName || current.store_name,
+      starts_at: current.starts_at || defaults.starts_at,
+      ends_at: defaults.ends_at,
+    }));
+  }, [scheduleStoreName, shiftForm.id]);
+
   const availableScheduleSellers = useMemo(() => {
     const storeFilter = normalizeText(scheduleStoreName);
+    const scheduleStoreScope = sellerStoreScopeKey(scheduleStoreName);
+    const allowedManagerStores = new Set(managerStoreNames.map(sellerStoreScopeKey).filter(Boolean));
     const names = new Set<string>();
+    // The staff directory is the source of truth for a manager's employee selector.
+    // Do not add names from old shifts or KPI rows: they can contain employees of
+    // other stores and would expose them in the schedule controls.
+    if (role === 'manager') {
+      sellers
+        .filter((seller) => {
+          const sellerStores = seller.stores?.length ? seller.stores : [seller.store || ''];
+          return allowedManagerStores.size > 0
+            && sellerStores.some((store) => allowedManagerStores.has(sellerStoreScopeKey(store)))
+            && (!scheduleStoreScope || sellerStores.some((store) => sellerStoreScopeKey(store) === scheduleStoreScope));
+        })
+        .forEach((seller) => {
+          if (seller.name?.trim()) names.add(seller.name.trim());
+        });
+      return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
+    }
     shifts
       .filter((shift) => !storeFilter || normalizeText(shift.store_name) === storeFilter)
       .forEach((shift) => {
@@ -446,7 +530,7 @@ export default function ProfileSellersPage() {
         if (seller.name?.trim()) names.add(seller.name.trim());
       });
     return Array.from(names).sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [kpi?.sellers, scheduleStoreName, sellers, shifts]);
+  }, [kpi?.sellers, managerStoreNames, role, scheduleStoreName, sellers, shifts]);
 
   useEffect(() => {
     if (selectedScheduleSeller && availableScheduleSellers.includes(selectedScheduleSeller)) return;
@@ -495,6 +579,26 @@ export default function ProfileSellersPage() {
 
   const analyticsRows = useMemo(() => {
     return orderedTargetRows.filter((row) => row.plan !== null || row.fact !== null || row.percent !== null);
+  }, [orderedTargetRows]);
+
+  const targetPlanSummary = useMemo(() => {
+    const plannedRows = orderedTargetRows.filter((row) => row.plan !== null && row.plan !== undefined);
+    const revenueRow = orderedTargetRows.find((row) => row.key === 'revenue');
+    const averageCompletionValues = orderedTargetRows
+      .map((row) => row.percent)
+      .filter((value): value is number => value !== null && value !== undefined);
+    const averageCompletion = averageCompletionValues.length
+      ? Math.round(averageCompletionValues.reduce((sum, value) => sum + value, 0) / averageCompletionValues.length)
+      : null;
+    return {
+      hasPlan: plannedRows.length > 0,
+      plannedCount: plannedRows.length,
+      totalCount: orderedTargetRows.length,
+      revenuePlan: revenueRow?.plan ?? null,
+      revenueFact: revenueRow?.fact ?? null,
+      revenuePercent: revenueRow?.percent ?? null,
+      averageCompletion,
+    };
   }, [orderedTargetRows]);
 
   const criticalMetricRows = useMemo(() => {
@@ -646,7 +750,7 @@ export default function ProfileSellersPage() {
     try {
       await api.saveSellerShift({ ...shiftForm, seller_name: shiftForm.seller_name.trim(), store_name: scheduleStoreName || shiftForm.store_name });
       setMessage('Смена сохранена');
-      setShiftForm({ shift_date: shiftForm.shift_date, seller_name: selectedScheduleSeller, store_name: scheduleStoreName, starts_at: '10:00', ends_at: '22:00', note: '' });
+      setShiftForm({ shift_date: shiftForm.shift_date, seller_name: selectedScheduleSeller, store_name: scheduleStoreName, ...defaultShiftHoursForStore(scheduleStoreName), note: '' });
       await loadShifts();
     } catch (e: any) {
       setError(e.response?.data?.detail || e.message || 'Не удалось сохранить смену');
@@ -672,8 +776,8 @@ export default function ProfileSellersPage() {
         shift_date: shiftDate,
         seller_name: selectedScheduleSeller,
         store_name: scheduleStoreName,
-        starts_at: shiftForm.starts_at || '10:00',
-        ends_at: shiftForm.ends_at || '22:00',
+        starts_at: shiftForm.starts_at || defaultShiftHoursForStore(scheduleStoreName).starts_at,
+        ends_at: shiftForm.ends_at || defaultShiftHoursForStore(scheduleStoreName).ends_at,
         note: shiftForm.note || '',
       });
       setMessage(`Смена добавлена: ${selectedScheduleSeller}, ${shiftDate}`);
@@ -699,8 +803,8 @@ export default function ProfileSellersPage() {
         ...draggedShift,
         shift_date: shiftDate,
         store_name: scheduleStoreName || draggedShift.store_name,
-        starts_at: draggedShift.starts_at?.slice(0, 5) || '10:00',
-        ends_at: draggedShift.ends_at?.slice(0, 5) || '22:00',
+        starts_at: draggedShift.starts_at?.slice(0, 5) || defaultShiftHoursForStore(scheduleStoreName || draggedShift.store_name).starts_at,
+        ends_at: draggedShift.ends_at?.slice(0, 5) || defaultShiftHoursForStore(scheduleStoreName || draggedShift.store_name).ends_at,
       });
       setMessage(`Смена перенесена: ${draggedShift.seller_name}, ${shiftDate}`);
       setDraggedShift(null);
@@ -717,8 +821,8 @@ export default function ProfileSellersPage() {
     setShiftForm({
       ...shift,
       store_name: scheduleStoreName || shift.store_name,
-      starts_at: shift.starts_at?.slice(0, 5) || '10:00',
-      ends_at: shift.ends_at?.slice(0, 5) || '22:00',
+      starts_at: shift.starts_at?.slice(0, 5) || defaultShiftHoursForStore(scheduleStoreName || shift.store_name).starts_at,
+      ends_at: shift.ends_at?.slice(0, 5) || defaultShiftHoursForStore(scheduleStoreName || shift.store_name).ends_at,
       note: shift.note || '',
     });
   };
@@ -837,8 +941,8 @@ export default function ProfileSellersPage() {
                   <label className="text-sm font-medium text-gray-700">
                     Магазин
                     <select value={selectedStoreName} onChange={(e) => setSelectedStoreName(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-2">
-                      <option value="">Все магазины</option>
-                      {STORE_OPTIONS.map((store) => (
+                      <option value="">{role === 'manager' ? 'Все мои магазины' : 'Все магазины'}</option>
+                      {storeOptions.map((store) => (
                         <option key={store.value} value={store.value}>{store.label}</option>
                       ))}
                     </select>
@@ -1016,7 +1120,51 @@ export default function ProfileSellersPage() {
           )}
 
           {!isSellerView && (
-          <div className="overflow-x-auto rounded-lg bg-white shadow-md">
+          <>
+          <div className="rounded-lg bg-white p-5 shadow-md">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="text-sm font-semibold uppercase tracking-wide text-gold-700">План месяца</div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-3 py-1 text-sm font-semibold ${targetPlanSummary.hasPlan ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                    {targetPlanSummary.hasPlan ? 'Есть план на месяц' : 'План на месяц не заполнен'}
+                  </span>
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">
+                    {selectedStoreName || 'Все магазины'} · {month}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-xl bg-gray-50 p-3">
+                    <div className="text-xs text-gray-500">Показателей в плане</div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">{targetPlanSummary.plannedCount} / {targetPlanSummary.totalCount}</div>
+                  </div>
+                  <div className="rounded-xl bg-gray-50 p-3">
+                    <div className="text-xs text-gray-500">План выручки</div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">{formatMoney(targetPlanSummary.revenuePlan)}</div>
+                  </div>
+                  <div className="rounded-xl bg-gray-50 p-3">
+                    <div className="text-xs text-gray-500">Факт выручки</div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">{formatMoney(targetPlanSummary.revenueFact)}</div>
+                  </div>
+                  <div className="rounded-xl bg-gray-50 p-3">
+                    <div className="text-xs text-gray-500">Выполнение</div>
+                    <div className="mt-1 text-lg font-bold text-gray-900">{formatPercent(targetPlanSummary.revenuePercent ?? targetPlanSummary.averageCompletion)}</div>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTargetPlanModalOpen(true)}
+                className="rounded-lg bg-gold-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-gold-700"
+              >
+                Открыть план месяца
+              </button>
+            </div>
+          </div>
+
+          {targetPlanModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-5 py-4">
               <div>
                 <div className="font-semibold text-gray-900">Целевые показатели</div>
@@ -1024,12 +1172,18 @@ export default function ProfileSellersPage() {
                   Плановые значения редактирует только администратор. Управляющий видит план-факт и аналитику без права изменения планов.
                 </div>
               </div>
-              {canEditPlans && (
-                <button type="button" onClick={saveTargetPlans} disabled={savingTargets} className="rounded-lg bg-gold-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-                  {savingTargets ? 'Сохранение…' : 'Сохранить план'}
+              <div className="flex items-center gap-2">
+                {canEditPlans && (
+                  <button type="button" onClick={saveTargetPlans} disabled={savingTargets} className="rounded-lg bg-gold-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                    {savingTargets ? 'Сохранение…' : 'Сохранить план'}
+                  </button>
+                )}
+                <button type="button" onClick={() => setTargetPlanModalOpen(false)} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50">
+                  Закрыть
                 </button>
-              )}
+              </div>
             </div>
+            <div className="overflow-auto">
             <table className="min-w-[1100px] w-full border-collapse text-sm">
               <thead className="bg-cyan-100 text-xs font-semibold uppercase tracking-wide text-gray-700">
                 <tr>
@@ -1094,6 +1248,10 @@ export default function ProfileSellersPage() {
               Прогноз считается по текущему темпу: факт / прошедшие дни × дней в месяце. Сейчас прошло {kpiTargets?.elapsed_days || '—'} из {kpiTargets?.days_in_month || '—'} дней.
             </div>
           </div>
+          </div>
+          </div>
+          )}
+          </>
           )}
 
           {!isSellerView && (
@@ -1368,7 +1526,7 @@ export default function ProfileSellersPage() {
               </div>
               <div className="flex flex-wrap gap-3">
                 {!isSellerView && (
-                  <label className="text-sm text-gray-700">Магазин<select value={selectedStoreName} onChange={(e) => setSelectedStoreName(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-2"><option value="">Все магазины</option>{STORE_OPTIONS.map((store) => <option key={store.value} value={store.value}>{store.label}</option>)}</select></label>
+                  <label className="text-sm text-gray-700">Магазин<select value={selectedStoreName} onChange={(e) => setSelectedStoreName(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-2"><option value="">{role === 'manager' ? 'Все мои магазины' : 'Все магазины'}</option>{storeOptions.map((store) => <option key={store.value} value={store.value}>{store.label}</option>)}</select></label>
                 )}
                 <label className="text-sm text-gray-700">С<input type="date" value={scheduleStart} onChange={(e) => setScheduleStart(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-2" /></label><label className="text-sm text-gray-700">По<input type="date" value={scheduleEnd} onChange={(e) => setScheduleEnd(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-2" /></label>
               </div>
@@ -1533,8 +1691,8 @@ export default function ProfileSellersPage() {
           </div>
           {loading ? <div className="rounded-lg border border-gray-200 p-6 text-sm text-gray-500">Загружаем продавцов из 1С…</div> : filteredSellers.length === 0 ? <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center text-sm text-gray-600">Продавцы не найдены</div> : (
             <div className="overflow-hidden rounded-lg border border-gray-200">
-              <div className="hidden grid-cols-[1.4fr_1fr_0.8fr] gap-4 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid"><div>Продавец</div><div>Контакты</div><div>Код</div></div>
-              <div className="divide-y divide-gray-200">{filteredSellers.map((seller, index) => <div key={sellerKey(seller, index)} className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.4fr_1fr_0.8fr] md:items-center md:gap-4"><div><div className="font-semibold text-gray-900">{seller.name || 'Без имени'}</div><div className="mt-1 text-xs text-gray-500">{seller.store || seller.position || 'Активный сотрудник'}</div></div><div className="space-y-1 text-gray-700"><div>{seller.phone || 'Телефон не указан'}</div><div className="text-xs text-gray-500">{seller.email || 'Email не указан'}</div></div><div className="text-gray-700">{seller.code || '—'}</div></div>)}</div>
+              <div className="hidden grid-cols-[1.1fr_1fr_0.8fr_1fr_0.5fr] gap-4 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid"><div>Продавец</div><div>Контакты</div><div>Должность</div><div>Магазин</div><div>Код</div></div>
+              <div className="divide-y divide-gray-200">{filteredSellers.map((seller, index) => <div key={sellerKey(seller, index)} className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_1fr_0.8fr_1fr_0.5fr] md:items-center md:gap-4"><div><div className="font-semibold text-gray-900">{seller.name || 'Без имени'}</div><div className="mt-1 text-xs text-gray-500">Активный сотрудник</div></div><div className="space-y-1 text-gray-700"><div>{seller.phone || 'Телефон не указан'}</div><div className="text-xs text-gray-500">{seller.email || 'Email не указан'}</div></div><div className="text-gray-700">{seller.role_label || 'Продавец'}</div><div className="text-gray-700"><div>{seller.store || 'Не указан в 1С'}</div>{seller.store_assignment_source && <div className="mt-1 text-xs text-gray-500">{seller.store_assignment_source === 'GLAME approved roster' ? 'Подтверждено GLAME' : 'Регистр сотрудников 1С'}</div>}</div><div className="text-gray-700">{seller.code || '—'}</div></div>)}</div>
             </div>
           )}
         </div>

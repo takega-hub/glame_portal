@@ -15,9 +15,14 @@ from app.models.gift_certificate import GiftCertificate
 from app.models.order import Order
 from app.models.payment import Payment
 from app.models.user import User
-from app.services.gift_certificate_service import GiftCertificateService
+from app.services.gift_certificate_email_service import GiftCertificateEmailService
+from app.services.gift_certificate_service import (
+    GiftCertificateService,
+    gift_certificate_amount_limits,
+    validate_gift_certificate_nominal,
+)
 from app.services.onec_order_xml_service import write_orders_xml_snapshot
-from app.services.yookassa_service import get_yookassa_service
+from app.services.yookassa_service import get_yookassa_service_for_db
 
 
 router = APIRouter()
@@ -74,19 +79,79 @@ async def _refresh_onec_orders_snapshot(db: AsyncSession) -> None:
         pass
 
 
+async def _sync_pending_certificate_payments(
+    db: AsyncSession,
+    certificates: list[GiftCertificate],
+) -> None:
+    pending_order_ids = [cert.order_id for cert in certificates if cert.status == "pending" and cert.order_id]
+    if not pending_order_ids:
+        return
+
+    svc = await get_yookassa_service_for_db(db)
+    if not svc:
+        return
+
+    gift_service = GiftCertificateService(db)
+    changed = False
+    for order_id in pending_order_ids:
+        order = await db.get(Order, order_id)
+        if not order or order.status not in {"pending", "payment_pending", "paid"}:
+            continue
+        payment = (
+            await db.execute(
+                select(Payment)
+                .where(Payment.order_id == order.id)
+                .order_by(desc(Payment.created_at))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if not payment or payment.provider != "yookassa" or not payment.external_id:
+            continue
+        if payment.status == "succeeded":
+            order.status = "paid"
+            activated = await gift_service.activate_order_certificates(order.id, payment.id)
+            await GiftCertificateEmailService(db).send_for_certificates(activated)
+            changed = True
+            continue
+        if payment.status == "canceled":
+            order.status = "canceled"
+            await gift_service.cancel_order_certificates(order.id)
+            changed = True
+            continue
+
+        try:
+            remote = await svc.get_payment(payment.external_id)
+        except Exception:
+            continue
+
+        remote_status = str(remote.get("status") or "pending")
+        payment.status = remote_status
+        payment.raw = remote
+        changed = True
+
+        if remote_status == "succeeded":
+            order.status = "paid"
+            activated = await gift_service.activate_order_certificates(order.id, payment.id)
+            await GiftCertificateEmailService(db).send_for_certificates(activated)
+        elif remote_status == "canceled":
+            order.status = "canceled"
+            await gift_service.cancel_order_certificates(order.id)
+
+    if changed:
+        await db.commit()
+
+
 @router.post("/gift-certificates/purchase")
 async def purchase_gift_certificate(
     body: GiftCertificatePurchaseRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    svc = get_yookassa_service()
+    svc = await get_yookassa_service_for_db(db)
     if not svc:
         raise HTTPException(status_code=500, detail="YOOKASSA is not configured")
 
-    nominal = int(body.nominal_amount or 0)
-    if nominal <= 0:
-        raise HTTPException(status_code=400, detail="Invalid nominal amount")
+    nominal = validate_gift_certificate_nominal(int(body.nominal_amount or 0))
     return_url = str(body.return_url or "").strip()
     if not return_url:
         raise HTTPException(status_code=400, detail="return_url is required")
@@ -207,6 +272,20 @@ async def purchase_gift_certificate(
     }
 
 
+@router.get("/gift-certificates/config")
+async def get_gift_certificate_config(
+    _current_user: User = Depends(get_current_user),
+):
+    limits = gift_certificate_amount_limits()
+    return {
+        "currency": "RUB",
+        "custom_amount_enabled": True,
+        "min_amount": limits["min_amount"],
+        "max_amount": limits["max_amount"],
+        "step": limits["step"],
+    }
+
+
 @router.get("/gift-certificates/my")
 async def list_my_gift_certificates(
     current_user: User = Depends(get_current_user),
@@ -224,6 +303,20 @@ async def list_my_gift_certificates(
             .order_by(desc(GiftCertificate.created_at))
         )
     ).scalars().all()
+    await _sync_pending_certificate_payments(db, rows)
+    if any(row.status == "pending" for row in rows):
+        rows = (
+            await db.execute(
+                select(GiftCertificate)
+                .where(
+                    or_(
+                        GiftCertificate.buyer_user_id == current_user.id,
+                        GiftCertificate.recipient_user_id == current_user.id,
+                    )
+                )
+                .order_by(desc(GiftCertificate.created_at))
+            )
+        ).scalars().all()
     return [GiftCertificateService.to_public_dict(row, include_pin=True) for row in rows]
 
 

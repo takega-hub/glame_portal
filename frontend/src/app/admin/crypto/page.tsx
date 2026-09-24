@@ -232,6 +232,56 @@ type GlmBridgeOperationsResponse = {
   operations: GlmBridgeOperation[];
 };
 
+type GlmOperationsAttentionItem = {
+  id: string;
+  operation_id?: string | null;
+  transaction_id?: string | null;
+  account_id?: string | null;
+  member_id?: string | null;
+  user_id?: string | null;
+  kind: string;
+  severity: string;
+  title: string;
+  partner_name?: string | null;
+  partner_phone?: string | null;
+  direction?: string | null;
+  status?: string | null;
+  glm_amount?: number | null;
+  points_amount?: number | null;
+  ton_status?: string | null;
+  ton_tx_hash?: string | null;
+  onec_status?: string | null;
+  onec_document_id?: string | null;
+  message?: string | null;
+  action_code?: string | null;
+  action_hint?: string | null;
+  latest_operator_event?: {
+    source?: string | null;
+    action?: string | null;
+    at?: string | null;
+    admin_user_id?: string | null;
+    comment?: string | null;
+    onec_status?: string | null;
+    onec_document_id?: string | null;
+    ton_status?: string | null;
+    ton_tx_hash?: string | null;
+  } | null;
+  operator_events?: Array<Record<string, any>>;
+  age_minutes?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type GlmOperationsAttention = {
+  generated_at: string;
+  stale_minutes: number;
+  count: number;
+  limit: number;
+  by_kind: Record<string, number>;
+  by_severity: Record<string, number>;
+  items: GlmOperationsAttentionItem[];
+};
+
 type GlmBridgeReconciliation = {
   generated_at: string;
   stale_hours: number;
@@ -594,6 +644,27 @@ type GlmTonReadiness = {
       }>;
     };
   };
+  wallet_cache_propagation?: {
+    status?: string;
+    checked_at?: string;
+    source?: string;
+    metadata_url?: string;
+    jetton_master_address?: string | null;
+    expected?: Record<string, any>;
+    tonapi?: {
+      verification?: string | null;
+      name?: string | null;
+      symbol?: string | null;
+      decimals?: string | null;
+      image?: string | null;
+      description?: string | null;
+      holders_count?: number | null;
+      preview?: string | null;
+    } | null;
+    metadata?: Record<string, any> | null;
+    checks?: Array<{ code: string; ok?: boolean; message: string }>;
+    errors?: string[];
+  };
   security?: {
     pilot_only?: boolean;
     mainnet_ready?: boolean;
@@ -620,6 +691,11 @@ type GlmTonReadiness = {
       security_approved?: boolean;
       treasury_approved?: boolean;
       comment?: string | null;
+      legal_evidence_ref?: string | null;
+      security_evidence_ref?: string | null;
+      treasury_evidence_ref?: string | null;
+      public_wording_evidence_ref?: string | null;
+      offline_evidence_ready?: boolean;
       updated_at?: string | null;
       updated_by?: string | null;
       error?: string | null;
@@ -643,6 +719,7 @@ type GlmTonReadiness = {
     status?: string;
     interval_minutes?: number;
     batch_limit?: number;
+    publish_lag_days?: number;
   }>;
   commands?: Record<string, string>;
   next_steps?: string[];
@@ -680,6 +757,44 @@ type GlmReplayIdempotencyAudit = {
   checks?: Array<{ code: string; status: string; message: string }>;
   issues_count?: number;
   issues?: Array<Record<string, any>>;
+};
+
+type GlmLaunchEvidence = {
+  schema?: string;
+  created_at?: string;
+  ok?: boolean;
+  approvals?: {
+    exists?: boolean;
+    valid_json?: boolean;
+    legal_approved?: boolean;
+    security_approved?: boolean;
+    treasury_approved?: boolean;
+    updated_at?: string | null;
+    comment_present?: boolean;
+    updated_by_present?: boolean;
+    legal_evidence_ref?: string | null;
+    security_evidence_ref?: string | null;
+    treasury_evidence_ref?: string | null;
+    public_wording_evidence_ref?: string | null;
+    offline_evidence_ready?: boolean;
+  };
+  policy_documents?: Array<{ file: string; exists?: boolean; sha256?: string | null; bytes?: number | null }>;
+  launch_checks?: {
+    ok?: boolean;
+    returncode?: number | null;
+    payload?: { checks?: Array<{ name: string; ok?: boolean; payload?: Record<string, any> | null }> };
+    error?: string;
+  };
+  signer_check?: ProductionSignerCheck;
+  replay_idempotency_audit?: GlmReplayIdempotencyAudit;
+  evidence_checklist?: Array<{
+    code: string;
+    label: string;
+    status: string;
+    href?: string;
+    evidence?: Record<string, any> | null;
+  }>;
+  manual_evidence_required?: string[];
 };
 
 type GlmDashboard = {
@@ -748,6 +863,31 @@ type GlmEffectiveness = {
   monthly_redemption_total: number;
   redemption_by_category: Array<{ category: string; count: number; amount: number }>;
   top_redemption_items: Array<{ sku: string; title: string; count: number; amount: number }>;
+  business_impact?: {
+    referral_orders_count: number;
+    referral_turnover_kopecks: number;
+    referral_commission_kopecks: number;
+    referral_partner_count: number;
+    referral_customer_count: number;
+    glm_linked_partner_count: number;
+    glm_linked_turnover_kopecks: number;
+    glm_linked_commission_kopecks: number;
+    glm_linked_turnover_percent: number;
+    repeat_referral_customer_count: number;
+    repeat_referral_orders_count: number;
+    repeat_referral_turnover_kopecks: number;
+  };
+  top_referral_turnover_partners: Array<{
+    member_id: string;
+    partner_name?: string | null;
+    partner_phone?: string | null;
+    orders_count: number;
+    turnover_kopecks: number;
+    commission_kopecks: number;
+    glm_balance: number;
+    glm_hold_balance: number;
+    glm_lifetime_earned: number;
+  }>;
 };
 
 type GlmSegmentItem = {
@@ -1060,6 +1200,19 @@ function pointsToGlmStage(item: GlmClaim | GlmBridgeOperation | Record<string, a
   return { label: 'Ждет отправки GLM', detail: 'Баллы списаны, ожидается перевод в TON', value: 'pending' };
 }
 
+function glmToGramStage(item: GlmTransaction | GlmBridgeOperation | Record<string, any>) {
+  const record = item as Record<string, any>;
+  const status = String(record.status || '');
+  const tonStatus = String(record.ton_status || record.ton_deposit_status || '');
+  const hasTx = Boolean(record.ton_tx_hash || record.deposit_tx_hash || record.gram_payout_tx_hash);
+  if (status === 'processed') return { label: 'GRAM выплачен', detail: 'Операция закрыта оператором по tx hash', value: 'processed' };
+  if (status === 'failed') return { label: 'Отклонено', detail: 'Заявка закрыта без выплаты GRAM', value: 'failed' };
+  if (status === 'canceled') return { label: 'Отменено', detail: 'Пользователь отменил заявку до обработки', value: 'canceled' };
+  if (tonStatus === 'wallet_request_prepared') return { label: 'Кошелек открыт', detail: 'Партнер должен отправить GLM в банк GLAME', value: tonStatus };
+  if (hasTx || tonStatus === 'tx_hash_present') return { label: 'GLM найден', detail: 'Оператор должен выплатить GRAM и закрыть заявку', value: tonStatus || 'tx_hash_present' };
+  return { label: 'Ждет GLM', detail: 'Партнер еще не отправил GLM в банк GLAME', value: tonStatus || 'waiting_for_deposit' };
+}
+
 function glmToPointsStage(item: GlmTransaction | GlmBridgeOperation | Record<string, any>) {
   const record = item as Record<string, any>;
   const status = String(record.status || '');
@@ -1078,6 +1231,8 @@ function glmToPointsStage(item: GlmTransaction | GlmBridgeOperation | Record<str
 function bridgeDirectionLabel(value?: string | null) {
   if (value === 'points_to_glm' || value === 'points_to_ton') return 'Баллы→GLM';
   if (value === 'glm_to_points') return 'GLM→баллы';
+  if (value === 'buy_glm_with_ton') return 'GRAM→GLM';
+  if (value === 'sell_glm_for_ton') return 'GLM→GRAM';
   return label(value);
 }
 
@@ -1164,18 +1319,27 @@ export default function AdminReferralsPage() {
   const [glmToPointsDocument, setGlmToPointsDocument] = useState('');
   const [glmToPointsComment, setGlmToPointsComment] = useState('');
   const [glmToPointsDepositHashes, setGlmToPointsDepositHashes] = useState<Record<string, string>>({});
+  const [exchangeDeskPayoutHashes, setExchangeDeskPayoutHashes] = useState<Record<string, string>>({});
   const [glmBridgeOperations, setGlmBridgeOperations] = useState<GlmBridgeOperation[]>([]);
+  const [glmOperationsAttention, setGlmOperationsAttention] = useState<GlmOperationsAttention | null>(null);
+  const [glmOperationsAttentionFilter, setGlmOperationsAttentionFilter] = useState('all');
+  const [glmOperationsAttentionComment, setGlmOperationsAttentionComment] = useState('');
   const [glmBridgeReconciliation, setGlmBridgeReconciliation] = useState<GlmBridgeReconciliation | null>(null);
   const [glmLoyaltyReconciliation, setGlmLoyaltyReconciliation] = useState<GlmLoyaltyReconciliation | null>(null);
   const [glmTonReadiness, setGlmTonReadiness] = useState<GlmTonReadiness | null>(null);
   const [productionSignerCheck, setProductionSignerCheck] = useState<ProductionSignerCheck | null>(null);
   const [replayIdempotencyAudit, setReplayIdempotencyAudit] = useState<GlmReplayIdempotencyAudit | null>(null);
+  const [launchEvidence, setLaunchEvidence] = useState<GlmLaunchEvidence | null>(null);
   const [productionApprovalsResult, setProductionApprovalsResult] = useState<string | null>(null);
   const [productionApprovalForm, setProductionApprovalForm] = useState({
     legal_approved: false,
     security_approved: false,
     treasury_approved: false,
     comment: '',
+    legal_evidence_ref: '',
+    security_evidence_ref: '',
+    treasury_evidence_ref: '',
+    public_wording_evidence_ref: '',
   });
   const [hotWalletLimitResult, setHotWalletLimitResult] = useState<string | null>(null);
   const [hotWalletRefillResult, setHotWalletRefillResult] = useState<string | null>(null);
@@ -1223,8 +1387,6 @@ export default function AdminReferralsPage() {
   const [posCode, setPosCode] = useState('');
   const [posName, setPosName] = useState('');
   const [posResult, setPosResult] = useState<string | null>(null);
-  const [glmPosCode, setGlmPosCode] = useState('');
-  const [glmPosResult, setGlmPosResult] = useState<string | null>(null);
   const [mediaMaterials, setMediaMaterials] = useState<MediaMaterial[]>([]);
   const [mediaTitle, setMediaTitle] = useState('');
   const [mediaCategory, setMediaCategory] = useState('logos');
@@ -1286,6 +1448,100 @@ export default function AdminReferralsPage() {
   const hotWalletLatestAlert = Object.entries(hotWalletAlertState)
     .filter(([code]) => code.startsWith('hot_wallet_'))
     .sort(([, left], [, right]) => String(right.last_sent_at || '').localeCompare(String(left.last_sent_at || '')))[0]?.[1];
+  const glmOperationsAttentionItems = glmOperationsAttention?.items || [];
+  const filteredGlmOperationsAttentionItems = glmOperationsAttentionItems.filter((item) => {
+    if (glmOperationsAttentionFilter === 'all') return true;
+    if (glmOperationsAttentionFilter === 'critical') return item.severity === 'critical';
+    if (glmOperationsAttentionFilter === 'warning') return item.severity === 'warning';
+    if (glmOperationsAttentionFilter === 'ton') return item.kind === 'bridge_ton_waiting';
+    if (glmOperationsAttentionFilter === 'onec') return item.kind === 'bridge_onec_issue';
+    if (glmOperationsAttentionFilter === 'refund') return item.kind === 'refund_attention';
+    if (glmOperationsAttentionFilter === 'stale') return item.kind === 'bridge_stale_pending';
+    return true;
+  });
+  const attentionFilterOptions = [
+    { value: 'all', label: 'Все', count: glmOperationsAttention?.count || 0 },
+    { value: 'critical', label: 'Срочно', count: glmOperationsAttention?.by_severity?.critical || 0 },
+    { value: 'warning', label: 'Предупреждения', count: glmOperationsAttention?.by_severity?.warning || 0 },
+    { value: 'ton', label: 'TON', count: glmOperationsAttention?.by_kind?.bridge_ton_waiting || 0 },
+    { value: 'onec', label: '1C', count: glmOperationsAttention?.by_kind?.bridge_onec_issue || 0 },
+    { value: 'refund', label: 'Возвраты', count: glmOperationsAttention?.by_kind?.refund_attention || 0 },
+    { value: 'stale', label: 'Зависшие', count: glmOperationsAttention?.by_kind?.bridge_stale_pending || 0 },
+  ];
+  const glmAttentionCriticalCount = glmOperationsAttention?.by_severity?.critical || 0;
+  const glmAttentionWarningCount = glmOperationsAttention?.by_severity?.warning || 0;
+  const firstAttentionItem = glmOperationsAttentionItems.find((item) => item.severity === 'critical') || glmOperationsAttentionItems[0];
+  const operationalReady = Boolean(
+    glmTonReadiness?.go_no_go?.ready
+    && !glmAttentionCriticalCount
+    && (glmTonReadiness?.treasury_balances?.status || '') !== 'critical'
+  );
+  const operationalStatusLabel = operationalReady
+    ? 'Рабочий режим'
+    : glmAttentionCriticalCount
+      ? 'Требует действия'
+      : glmAttentionWarningCount
+        ? 'Есть предупреждения'
+        : glmTonReadiness?.go_no_go?.ready
+          ? 'Готово'
+          : 'Проверить readiness';
+  const operationalStatusClass = operationalReady
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+    : glmAttentionCriticalCount
+      ? 'border-red-200 bg-red-50 text-red-900'
+      : glmAttentionWarningCount
+        ? 'border-amber-200 bg-amber-50 text-amber-900'
+        : 'border-slate-200 bg-slate-50 text-slate-900';
+  const operationalNextAction = firstAttentionItem
+    ? `${firstAttentionItem.title || label(firstAttentionItem.kind)}: ${firstAttentionItem.partner_name || 'Партнер GLAME'} · ${firstAttentionItem.glm_amount || 0} GLM`
+    : (glmTonReadiness?.go_no_go?.next_steps || [])[0] || 'Критических действий сейчас нет.';
+  const productionEvidenceChecklist = launchEvidence?.evidence_checklist || [];
+  const productionEvidenceOkCount = productionEvidenceChecklist.filter((item) => item.status === 'ok').length;
+  const productionEvidenceTotal = productionEvidenceChecklist.length;
+  const productionEvidenceTodoCount = productionEvidenceChecklist.filter((item) => item.status !== 'ok').length;
+  const signedOfflineEvidenceReady = Boolean(
+    launchEvidence?.approvals?.offline_evidence_ready
+    || (
+      productionApprovalForm.legal_evidence_ref.trim()
+      && productionApprovalForm.security_evidence_ref.trim()
+      && productionApprovalForm.treasury_evidence_ref.trim()
+      && productionApprovalForm.public_wording_evidence_ref.trim()
+    )
+  );
+  const operationalStatsStartAt = glmEffectiveness?.period?.operational_stats_start_at || glmTreasuryTurnover?.operational_stats_start_at || launchEvidence?.created_at;
+  const productionObservationDays = (() => {
+    if (!operationalStatsStartAt) return null;
+    const start = new Date(operationalStatsStartAt);
+    if (Number.isNaN(start.getTime())) return null;
+    const diff = Date.now() - start.getTime();
+    return Math.max(1, Math.floor(diff / 86400000) + 1);
+  })();
+  const productionObservationIssues = glmAttentionCriticalCount
+    + (replayIdempotencyAudit?.issues_count || 0)
+    + (glmTonReadiness?.go_no_go?.blockers?.length || 0);
+  const productionObservationReady = Boolean(
+    glmTonReadiness?.go_no_go?.ready
+    && !productionObservationIssues
+    && !productionEvidenceTodoCount
+    && signedOfflineEvidenceReady
+  );
+  const productionObservationClass = productionObservationReady
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+    : productionObservationIssues
+      ? 'border-red-200 bg-red-50 text-red-900'
+      : 'border-amber-200 bg-amber-50 text-amber-900';
+  const productionObservationLabel = productionObservationReady
+    ? 'Готово к расширению'
+    : productionObservationIssues
+      ? 'Есть блокеры'
+      : 'Пилотное наблюдение';
+  const productionObservationNextAction = productionObservationIssues
+    ? 'Сначала закрыть блокеры readiness, replay или очереди внимания.'
+    : !signedOfflineEvidenceReady
+      ? 'Заполнить signed/offline evidence refs по legal, security, treasury и public wording.'
+      : productionEvidenceTodoCount
+        ? 'Обновить launch evidence и сохранить недостающие evidence-артефакты.'
+        : 'Продолжать несколько дней малых production-операций и смотреть очередь внимания.';
 
   async function loadPartners(keepSelected = true) {
     setError(null);
@@ -1486,6 +1742,13 @@ export default function AdminReferralsPage() {
     setGlmBridgeOperations(response.data.operations || []);
   }
 
+  async function loadGlmOperationsAttention() {
+    const response = await apiClient.get<GlmOperationsAttention>('/api/referrals/admin/glm-operations-attention', {
+      params: { limit: 50 },
+    });
+    setGlmOperationsAttention(response.data);
+  }
+
   async function loadGlmTonReadiness() {
     const response = await apiClient.get<GlmTonReadiness>('/api/referrals/admin/glm-ton-readiness');
     setGlmTonReadiness(response.data);
@@ -1505,6 +1768,10 @@ export default function AdminReferralsPage() {
         security_approved: Boolean(security.production_security_approved),
         treasury_approved: Boolean(security.production_treasury_approved),
         comment: prev.comment || security.production_approvals_override?.comment || '',
+        legal_evidence_ref: prev.legal_evidence_ref || security.production_approvals_override?.legal_evidence_ref || '',
+        security_evidence_ref: prev.security_evidence_ref || security.production_approvals_override?.security_evidence_ref || '',
+        treasury_evidence_ref: prev.treasury_evidence_ref || security.production_approvals_override?.treasury_evidence_ref || '',
+        public_wording_evidence_ref: prev.public_wording_evidence_ref || security.production_approvals_override?.public_wording_evidence_ref || '',
       }));
     }
   }
@@ -1530,6 +1797,25 @@ export default function AdminReferralsPage() {
       setReplayIdempotencyAudit(response.data);
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || 'Не удалось выполнить replay/idempotency audit');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function buildLaunchEvidence() {
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await apiClient.get<GlmLaunchEvidence>('/api/referrals/admin/glm-launch-evidence');
+      setLaunchEvidence(response.data);
+      if (response.data.signer_check) {
+        setProductionSignerCheck(response.data.signer_check);
+      }
+      if (response.data.replay_idempotency_audit) {
+        setReplayIdempotencyAudit(response.data.replay_idempotency_audit);
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Не удалось собрать launch evidence');
     } finally {
       setSaving(false);
     }
@@ -1562,6 +1848,45 @@ export default function AdminReferralsPage() {
       await loadGlmTonReadiness();
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || 'Не удалось сохранить production approvals');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function fillProductionApprovalEvidenceRefs() {
+    setSaving(true);
+    setError(null);
+    setProductionApprovalsResult(null);
+    try {
+      const response = await apiClient.get<GlmLaunchEvidence>('/api/referrals/admin/glm-launch-evidence');
+      const evidence = response.data;
+      setLaunchEvidence(evidence);
+      const docs = new Map(
+        (evidence.policy_documents || [])
+          .filter((item) => item.exists && item.sha256)
+          .map((item) => [item.file.split('/').pop() || item.file, `${item.file} sha256:${item.sha256}`])
+      );
+      const publicRefs = [
+        docs.get('token-policy.md'),
+        docs.get('risk-disclosure.md'),
+        docs.get('bridge-rules.md'),
+        docs.get('faq.md'),
+        docs.get('launch-approval-packet.md'),
+      ].filter(Boolean);
+      setProductionApprovalForm((prev) => ({
+        ...prev,
+        legal_approved: true,
+        security_approved: true,
+        treasury_approved: true,
+        comment: prev.comment || 'Internal approval refs recorded as SHA-256 fingerprints of final policy documents. Replace with external signed document refs when available.',
+        legal_evidence_ref: docs.get('legal-accounting-approval.md') || prev.legal_evidence_ref,
+        security_evidence_ref: docs.get('security-review-checklist.md') || prev.security_evidence_ref,
+        treasury_evidence_ref: docs.get('treasury-approval.md') || prev.treasury_evidence_ref,
+        public_wording_evidence_ref: publicRefs.join('; ') || prev.public_wording_evidence_ref,
+      }));
+      setProductionApprovalsResult('SHA refs подставлены из текущего launch evidence. Нажмите "Сохранить approvals".');
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Не удалось подставить evidence refs');
     } finally {
       setSaving(false);
     }
@@ -1791,6 +2116,7 @@ export default function AdminReferralsPage() {
     void loadGlmRefundCandidates();
     void loadGlmToPointsBridges();
     void loadGlmBridgeOperations();
+    void loadGlmOperationsAttention();
     void loadGlmBridgeReconciliation();
     void loadGlmLoyaltyReconciliation();
     void loadGlmTonReadiness();
@@ -1869,6 +2195,7 @@ export default function AdminReferralsPage() {
       setGlmClaimComment('');
       await loadGlmClaims();
       await loadGlmBridgeOperations();
+      await loadGlmOperationsAttention();
       await loadGlmBridgeReconciliation();
       await loadGlmTransactions();
       await loadGlmDashboard();
@@ -2115,7 +2442,7 @@ export default function AdminReferralsPage() {
     }
   }
 
-  async function refundGlmRedemptionInWallet(item: GlmTransaction) {
+  async function refundGlmRedemptionById(redemptionId: string, amountGlm: number, commentOverride?: string | null) {
     setSaving(true);
     setError(null);
     setGlmRedemptionTonRefundResult(null);
@@ -2127,21 +2454,22 @@ export default function AdminReferralsPage() {
         return;
       }
       setGlmRedemptionTonRefundResult('Готовим TON refund из treasury...');
-      const response = await apiClient.post<TonConnectTransactionPayload>(`/api/referrals/admin/glm-redemptions/${item.id}/ton-refund-transaction`);
+      const response = await apiClient.post<TonConnectTransactionPayload>(`/api/referrals/admin/glm-redemptions/${redemptionId}/ton-refund-transaction`);
       const payload = response.data;
       if (payload.transaction?.from && tonWallet.account.address !== payload.transaction.from) {
         setGlmRedemptionTonRefundResult(`Проверьте кошелек: нужен treasury ${payload.transaction.from}, сейчас подключен ${tonWallet.account.address}.`);
       }
       setGlmRedemptionTonRefundResult('Откройте кошелек и подтвердите возврат GLM покупателю.');
       await tonConnectUI.sendTransaction(payload.transaction);
-      await apiClient.post(`/api/referrals/admin/glm-redemptions/${item.id}/ton-refund-record`, {
+      await apiClient.post(`/api/referrals/admin/glm-redemptions/${redemptionId}/ton-refund-record`, {
         tx_hash: null,
-        comment: `TON Connect refund submitted from admin for ${payload.amount_glm || Math.abs(item.amount || 0)} GLM.`,
+        comment: commentOverride?.trim() || `TON Connect refund submitted from admin for ${payload.amount_glm || amountGlm} GLM.`,
       });
       setGlmRedemptionTonRefundResult('TON refund отправлен в кошелек. Обязательство закрыто как submitted; tx hash можно добавить позже вручную в audit.');
       await loadGlmRedemptions();
       await loadGlmTreasuryTurnover();
       await loadGlmDashboard();
+      await loadGlmOperationsAttention();
     } catch (e: any) {
       const message = String(e?.response?.data?.detail || e?.message || '');
       setGlmRedemptionTonRefundResult(
@@ -2149,6 +2477,36 @@ export default function AdminReferralsPage() {
           ? 'В treasury-кошельке не хватает testnet TON gas для комиссии refund.'
           : message || 'Не удалось отправить TON refund'
       );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function refundGlmRedemptionInWallet(item: GlmTransaction) {
+    await refundGlmRedemptionById(item.id, Math.abs(item.amount || 0));
+  }
+
+  async function settleGlmRedemptionTonRefundById(redemptionId: string, txHash: string, commentOverride?: string | null) {
+    setSaving(true);
+    setError(null);
+    setGlmRedemptionTonRefundResult(null);
+    try {
+      const response = await apiClient.post(`/api/referrals/admin/glm-redemptions/${redemptionId}/ton-refund-settlement`, {
+        tx_hash: txHash,
+        require_verified: true,
+        comment: commentOverride?.trim() || glmFulfillmentComment.trim() || 'TON refund settlement from GLM attention queue',
+      });
+      if (response.data?.status === 'verified') {
+        setGlmRedemptionTonRefundResult('TON refund проверен в сети: сумма и получатель совпали.');
+      } else {
+        setGlmRedemptionTonRefundResult(`Refund пока не подтвержден: ${response.data?.verification?.status || response.data?.status || 'unknown'}`);
+      }
+      await loadGlmRedemptions();
+      await loadGlmTreasuryTurnover();
+      await loadGlmDashboard();
+      await loadGlmOperationsAttention();
+    } catch (e: any) {
+      setGlmRedemptionTonRefundResult(e?.response?.data?.detail || e?.message || 'Не удалось проверить TON refund');
     } finally {
       setSaving(false);
     }
@@ -2178,6 +2536,7 @@ export default function AdminReferralsPage() {
       await loadGlmRedemptions();
       await loadGlmTreasuryTurnover();
       await loadGlmDashboard();
+      await loadGlmOperationsAttention();
     } catch (e: any) {
       setGlmRedemptionTonRefundResult(e?.response?.data?.detail || e?.message || 'Не удалось проверить TON refund');
     } finally {
@@ -2203,6 +2562,7 @@ export default function AdminReferralsPage() {
       setGlmToPointsComment('');
       await loadGlmToPointsBridges();
       await loadGlmBridgeOperations();
+      await loadGlmOperationsAttention();
       await loadGlmBridgeReconciliation();
       await loadGlmTransactions();
       await loadGlmDashboard();
@@ -2242,6 +2602,7 @@ export default function AdminReferralsPage() {
       setGlmToPointsComment('');
       await loadGlmToPointsBridges();
       await loadGlmBridgeOperations();
+      await loadGlmOperationsAttention();
       await loadGlmBridgeReconciliation();
       await loadGlmTransactions();
       await loadGlmDashboard();
@@ -2256,7 +2617,40 @@ export default function AdminReferralsPage() {
     }
   }
 
-  async function repairGlmBridge(id: string, action: 'retry_onec' | 'record_manual_document' | 'mark_reviewed', operationId?: string | null) {
+  async function updateExchangeDeskRequest(transactionId: string, nextStatus: 'processed' | 'failed' | 'canceled') {
+    const payoutHash = (exchangeDeskPayoutHashes[transactionId] || '').trim();
+    if (nextStatus === 'processed' && !payoutHash) {
+      setError('Укажите GRAM payout tx hash для закрытия exchange desk заявки');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await apiClient.patch(`/api/referrals/admin/glm-exchange-desk/${transactionId}`, {
+        status: nextStatus,
+        payout_tx_hash: payoutHash || null,
+        comment: glmToPointsComment.trim() || null,
+      });
+      setExchangeDeskPayoutHashes((current) => {
+        const next = { ...current };
+        delete next[transactionId];
+        return next;
+      });
+      setGlmToPointsComment('');
+      await loadGlmBridgeOperations();
+      await loadGlmOperationsAttention();
+      await loadGlmBridgeReconciliation();
+      await loadGlmTransactions();
+      await loadGlmTreasuryTurnover();
+      await loadGlmDashboard();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || 'Не удалось закрыть GLM -> GRAM exchange desk заявку');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function repairGlmBridge(id: string, action: 'retry_onec' | 'record_manual_document' | 'mark_reviewed', operationId?: string | null, commentOverride?: string | null) {
     setSaving(true);
     setError(null);
     try {
@@ -2266,12 +2660,13 @@ export default function AdminReferralsPage() {
       await apiClient.post(endpoint, {
         action,
         onec_document_id: glmToPointsDocument.trim() || null,
-        comment: glmToPointsComment.trim() || null,
+        comment: commentOverride?.trim() || glmToPointsComment.trim() || null,
       });
       setGlmToPointsDocument('');
       setGlmToPointsComment('');
       await loadGlmToPointsBridges();
       await loadGlmBridgeOperations();
+      await loadGlmOperationsAttention();
       await loadGlmBridgeReconciliation();
       await loadGlmTransactions();
       await loadGlmDashboard();
@@ -2282,7 +2677,7 @@ export default function AdminReferralsPage() {
     }
   }
 
-  async function repairPointsToGlmSpend(id: string, action: 'retry_onec_spend' | 'record_manual_spend_document' | 'mark_reviewed', operationId?: string | null) {
+  async function repairPointsToGlmSpend(id: string, action: 'retry_onec_spend' | 'record_manual_spend_document' | 'mark_reviewed', operationId?: string | null, commentOverride?: string | null) {
     setSaving(true);
     setError(null);
     try {
@@ -2292,11 +2687,12 @@ export default function AdminReferralsPage() {
       await apiClient.post(endpoint, {
         action,
         onec_document_id: glmToPointsDocument.trim() || null,
-        comment: glmToPointsComment.trim() || null,
+        comment: commentOverride?.trim() || glmToPointsComment.trim() || null,
       });
       setGlmToPointsDocument('');
       setGlmToPointsComment('');
       await loadGlmBridgeOperations();
+      await loadGlmOperationsAttention();
       await loadGlmBridgeReconciliation();
       await loadGlmTransactions();
       await loadGlmDashboard();
@@ -2312,6 +2708,7 @@ export default function AdminReferralsPage() {
     action: 'settle_ton_transfer' | 'cancel_onec_spend' | 'mark_legacy_manual' | 'mark_reviewed',
     issueCode?: string,
     operationId?: string | null,
+    commentOverride?: string | null,
   ) {
     setSaving(true);
     setError(null);
@@ -2323,10 +2720,11 @@ export default function AdminReferralsPage() {
         action,
         issue_code: issueCode || null,
         tx_hash: glmToPointsDepositHashes[id]?.trim() || null,
-        comment: glmToPointsComment.trim() || null,
+        comment: commentOverride?.trim() || glmToPointsComment.trim() || null,
       });
       setGlmToPointsComment('');
       await loadGlmBridgeOperations();
+      await loadGlmOperationsAttention();
       await loadGlmBridgeReconciliation();
       await loadGlmTransactions();
       await loadGlmDashboard();
@@ -2337,6 +2735,52 @@ export default function AdminReferralsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function runGlmAttentionAction(item: GlmOperationsAttentionItem) {
+    const txId = item.transaction_id || item.id;
+    const opId = item.operation_id || null;
+    if (!txId) {
+      setError('Не найден ID GLM операции');
+      return;
+    }
+    if (item.action_code === 'retry_onec_spend') {
+      await repairPointsToGlmSpend(txId, 'retry_onec_spend', opId, glmOperationsAttentionComment);
+      setGlmOperationsAttentionComment('');
+      return;
+    }
+    if (item.action_code === 'retry_onec_bridge') {
+      await repairGlmBridge(txId, 'retry_onec', opId, glmOperationsAttentionComment);
+      setGlmOperationsAttentionComment('');
+      return;
+    }
+    if (item.action_code === 'settle_ton_transfer') {
+      await runGlmBridgeIssueAction(txId, 'settle_ton_transfer', item.kind, opId, glmOperationsAttentionComment);
+      setGlmOperationsAttentionComment('');
+      return;
+    }
+    if (item.action_code === 'refund_review') {
+      await refundGlmRedemptionById(txId, Math.abs(item.glm_amount || 0), glmOperationsAttentionComment);
+      setGlmOperationsAttentionComment('');
+      return;
+    }
+    if (item.action_code === 'settle_refund') {
+      if (!item.ton_tx_hash) {
+        setError('Для проверки refund нужен TON tx hash.');
+        return;
+      }
+      await settleGlmRedemptionTonRefundById(txId, item.ton_tx_hash, glmOperationsAttentionComment);
+      setGlmOperationsAttentionComment('');
+      return;
+    }
+    if (item.action_code === 'mark_reviewed') {
+      await runGlmBridgeIssueAction(txId, 'mark_reviewed', item.kind, opId, glmOperationsAttentionComment);
+      setGlmOperationsAttentionComment('');
+      return;
+    }
+    setError(item.action_code === 'settle_glm_deposit'
+      ? 'Для GLM -> баллы нужен TON tx hash: внесите его в очередь GLM -> баллы и нажмите Проверить TON.'
+      : 'Для этой операции пока доступна только ручная проверка по подсказке.');
   }
 
   async function releaseDueGlmHolds() {
@@ -2515,24 +2959,6 @@ export default function AdminReferralsPage() {
     }
   }
 
-  async function lookupGlmPosCode() {
-    if (!glmPosCode.trim()) {
-      setError('Укажите GLM POS-код');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    setGlmPosResult(null);
-    try {
-      const response = await apiClient.get(`/api/referrals/admin/glm-pos/${encodeURIComponent(glmPosCode.trim())}`);
-      setGlmPosResult(`${response.data?.partner_name || 'Партнер GLAME'} · ${response.data?.partner_phone || 'телефон не указан'} · balance ${response.data?.balance || 0} GLM · hold ${response.data?.hold_balance || 0} GLM`);
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || 'GLM POS-код не найден');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function uploadMediaMaterial() {
     if (!mediaFile) {
       setError('Выберите файл медиаматериала');
@@ -2658,15 +3084,19 @@ export default function AdminReferralsPage() {
         <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-3xl font-semibold text-slate-900">CryptoGLAME</h1>
-            <p className="mt-2 max-w-3xl text-sm text-slate-600">GLM, TON-кошельки, bridge, treasury, GLM Store, аудит и операционные очереди криптопрограммы.</p>
+            <p className="mt-2 max-w-3xl text-sm text-slate-600">GLM, TON-кошельки, обмен баллов, банк GLAME, GLM Store, аудит и операционные очереди криптопрограммы.</p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
-              <a href="/static/glm_policy/token-policy.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Token policy</a>
-              <a href="/static/glm_policy/risk-disclosure.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Risk disclosure</a>
+              <a href="/static/glm_policy/token-policy.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Правила токена</a>
+              <a href="/static/glm_policy/risk-disclosure.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Риски</a>
               <a href="/static/glm_policy/bridge-rules.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Правила обмена</a>
               <a href="/static/glm_policy/faq.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">FAQ</a>
-              <a href="/static/glm_policy/operator-runbook.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Operator runbook</a>
-              <a href="/static/glm_policy/production-escalation-policy.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Escalation policy</a>
-              <a href="/static/glm_policy/production-signer-contract.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Signer contract</a>
+              <a href="/static/glm_policy/operator-runbook.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Инструкция оператора</a>
+              <a href="/static/glm_policy/production-escalation-policy.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Правила алертов</a>
+              <a href="/static/glm_policy/production-signer-contract.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">TON signer</a>
+              <a href="/static/glm_policy/legal-accounting-approval.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Legal/accounting</a>
+              <a href="/static/glm_policy/treasury-approval.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Банк GLAME</a>
+              <a href="/static/glm_policy/launch-approval-packet.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Launch evidence</a>
+              <a href="/static/glm_policy/p2p-marketplace-approval-packet.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">P2P gate</a>
               <a href="/static/glm_policy/security-review-checklist.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 px-3 py-2 font-medium text-slate-700">Security checklist</a>
             </div>
           </div>
@@ -2675,6 +3105,119 @@ export default function AdminReferralsPage() {
       </div>
 
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
+
+      <section className={`rounded-md border p-5 shadow-sm ${operationalStatusClass}`}>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide opacity-70">Операционный статус</div>
+            <div className="mt-1 text-2xl font-semibold">{operationalStatusLabel}</div>
+            <div className="mt-2 max-w-4xl text-sm leading-6 opacity-85">{operationalNextAction}</div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:min-w-[720px]">
+            <div className="rounded-md border border-current/20 bg-white/55 p-3">
+              <div className="text-xs uppercase tracking-wide opacity-70">Срочно</div>
+              <div className="mt-1 text-xl font-semibold">{glmAttentionCriticalCount}</div>
+              <div className="mt-1 text-xs opacity-70">очередь внимания</div>
+            </div>
+            <div className="rounded-md border border-current/20 bg-white/55 p-3">
+              <div className="text-xs uppercase tracking-wide opacity-70">Предупреждения</div>
+              <div className="mt-1 text-xl font-semibold">{glmAttentionWarningCount}</div>
+              <div className="mt-1 text-xs opacity-70">уйдут в сводку</div>
+            </div>
+            <div className="rounded-md border border-current/20 bg-white/55 p-3">
+              <div className="text-xs uppercase tracking-wide opacity-70">Рабочий кошелек</div>
+              <div className="mt-1 text-xl font-semibold">{glmHotWalletBalance?.glm_balance ?? '—'} GLM</div>
+              <div className="mt-1 text-xs opacity-70">{glmHotWalletBalance?.ton_balance ?? '—'} TON gas</div>
+            </div>
+            <div className="rounded-md border border-current/20 bg-white/55 p-3">
+              <div className="text-xs uppercase tracking-wide opacity-70">Запуск</div>
+              <div className="mt-1 text-xl font-semibold">{glmTonReadiness?.go_no_go?.ready ? 'GO' : 'Blocked'}</div>
+              <div className="mt-1 text-xs opacity-70">{glmTonReadiness?.go_no_go?.blockers?.length || 0} блокеров</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a href="#glm-operations-attention" className="rounded-md border border-current/30 bg-white/60 px-3 py-2 text-xs font-medium">Открыть очередь внимания</a>
+          <a href="#ton-readiness" className="rounded-md border border-current/30 bg-white/60 px-3 py-2 text-xs font-medium">Открыть готовность TON</a>
+          <button
+            type="button"
+            onClick={() => {
+              void loadGlmOperationsAttention();
+              void loadGlmTonReadiness();
+              void loadGlmBridgeReconciliation();
+            }}
+            disabled={saving}
+            className="rounded-md border border-current/30 bg-white/60 px-3 py-2 text-xs font-medium disabled:opacity-50"
+          >
+            Обновить статус
+          </button>
+        </div>
+        {hotWalletLatestAlert?.last_sent_at ? (
+          <div className="mt-3 text-xs opacity-75">
+            Последний алерт рабочего кошелька: {dateRu(hotWalletLatestAlert.last_sent_at)} · {hotWalletLatestAlert.message || 'без текста'}
+          </div>
+        ) : null}
+      </section>
+
+      <section className={`rounded-md border p-5 shadow-sm ${productionObservationClass}`}>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide opacity-70">Production-наблюдение</div>
+            <div className="mt-1 text-2xl font-semibold">{productionObservationLabel}</div>
+            <div className="mt-2 max-w-4xl text-sm leading-6 opacity-85">{productionObservationNextAction}</div>
+            <div className="mt-3 text-xs opacity-75">
+              Старт статистики: {dateRu(operationalStatsStartAt)}{productionObservationDays ? ` · день ${productionObservationDays}` : ''}.
+              {' '}Последний evidence: {dateTimeRu(launchEvidence?.created_at)}.
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 xl:min-w-[900px]">
+            <div className="rounded-md border border-current/20 bg-white/55 p-3">
+              <div className="text-xs uppercase tracking-wide opacity-70">Evidence</div>
+              <div className="mt-1 text-xl font-semibold">{productionEvidenceTotal ? `${productionEvidenceOkCount}/${productionEvidenceTotal}` : '—'}</div>
+              <div className="mt-1 text-xs opacity-70">{productionEvidenceTodoCount} осталось</div>
+            </div>
+            <div className="rounded-md border border-current/20 bg-white/55 p-3">
+              <div className="text-xs uppercase tracking-wide opacity-70">Signed refs</div>
+              <div className="mt-1 text-xl font-semibold">{signedOfflineEvidenceReady ? 'OK' : 'Нужно'}</div>
+              <div className="mt-1 text-xs opacity-70">legal/security/treasury/public</div>
+            </div>
+            <div className="rounded-md border border-current/20 bg-white/55 p-3">
+              <div className="text-xs uppercase tracking-wide opacity-70">Replay</div>
+              <div className="mt-1 text-xl font-semibold">{replayIdempotencyAudit?.issues_count ?? '—'}</div>
+              <div className="mt-1 text-xs opacity-70">issues</div>
+            </div>
+            <div className="rounded-md border border-current/20 bg-white/55 p-3">
+              <div className="text-xs uppercase tracking-wide opacity-70">Операции</div>
+              <div className="mt-1 text-xl font-semibold">{glmTonReadiness?.bridge_operations?.count || 0}</div>
+              <div className="mt-1 text-xs opacity-70">{glmTonReadiness?.bridge_operations?.amount_glm || 0} GLM</div>
+            </div>
+            <div className="rounded-md border border-current/20 bg-white/55 p-3">
+              <div className="text-xs uppercase tracking-wide opacity-70">Оборот банка</div>
+              <div className="mt-1 text-xl font-semibold">{glmTreasuryTurnover?.net_glm ?? '—'} GLM</div>
+              <div className="mt-1 text-xs opacity-70">{glmTreasuryTurnover?.period_days || 30} дней</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              void buildLaunchEvidence();
+              void runReplayIdempotencyAudit();
+              void loadGlmEffectiveness();
+              void loadGlmTreasuryTurnover();
+              void loadGlmOperationsAttention();
+            }}
+            disabled={saving}
+            className="rounded-md border border-current/30 bg-white/60 px-3 py-2 text-xs font-medium disabled:opacity-50"
+          >
+            Обновить наблюдение
+          </button>
+          <a href="#production-approvals" className="rounded-md border border-current/30 bg-white/60 px-3 py-2 text-xs font-medium">Открыть approvals</a>
+          <a href="#glm-operations-attention" className="rounded-md border border-current/30 bg-white/60 px-3 py-2 text-xs font-medium">Открыть очередь</a>
+          <a href="#ton-readiness" className="rounded-md border border-current/30 bg-white/60 px-3 py-2 text-xs font-medium">Открыть готовность TON</a>
+        </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <Metric title="Партнеров" value={`${totals.partners_total}`} />
@@ -2760,17 +3303,6 @@ export default function AdminReferralsPage() {
       </section>
 
       <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">GLM POS</div>
-        <div className="mt-1 text-lg font-semibold text-slate-900">Проверить GLM-код в магазине</div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-          <input value={glmPosCode} onChange={(event) => setGlmPosCode(event.target.value.toUpperCase())} placeholder="GLM-XXXXXXXXXX" className="rounded-md border border-slate-300 px-3 py-2 text-sm uppercase" />
-          <button onClick={() => void lookupGlmPosCode()} disabled={saving} className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">Проверить</button>
-        </div>
-        {glmPosResult ? <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{glmPosResult}</div> : null}
-        <p className="mt-3 text-xs text-slate-500">Пилотный режим: код подтверждает GLM-аккаунт и доступный balance; списание проводится через GLM Store/redemption или админскую корректировку.</p>
-      </section>
-
-      <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">GLM Effectiveness</div>
@@ -2790,6 +3322,28 @@ export default function AdminReferralsPage() {
           <Metric title="Points→GLM" value={`${glmEffectiveness?.conversion_total || 0} GLM`} hint={`${glmEffectiveness?.conversion_accounts || 0} accounts`} />
           <Metric title="Ready to spend" value={`${glmEffectiveness?.ready_to_redeem_count || 0}`} hint={`${glmEffectiveness?.active_balance_accounts || 0} с балансом`} />
           <Metric title="Need activation" value={`${glmEffectiveness?.high_balance_no_redemption_count || 0}`} hint={`из ${glmEffectiveness?.high_balance_count || 0} high-balance`} />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Metric
+            title="Referral turnover"
+            value={money(glmEffectiveness?.business_impact?.referral_turnover_kopecks)}
+            hint={`${glmEffectiveness?.business_impact?.referral_orders_count || 0} заказов · ${glmEffectiveness?.business_impact?.referral_partner_count || 0} партнеров`}
+          />
+          <Metric
+            title="GLM-linked turnover"
+            value={money(glmEffectiveness?.business_impact?.glm_linked_turnover_kopecks)}
+            hint={`${glmEffectiveness?.business_impact?.glm_linked_turnover_percent || 0}% оборота · ${glmEffectiveness?.business_impact?.glm_linked_partner_count || 0} GLM partners`}
+          />
+          <Metric
+            title="Referral commission"
+            value={money(glmEffectiveness?.business_impact?.referral_commission_kopecks)}
+            hint={`${money(glmEffectiveness?.business_impact?.glm_linked_commission_kopecks)} у GLM partners`}
+          />
+          <Metric
+            title="Repeat referral"
+            value={`${glmEffectiveness?.business_impact?.repeat_referral_orders_count || 0} заказов`}
+            hint={`${glmEffectiveness?.business_impact?.repeat_referral_customer_count || 0} клиентов · ${money(glmEffectiveness?.business_impact?.repeat_referral_turnover_kopecks)}`}
+          />
         </div>
         <div className="mt-4 grid gap-4 xl:grid-cols-[0.75fr_1.25fr]">
           <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
@@ -2830,6 +3384,31 @@ export default function AdminReferralsPage() {
                 {!(glmEffectiveness?.top_redemption_items || []).length ? <div className="text-sm text-slate-500">Топ появится после первых списаний</div> : null}
               </div>
             </div>
+          </div>
+        </div>
+        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Топ партнеров по реферальному обороту</div>
+          <div className="mt-3 grid gap-2 xl:grid-cols-2">
+            {(glmEffectiveness?.top_referral_turnover_partners || []).map((partner) => (
+              <div key={partner.member_id} className="rounded border border-slate-200 bg-white p-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-slate-900">{partner.partner_name || 'Партнер GLAME'}</div>
+                    <div className="mt-1 text-xs text-slate-500">{partner.partner_phone || '—'}</div>
+                  </div>
+                  <div className="shrink-0 text-right text-slate-700">
+                    {money(partner.turnover_kopecks)}
+                    <div className="mt-1 text-xs text-slate-400">{partner.orders_count} заказов</div>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-500">
+                  <div><span className="block text-slate-400">Комиссия</span>{money(partner.commission_kopecks)}</div>
+                  <div><span className="block text-slate-400">GLM</span>{partner.glm_balance}</div>
+                  <div><span className="block text-slate-400">Earned</span>{partner.glm_lifetime_earned}</div>
+                </div>
+              </div>
+            ))}
+            {!(glmEffectiveness?.top_referral_turnover_partners || []).length ? <div className="text-sm text-slate-500">Оборот появится после первых реферальных покупок</div> : null}
           </div>
         </div>
       </section>
@@ -2912,12 +3491,12 @@ export default function AdminReferralsPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">{tonReadinessTitle(glmTonReadiness?.policy?.network)}</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">Готовность GLM treasury transfer workflow</div>
+            <div className="mt-1 text-lg font-semibold text-slate-900">Готовность переводов GLM через банк GLAME</div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => void runGlmTonAutoTransfer()} disabled={saving || !glmTonReadiness?.auto_transfer?.ready} className="rounded-md border border-emerald-200 px-4 py-2 text-sm font-medium text-emerald-700 disabled:opacity-50">Запустить auto-transfer</button>
-            <button onClick={() => void setGlmTonAutoTransferOverride(false)} disabled={saving || glmTonReadiness?.auto_transfer?.override?.enabled === false} className="rounded-md border border-rose-200 px-4 py-2 text-sm font-medium text-rose-700 disabled:opacity-50">Пауза auto-transfer</button>
-            <button onClick={() => void setGlmTonAutoTransferOverride(true)} disabled={saving || glmTonReadiness?.auto_transfer?.override?.enabled === true} className="rounded-md border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700 disabled:opacity-50">Включить auto-transfer</button>
+            <button onClick={() => void runGlmTonAutoTransfer()} disabled={saving || !glmTonReadiness?.auto_transfer?.ready} className="rounded-md border border-emerald-200 px-4 py-2 text-sm font-medium text-emerald-700 disabled:opacity-50">Запустить автоотправку</button>
+            <button onClick={() => void setGlmTonAutoTransferOverride(false)} disabled={saving || glmTonReadiness?.auto_transfer?.override?.enabled === false} className="rounded-md border border-rose-200 px-4 py-2 text-sm font-medium text-rose-700 disabled:opacity-50">Пауза автоотправки</button>
+            <button onClick={() => void setGlmTonAutoTransferOverride(true)} disabled={saving || glmTonReadiness?.auto_transfer?.override?.enabled === true} className="rounded-md border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700 disabled:opacity-50">Включить автоотправку</button>
             <button onClick={() => void checkProductionSigner()} disabled={saving || !glmTonReadiness?.security?.production_signer_endpoint_configured} className="rounded-md border border-violet-200 px-4 py-2 text-sm font-medium text-violet-700 disabled:opacity-50">Проверить signer</button>
             <button onClick={() => void setProductionSignerEmergencyPause(true)} disabled={saving || !glmTonReadiness?.security?.production_signer_pause_endpoint_configured} className="rounded-md border border-rose-300 px-4 py-2 text-sm font-medium text-rose-800 disabled:opacity-50">Пауза signer</button>
             <button onClick={() => void setProductionSignerEmergencyPause(false)} disabled={saving || !glmTonReadiness?.security?.production_signer_pause_endpoint_configured} className="rounded-md border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-800 disabled:opacity-50">Включить signer</button>
@@ -2925,8 +3504,8 @@ export default function AdminReferralsPage() {
           </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-12">
-          <Metric title="Status" value={label(glmTonReadiness?.status)} />
-          <Metric title="Network" value={String(glmTonReadiness?.policy?.network || 'testnet')} />
+          <Metric title="Статус" value={label(glmTonReadiness?.status)} />
+          <Metric title="Сеть" value={String(glmTonReadiness?.policy?.network || 'testnet')} />
           <Metric
             title="Jetton"
             value={jettonDeploymentLabel(
@@ -2936,49 +3515,51 @@ export default function AdminReferralsPage() {
               glmTonReadiness?.policy?.network,
             )}
           />
-          <Metric title="Hot-wallet GLM" value={`${glmHotWalletBalance?.glm_balance ?? '—'}`} hint={`need ${glmHotWalletBalance?.required_glm ?? '—'} · ${label(glmHotWalletBalance?.status)}`} />
-          <Metric title="Hot-wallet TON gas" value={`${glmHotWalletBalance?.ton_balance ?? '—'}`} hint={`need ${glmHotWalletBalance?.required_ton ?? '—'} · ${label(glmHotWalletBalance?.status)}`} />
-          <Metric title="Hot safe GLM" value={`${glmHotWalletBalance?.safe_transfer_capacity_glm ?? '—'}`} hint={`threshold ${glmHotWalletBalance?.refill_threshold_glm ?? '—'}`} />
-          <Metric title="Hot refill target" value={`${glmHotWalletBalance?.refill_target_glm ?? '—'} GLM`} hint={`${glmHotWalletBalance?.refill_target_ton ?? '—'} TON gas`} />
-          <Metric title="Treasury GLM" value={`${glmTreasuryBalance?.glm_balance ?? '—'}`} hint={`need ${glmTreasuryBalance?.required_glm ?? '—'} · ${label(glmTreasuryBalance?.status)}`} />
-          <Metric title="Treasury TON gas" value={`${glmTreasuryBalance?.ton_balance ?? '—'}`} hint={`need ${glmTreasuryBalance?.required_ton ?? '—'} · ${label(glmTreasuryBalance?.status)}`} />
+          <Metric title="Рабочий кошелек GLM" value={`${glmHotWalletBalance?.glm_balance ?? '—'}`} hint={`нужно ${glmHotWalletBalance?.required_glm ?? '—'} · ${label(glmHotWalletBalance?.status)}`} />
+          <Metric title="Газ рабочего кошелька" value={`${glmHotWalletBalance?.ton_balance ?? '—'}`} hint={`нужно ${glmHotWalletBalance?.required_ton ?? '—'} · ${label(glmHotWalletBalance?.status)}`} />
+          <Metric title="Доступно к отправке" value={`${glmHotWalletBalance?.safe_transfer_capacity_glm ?? '—'}`} hint={`порог ${glmHotWalletBalance?.refill_threshold_glm ?? '—'}`} />
+          <Metric title="Цель пополнения" value={`${glmHotWalletBalance?.refill_target_glm ?? '—'} GLM`} hint={`${glmHotWalletBalance?.refill_target_ton ?? '—'} TON gas`} />
+          <Metric title="Банк GLM" value={`${glmTreasuryBalance?.glm_balance ?? '—'}`} hint={`нужно ${glmTreasuryBalance?.required_glm ?? '—'} · ${label(glmTreasuryBalance?.status)}`} />
+          <Metric title="Газ банка" value={`${glmTreasuryBalance?.ton_balance ?? '—'}`} hint={`нужно ${glmTreasuryBalance?.required_ton ?? '—'} · ${label(glmTreasuryBalance?.status)}`} />
           <Metric title="Баллы→GLM" value={`${glmTonReadiness?.pending_claims?.count || 0}`} hint={`${glmTonReadiness?.pending_claims?.amount_glm || 0} GLM`} />
           <Metric title="Б→GLM не начато" value={`${glmTonReadiness?.pending_claims?.auto_transfer_status_counts?.not_started || 0}`} />
           <Metric title="Б→GLM ждут TON" value={`${glmTonReadiness?.pending_claims?.auto_transfer_status_counts?.sent_waiting_settlement || 0}`} />
           <Metric title="Б→GLM блок" value={`${sumStatusCounts(glmTonReadiness?.pending_claims?.auto_transfer_status_counts, (status) => status.startsWith('blocked_'))}`} />
-          <Metric title="Б→GLM health" value={glmTonReadiness?.pending_claims?.auto_transfer_health?.needs_attention ? 'Attention' : 'OK'} hint={`${glmTonReadiness?.pending_claims?.auto_transfer_health?.oldest_pending_age_minutes || 0} мин`} />
+          <Metric title="Б→GLM статус" value={glmTonReadiness?.pending_claims?.auto_transfer_health?.needs_attention ? 'Внимание' : 'OK'} hint={`${glmTonReadiness?.pending_claims?.auto_transfer_health?.oldest_pending_age_minutes || 0} мин`} />
           <Metric title="Б→GLM нет GLM" value={`${glmTonReadiness?.pending_claims?.auto_transfer_health?.blocked_amount_glm || 0}`} hint={`${glmTonReadiness?.pending_claims?.auto_transfer_health?.waiting_settlement_amount_glm || 0} ждут TON`} />
           <Metric title="GLM→баллы" value={`${glmTonReadiness?.pending_glm_to_points?.count || 0}`} hint={`${glmTonReadiness?.pending_glm_to_points?.amount_glm || 0} GLM`} />
           <Metric title="GLM→Б ждут TON" value={`${(glmTonReadiness?.pending_glm_to_points?.deposit_status_counts?.waiting_for_deposit || 0) + (glmTonReadiness?.pending_glm_to_points?.deposit_status_counts?.not_started || 0) + (glmTonReadiness?.pending_glm_to_points?.deposit_status_counts?.wallet_request_prepared || 0)}`} />
           <Metric title="GLM→Б TON найден" value={`${glmTonReadiness?.pending_glm_to_points?.deposit_status_counts?.tx_hash_present || 0}`} />
-          <Metric title="GLM→Б health" value={glmTonReadiness?.pending_glm_to_points?.health?.needs_attention ? 'Attention' : 'OK'} hint={`${glmTonReadiness?.pending_glm_to_points?.health?.oldest_pending_age_minutes || 0} мин`} />
-          <Metric title="GLM→Б 1C issue" value={`${glmTonReadiness?.pending_glm_to_points?.health?.onec_issue_count || 0}`} hint={`${glmTonReadiness?.pending_glm_to_points?.health?.tx_found_amount_glm || 0} GLM tx`} />
+          <Metric title="GLM→Б статус" value={glmTonReadiness?.pending_glm_to_points?.health?.needs_attention ? 'Внимание' : 'OK'} hint={`${glmTonReadiness?.pending_glm_to_points?.health?.oldest_pending_age_minutes || 0} мин`} />
+          <Metric title="GLM→Б 1C" value={`${glmTonReadiness?.pending_glm_to_points?.health?.onec_issue_count || 0}`} hint={`${glmTonReadiness?.pending_glm_to_points?.health?.tx_found_amount_glm || 0} GLM tx`} />
           <Metric title="Операции" value={`${glmTonReadiness?.bridge_operations?.count || 0}`} hint={`${glmTonReadiness?.bridge_operations?.amount_glm || 0} GLM`} />
           <Metric title="Нет операции" value={`${glmTonReadiness?.bridge_operations?.missing_domain_count || 0}`} />
-          <Metric title="Сверка health" value={glmTonReadiness?.bridge_operations?.health?.needs_attention ? 'Attention' : 'OK'} hint={`${glmTonReadiness?.bridge_operations?.health?.oldest_pending_age_minutes || 0} мин`} />
+          <Metric title="Сверка" value={glmTonReadiness?.bridge_operations?.health?.needs_attention ? 'Внимание' : 'OK'} hint={`${glmTonReadiness?.bridge_operations?.health?.oldest_pending_age_minutes || 0} мин`} />
           <Metric title="TON/1C проблемы" value={`${glmTonReadiness?.bridge_operations?.health?.ton_waiting_count || 0}/${glmTonReadiness?.bridge_operations?.health?.onec_issue_count || 0}`} hint="TON / 1C" />
-          <Metric title="Blockers" value={`${glmTonReadiness?.blockers?.length || 0}`} />
-          <Metric title="Auto-transfer" value={label(glmTonReadiness?.schedulers?.ton_auto_transfer?.status || '—')} hint={glmTonReadiness?.schedulers?.ton_auto_transfer?.enabled ? 'enabled' : 'disabled'} />
-          <Metric title="Settlement" value={label(glmTonReadiness?.schedulers?.ton_settlement?.status || '—')} hint={glmTonReadiness?.schedulers?.ton_settlement?.enabled ? 'enabled' : 'disabled'} />
+          <Metric title="Блокеры" value={`${glmTonReadiness?.blockers?.length || 0}`} />
+          <Metric title="Автоотправка" value={label(glmTonReadiness?.schedulers?.ton_auto_transfer?.status || '—')} hint={glmTonReadiness?.schedulers?.ton_auto_transfer?.enabled ? 'включена' : 'выключена'} />
+          <Metric title="Проверка TON" value={label(glmTonReadiness?.schedulers?.ton_settlement?.status || '—')} hint={glmTonReadiness?.schedulers?.ton_settlement?.enabled ? 'включена' : 'выключена'} />
           <Metric title="1C retry" value={label(glmTonReadiness?.schedulers?.onec_bridge_retry?.status || '—')} hint={glmTonReadiness?.schedulers?.onec_bridge_retry?.enabled ? 'включен' : 'выключен'} />
-          <Metric title="Security" value={glmTonReadiness?.security?.mainnet_ready ? 'Mainnet ready' : 'Pilot only'} hint={`${(glmTonReadiness?.security?.warnings || []).length + (glmTonReadiness?.security?.mainnet_blockers || []).length} notes`} />
-          <Metric title="Prod wallet" value={glmTonReadiness?.security?.production_candidate_ready ? 'Candidate' : 'Missing'} hint={label(glmTonReadiness?.security?.production_signer_mode || 'not configured')} />
+          <Metric title="Аудит" value={label(glmTonReadiness?.schedulers?.audit_hash_publish?.status || '—')} hint={glmTonReadiness?.schedulers?.audit_hash_publish?.enabled ? `${glmTonReadiness?.schedulers?.audit_hash_publish?.publish_lag_days || 1} дн. lag` : 'вручную'} />
+          <Metric title="Кошельки" value={glmTonReadiness?.wallet_cache_propagation?.status === 'ok' ? 'Whitelist' : label(glmTonReadiness?.wallet_cache_propagation?.status || '—')} hint={glmTonReadiness?.wallet_cache_propagation?.tonapi?.verification || 'TonAPI'} />
+          <Metric title="Безопасность" value={glmTonReadiness?.security?.mainnet_ready ? 'Mainnet ready' : 'Pilot only'} hint={`${(glmTonReadiness?.security?.warnings || []).length + (glmTonReadiness?.security?.mainnet_blockers || []).length} notes`} />
+          <Metric title="Рабочий кошелек" value={glmTonReadiness?.security?.production_candidate_ready ? 'Candidate' : 'Missing'} hint={label(glmTonReadiness?.security?.production_signer_mode || 'not configured')} />
           <Metric
-            title="Prod treasury"
+            title="Банк GLAME"
             value={glmTonReadiness?.security?.production_treasury_ready ? 'Bank set' : 'Missing'}
             hint={glmTonReadiness?.security?.production_treasury_address ? `${glmTonReadiness.security.production_treasury_address.slice(0, 6)}...${glmTonReadiness.security.production_treasury_address.slice(-4)}` : '—'}
           />
-          <Metric title="Prod signer" value={glmTonReadiness?.security?.production_signer_endpoint_configured ? 'Endpoint' : 'No endpoint'} hint={glmTonReadiness?.security?.production_signer_auth_configured ? 'auth configured' : 'auth missing'} />
-          <Metric title="Prod approvals" value={glmTonReadiness?.security?.production_approvals_ready ? 'Ready' : 'Pending'} hint={`${[
+          <Metric title="TON signer" value={glmTonReadiness?.security?.production_signer_endpoint_configured ? 'Endpoint' : 'No endpoint'} hint={glmTonReadiness?.security?.production_signer_auth_configured ? 'auth configured' : 'auth missing'} />
+          <Metric title="Approvals" value={glmTonReadiness?.security?.production_approvals_ready ? 'Ready' : 'Pending'} hint={`${[
             glmTonReadiness?.security?.production_legal_approved ? 'legal' : null,
             glmTonReadiness?.security?.production_security_approved ? 'security' : null,
             glmTonReadiness?.security?.production_treasury_approved ? 'treasury' : null,
           ].filter(Boolean).length}/3`} />
-          <Metric title="Go/no-go" value={glmTonReadiness?.go_no_go?.ready ? 'GO' : 'Blocked'} hint={`${glmTonReadiness?.go_no_go?.blockers?.length || 0} blockers`} />
-          <Metric title="Max / tx" value={`${glmTonReadiness?.go_no_go?.max_amount_glm ?? '—'} GLM`} hint="signer cap" />
-          <Metric title="Daily cap" value={`${glmTonReadiness?.go_no_go?.daily_limit_glm ?? '—'} GLM`} hint="hot-wallet cap" />
-          <Metric title="Batch" value={`${glmTonReadiness?.schedulers?.ton_auto_transfer?.batch_limit || 0}`} hint={`${glmTonReadiness?.schedulers?.ton_auto_transfer?.interval_minutes || 0} мин`} />
-          <Metric title="Mainnet" value={glmTonReadiness?.policy?.mainnet_enabled ? 'Enabled' : 'Blocked'} />
+          <Metric title="Запуск" value={glmTonReadiness?.go_no_go?.ready ? 'GO' : 'Blocked'} hint={`${glmTonReadiness?.go_no_go?.blockers?.length || 0} блокеров`} />
+          <Metric title="Лимит операции" value={`${glmTonReadiness?.go_no_go?.max_amount_glm ?? '—'} GLM`} hint="signer cap" />
+          <Metric title="Дневной лимит" value={`${glmTonReadiness?.go_no_go?.daily_limit_glm ?? '—'} GLM`} hint="hot-wallet cap" />
+          <Metric title="Пачка" value={`${glmTonReadiness?.schedulers?.ton_auto_transfer?.batch_limit || 0}`} hint={`${glmTonReadiness?.schedulers?.ton_auto_transfer?.interval_minutes || 0} мин`} />
+          <Metric title="Майннет" value={glmTonReadiness?.policy?.mainnet_enabled ? 'Enabled' : 'Blocked'} />
         </div>
         {productionSignerCheck ? (
           <div className={`mt-4 rounded-md border p-3 text-sm ${
@@ -3055,6 +3636,12 @@ export default function AdminReferralsPage() {
               <div className="mt-1 text-sm text-slate-600">
                 Mainnet разрешается только после legal, security и treasury approval.
               </div>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <a href="/static/glm_policy/legal-accounting-approval.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 bg-white px-3 py-2 font-medium text-slate-700">Legal/accounting doc</a>
+                <a href="/static/glm_policy/security-review-checklist.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 bg-white px-3 py-2 font-medium text-slate-700">Security checklist</a>
+                <a href="/static/glm_policy/treasury-approval.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 bg-white px-3 py-2 font-medium text-slate-700">Treasury doc</a>
+                <a href="/static/glm_policy/launch-approval-packet.md" target="_blank" rel="noreferrer" className="rounded-md border border-slate-300 bg-white px-3 py-2 font-medium text-slate-700">Launch packet</a>
+              </div>
               {glmTonReadiness?.security?.production_approvals_override?.updated_at ? (
                 <div className="mt-1 text-xs text-slate-500">
                   Последнее изменение: {dateRu(glmTonReadiness.security.production_approvals_override.updated_at)}
@@ -3062,6 +3649,13 @@ export default function AdminReferralsPage() {
               ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => void buildLaunchEvidence()}
+                disabled={saving}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-60"
+              >
+                Launch evidence
+              </button>
               <button
                 onClick={() => void runReplayIdempotencyAudit()}
                 disabled={saving}
@@ -3075,6 +3669,13 @@ export default function AdminReferralsPage() {
                 className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-60"
               >
                 Сохранить approvals
+              </button>
+              <button
+                onClick={() => void fillProductionApprovalEvidenceRefs()}
+                disabled={saving}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 disabled:opacity-60"
+              >
+                Заполнить SHA refs
               </button>
             </div>
           </div>
@@ -3104,8 +3705,105 @@ export default function AdminReferralsPage() {
             placeholder="Комментарий к approval"
             className="mt-3 min-h-[76px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
           />
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {[
+              ['legal_evidence_ref', 'Legal/accounting evidence', 'Ссылка, номер документа или hash подписанной оферты/учетной модели'],
+              ['security_evidence_ref', 'Security evidence', 'Ссылка, номер документа или hash security sign-off'],
+              ['treasury_evidence_ref', 'Treasury evidence', 'Ссылка, номер документа или hash treasury/bank sign-off'],
+              ['public_wording_evidence_ref', 'Public wording evidence', 'Ссылка или hash утвержденной публичной редакции без investment claims'],
+            ].map(([key, title, placeholder]) => (
+              <label key={key} className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {title}
+                <input
+                  value={String(productionApprovalForm[key as keyof typeof productionApprovalForm] || '')}
+                  onChange={(event) => setProductionApprovalForm((prev) => ({ ...prev, [key]: event.target.value }))}
+                  placeholder={placeholder}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900"
+                />
+              </label>
+            ))}
+          </div>
+          <div className={`mt-3 rounded-md border px-3 py-2 text-xs ${
+            productionApprovalForm.legal_evidence_ref
+              && productionApprovalForm.security_evidence_ref
+              && productionApprovalForm.treasury_evidence_ref
+              && productionApprovalForm.public_wording_evidence_ref
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-amber-200 bg-amber-50 text-amber-900'
+          }`}>
+            Offline evidence: {
+              productionApprovalForm.legal_evidence_ref
+              && productionApprovalForm.security_evidence_ref
+              && productionApprovalForm.treasury_evidence_ref
+              && productionApprovalForm.public_wording_evidence_ref
+                ? 'ready'
+                : 'нужно заполнить 4 ссылки/хэша'
+            }
+          </div>
           {productionApprovalsResult ? (
             <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{productionApprovalsResult}</div>
+          ) : null}
+          {launchEvidence ? (
+            <div className={`mt-3 rounded-md border p-3 text-sm ${
+              launchEvidence.ok
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : 'border-amber-200 bg-amber-50 text-amber-900'
+            }`}>
+              <div className="font-semibold">
+                Launch evidence: {launchEvidence.ok ? 'OK' : 'Attention'}
+                {launchEvidence.created_at ? ` · ${dateRu(launchEvidence.created_at)}` : ''}
+              </div>
+              <div className="mt-1 grid gap-1 text-xs md:grid-cols-2 xl:grid-cols-4">
+                <div>Checks: {launchEvidence.launch_checks?.ok ? 'OK' : 'Attention'}</div>
+                <div>Signer: {label(launchEvidence.signer_check?.status || 'unknown')}</div>
+                <div>Replay: {label(launchEvidence.replay_idempotency_audit?.status || 'unknown')}</div>
+                <div>Policy docs: {(launchEvidence.policy_documents || []).filter((item) => item.exists).length}/{(launchEvidence.policy_documents || []).length}</div>
+              </div>
+              {launchEvidence.evidence_checklist?.length ? (
+                <div className="mt-3 rounded-md border border-current/20 bg-white/70 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide">Launch evidence checklist</div>
+                  <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
+                    {launchEvidence.evidence_checklist.map((item) => {
+                      const status = String(item.status || '').toLowerCase() === 'ok' ? 'OK' : 'TODO';
+                      const title = `${status} · ${item.label}`;
+                      const className = `rounded border px-2 py-2 ${
+                        status === 'OK'
+                          ? 'border-emerald-500/30 bg-emerald-50/60'
+                          : 'border-current/20'
+                      }`;
+                      const evidenceDate = item.evidence?.updated_at || item.evidence?.audit_date;
+                      const content = (
+                        <>
+                          <span>{title}</span>
+                          {evidenceDate ? <span className="ml-1 opacity-70">· {dateRu(String(evidenceDate))}</span> : null}
+                        </>
+                      );
+                      if (item.href) {
+                        return (
+                          <a
+                            key={item.code}
+                            href={item.href}
+                            target={item.href.startsWith('/') ? '_blank' : undefined}
+                            rel={item.href.startsWith('/') ? 'noreferrer' : undefined}
+                            className={`${className} underline underline-offset-4`}
+                          >
+                            {content}
+                          </a>
+                        );
+                      }
+                      return (
+                        <div key={item.code} className={className}>
+                          {content}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+              {launchEvidence.launch_checks?.error ? (
+                <div className="mt-2 text-xs">{launchEvidence.launch_checks.error}</div>
+              ) : null}
+            </div>
           ) : null}
           {replayIdempotencyAudit ? (
             <div className={`mt-3 rounded-md border p-3 text-sm ${
@@ -3670,6 +4368,173 @@ export default function AdminReferralsPage() {
         </div>
       </section>
 
+      <section id="glm-operations-attention" className="rounded-md border border-slate-200 bg-white p-5 shadow-sm scroll-mt-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="text-sm font-semibold uppercase tracking-wide text-slate-500">CryptoGLAME</div>
+            <div className="mt-1 text-lg font-semibold text-slate-900">Очередь внимания GLM</div>
+            <div className="mt-1 text-sm text-slate-600">Спорные TON-переводы, 1С, возвраты и зависшие обмены в одном списке.</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href="/api/referrals/admin/glm-operations-attention/export.csv?limit=1000"
+              className="inline-flex items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+            >
+              CSV
+            </a>
+            <button
+              onClick={() => { void loadGlmOperationsAttention(); void loadGlmBridgeOperations(); void loadGlmBridgeReconciliation(); }}
+              disabled={saving}
+              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-60"
+            >
+              Обновить очередь
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <Metric title="Всего" value={`${glmOperationsAttention?.count ?? 0}`} hint={glmOperationsAttention?.generated_at ? dateRu(glmOperationsAttention.generated_at) : undefined} />
+          <Metric title="Срочно" value={`${glmOperationsAttention?.by_severity?.critical || 0}`} />
+          <Metric title="Предупреждения" value={`${glmOperationsAttention?.by_severity?.warning || 0}`} />
+          <Metric title="Ждут TON" value={`${glmOperationsAttention?.by_kind?.bridge_ton_waiting || 0}`} />
+          <Metric title="Проблемы 1C" value={`${glmOperationsAttention?.by_kind?.bridge_onec_issue || 0}`} />
+          <Metric title="Возвраты/зависшие" value={`${(glmOperationsAttention?.by_kind?.refund_attention || 0) + (glmOperationsAttention?.by_kind?.bridge_stale_pending || 0)}`} hint={`${glmOperationsAttention?.stale_minutes || 60} мин без движения`} />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {attentionFilterOptions.map((option) => {
+            const active = glmOperationsAttentionFilter === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setGlmOperationsAttentionFilter(option.value)}
+                className={`rounded-md border px-3 py-2 text-xs font-medium ${active ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'}`}
+              >
+                {option.label} · {option.count}
+              </button>
+            );
+          })}
+          {glmOperationsAttentionFilter !== 'all' ? (
+            <button
+              type="button"
+              onClick={() => setGlmOperationsAttentionFilter('all')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-500"
+            >
+              Сбросить
+            </button>
+          ) : null}
+        </div>
+        <div className="mt-4 grid gap-2 lg:grid-cols-[1fr_auto] lg:items-end">
+          <label className="block text-xs font-medium uppercase tracking-wide text-slate-500">
+            Комментарий оператора
+            <input
+              value={glmOperationsAttentionComment}
+              onChange={(event) => setGlmOperationsAttentionComment(event.target.value)}
+              placeholder="Например: проверил TON tx, документ 1C создан вручную, возврат согласован"
+              className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-normal normal-case tracking-normal text-slate-900"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setGlmOperationsAttentionComment('')}
+            disabled={!glmOperationsAttentionComment.trim()}
+            className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 disabled:opacity-50"
+          >
+            Очистить
+          </button>
+        </div>
+        <div className="mt-4">
+          <DataTable
+            headers={['Важность', 'Проблема', 'Партнер', 'Сумма', 'Статусы', 'TON / 1C', 'Возраст', 'Последнее действие', 'Следующий шаг']}
+            rows={filteredGlmOperationsAttentionItems.map((item) => {
+              const canRunAction = ['retry_onec_spend', 'retry_onec_bridge', 'settle_ton_transfer', 'mark_reviewed', 'refund_review', 'settle_refund'].includes(item.action_code || '');
+              const actionLabel = item.action_code === 'refund_review'
+                ? 'Вернуть TON'
+                : item.action_code === 'settle_refund'
+                  ? 'Проверить refund'
+                  : item.action_code === 'settle_ton_transfer'
+                    ? 'Проверить TON'
+                    : item.action_code?.startsWith('retry_onec')
+                      ? 'Повторить 1C'
+                      : 'Выполнить';
+              return [
+                <Badge key={`attention-severity-${item.id}`} value={item.severity === 'critical' ? 'failed' : item.severity === 'warning' ? 'pending' : 'processed'} />,
+                <div key={`attention-title-${item.id}`} className="max-w-[260px]">
+                  <div className="font-medium text-slate-900">{item.title || label(item.kind)}</div>
+                  <div className="mt-1 text-xs text-slate-500">{bridgeDirectionLabel(item.direction)} · {label(item.kind)}</div>
+                </div>,
+                <div key={`attention-partner-${item.id}`}>
+                  <div className="font-medium text-slate-900">{item.partner_name || 'Партнер GLAME'}</div>
+                  <div className="mt-1 text-xs text-slate-500">{item.partner_phone || item.member_id || '—'}</div>
+                </div>,
+                <div key={`attention-amount-${item.id}`} className="text-sm">
+                  <div>{item.glm_amount || 0} GLM</div>
+                  <div className="mt-1 text-xs text-slate-500">{item.points_amount || 0} баллов</div>
+                </div>,
+                <div key={`attention-status-${item.id}`} className="text-xs leading-5">
+                  <div>обмен: {label(item.status)}</div>
+                  <div>TON: {label(item.ton_status)}</div>
+                  <div>1C: {label(item.onec_status)}</div>
+                </div>,
+                <div key={`attention-refs-${item.id}`} className="max-w-[260px] break-all text-xs leading-5 text-slate-600">
+                  {item.ton_tx_hash ? <div>TON: {item.ton_tx_hash}</div> : null}
+                  {item.onec_document_id ? <div>1C: {item.onec_document_id}</div> : null}
+                  {!item.ton_tx_hash && !item.onec_document_id ? '—' : null}
+                </div>,
+                <div key={`attention-age-${item.id}`} className="text-xs text-slate-600">
+                  <div>{item.age_minutes || 0} мин</div>
+                  <div className="mt-1 text-slate-400">{dateRu(item.created_at)}</div>
+                </div>,
+                <div key={`attention-operator-event-${item.id}`} className="max-w-[260px] text-xs leading-5 text-slate-600">
+                  {item.latest_operator_event ? (
+                    <>
+                      <div className="font-medium text-slate-800">{label(item.latest_operator_event.action)}</div>
+                      <div>{dateRu(item.latest_operator_event.at)}</div>
+                      {item.latest_operator_event.onec_document_id ? <div className="break-all">1C: {item.latest_operator_event.onec_document_id}</div> : null}
+                      {item.latest_operator_event.ton_tx_hash ? <div className="break-all">TON: {item.latest_operator_event.ton_tx_hash}</div> : null}
+                      {item.latest_operator_event.comment ? <div className="text-slate-500">{item.latest_operator_event.comment}</div> : null}
+                    </>
+                  ) : (
+                    <span className="text-slate-400">действий пока нет</span>
+                  )}
+                </div>,
+                <div key={`attention-action-${item.id}`} className="max-w-[380px]">
+                  <div className="text-xs leading-5 text-slate-600">{item.action_hint || item.message || 'Проверьте операцию вручную.'}</div>
+                  {item.message && item.message !== item.action_hint ? <div className="mt-1 text-xs leading-5 text-amber-700">{item.message}</div> : null}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {canRunAction ? (
+                      <button
+                        disabled={saving}
+                        onClick={() => void runGlmAttentionAction(item)}
+                        className="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50"
+                      >
+                        {actionLabel}
+                      </button>
+                    ) : null}
+                    {item.operation_id ? (
+                      <button
+                        disabled={saving || !item.transaction_id}
+                        onClick={() => {
+                          void runGlmBridgeIssueAction(
+                            item.transaction_id || item.id,
+                            'mark_reviewed',
+                            item.kind,
+                            item.operation_id,
+                            glmOperationsAttentionComment,
+                          ).then(() => setGlmOperationsAttentionComment(''));
+                        }}
+                        className="rounded border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 disabled:opacity-50"
+                      >
+                        Проверено
+                      </button>
+                    ) : null}
+                  </div>
+                </div>,
+              ];
+            })}
+          />
+        </div>
+      </section>
+
       <section id="glm-bridge-reconciliation" className="rounded-md border border-slate-200 bg-white p-5 shadow-sm scroll-mt-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -3735,7 +4600,11 @@ export default function AdminReferralsPage() {
           <DataTable
             headers={['Направление', 'Этап', 'Партнер', 'GLM', 'Баллы', 'TON', '1С', 'Операция']}
             rows={(glmBridgeOperations || []).slice(0, 20).map((item) => {
-              const stage = item.direction === 'glm_to_points' ? glmToPointsStage(item) : pointsToGlmStage(item);
+              const stage = item.direction === 'glm_to_points'
+                ? glmToPointsStage(item)
+                : item.direction === 'sell_glm_for_ton'
+                  ? glmToGramStage(item)
+                  : pointsToGlmStage(item);
               return [
                 bridgeDirectionLabel(item.direction),
                 <div key={`bridge-op-status-${item.id}`} className="max-w-[220px]">
@@ -3757,9 +4626,35 @@ export default function AdminReferralsPage() {
                   <div>{label(item.onec_status)}</div>
                   {item.onec_document_id ? <div className="mt-1 text-slate-500">{item.onec_document_id}</div> : null}
                 </div>,
-                <div key={`bridge-op-id-${item.id}`} className="max-w-[220px] break-all text-xs">
+                <div key={`bridge-op-id-${item.id}`} className="max-w-[280px] break-all text-xs">
                   <div>{item.id}</div>
                   <div className="mt-1 text-slate-500">{dateRu(item.updated_at || item.created_at)}</div>
+                  {item.direction === 'sell_glm_for_ton' && item.status === 'pending' ? (
+                    <div className="mt-2 flex flex-col gap-2">
+                      <input
+                        value={exchangeDeskPayoutHashes[item.transaction_id] || ''}
+                        onChange={(event) => setExchangeDeskPayoutHashes((current) => ({ ...current, [item.transaction_id]: event.target.value }))}
+                        placeholder="GRAM payout tx hash"
+                        className="rounded border border-slate-300 px-2 py-1 text-xs"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          disabled={saving || !(exchangeDeskPayoutHashes[item.transaction_id] || '').trim()}
+                          onClick={() => void updateExchangeDeskRequest(item.transaction_id, 'processed')}
+                          className="rounded border border-emerald-200 px-2 py-1 text-xs font-medium text-emerald-700 disabled:opacity-50"
+                        >
+                          Выплачено
+                        </button>
+                        <button
+                          disabled={saving}
+                          onClick={() => void updateExchangeDeskRequest(item.transaction_id, 'failed')}
+                          className="rounded border border-red-200 px-2 py-1 text-xs font-medium text-red-700 disabled:opacity-50"
+                        >
+                          Отклонить
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>,
               ];
             })}
@@ -3856,6 +4751,7 @@ export default function AdminReferralsPage() {
         </div>
         {glmAuditResult ? <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{glmAuditResult}</div> : null}
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <a href="/glm/audit" target="_blank" rel="noreferrer" className="rounded border border-slate-300 px-3 py-2 text-slate-700">Public page</a>
           <a href="/api/referrals/glm-audit-hashes/public" target="_blank" rel="noreferrer" className="rounded border border-slate-300 px-3 py-2 text-slate-700">Public API</a>
           <a href="/static/glm_audit_journal/index.json" target="_blank" rel="noreferrer" className="rounded border border-slate-300 px-3 py-2 text-slate-700">Journal JSON</a>
           <a href="/static/glm_audit_journal/glame-audit-hashes.jsonl" target="_blank" rel="noreferrer" className="rounded border border-slate-300 px-3 py-2 text-slate-700">Journal JSONL</a>

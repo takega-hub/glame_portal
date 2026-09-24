@@ -12,9 +12,6 @@ import '../../core/theme/glame_theme.dart';
 import '../customer/stylist_entry.dart';
 import '../home/home_providers.dart';
 
-const String _homeBlock5BackgroundAsset =
-    'assets/images/home/glame_home_block5_background_underlay.png';
-
 class HomeSpacesBlock extends ConsumerStatefulWidget {
   final double? viewportHeight;
 
@@ -56,101 +53,46 @@ class _HomeSpacesBlockState extends ConsumerState<HomeSpacesBlock> {
     _syncAutoScroll(items.length);
     final compact = widget.viewportHeight != null;
     final targetHeight = widget.viewportHeight;
-    final topBarBottom =
-        MediaQuery.of(context).padding.top +
-        GlameUi.heroTopOffset +
-        GlameUi.heroTopBarHeight;
-    final topPadding = compact ? topBarBottom + 20.0 : 74.0;
-    final bottomPadding = compact ? 22.0 : 54.0;
-    final horizontalPadding = compact ? 22.0 : 32.0;
-    final headerGap = compact ? 16.0 : 28.0;
     final viewport = MediaQuery.of(context).size;
     final height = targetHeight ?? viewport.height.clamp(760.0, 920.0);
-    final cardHeight = (height - topPadding - bottomPadding - 92 - headerGap)
-        .clamp(compact ? 520.0 : 560.0, height);
 
-    return Container(
+    return SizedBox(
       height: height,
       width: double.infinity,
-      color: GlameColors.nearBlack,
       child: Stack(
         children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Opacity(
-                opacity: 0.16,
-                child: Image.asset(
-                  _homeBlock5BackgroundAsset,
-                  fit: BoxFit.cover,
-                  alignment: Alignment.topCenter,
-                ),
-              ),
+          Listener(
+            onPointerDown: (_) => _pauseAutoScroll(),
+            onPointerUp: (_) => _resumeAutoScroll(),
+            onPointerCancel: (_) => _resumeAutoScroll(),
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: items.length,
+              onPageChanged: (index) {
+                if (!mounted) return;
+                setState(() => _currentPage = index);
+                _scheduleAutoScroll();
+              },
+              itemBuilder: (context, index) {
+                return _HomeSpaceSlideCard(
+                  space: items[index],
+                  compact: compact,
+                  pageIndex: index,
+                  pageCount: items.length,
+                );
+              },
             ),
           ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              horizontalPadding,
-              topPadding,
-              horizontalPadding,
-              bottomPadding,
-            ),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 860),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _SpacesHeader(
-                      compact: compact,
-                      dark: true,
-                      cities: items.map((item) => item.city).toList(),
-                    ),
-                    SizedBox(height: headerGap),
-                    Expanded(
-                      child: SizedBox(
-                        height: cardHeight,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Listener(
-                              onPointerDown: (_) => _pauseAutoScroll(),
-                              onPointerUp: (_) => _resumeAutoScroll(),
-                              onPointerCancel: (_) => _resumeAutoScroll(),
-                              child: PageView.builder(
-                                controller: _pageController,
-                                itemCount: items.length,
-                                onPageChanged: (index) {
-                                  if (!mounted) return;
-                                  setState(() => _currentPage = index);
-                                  _scheduleAutoScroll();
-                                },
-                                itemBuilder: (context, index) {
-                                  return _HomeSpaceSlideCard(
-                                    space: items[index],
-                                    compact: compact,
-                                    pageIndex: index,
-                                    pageCount: items.length,
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    if (items.length > 1) ...[
-                      const SizedBox(height: 16),
-                      _SpacesSliderIndicator(
-                        currentIndex: _currentPage.clamp(0, items.length - 1),
-                        count: items.length,
-                      ),
-                    ],
-                  ],
-                ),
+          if (items.length > 1)
+            Positioned(
+              left: compact ? 22 : 34,
+              right: compact ? 22 : 34,
+              bottom: compact ? 18 : 26,
+              child: _SpacesSliderIndicator(
+                currentIndex: _currentPage.clamp(0, items.length - 1),
+                count: items.length,
               ),
             ),
-          ),
         ],
       ),
     );
@@ -216,15 +158,6 @@ class StoresScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 children: [
-                  const Text(
-                    'ПРОСТРАНСТВА GLAME',
-                    style: TextStyle(
-                      fontSize: 18,
-                      letterSpacing: 0.2,
-                      color: GlameColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
                   _SpacesHeader(
                     cities: items.map((item) => item.city).toList(),
                   ),
@@ -283,7 +216,7 @@ class SpaceDetailScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Пространство GLAME',
+                            'О пространстве',
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(
                                   color: GlameColors.textPrimary,
@@ -371,11 +304,9 @@ class SpaceDetailScreen extends ConsumerWidget {
 }
 
 class _SpacesHeader extends StatelessWidget {
-  final bool compact;
-  final bool dark;
   final List<String>? cities;
 
-  const _SpacesHeader({this.compact = false, this.dark = false, this.cities});
+  const _SpacesHeader({this.cities});
 
   @override
   Widget build(BuildContext context) {
@@ -385,28 +316,28 @@ class _SpacesHeader extends StatelessWidget {
         Text.rich(
           TextSpan(
             children: [
-              TextSpan(text: compact ? 'Пространства ' : 'Пространства\n'),
+              const TextSpan(text: 'Пространства\n'),
               TextSpan(
                 text: 'GLAME',
-                style: TextStyle(letterSpacing: compact ? 0 : 2.6),
+                style: const TextStyle(letterSpacing: 2.6),
               ),
             ],
           ),
-          style: TextStyle(
-            fontSize: compact ? 20 : 46,
+          style: const TextStyle(
+            fontSize: 46,
             height: 1.05,
             letterSpacing: 0,
-            color: dark ? GlameColors.whiteGlame : GlameColors.graphite,
+            color: GlameColors.graphite,
             fontWeight: FontWeight.w300,
           ),
         ),
-        SizedBox(height: compact ? 8 : 22),
+        const SizedBox(height: 22),
         Text(
           _citySummary(cities),
-          style: TextStyle(
-            fontSize: compact ? 13 : 20,
+          style: const TextStyle(
+            fontSize: 20,
             height: 1.3,
-            color: dark ? GlameColors.steelGray : GlameColors.graphite,
+            color: GlameColors.graphite,
             fontWeight: FontWeight.w300,
           ),
         ),
@@ -453,114 +384,102 @@ class _HomeSpaceCard extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final narrow = constraints.maxWidth < 560;
-            final cardHeight = narrow ? 406.0 : 392.0;
-            final citySize = narrow ? 28.0 : 33.0;
-            final addressSize = narrow ? 14.0 : 16.0;
-            final descriptionSize = narrow ? 13.0 : 15.0;
-            final verticalGap = narrow ? 24.0 : 34.0;
-            final textPadding = narrow
-                ? const EdgeInsets.fromLTRB(20, 24, 14, 22)
-                : const EdgeInsets.fromLTRB(28, 32, 18, 28);
-            final ctaWidth = narrow ? 154.0 : 176.0;
+            final cardHeight = narrow ? 460.0 : 510.0;
+            final citySize = narrow ? 32.0 : 38.0;
             final cardImageUrl = space.cardImageUrl;
 
             return SizedBox(
               width: double.infinity,
               height: cardHeight,
-              child: Material(
-                color: Colors.white.withValues(alpha: 0.72),
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFC7C9CB)),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _NetworkStoreImage(url: cardImageUrl),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0x18000000),
+                          Color(0x32000000),
+                          Color(0xE6000000),
+                        ],
+                        stops: [0, 0.42, 1],
+                      ),
+                    ),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        flex: narrow ? 43 : 39,
-                        child: Padding(
-                          padding: textPadding,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                  Positioned(
+                    left: narrow ? 20 : 28,
+                    right: narrow ? 20 : 28,
+                    bottom: narrow ? 20 : 28,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          copy.cityLabel,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: citySize,
+                            height: 1.05,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          copy.cardAddressLines.join('\n'),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            height: 1.42,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          copy.cardDescriptionLines.join(' '),
+                          style: TextStyle(
+                            fontSize: narrow ? 13 : 15,
+                            height: 1.35,
+                            color: Colors.white.withValues(alpha: 0.82),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Container(
+                          height: 44,
+                          width: narrow ? double.infinity : 220,
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.9),
+                            ),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                copy.cityLabel,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                'Смотреть пространство',
                                 style: TextStyle(
-                                  fontSize: citySize,
-                                  height: 1.08,
-                                  letterSpacing: 0,
-                                  color: GlameColors.graphite,
-                                  fontWeight: FontWeight.w300,
+                                  fontSize: 12,
+                                  letterSpacing: 0.2,
+                                  color: Colors.white,
                                 ),
                               ),
-                              SizedBox(height: verticalGap),
-                              Text(
-                                copy.cardAddressLines.join('\n'),
-                                overflow: TextOverflow.visible,
-                                style: TextStyle(
-                                  fontSize: addressSize,
-                                  height: 1.45,
-                                  color: GlameColors.graphite,
-                                  fontWeight: FontWeight.w300,
-                                ),
-                              ),
-                              SizedBox(height: narrow ? 22 : 30),
-                              Container(
-                                width: 36,
-                                height: 1,
-                                color: GlameColors.graphite,
-                              ),
-                              const Spacer(),
-                              Text(
-                                copy.cardDescriptionLines.join('\n'),
-                                overflow: TextOverflow.visible,
-                                style: TextStyle(
-                                  fontSize: descriptionSize,
-                                  height: 1.35,
-                                  color: GlameColors.graphite,
-                                  fontWeight: FontWeight.w300,
-                                ),
-                              ),
-                              SizedBox(height: narrow ? 18 : 24),
-                              SizedBox(
-                                width: ctaWidth,
-                                child: Container(
-                                  height: narrow ? 40 : 44,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: GlameColors.graphite,
-                                    ),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  child: Text(
-                                    'Смотреть пространство',
-                                    style: TextStyle(
-                                      fontSize: narrow ? 12 : 13,
-                                      height: 1,
-                                      color: GlameColors.graphite,
-                                      fontWeight: FontWeight.w300,
-                                    ),
-                                  ),
-                                ),
+                              SizedBox(width: 10),
+                              Icon(
+                                Icons.arrow_forward,
+                                size: 16,
+                                color: Colors.white,
                               ),
                             ],
                           ),
                         ),
-                      ),
-                      Expanded(
-                        flex: narrow ? 57 : 61,
-                        child: ClipRect(
-                          child: _NetworkStoreImage(url: cardImageUrl),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
             );
           },
@@ -591,8 +510,8 @@ class _HomeSpaceSlideCard extends StatelessWidget {
     final subtitleSize = compact ? 15.0 : 18.0;
     final descriptionSize = compact ? 14.0 : 16.0;
     final contentPadding = compact
-        ? const EdgeInsets.fromLTRB(22, 28, 22, 26)
-        : const EdgeInsets.fromLTRB(34, 40, 34, 34);
+        ? const EdgeInsets.fromLTRB(28, 28, 28, 62)
+        : const EdgeInsets.fromLTRB(48, 52, 48, 76);
 
     return Padding(
       padding: EdgeInsets.zero,
@@ -640,6 +559,16 @@ class _HomeSpaceSlideCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          Text(
+                            'ПРОСТРАНСТВА GLAME',
+                            style: TextStyle(
+                              fontSize: compact ? 13 : 14,
+                              letterSpacing: 0.7,
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          const SizedBox(height: 22),
                           Text(
                             '${(pageIndex + 1).toString().padLeft(2, '0')} / ${pageCount.toString().padLeft(2, '0')}',
                             style: TextStyle(
@@ -794,42 +723,37 @@ class _SpaceHero extends StatelessWidget {
             left: 20,
             right: 20,
             bottom: 24,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      copy.heroTitle,
-                      style: const TextStyle(
-                        fontSize: 36,
-                        height: 1.05,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w400,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      copy.heroSubtitle,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        height: 1.35,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      copy.heroAddressLines.join('\n'),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        height: 1.45,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  copy.cityLabel,
+                  style: const TextStyle(
+                    fontSize: 32,
+                    height: 1.05,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 10),
+                Text(
+                  copy.heroSubtitle,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    height: 1.35,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  copy.heroAddressLines.join('\n'),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    height: 1.45,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1384,26 +1308,26 @@ const _spaceCopyBySlug = <String, _SpaceCopy>{
 
 const _spacePaletteBySlug = <String, _SpacePalette>{
   'yalta': _SpacePalette(
-    overlayTop: Color(0x26293E52),
-    overlayBottom: Color(0x8F1F2F3E),
-    border: Color(0xFFD7E1E8),
-    panelBackground: Color(0xFFF7FAFC),
-    filledBackground: Color(0xFF2F4658),
+    overlayTop: Color(0x1A000000),
+    overlayBottom: Color(0xA6000000),
+    border: Color(0xFFD8D8D8),
+    panelBackground: Color(0xFFFFFFFF),
+    filledBackground: Color(0xFF272A2B),
     filledForeground: Colors.white,
   ),
   'simferopol': _SpacePalette(
     overlayTop: Color(0x1A111316),
     overlayBottom: Color(0xA6131518),
-    border: Color(0xFFD8DDE3),
-    panelBackground: Color(0xFFF6F7F9),
+    border: Color(0xFFD8D8D8),
+    panelBackground: Color(0xFFFFFFFF),
     filledBackground: Color(0xFF1F2328),
     filledForeground: Colors.white,
   ),
   'mriya': _SpacePalette(
     overlayTop: Color(0x1A111316),
     overlayBottom: Color(0xA6131518),
-    border: Color(0xFFD8DDE3),
-    panelBackground: Color(0xFFF6F7F9),
+    border: Color(0xFFD8D8D8),
+    panelBackground: Color(0xFFFFFFFF),
     filledBackground: Color(0xFF1F2328),
     filledForeground: Colors.white,
   ),

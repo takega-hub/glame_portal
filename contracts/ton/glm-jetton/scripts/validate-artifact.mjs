@@ -11,19 +11,20 @@ function main() {
   const contracts = artifact.contracts || {};
   const deployment = artifact.deployment || {};
 
-  if (artifact.network !== 'testnet') errors.push('network must be testnet');
+  const expectedStatus = artifact.network === 'mainnet' ? 'mainnet_deployed' : 'testnet_deployed';
+  if (!['testnet', 'mainnet'].includes(artifact.network)) errors.push('network must be testnet or mainnet');
   if (token.symbol !== 'GLM') errors.push('token.symbol must be GLM');
   if (token.decimals !== 9) errors.push('token.decimals must be 9 for TON wallet display compatibility');
-  if (!String(token.metadata_url || '').includes('/static/glm_policy/jetton-metadata.json')) {
+  if (!String(token.metadata_url || '').includes('/static/glm_policy/jetton-metadata')) {
     errors.push('token.metadata_url must point to GLM policy metadata');
   }
-  if (deployment.status === 'testnet_deployed') {
+  if (deployment.status === expectedStatus) {
     if (!contracts.jetton_master_address) errors.push('deployed artifact missing contracts.jetton_master_address');
     if (!contracts.admin_address) errors.push('deployed artifact missing contracts.admin_address');
     if (!contracts.treasury_address) errors.push('deployed artifact missing contracts.treasury_address');
     if (!deployment.deploy_tx_hash) errors.push('deployed artifact missing deployment.deploy_tx_hash');
   } else {
-    warnings.push('artifact is not testnet_deployed yet');
+    warnings.push(`artifact is not ${expectedStatus} yet`);
   }
   if (contracts.implementation && !String(contracts.implementation).includes('tep74')) {
     warnings.push('contracts.implementation should document TEP-74 compatibility');

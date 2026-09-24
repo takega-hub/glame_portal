@@ -485,6 +485,246 @@ class TonGlmSettlementService:
             "expected_amount_base_units": str(expected_amount_base_units),
         }
 
+    @staticmethod
+    def _ton_coin_payment_validation(
+        *,
+        tx: dict[str, Any],
+        sale: GlameTokenTransaction,
+    ) -> dict[str, Any]:
+        meta = sale.meta if isinstance(sale.meta, dict) else {}
+        expected_sender_raw = TonGlmSettlementService._normalize_ton_address(
+            meta.get("expected_ton_sender_address") if isinstance(meta.get("expected_ton_sender_address"), str) else None
+        )
+        expected_treasury_raw = TonGlmSettlementService._normalize_ton_address(
+            meta.get("treasury_address") if isinstance(meta.get("treasury_address"), str) else os.getenv("TON_GLM_TREASURY_ADDRESS")
+        )
+        try:
+            expected_nanoton = int(str(meta.get("ton_amount_nanoton") or "0"))
+        except (TypeError, ValueError):
+            expected_nanoton = 0
+        in_msg = tx.get("in_msg") if isinstance(tx.get("in_msg"), dict) else {}
+        actual_source_raw = TonGlmSettlementService._normalize_ton_address(
+            in_msg.get("source") if isinstance(in_msg.get("source"), str) else None
+        )
+        actual_destination_raw = TonGlmSettlementService._normalize_ton_address(
+            in_msg.get("destination") if isinstance(in_msg.get("destination"), str) else None
+        )
+        try:
+            actual_nanoton = int(str(in_msg.get("value") or "0"))
+        except (TypeError, ValueError):
+            actual_nanoton = 0
+        checks = [
+            {
+                "code": "tx_found",
+                "ok": True,
+                "message": "TON tx hash найден в истории treasury lookup-адреса.",
+            },
+            {
+                "code": "sender",
+                "ok": bool(expected_sender_raw and actual_source_raw == expected_sender_raw),
+                "message": "TON sender должен совпадать с подтвержденным кошельком партнера.",
+                "expected": expected_sender_raw,
+                "actual": actual_source_raw,
+            },
+            {
+                "code": "destination",
+                "ok": bool(expected_treasury_raw and actual_destination_raw == expected_treasury_raw),
+                "message": "TON destination должен быть treasury GLAME.",
+                "expected": expected_treasury_raw,
+                "actual": actual_destination_raw,
+            },
+            {
+                "code": "amount",
+                "ok": bool(expected_nanoton > 0 and actual_nanoton >= expected_nanoton),
+                "message": "TON amount должен быть не меньше суммы заявки.",
+                "expected_nanoton": str(expected_nanoton),
+                "actual_nanoton": str(actual_nanoton),
+            },
+        ]
+        blocking = [item for item in checks if item.get("ok") is False]
+        return {
+            "ok": not blocking,
+            "status": "ton_payment_checks_passed" if not blocking else "ton_payment_checks_failed",
+            "checks": checks,
+            "blocking": blocking,
+            "expected_sender_address": expected_sender_raw,
+            "expected_treasury_address": expected_treasury_raw,
+            "expected_nanoton": str(expected_nanoton),
+            "actual_nanoton": str(actual_nanoton),
+        }
+
+    async def verify_ton_payment_tx_hash(
+        self,
+        *,
+        tx_hash: str,
+        sale: GlameTokenTransaction,
+    ) -> dict[str, Any]:
+        config = self.config_payload()
+        normalized_hash = self._normalize_hash(tx_hash)
+        if not normalized_hash:
+            return {"ok": False, "status": "missing_tx_hash", "message": "TON tx hash is empty."}
+        lookup_addresses = self._bridge_deposit_lookup_addresses(sale)
+        headers = {}
+        api_key = (os.getenv("TONCENTER_API_KEY") or "").strip()
+        if api_key:
+            headers["X-API-Key"] = api_key
+        checked: list[dict[str, Any]] = []
+        async with httpx.AsyncClient(timeout=config["timeout_seconds"]) as client:
+            for address in lookup_addresses:
+                try:
+                    response = await client.get(
+                        f"{config['toncenter_base_url']}/getTransactions",
+                        params={"address": address, "limit": config["lookup_limit"], "archival": "true"},
+                        headers=headers,
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+                except Exception as error:
+                    checked.append({"address": address, "ok": False, "error": str(error)})
+                    continue
+                transactions = payload.get("result") if isinstance(payload, dict) else None
+                if not isinstance(transactions, list):
+                    checked.append({"address": address, "ok": False, "error": "Unexpected TON Center response."})
+                    continue
+                for tx in transactions:
+                    if isinstance(tx, dict) and self._hash_matches(tx, normalized_hash):
+                        validation = self._ton_coin_payment_validation(tx=tx, sale=sale)
+                        return {
+                            "ok": bool(validation.get("ok")),
+                            "status": "verified" if validation.get("ok") else "ton_payment_validation_failed",
+                            "message": "TON payment tx hash found in TON Center transactions.",
+                            "tx_hash": normalized_hash,
+                            "matched_address": address,
+                            "transaction_id": tx.get("transaction_id"),
+                            "utime": tx.get("utime"),
+                            "ton_payment_validation": validation,
+                            "checked": checked,
+                        }
+                checked.append({"address": address, "ok": True, "transactions_checked": len(transactions)})
+        return {
+            "ok": False,
+            "status": "not_found",
+            "message": "TON payment tx hash was not found in checked treasury transactions.",
+            "tx_hash": normalized_hash,
+            "checked": checked,
+        }
+
+    async def _find_matching_ton_payment_tx_hash(self, *, sale: GlameTokenTransaction) -> dict[str, Any]:
+        config = self.config_payload()
+        lookup_addresses = self._bridge_deposit_lookup_addresses(sale)
+        min_utime = None
+        if sale.created_at:
+            created_at = sale.created_at
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            min_utime = int(created_at.timestamp()) - 300
+        headers = {}
+        api_key = (os.getenv("TONCENTER_API_KEY") or "").strip()
+        if api_key:
+            headers["X-API-Key"] = api_key
+        checked: list[dict[str, Any]] = []
+        async with httpx.AsyncClient(timeout=config["timeout_seconds"]) as client:
+            for address in lookup_addresses:
+                try:
+                    response = await client.get(
+                        f"{config['toncenter_base_url']}/getTransactions",
+                        params={"address": address, "limit": config["lookup_limit"], "archival": "true"},
+                        headers=headers,
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+                except Exception as error:
+                    checked.append({"address": address, "ok": False, "error": str(error)})
+                    continue
+                transactions = payload.get("result") if isinstance(payload, dict) else None
+                if not isinstance(transactions, list):
+                    checked.append({"address": address, "ok": False, "error": "Unexpected TON Center response."})
+                    continue
+                for tx in transactions:
+                    if not isinstance(tx, dict):
+                        continue
+                    utime = int(tx.get("utime") or 0)
+                    if min_utime is not None and utime and utime < min_utime:
+                        continue
+                    validation = self._ton_coin_payment_validation(tx=tx, sale=sale)
+                    if not validation.get("ok"):
+                        continue
+                    tx_hash = tx.get("hash") or (
+                        (tx.get("transaction_id") or {}).get("hash")
+                        if isinstance(tx.get("transaction_id"), dict)
+                        else None
+                    )
+                    if not tx_hash:
+                        continue
+                    return {
+                        "ok": True,
+                        "status": "matched",
+                        "tx_hash": str(tx_hash),
+                        "matched_address": address,
+                        "transaction_id": tx.get("transaction_id"),
+                        "utime": tx.get("utime"),
+                        "ton_payment_validation": validation,
+                        "checked": checked,
+                    }
+                checked.append({"address": address, "ok": True, "transactions_checked": len(transactions)})
+        return {
+            "ok": False,
+            "status": "not_found",
+            "message": "Matching TON payment was not found in checked treasury transactions.",
+            "checked": checked,
+        }
+
+    async def settle_buy_glm_with_ton_payment_by_tx_hash(
+        self,
+        *,
+        sale_id: UUID,
+        tx_hash: str,
+        admin_user_id: UUID,
+        comment: str | None = None,
+        require_verified: bool = True,
+    ) -> dict[str, Any]:
+        sale = (
+            await self.db.execute(
+                select(GlameTokenTransaction).where(
+                    GlameTokenTransaction.id == sale_id,
+                    GlameTokenTransaction.transaction_type == "claim",
+                    GlameTokenTransaction.reason == "buy_glm_with_ton",
+                )
+            )
+        ).scalar_one_or_none()
+        if sale is None:
+            raise ValueError("Покупка GLM за TON не найдена")
+        if sale.status != "pending_payment":
+            raise ValueError("Можно settlement только pending TON payment")
+        verification = await self.verify_ton_payment_tx_hash(tx_hash=tx_hash, sale=sale)
+        meta = sale.meta if isinstance(sale.meta, dict) else {}
+        sale.meta = {
+            **meta,
+            "ton_payment_tx_hash": tx_hash,
+            "ton_payment_status": "verified" if verification.get("ok") else "verification_failed",
+            "ton_payment_verification": {
+                **verification,
+                "verified_at": datetime.now(timezone.utc).isoformat(),
+                "verified_by": str(admin_user_id),
+            },
+            "admin_comment": comment or meta.get("admin_comment"),
+        }
+        flag_modified(sale, "meta")
+        await self.db.flush()
+        await GlameTokenService(self.db).sync_bridge_operation(sale)
+        if require_verified and not verification.get("ok"):
+            return {"status": "blocked", "sale": sale, "verification": verification}
+        sale.status = "pending"
+        sale.meta = {
+            **(sale.meta or {}),
+            "ton_payment_status": "verified",
+            "payment_processed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        flag_modified(sale, "meta")
+        await self.db.flush()
+        await GlameTokenService(self.db).sync_bridge_operation(sale)
+        return {"status": "pending_auto_transfer", "sale": sale, "verification": verification}
+
     async def verify_tx_hash(
         self,
         *,
@@ -1202,6 +1442,71 @@ class TonGlmSettlementService:
             "skipped": skipped,
         }
 
+    async def settle_pending_buy_glm_with_ton_sales(
+        self,
+        *,
+        admin_user_id: UUID,
+        limit: int = 50,
+        require_verified: bool = True,
+    ) -> dict[str, Any]:
+        rows = (
+            await self.db.execute(
+                select(GlameTokenTransaction)
+                .where(
+                    GlameTokenTransaction.transaction_type == "claim",
+                    GlameTokenTransaction.status == "pending_payment",
+                    GlameTokenTransaction.reason == "buy_glm_with_ton",
+                )
+                .order_by(GlameTokenTransaction.created_at.asc(), GlameTokenTransaction.id.asc())
+                .limit(max(int(limit or 1), 1))
+            )
+        ).scalars().all()
+
+        processed: list[dict[str, Any]] = []
+        blocked: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for sale in rows:
+            meta = sale.meta if isinstance(sale.meta, dict) else {}
+            tx_hash = self._bridge_candidate_tx_hash(sale) or str(meta.get("ton_payment_tx_hash") or "").strip()
+            if not tx_hash:
+                match = await self._find_matching_ton_payment_tx_hash(sale=sale)
+                if match.get("ok"):
+                    tx_hash = str(match.get("tx_hash") or "")
+                else:
+                    sale.meta = {
+                        **meta,
+                        "ton_payment_status": "waiting_for_payment",
+                        "ton_payment_last_lookup": {
+                            **match,
+                            "checked_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    }
+                    flag_modified(sale, "meta")
+                    await GlameTokenService(self.db).sync_bridge_operation(sale)
+                    skipped.append({"sale_id": str(sale.id), "reason": match.get("status") or "missing_payment_tx_hash"})
+                    continue
+            try:
+                result = await self.settle_buy_glm_with_ton_payment_by_tx_hash(
+                    sale_id=sale.id,
+                    tx_hash=tx_hash,
+                    admin_user_id=admin_user_id,
+                    require_verified=require_verified,
+                    comment="TON primary-sale payment verified by background watcher.",
+                )
+            except Exception as error:
+                blocked.append({"sale_id": str(sale.id), "tx_hash": tx_hash, "reason": str(error)})
+                continue
+            if result.get("status") == "pending_auto_transfer":
+                processed.append({"sale_id": str(sale.id), "tx_hash": tx_hash, "verification": result.get("verification")})
+            else:
+                blocked.append({"sale_id": str(sale.id), "tx_hash": tx_hash, "verification": result.get("verification")})
+        return {
+            "checked": len(rows),
+            "processed": processed,
+            "blocked": blocked,
+            "skipped": skipped,
+        }
+
     async def settle_pending_claims(
         self,
         *,
@@ -1272,6 +1577,11 @@ class TonGlmSettlementService:
             limit=limit,
             require_verified=require_verified,
         )
+        buy_glm_with_ton_result = await self.settle_pending_buy_glm_with_ton_sales(
+            admin_user_id=admin_user_id,
+            limit=limit,
+            require_verified=require_verified,
+        )
 
         return {
             "checked": len(rows),
@@ -1280,4 +1590,5 @@ class TonGlmSettlementService:
             "skipped": skipped,
             "glm_to_points": bridge_result,
             "reward_store": reward_store_result,
+            "buy_glm_with_ton": buy_glm_with_ton_result,
         }

@@ -289,7 +289,7 @@ export default function RolesAccessPage() {
             <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
               <tr>
                 <th className="px-4 py-3">Сотрудник</th>
-                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Email / логин</th>
                 <th className="px-4 py-3">Роль</th>
                 <th className="px-4 py-3 text-right">Действия</th>
               </tr>
@@ -298,7 +298,15 @@ export default function RolesAccessPage() {
               {staff.map((user) => (
                 <tr key={user.id}>
                   <td className="px-4 py-3 text-gray-900">{user.full_name || 'Без имени'}</td>
-                  <td className="px-4 py-3 text-gray-600">{user.email}</td>
+                  <td className="px-4 py-3 text-gray-600">
+                    <div>{user.email || '—'}</div>
+                    {user.staff_login && (
+                      <div className="mt-1 text-xs text-gray-400">логин: {user.staff_login}</div>
+                    )}
+                    {!user.email && !user.staff_login && user.phone && (
+                      <div className="mt-1 text-xs text-gray-400">телефон: {user.phone}</div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <select
                       value={user.role || 'seller'}

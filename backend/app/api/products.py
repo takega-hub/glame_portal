@@ -20,11 +20,14 @@ import logging
 import asyncio
 import json
 import os
+import re
 from app.database.connection import get_db
 from app.api.auth import get_current_user_optional
 from app.agents.customer_product_recommendation_agent import CustomerProductRecommendationAgent
 from app.models.product import Product
+from app.models.product_arrival_subscription import ProductArrivalSubscription
 from app.models.product_catalog_section import ProductCatalogSection
+from app.models.customer_favorite_product import CustomerFavoriteProduct
 from app.models.user import User
 from app.services.onec_products_service import OneCProductsService
 from app.services.onec_stock_service import OneCStockService
@@ -33,6 +36,7 @@ from app.services.onec_images_service import OneCImagesService
 from app.services.yml_images_service import YMLImagesService
 from app.services.commerceml_xml_service import CommerceMLXMLService
 from app.services.product_images_download_service import ProductImagesDownloadService
+from app.services.product_arrival_notification_service import ProductArrivalNotificationService
 from uuid import UUID
 
 router = APIRouter()
@@ -63,6 +67,27 @@ def _base_article(article: str | None) -> str:
             if head:
                 return head
     return raw
+
+
+def _specification_values_filter(
+    specification: str,
+    raw_value: str | None,
+    parameter_prefix: str,
+):
+    """Match one or more comma-separated values of a product characteristic."""
+    values = [value.strip() for value in (raw_value or "").split(",") if value.strip()]
+    if not values:
+        return None
+
+    matches = []
+    for index, value in enumerate(values):
+        parameter = f"{parameter_prefix}_{index}"
+        matches.append(
+            text(
+                f"LOWER(specifications->>'{specification}') = LOWER(:{parameter})"
+            ).bindparams(bindparam(parameter, value=value))
+        )
+    return and_(Product.specifications.isnot(None), or_(*matches))
 
 
 def _product_response(product: Product, stock: float | None = None) -> "ProductResponse":
@@ -178,6 +203,19 @@ class ProductRecommendationResponse(BaseModel):
     reasons: List[str] = []
 
 
+class ProductArrivalSubscribeRequest(BaseModel):
+    email: str
+    variant_product_id: str | None = None
+    source: str | None = "product_card"
+
+
+class ProductArrivalSubscribeResponse(BaseModel):
+    status: str
+    subscription_id: str | None = None
+    already_available: bool = False
+    message: str
+
+
 class ReceiptBundleRuleResponse(BaseModel):
     product: ProductResponse | None = None
     score: float
@@ -222,12 +260,18 @@ async def get_characteristics_values(
     Возвращает словарь, где ключ - название характеристики, значение - список уникальных значений.
     """
     try:
-        # Получаем все товары с specifications
-        # Используем полный объект Product, чтобы получить доступ к specifications
+        # Показываем только характеристики товаров, которые попадут в витрину.
+        # Иначе пользователь может выбрать цвет у позиции без фото и получить 0.
+        safe_images = case(
+            (func.jsonb_typeof(Product.images) == "array", Product.images),
+            else_=text("'[]'::jsonb"),
+        )
         result = await db.execute(
             select(Product).where(
                 Product.specifications.isnot(None),
-                Product.is_active == True
+                Product.is_active == True,
+                Product.images.isnot(None),
+                func.jsonb_array_length(safe_images) > 0,
             )
         )
         products = result.scalars().all()
@@ -283,6 +327,7 @@ async def get_products_paged(
     tip_zamka: Optional[str] = None,  # Тип замка
     color: Optional[str] = None,  # Цвет
     in_stock: Optional[bool] = None,
+    store_id: Optional[str] = Query(None, description="Склад_Key магазина из 1С"),
     has_images: Optional[bool] = None,
     # Универсальный фильтр по характеристикам (JSON строка вида {"Характеристика": "Значение"})
     specs: Optional[str] = None,
@@ -304,54 +349,64 @@ async def get_products_paged(
         # подходящие записи, группируем варианты и отдаём один реальный
         # вариант на группу. Родители с дочерними вариантами исключаются.
         
-        if category:
+        category_filter = (category or "").strip()
+        if category_filter.lower() in {"все", "all"}:
+            category_filter = ""
+
+        if category_filter:
             # Фильтр по категории (название раздела каталога)
             # Товар может быть в нескольких группах, поэтому используем JOIN через промежуточную таблицу
             from app.models.catalog_section import CatalogSection
-            category_filter = category.strip()
+            normalized_category = category_filter.lower()
+            category_aliases = {normalized_category}
+            if normalized_category in {"новинки", "new"}:
+                category_aliases.update({"новинки", "new"})
             # Используем подзапрос для поиска товаров, связанных с разделом каталога
             section_subquery = select(ProductCatalogSection.product_id).join(
                 CatalogSection, ProductCatalogSection.catalog_section_id == CatalogSection.id
-            ).where(CatalogSection.name.ilike(category_filter))
+            ).where(func.lower(func.trim(CatalogSection.name)).in_(category_aliases))
             filters.append(Product.id.in_(section_subquery))
             logger.info(f"Фильтр по категории (разделу): '{category_filter}'")
         if brand:
             # Бренд может быть в поле brand или в specifications['Бренд']
             # Проверяем оба варианта
-            brand_filter = brand.strip()
+            brand_values = [value.strip() for value in brand.split(",") if value.strip()]
             brand_filters = []
-            # Фильтр по полю brand (точное совпадение, регистронезависимое)
-            brand_filters.append(
-                and_(
-                    Product.brand.isnot(None),
-                    func.lower(Product.brand) == func.lower(brand_filter)
+            for index, brand_value in enumerate(brand_values):
+                brand_filters.append(
+                    and_(
+                        Product.brand.isnot(None),
+                        func.lower(Product.brand) == func.lower(brand_value),
+                    )
                 )
-            )
-            # Фильтр по specifications['Бренд'] (точное совпадение, регистронезависимое)
-            # Используем прямой SQL для надежной работы с JSONB
-            brand_sql = text("LOWER(specifications->>'Бренд') = LOWER(:brand_value)").bindparams(brand_value=brand_filter)
-            brand_filters.append(
-                and_(
-                    Product.specifications.isnot(None),
-                    brand_sql
+                brand_filters.append(
+                    and_(
+                        Product.specifications.isnot(None),
+                        text(
+                            "LOWER(specifications->>'Бренд') = LOWER(:brand_value_"
+                            f"{index})"
+                        ).bindparams(
+                            bindparam(f"brand_value_{index}", value=brand_value)
+                        ),
+                    )
                 )
-            )
             filters.append(or_(*brand_filters))
-            logger.info(f"Фильтр по бренду: '{brand_filter}'")
+            logger.info(f"Фильтр по бренду: '{brand}'")
         if tags:
             tag_list = [t.strip() for t in tags.split(",") if t.strip()]
             for tag in tag_list:
                 filters.append(Product.tags.contains([tag]))
 
+        store_stock_id = (store_id or "").strip() or None
+
         if in_stock:
-            from app.models.product_stock import ProductStock
-            stock_subquery = (
-                select(ProductStock.product_id)
-                .group_by(ProductStock.product_id)
-                .having(func.sum(ProductStock.available_quantity) > 0)
+            # Наличие проверяем после группировки вариантов. Иначе базовая
+            # карточка без собственного остатка отсекается раньше, чем мы
+            # увидим доступные цветовые варианты.
+            logger.info(
+                "Фильтр по наличию: применится после группировки вариантов%s",
+                f" для склада {store_stock_id}" if store_stock_id else "",
             )
-            filters.append(Product.id.in_(stock_subquery))
-            logger.info("Фильтр по наличию: только товары с количеством > 0")
 
         if has_images is not None:
             if has_images:
@@ -416,37 +471,20 @@ async def get_products_paged(
         # Используем прямой SQL оператор ->> для извлечения текста из JSONB
         # Это более надежный способ работы с JSONB в PostgreSQL
         if material:
-            material_filter = material.strip()
-            material_sql = text("LOWER(specifications->>'Материал') = LOWER(:material_value)").bindparams(material_value=material_filter)
             filters.append(
-                and_(
-                    Product.specifications.isnot(None),
-                    material_sql
-                )
+                _specification_values_filter("Материал", material, "material")
             )
-            logger.debug(f"Фильтр по материалу: '{material_filter}'")
+            logger.debug(f"Фильтр по материалу: '{material}'")
         if vstavka:
-            vstavka_filter = vstavka.strip()
-            vstavka_sql = text("LOWER(specifications->>'Вставка') = LOWER(:vstavka_value)").bindparams(vstavka_value=vstavka_filter)
             filters.append(
-                and_(
-                    Product.specifications.isnot(None),
-                    vstavka_sql
-                )
+                _specification_values_filter("Вставка", vstavka, "vstavka")
             )
-            logger.debug(f"Фильтр по вставке: '{vstavka_filter}'")
+            logger.debug(f"Фильтр по вставке: '{vstavka}'")
         if pokrytie:
-            pokrytie_filter = pokrytie.strip()
-            # Фильтр по покрытию - проверяем только в основных товарах (варианты уже исключены)
-            # Используем прямой SQL оператор ->> для извлечения текста из JSONB
-            # Это более надежный способ работы с JSONB в PostgreSQL
-            pokrytie_sql = text("LOWER(specifications->>'Покрытие') = LOWER(:pokrytie_value)").bindparams(pokrytie_value=pokrytie_filter)
-            pokrytie_condition = and_(
-                Product.specifications.isnot(None),
-                pokrytie_sql
+            filters.append(
+                _specification_values_filter("Покрытие", pokrytie, "pokrytie")
             )
-            filters.append(pokrytie_condition)
-            logger.info(f"Фильтр по покрытию: '{pokrytie_filter}'")
+            logger.info(f"Фильтр по покрытию: '{pokrytie}'")
         if sochetanie:
             sochetanie_filter = sochetanie.strip()
             sochetanie_sql = text("LOWER(specifications->>'Сочетание') = LOWER(:sochetanie_value)").bindparams(
@@ -460,35 +498,16 @@ async def get_products_paged(
             )
             logger.info(f"Фильтр по сочетанию: '{sochetanie_filter}'")
         if razmer:
-            razmer_filter = razmer.strip()
-            razmer_sql = text("LOWER(specifications->>'Размер') = LOWER(:razmer_value)").bindparams(razmer_value=razmer_filter)
-            filters.append(
-                and_(
-                    Product.specifications.isnot(None),
-                    razmer_sql
-                )
-            )
-            logger.debug(f"Фильтр по размеру: '{razmer_filter}'")
+            filters.append(_specification_values_filter("Размер", razmer, "razmer"))
+            logger.debug(f"Фильтр по размеру: '{razmer}'")
         if tip_zamka:
-            tip_zamka_filter = tip_zamka.strip()
-            tip_zamka_sql = text("LOWER(specifications->>'Тип замка') = LOWER(:tip_zamka_value)").bindparams(tip_zamka_value=tip_zamka_filter)
             filters.append(
-                and_(
-                    Product.specifications.isnot(None),
-                    tip_zamka_sql
-                )
+                _specification_values_filter("Тип замка", tip_zamka, "tip_zamka")
             )
-            logger.debug(f"Фильтр по типу замка: '{tip_zamka_filter}'")
+            logger.debug(f"Фильтр по типу замка: '{tip_zamka}'")
         if color:
-            color_filter = color.strip()
-            color_sql = text("LOWER(specifications->>'Цвет') = LOWER(:color_value)").bindparams(color_value=color_filter)
-            filters.append(
-                and_(
-                    Product.specifications.isnot(None),
-                    color_sql
-                )
-            )
-            logger.debug(f"Фильтр по цвету: '{color_filter}'")
+            filters.append(_specification_values_filter("Цвет", color, "color"))
+            logger.debug(f"Фильтр по цвету: '{color}'")
         
         # Универсальный фильтр по характеристикам (JSON строка)
         if specs:
@@ -546,19 +565,78 @@ async def get_products_paged(
         result = await db.execute(query)
         filtered_products = result.scalars().all()
 
+        # Категория/бренд/поиск могут найти только базовую номенклатуру, а
+        # остатки и цены лежат на цветовых вариантах. Добираем siblings для
+        # каждой найденной группы, чтобы наличие считалось по всей карточке.
+        external_ids = {
+            p.external_id
+            for p in filtered_products
+            if p.external_id
+        }
+        parent_external_ids = {
+            parent_id
+            for parent_id in (_json_parent_external_id(p) for p in filtered_products)
+            if parent_id
+        }
+        base_articles = {
+            _base_article(p.article)
+            for p in filtered_products
+            if _base_article(p.article)
+        }
+        sibling_filters = []
+        if external_ids or parent_external_ids:
+            parent_lookup_ids = external_ids | parent_external_ids
+            sibling_filters.append(
+                or_(
+                    func.jsonb_extract_path_text(
+                        Product.specifications,
+                        "parent_external_id",
+                    ).in_(parent_lookup_ids),
+                    func.jsonb_extract_path_text(
+                        Product.sync_metadata,
+                        "parent_external_id",
+                    ).in_(parent_lookup_ids),
+                    Product.external_id.in_(parent_lookup_ids),
+                )
+            )
+        for base_article in base_articles:
+            sibling_filters.append(
+                or_(
+                    Product.article == base_article,
+                    Product.article.like(f"{base_article}-%"),
+                    Product.article.like(f"{base_article}_%"),
+                    Product.article.like(f"{base_article} %"),
+                )
+            )
+        if sibling_filters:
+            siblings_result = await db.execute(
+                select(Product).where(
+                    Product.is_active == True,
+                    or_(*sibling_filters),
+                )
+            )
+            by_id = {p.id: p for p in filtered_products}
+            for product in siblings_result.scalars().all():
+                by_id.setdefault(product.id, product)
+            filtered_products = list(by_id.values())
+
         # Остатки нужны для выбора лучшего представителя группы: сначала
         # показываем вариант в наличии, затем вариант с ценой и фото.
         from app.models.product_stock import ProductStock
         all_filtered_ids = [p.id for p in filtered_products]
         stocks_dict: Dict[UUID, float] = {}
         if all_filtered_ids:
-            stocks_result = await db.execute(
+            stock_query = (
                 select(
                     ProductStock.product_id,
                     func.sum(ProductStock.available_quantity).label('total_stock')
                 )
                 .where(ProductStock.product_id.in_(all_filtered_ids))
-                .group_by(ProductStock.product_id)
+            )
+            if store_stock_id:
+                stock_query = stock_query.where(ProductStock.store_id == store_stock_id)
+            stocks_result = await db.execute(
+                stock_query.group_by(ProductStock.product_id)
             )
             stocks_dict = {row[0]: float(row[1]) for row in stocks_result.all()}
 
@@ -597,11 +675,25 @@ async def get_products_paged(
                 product.article or product.name or "",
             )
 
-        products = [
-            sorted(groups[key], key=_variant_score, reverse=True)[0]
-            for key in order
-            if groups.get(key)
-        ]
+        selected_with_group_stock: List[tuple[Product, float]] = []
+        for key in order:
+            group = groups.get(key)
+            if not group:
+                continue
+            selected = sorted(group, key=_variant_score, reverse=True)[0]
+            group_stock = sum(stocks_dict.get(item.id) or 0 for item in group)
+            selected_with_group_stock.append((selected, group_stock))
+        if in_stock:
+            selected_with_group_stock = [
+                (item, group_stock)
+                for item, group_stock in selected_with_group_stock
+                if group_stock > 0
+            ]
+
+        products = [item[0] for item in selected_with_group_stock]
+        group_stock_by_id = {
+            item.id: group_stock for item, group_stock in selected_with_group_stock
+        }
         total = len(products)
         products = products[skip:skip + limit]
         
@@ -637,7 +729,10 @@ async def get_products_paged(
         }
         items = []
         for p in products:
-            response = _product_response(p, stocks_dict.get(p.id))
+            response = _product_response(
+                p,
+                group_stock_by_id.get(p.id, stocks_dict.get(p.id) or 0),
+            )
             parent_id = _json_parent_external_id(p)
             parent_product = parents_by_external_id.get(parent_id) if parent_id else None
             if not response.images and parent_product and parent_product.images:
@@ -1012,6 +1107,133 @@ async def get_product_recommendations(
             exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Не удалось подобрать рекомендации")
+
+
+def _arrival_variant_label(product: Product) -> str | None:
+    parts: list[str] = []
+    specs = product.specifications if isinstance(product.specifications, dict) else {}
+    for key in ("Цвет", "Размер", "Материал", "Покрытие"):
+        value = specs.get(key)
+        if value:
+            parts.append(f"{key}: {str(value).strip()}")
+    if parts:
+        return ", ".join(parts)
+    article = (product.article or "").strip()
+    return article or None
+
+
+def _arrival_product_snapshot(product: Product) -> dict:
+    images = product.images if isinstance(product.images, list) else []
+    return {
+        "name": product.name,
+        "brand": product.brand,
+        "article": product.article,
+        "price": product.price,
+        "image": next((str(image) for image in images if image), None),
+    }
+
+
+@router.post(
+    "/{product_id}/arrival-subscriptions",
+    response_model=ProductArrivalSubscribeResponse,
+)
+async def subscribe_product_arrival(
+    product_id: UUID,
+    payload: ProductArrivalSubscribeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    email = str(payload.email or "").strip().lower()
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        raise HTTPException(status_code=422, detail="Введите корректный email")
+
+    product = (
+        await db.execute(select(Product).where(Product.id == product_id, Product.is_active == True))
+    ).scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    variant_id = product_id
+    if payload.variant_product_id:
+        try:
+            variant_id = UUID(str(payload.variant_product_id))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Некорректный вариант товара")
+
+    variant = (
+        await db.execute(select(Product).where(Product.id == variant_id, Product.is_active == True))
+    ).scalar_one_or_none()
+    if not variant:
+        raise HTTPException(status_code=404, detail="Variant not found")
+
+    service = ProductArrivalNotificationService(db)
+    if await service.available_quantity(variant.id) > 0:
+        return ProductArrivalSubscribeResponse(
+            status="already_available",
+            already_available=True,
+            message="Этот вариант уже в наличии",
+        )
+
+    existing = (
+        await db.execute(
+            select(ProductArrivalSubscription).where(
+                ProductArrivalSubscription.email == email,
+                ProductArrivalSubscription.variant_product_id == variant.id,
+                ProductArrivalSubscription.status == "pending",
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        await _ensure_arrival_favorite(db, current_user, variant.id)
+        return ProductArrivalSubscribeResponse(
+            status="exists",
+            subscription_id=str(existing.id),
+            message="Заявка уже сохранена. Мы сообщим, когда украшение появится.",
+        )
+
+    subscription = ProductArrivalSubscription(
+        product_id=product.id,
+        variant_product_id=variant.id,
+        user_id=getattr(current_user, "id", None),
+        email=email,
+        status="pending",
+        source=(payload.source or "product_card")[:64],
+        variant_label=_arrival_variant_label(variant),
+        product_snapshot=_arrival_product_snapshot(variant),
+    )
+    db.add(subscription)
+    await _ensure_arrival_favorite(db, current_user, variant.id, commit=False)
+    await db.commit()
+    await db.refresh(subscription)
+    return ProductArrivalSubscribeResponse(
+        status="created",
+        subscription_id=str(subscription.id),
+        message="Готово. Мы напишем, когда украшение снова появится.",
+    )
+
+
+async def _ensure_arrival_favorite(
+    db: AsyncSession,
+    current_user: Optional[User],
+    product_id: UUID,
+    *,
+    commit: bool = True,
+) -> None:
+    if not current_user:
+        return
+    existing = (
+        await db.execute(
+            select(CustomerFavoriteProduct).where(
+                CustomerFavoriteProduct.user_id == current_user.id,
+                CustomerFavoriteProduct.product_id == product_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return
+    db.add(CustomerFavoriteProduct(user_id=current_user.id, product_id=product_id))
+    if commit:
+        await db.commit()
 
 
 @router.get("/{product_id}", response_model=ProductResponse)

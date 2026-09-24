@@ -19,6 +19,9 @@ export default function LooksPage() {
   const [selectedLookId, setSelectedLookId] = useState<string | undefined>();
   const [portfolioSlideIndex, setPortfolioSlideIndex] = useState<number | null>(null);
   const [deletingPortfolioUrl, setDeletingPortfolioUrl] = useState<string | null>(null);
+  const [syncingYandexLooks, setSyncingYandexLooks] = useState(false);
+  const [yandexSyncMessage, setYandexSyncMessage] = useState<string | null>(null);
+  const [yandexSyncError, setYandexSyncError] = useState<string | null>(null);
   
   // Состояния для управления моделями
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -92,6 +95,50 @@ export default function LooksPage() {
 
   const handleTryOnComplete = () => {
     loadLooks();
+  };
+
+  const formatApiError = (fallback: string, e: any) => {
+    const detail = e?.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) => {
+          if (typeof item === 'string') return item;
+          if (item?.msg) return String(item.msg);
+          return JSON.stringify(item);
+        })
+        .join('; ');
+    }
+    if (detail && typeof detail === 'object') {
+      return detail.message || detail.error || JSON.stringify(detail);
+    }
+    return fallback;
+  };
+
+  const handleSyncYandexLooks = async () => {
+    setSyncingYandexLooks(true);
+    setYandexSyncMessage(null);
+    setYandexSyncError(null);
+    setError(null);
+
+    try {
+      const result = await api.syncYandexDiskLooks({ publish: true });
+      const summary = result.summary || { imported: 0, skipped: 0, errors: 0 };
+      setYandexSyncMessage(
+        `ЯД: импортировано ${summary.imported}, пропущено ${summary.skipped}, ошибок ${summary.errors}`
+      );
+      await loadDigitalModels();
+      if (selectedDigitalModel !== 'real_shoot') {
+        setSelectedDigitalModel('real_shoot');
+      } else {
+        loadLooks();
+      }
+      setActiveTab('list');
+    } catch (e: any) {
+      setYandexSyncError(formatApiError('Не удалось синхронизировать образы с Яндекс.Диска', e));
+    } finally {
+      setSyncingYandexLooks(false);
+    }
   };
 
   const openPortfolioSlider = (index: number) => {
@@ -290,13 +337,34 @@ export default function LooksPage() {
                 Ядро: исходные фото в `backend/static/models`. Портфолио: сгенерированные образы выбранной модели.
               </p>
             </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="rounded-lg bg-gold-500 px-4 py-2 text-sm font-medium text-white hover:bg-gold-600 transition"
-            >
-              + Добавить модель
-            </button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                onClick={handleSyncYandexLooks}
+                disabled={syncingYandexLooks}
+                className="rounded-lg border border-gold-500 px-4 py-2 text-sm font-medium text-gold-700 hover:bg-gold-50 disabled:cursor-not-allowed disabled:opacity-60 transition"
+              >
+                {syncingYandexLooks ? 'Синхронизация...' : 'Синхронизировать образы с ЯД'}
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="rounded-lg bg-gold-500 px-4 py-2 text-sm font-medium text-white hover:bg-gold-600 transition"
+              >
+                + Добавить модель
+              </button>
+            </div>
           </div>
+
+          {(yandexSyncMessage || yandexSyncError) && (
+            <div
+              className={`mb-3 rounded-md border px-3 py-2 text-sm ${
+                yandexSyncError
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : 'border-green-200 bg-green-50 text-green-700'
+              }`}
+            >
+              {yandexSyncError || yandexSyncMessage}
+            </div>
+          )}
 
           {digitalModels.length === 0 ? (
             <div className="rounded-lg border border-dashed border-concrete-300 bg-concrete-50 p-6 text-center">

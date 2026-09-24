@@ -11,15 +11,36 @@ from typing import Any, Optional
 
 ACCESSORY_PRODUCT_TERMS = (
     "упаков",
+    "паковоч",
     "пакет",
     "короб",
     "футляр",
     "мешочек",
+    "мешок",
     "салфет",
+    "расход",
+    "техническ",
+    "упаковочный материал",
+    "упаковочные материалы",
+    "бирк",
+    "ярлык",
+    "стикер",
+    "наклейк",
+    "пломб",
+    "лента упаков",
     "сертификат",
     "gift card",
     "certificate",
     "packaging",
+    "package",
+    "bag",
+    "box",
+    "pouch",
+    "napkin",
+    "consumable",
+    "supply",
+    "supplies",
+    "technical",
     "сопутств",
     "открытк",
     "холдер",
@@ -42,9 +63,16 @@ ACCESSORY_PRODUCT_IDS = (
     "22eada08-bdab-11f0-9138-fa163e4cc04e",
     "0135f798-bb1d-11f0-836e-fa163e4cc04e",
     "245f8a6e-bdab-11f0-9138-fa163e4cc04e",
+    "6481259e-bccf-11f0-9138-fa163e4cc04e",
     "a2a2b022-bccf-11f0-9138-fa163e4cc04e",
     "1e69afd6-bdab-11f0-9138-fa163e4cc04e",
     "15cb6522-baf4-11f0-836e-fa163e4cc04e",
+)
+
+GIFT_PACKAGING_PRODUCT_IDS = (
+    "150b5f2a-baf4-11f0-836e-fa163e4cc04e",  # Упаковка большая черного цвета GLAME, 40015
+    "15cb6522-baf4-11f0-836e-fa163e4cc04e",  # Упаковка малая черного цвета GLAME, 40013
+    "16adf77a-baf4-11f0-836e-fa163e4cc04e",  # Упаковка средняя черного цвета GLAME, 40014
 )
 
 ACCESSORY_ARTICLE_PREFIXES = ("400", "500")
@@ -111,6 +139,25 @@ def analytics_eligible_product_sql(sales_alias: str = "sr", product_alias: str =
 
 
 ANALYTICS_ELIGIBLE_PRODUCT_SQL = analytics_eligible_product_sql()
+
+
+def analytics_revenue_eligible_product_sql(sales_alias: str = "sr", product_alias: str = "p") -> str:
+    """SQL filter for revenue KPI.
+
+    Jewelry/product metrics still exclude all accessory materials. Revenue metrics
+    include paid gift packaging because it is a real sale, while certificates,
+    bags, pouches, napkins and other technical/supplementary rows stay excluded.
+    """
+    text_expr = sales_record_product_text_sql(sales_alias=sales_alias, product_alias=product_alias)
+    gift_id_list = ", ".join([f"'{product_id}'" for product_id in GIFT_PACKAGING_PRODUCT_IDS])
+    gift_packaging_clause = (
+        f"(COALESCE({sales_alias}.product_id, {sales_alias}.raw_data->>'Номенклатура_Key', '') IN ({gift_id_list}) "
+        f"OR ({text_expr} LIKE '%упаковка%' AND {text_expr} LIKE '%черного цвета%' AND {text_expr} LIKE '%glame%'))"
+    )
+    return f"({analytics_eligible_product_sql(sales_alias=sales_alias, product_alias=product_alias)} OR {gift_packaging_clause})"
+
+
+ANALYTICS_REVENUE_ELIGIBLE_PRODUCT_SQL = analytics_revenue_eligible_product_sql()
 
 
 def sales_record_eligible_product_filter(SalesRecord: Any, func: Any, and_: Any, Product: Optional[Any] = None) -> Any:

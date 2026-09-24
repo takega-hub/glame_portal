@@ -34,12 +34,18 @@ class AdminSection:
 ADMIN_SECTIONS: tuple[AdminSection, ...] = (
     AdminSection("customer_stylist", "Связь со стилистом", "/admin/live-stylist", "AI инструменты"),
     AdminSection("sellers", "Продавцы", "/profile/sellers", "Аккаунт"),
+    AdminSection("seller_dashboard", "План/Факт", "/profile/sellers/dashboard", "Аккаунт"),
+    AdminSection("seller_crm", "CRM продавца", "/profile/sellers/crm", "Аккаунт"),
+    AdminSection("seller_customer_questionnaire", "Анкета покупателя", "/seller/customer-questionnaire", "Аккаунт"),
+    AdminSection("customer_requests", "Запросы клиентов", "/customer-requests", "Аккаунт"),
+    AdminSection("jewelry_photo", "Фото украшений", "/profile/sellers/jewelry-photo", "Аккаунт"),
     AdminSection("content_generator", "Генератор контента", "/content-generator", "AI инструменты"),
     AdminSection("content_agent", "AI Контент-агент", "/content-agent", "AI инструменты"),
     AdminSection("ai_marketer", "AI Маркетолог", "/ai-marketer", "AI инструменты"),
     AdminSection("ai_marketer_tasks", "Задачи маркетолога", "/ai-marketer/tasks", "AI инструменты"),
     AdminSection("consultant_training", "AI Тренер консультантов", "/admin/consultant-training", "AI инструменты"),
     AdminSection("seller_training", "Обучение GLAME", "/profile/training", "Аккаунт"),
+    AdminSection("manager_training", "Стажёры", "/manager/training", "Аккаунт"),
     AdminSection("batch_messages", "Массовая генерация", "/admin/batch-messages", "AI инструменты"),
     AdminSection("knowledge_base", "База знаний", "/knowledge-base", "Управление"),
     AdminSection("products", "Каталог товаров", "/products", "Управление"),
@@ -85,8 +91,43 @@ DEFAULT_ROLE_SECTIONS: dict[str, list[str]] = {
     ],
     ROLE_MANAGER: [
         "sellers",
-        "consultant_training",
+        "seller_dashboard",
+        "seller_crm",
+        "seller_customer_questionnaire",
+        "customer_requests",
+        "jewelry_photo",
+        "manager_training",
+        "knowledge_base",
+        "products",
+        "looks",
+        "customers",
+        "referrals_admin",
+        "analytics",
+        "product_analytics",
+        "inventory_control",
+        "inventory_tasks",
+        "app_admin",
+        "shipping_admin",
+        "inventory_admin",
+    ],
+    ROLE_SELLER: [
+        "customer_stylist",
+        "seller_dashboard",
+        "seller_crm",
+        "seller_customer_questionnaire",
+        "customer_requests",
+        "jewelry_photo",
         "seller_training",
+        "products",
+        "looks",
+        "customers",
+    ],
+}
+
+LEGACY_DEFAULT_ROLE_SECTIONS: dict[str, list[str]] = {
+    ROLE_MANAGER: [
+        "sellers",
+        "manager_training",
         "knowledge_base",
         "products",
         "looks",
@@ -150,6 +191,23 @@ async def ensure_default_role_access(db: AsyncSession) -> None:
                     is_system=True,
                 )
             )
+            changed = True
+            continue
+
+        legacy_defaults = LEGACY_DEFAULT_ROLE_SECTIONS.get(role_key)
+        if legacy_defaults and clean_section_ids(access.section_ids) == legacy_defaults:
+            access.section_ids = DEFAULT_ROLE_SECTIONS[role_key]
+            changed = True
+            continue
+
+        # This is a standard seller-facing tool. Add it to system-managed
+        # seller/manager access rows while preserving deliberately custom rows.
+        if (
+            role_key in {ROLE_SELLER, ROLE_MANAGER}
+            and access.is_system
+            and "seller_customer_questionnaire" not in clean_section_ids(access.section_ids)
+        ):
+            access.section_ids = [*clean_section_ids(access.section_ids), "seller_customer_questionnaire"]
             changed = True
     if changed:
         await db.commit()

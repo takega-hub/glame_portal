@@ -1,8 +1,9 @@
 import ftplib
 import os
+import ssl
 import csv
 import json
-import xml.etree.ElementTree as ET
+from lxml import etree as ET
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from io import StringIO, BytesIO
@@ -23,13 +24,18 @@ class FTPService:
         self.username = username
         self.password = password
         self.directory = directory
+        self.use_tls = os.getenv("FTP_USE_TLS", "true").strip().lower() not in {"0", "false", "no"}
         self.ftp = None
     
     def connect(self) -> ftplib.FTP:
-        """Подключение к FTP серверу"""
+        """Подключение к FTPS серверу с шифрованием канала данных."""
         try:
-            self.ftp = ftplib.FTP(self.host)
+            if not self.use_tls:
+                raise RuntimeError("Insecure FTP is disabled. Configure FTPS or explicitly set FTP_USE_TLS=false temporarily.")
+            self.ftp = ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=30)
+            self.ftp.connect(self.host)
             self.ftp.login(self.username, self.password)
+            self.ftp.prot_p()
             if self.directory:
                 self.ftp.cwd(self.directory)
             logger.info(f"Connected to FTP server: {self.host}")
@@ -155,8 +161,10 @@ class FTPService:
     def parse_xml(self, content: bytes, encoding: str = 'utf-8') -> ET.Element:
         """Парсинг XML файла"""
         try:
-            text = content.decode(encoding)
-            return ET.fromstring(text)
+            return ET.fromstring(
+                content,
+                parser=ET.XMLParser(resolve_entities=False, no_network=True, huge_tree=False),
+            )
         except Exception as e:
             logger.error(f"Error parsing XML: {e}")
             raise

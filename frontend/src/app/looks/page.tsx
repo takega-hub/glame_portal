@@ -28,6 +28,8 @@ export default function LooksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [onlyNew, setOnlyNew] = useState(false);
+  const [syncingYandexLooks, setSyncingYandexLooks] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const newPostsCount = posts.filter((post) => post.is_new).length;
 
   const loadFeed = async () => {
@@ -47,6 +49,22 @@ export default function LooksPage() {
     void loadFeed();
   }, []);
 
+  const syncYandexLooks = async () => {
+    setSyncingYandexLooks(true);
+    setSyncMessage(null);
+    setError(null);
+    try {
+      const result = await api.syncYandexDiskLooks({ publish: true });
+      const summary = result.summary || { imported: 0, skipped: 0, errors: 0 };
+      setSyncMessage(`ЯД: импортировано ${summary.imported}, пропущено ${summary.skipped}, ошибок ${summary.errors}`);
+      await loadFeed();
+    } catch (e: any) {
+      setError(getErrorMessage(e, 'Не удалось синхронизировать образы с Яндекс.Диска'));
+    } finally {
+      setSyncingYandexLooks(false);
+    }
+  };
+
   const visiblePosts = onlyNew ? posts.filter((post) => post.is_new) : posts;
 
   if (mode === 'studio') {
@@ -55,13 +73,25 @@ export default function LooksPage() {
         <div className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
             <div className="text-sm font-semibold text-gray-950">Студия образов</div>
-            <button
-              type="button"
-              onClick={() => setMode('feed')}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
-            >
-              Вернуться в ленту
-            </button>
+            <div className="flex items-center gap-2">
+              {syncMessage ? <div className="hidden text-xs text-emerald-700 sm:block">{syncMessage}</div> : null}
+              <button
+                type="button"
+                onClick={() => void syncYandexLooks()}
+                disabled={syncingYandexLooks}
+                className="inline-flex items-center gap-2 rounded-md border border-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${syncingYandexLooks ? 'animate-spin' : ''}`} />
+                {syncingYandexLooks ? 'Синхронизация...' : 'Синхронизация с ЯД'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('feed')}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+              >
+                Вернуться в ленту
+              </button>
+            </div>
           </div>
         </div>
         <LooksStudioPage />
@@ -97,6 +127,18 @@ export default function LooksPage() {
 
       <section className="mx-auto max-w-[520px] border-x border-gray-100">
         <div className="border-b border-gray-100 px-3 py-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => void syncYandexLooks()}
+              disabled={syncingYandexLooks}
+              className="inline-flex items-center gap-2 rounded-md border border-amber-400 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncingYandexLooks ? 'animate-spin' : ''}`} />
+              {syncingYandexLooks ? 'Синхронизация...' : 'Синхронизировать образы с ЯД'}
+            </button>
+            {syncMessage ? <div className="text-right text-xs text-emerald-700">{syncMessage}</div> : null}
+          </div>
           <button
             type="button"
             onClick={() => setOnlyNew((current) => !current)}

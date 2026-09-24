@@ -278,7 +278,7 @@ class _LookDetailScreenState extends ConsumerState<LookDetailScreen> {
           textColor: GlameColors.gold,
           onPressed: () {
             messenger.removeCurrentSnackBar();
-            context.go('/home?tab=3');
+            context.go('/home?tab=11');
           },
         ),
       ),
@@ -543,6 +543,7 @@ class _LookHeroSection extends StatelessWidget {
                 images: heroImages,
                 currentIndex: currentPage,
                 onSelect: onSelectPage,
+                maxHeight: (heroHeight - 370).clamp(150.0, 320.0),
               ),
             ),
         ],
@@ -911,29 +912,32 @@ class _LookDetailProductCard extends ConsumerWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Container(
-                  color: const Color(0xFFEFF1F2),
-                  alignment: Alignment.center,
-                  child: imageUrl == null
-                      ? const Icon(
-                          Icons.diamond_outlined,
-                          color: GlameColors.borderGray,
-                          size: 48,
-                        )
-                      : CachedNetworkImage(
-                          imageUrl: imageUrl,
-                          width: double.infinity,
-                          height: double.infinity,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
-                          placeholder: (_, _) =>
-                              const ColoredBox(color: Color(0xFFEFF1F2)),
-                          errorWidget: (_, _, _) => const Icon(
+                InkWell(
+                  onTap: id.isEmpty ? null : () => context.push('/product/$id'),
+                  child: Container(
+                    color: const Color(0xFFEFF1F2),
+                    alignment: Alignment.center,
+                    child: imageUrl == null
+                        ? const Icon(
                             Icons.diamond_outlined,
                             color: GlameColors.borderGray,
                             size: 48,
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: imageUrl,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            placeholder: (_, _) =>
+                                const ColoredBox(color: Color(0xFFEFF1F2)),
+                            errorWidget: (_, _, _) => const Icon(
+                              Icons.diamond_outlined,
+                              color: GlameColors.borderGray,
+                              size: 48,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
                 Positioned(
                   top: 10,
@@ -1025,7 +1029,7 @@ class _LookDetailProductCard extends ConsumerWidget {
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       child: const Text(
-                        'ВЫБРАТЬ',
+                        'К КАРТОЧКЕ',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -1518,7 +1522,7 @@ class _LookProductCard extends ConsumerWidget {
                   ),
                 const SizedBox(height: 8),
                 Text(
-                  stock > 0 ? 'В наличии' : 'Нет в наличии',
+                  stock > 0 ? 'В наличии' : 'Скоро в наличии',
                   style: TextStyle(
                     fontSize: 12,
                     color: stock > 0 ? GlameColors.gold : GlameColors.graphite,
@@ -1808,11 +1812,13 @@ class _HeroThumbRail extends StatelessWidget {
   final List<String?> images;
   final int currentIndex;
   final ValueChanged<int> onSelect;
+  final double maxHeight;
 
   const _HeroThumbRail({
     required this.images,
     required this.currentIndex,
     required this.onSelect,
+    required this.maxHeight,
   });
 
   @override
@@ -1823,15 +1829,19 @@ class _HeroThumbRail extends StatelessWidget {
         color: GlameColors.surface2.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        children: List.generate(images.length.clamp(0, 4), (index) {
-          final imageUrl = images[index];
-          final selected = index == currentIndex;
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: index == images.length - 1 ? 0 : 8,
-            ),
-            child: InkWell(
+      child: SizedBox(
+        width: 54,
+        height: maxHeight,
+        child: ListView.separated(
+          primary: false,
+          padding: EdgeInsets.zero,
+          physics: const ClampingScrollPhysics(),
+          itemCount: images.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            final imageUrl = images[index];
+            final selected = index == currentIndex;
+            return InkWell(
               onTap: () => onSelect(index),
               borderRadius: BorderRadius.circular(10),
               child: AnimatedContainer(
@@ -1871,9 +1881,9 @@ class _HeroThumbRail extends StatelessWidget {
                         ),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          },
+        ),
       ),
     );
   }

@@ -42,6 +42,7 @@ from app.services.consultant_training_service import (
     build_training_material_slides_progress_payload,
     build_training_material_progress_analytics_payload,
     build_training_material_learning_pack_payload,
+    build_training_material_question_pool,
     build_step_material_practice_gate_payload,
     build_step_material_link_payload,
     build_unlocked_step_materials_payload,
@@ -68,9 +69,30 @@ from app.services.consultant_training_service import (
     normalize_topic_status,
     should_request_revision,
 )
+from app.services.trainee_attestation import trainee_blank_coverage_summary
 
 
 class ConsultantTrainingServiceTests(unittest.TestCase):
+    def test_trainee_blank_is_fully_distributed_across_default_lessons(self):
+        lesson_titles = [
+            "Миссия и ценности GLAME",
+            "Первый контакт 30–60 секунд",
+            "Ювелирная база: кольца, серьги и замки",
+            "Материалы, покрытия, сталь и уход",
+            "Коллекции GLAME и подбор по образу",
+            "Камни, огранки и закрепки",
+            "Презентация: свойство → выгода",
+            "Сомнения и завершение продажи",
+            "Касса, сертификаты, возвраты и лояльность",
+            "Открытие, закрытие, выкладка и KPI",
+        ]
+
+        coverage = trainee_blank_coverage_summary(lesson_titles)
+
+        self.assertTrue(coverage["is_complete"])
+        self.assertEqual(coverage["missing_question_ids"], [])
+        self.assertEqual(len(coverage["covered_question_ids"]), 24)
+
     def test_low_quality_submission_requests_delicate_revision(self):
         result = evaluate_submission_quality(
             "Красивые модные серьги, всем подходят, берите.",
@@ -1393,6 +1415,42 @@ order_index: 15
         self.assertIn("понимание", " ".join(pack["assessment"]["criteria"]).lower())
         self.assertTrue(pack["review_required"])
         self.assertNotIn("published", [slide["status"] for slide in pack["slides"]])
+
+    def test_lesson_question_pool_uses_only_current_lesson_slides(self):
+        slides = [
+            {"title": "Приветствие", "body": "Поздоровайтесь и предложите помощь без давления.", "quiz_question": "Как начать контакт спокойно?", "order_index": 10},
+            {"title": "Повод", "body": "Уточните повод и адресата подарка.", "quiz_question": "Что уточнить после приветствия?", "order_index": 20},
+        ]
+
+        questions = build_training_material_question_pool(slides=slides, target_count=5)
+
+        self.assertEqual(len(questions), 2)
+        self.assertEqual([item["source_slide_order_index"] for item in questions], [10, 20])
+        self.assertEqual([item["question"] for item in questions], ["Как начать контакт спокойно?", "Что уточнить после приветствия?"])
+        self.assertTrue(all(item["source"] == "current_lesson_slide" for item in questions))
+        self.assertNotIn("бюджет", " ".join(item["question"] for item in questions).lower())
+
+    def test_learning_pack_never_uses_pdf_pages_as_learner_slide_images(self):
+        pack = build_training_material_learning_pack_payload(
+            material={
+                "id": "m-pdf",
+                "title": "Стандарты GLAME",
+                "topic": "Бренд",
+                "markdown_content": "# Стандарты\n\nОбъясните ценность бренда клиенту спокойно и конкретно.",
+                "extraction_metadata": {
+                    "visual_assets": [{
+                        "asset_id": "pdf-page-1",
+                        "source": "pdf_rendered_page",
+                        "mime_type": "image/jpeg",
+                        "content_base64": "ZmFrZQ==",
+                    }],
+                },
+            },
+            target_slide_count=3,
+        )
+
+        self.assertTrue(all(slide["image_url"] is None for slide in pack["slides"]))
+        self.assertTrue(all("GLAME premium jewelry training visual" in slide["image_prompt"] for slide in pack["slides"]))
 
     def test_step_material_link_payload_marks_primary_lesson_required(self):
         payload = build_step_material_link_payload(

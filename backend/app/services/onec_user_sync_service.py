@@ -182,10 +182,15 @@ class OneCUserSyncService:
         self,
         onec: OneCOutboundService,
         payload: OneCUserRegistrationPayload,
+        *,
+        existing_card: Dict[str, Any] | None = None,
     ) -> Tuple[str, str, Dict[str, Any]]:
         debug: Dict[str, Any] = {"steps": []}
 
-        card = await onec.find_discount_card_by_phone(payload.phone)
+        # The kiosk questionnaire has already checked the card before asking
+        # the seller to confirm an overwrite. Reuse that authoritative lookup
+        # instead of making the same slow 1C request once more.
+        card = existing_card if existing_card is not None else await onec.find_discount_card_by_phone(payload.phone)
         existing_card_id = None
         if card:
             debug["steps"].append({"type": "found_card", "ref_key": card.get("Ref_Key")})

@@ -23,5 +23,7 @@ python3 "$SCRIPT_DIR/postprocess_flutter_web.py" "$(pwd)/build/web" "$BUILD_ID"
 
 mkdir -p "$WEB_ROOT"
 rsync -a --delete build/web/ "$WEB_ROOT/"
+find "$WEB_ROOT" -type d -exec chmod 755 {} +
+find "$WEB_ROOT" -type f -exec chmod 644 {} +
 
 echo "Deployed BUILD_ID=$BUILD_ID to $WEB_ROOT"

@@ -13,6 +13,10 @@ type AgentBoardChatProps = {
   boardId: string;
   aliases?: string[];
   title?: string;
+  crmMode?: boolean;
+  hiddenTaskContextKey?: string;
+  selectedTaskIdOverride?: string;
+  onSelectedTaskChange?: (taskId: string) => void;
 };
 
 const FINAL_STATUSES = new Set(['completed', 'cancelled', 'failed', 'rejected']);
@@ -69,10 +73,22 @@ function buildTaskTitle(agentName: string, boardId: string, message: string) {
   return snippet ? `${agentName}: ${snippet}` : `${agentName}: операционная задача ${boardId}`;
 }
 
-export default function AgentBoardChat({ agentId, agentName, boardId, aliases = [], title }: AgentBoardChatProps) {
+export default function AgentBoardChat({
+  agentId,
+  agentName,
+  boardId,
+  aliases = [],
+  title,
+  crmMode = false,
+  hiddenTaskContextKey,
+  selectedTaskIdOverride,
+  onSelectedTaskChange,
+}: AgentBoardChatProps) {
   const [tasks, setTasks] = useState<AgentInteractionTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [messages, setMessages] = useState<ChatHistoryItem[]>([]);
+  const [crmPlan, setCrmPlan] = useState<Record<string, any> | null>(null);
+  const [crmActionLoading, setCrmActionLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -95,19 +111,50 @@ export default function AgentBoardChat({ agentId, agentName, boardId, aliases = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!selectedTaskIdOverride || selectedTaskIdOverride === selectedTaskId) return;
+    selectTask(selectedTaskIdOverride);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTaskIdOverride, tasks]);
+
   async function loadThread() {
     setLoading(true);
     setError(null);
     try {
       const allTasks = await agentInteractions.listTasks({ limit: 200 });
-      let agentTasks = allTasks.filter((task) => taskMatches(task, matchKeys));
+      let agentTasks = allTasks.filter(
+        (task) => taskMatches(task, matchKeys)
+          && !(crmMode && task.task_context?.crm_project_hidden)
+          && !(hiddenTaskContextKey && task.task_context?.[hiddenTaskContextKey])
+      );
       agentTasks = agentTasks.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      const activeTask = agentTasks.find((task) => !FINAL_STATUSES.has(task.status)) || agentTasks[0];
+      let overriddenTask = selectedTaskIdOverride
+        ? agentTasks.find((task) => task.id === selectedTaskIdOverride)
+        : undefined;
+      if (selectedTaskIdOverride && !overriddenTask) {
+        overriddenTask = await agentInteractions.getTask(selectedTaskIdOverride).catch((error) => {
+          if (error?.response?.status === 404) {
+            onSelectedTaskChange?.('');
+          }
+          return undefined;
+        });
+        if (overriddenTask && taskMatches(overriddenTask, matchKeys)) {
+          agentTasks = [overriddenTask, ...agentTasks];
+        } else {
+          overriddenTask = undefined;
+        }
+      }
+      const activeTask = overriddenTask || agentTasks.find((task) => !FINAL_STATUSES.has(task.status)) || agentTasks[0];
       setTasks(agentTasks);
       if (activeTask) {
         setSelectedTaskId(activeTask.id);
-        const history = await agentInteractions.getChatHistory(activeTask.id, 120);
+        onSelectedTaskChange?.(activeTask.id);
+        const history = await agentInteractions.getChatHistory(activeTask.id, 500, crmMode);
         setMessages(history);
+        if (crmMode) {
+          const plan = await api.getCrmPlan(activeTask.id).catch(() => null);
+          setCrmPlan(plan?.crm_plan || activeTask.output_data?.crm_plan || null);
+        }
       } else {
         setSelectedTaskId('');
         setMessages([]);
@@ -121,13 +168,28 @@ export default function AgentBoardChat({ agentId, agentName, boardId, aliases = 
 
   async function selectTask(taskId: string) {
     setSelectedTaskId(taskId);
+    onSelectedTaskChange?.(taskId);
     setMessages([]);
+    setCrmPlan(null);
     setError(null);
     try {
-      const history = await agentInteractions.getChatHistory(taskId, 120);
+      const selected = tasks.find((task) => task.id === taskId) || await agentInteractions.getTask(taskId);
+      const history = await agentInteractions.getChatHistory(taskId, 500, crmMode);
       setMessages(history);
+      if (crmMode) {
+        const plan = await api.getCrmPlan(taskId).catch(() => null);
+        setCrmPlan(plan?.crm_plan || selected?.output_data?.crm_plan || null);
+      }
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Не удалось загрузить историю');
+      if (e?.response?.status === 404) {
+        setSelectedTaskId('');
+        onSelectedTaskChange?.('');
+        setMessages([]);
+        setCrmPlan(null);
+        setError('CRM-проект удалён или больше не существует. Выберите другой проект слева.');
+      } else {
+        setError(e?.response?.data?.detail || 'Не удалось загрузить историю');
+      }
     }
   }
 
@@ -170,6 +232,7 @@ export default function AgentBoardChat({ agentId, agentName, boardId, aliases = 
       return exists ? current : [ensured.task, ...current];
     });
     setSelectedTaskId(ensured.task.id);
+    onSelectedTaskChange?.(ensured.task.id);
     return ensured.task;
   }
 
@@ -209,12 +272,57 @@ export default function AgentBoardChat({ agentId, agentName, boardId, aliases = 
     }
   }
 
-  const quickActions = [
+  async function finalizeCrmPlan() {
+    if (!selectedTaskId || crmActionLoading) return;
+    setCrmActionLoading(true);
+    setError(null);
+    try {
+      const latestAssistant = [...messages].reverse().find((item) => item.role === 'assistant')?.content || '';
+      const result = await api.finalizeCrmPlan(selectedTaskId, { source_text: latestAssistant, status: 'needs_elena_approval' });
+      setCrmPlan(result.crm_plan);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Не удалось зафиксировать CRM-план');
+    } finally {
+      setCrmActionLoading(false);
+    }
+  }
+
+  async function createSellerTasks() {
+    if (!selectedTaskId || crmActionLoading) return;
+    setCrmActionLoading(true);
+    setError(null);
+    try {
+      const result = await api.createSellerCrmTasks(selectedTaskId, { crm_plan: crmPlan || undefined, limit: 300 });
+      setCrmPlan(result.crm_plan);
+      setMessages((current) => [
+        ...current,
+        {
+          id: `${new Date().toISOString()}-crm-tasks`,
+          role: 'assistant',
+          content: `Создать задачи продавцам: создано ${result.created}, пропущено дублей ${result.skipped}.`,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Не удалось создать задачи продавцам');
+    } finally {
+      setCrmActionLoading(false);
+    }
+  }
+
+  const defaultQuickActions = [
     `Обнови данные по своей доске ${boardId} и зафиксируй, что изменилось.`,
     'Согласовано, можно передавать задачу в работу. Зафиксируй следующий шаг.',
     'Верни на доработку: проверь вводные, уточни риски и предложи правки.',
     'Передай результат дальше директору и укажи, какие данные приложены.',
   ];
+  const crmQuickActions = [
+    'Подбери CRM-сегмент по логике Елены: цель, критерии, исключения, размер, риски. Не запускай рассылку без согласования.',
+    'Напиши скрипты общения продавца: звонок, WhatsApp/Telegram, VIP-вариант, follow-up и заметку продавцу.',
+    'Собери итоговый CRM-план в JSON contract: status, goal, campaign_name, segment, scenario, scripts, approval, risks, next_action.',
+    'Проверь текст по GLAME guardrails: без комфортного бюджета для Крыма, без пассивного “посмотреть подборку”, без паники и жалости.',
+  ];
+  const quickActions = crmMode ? crmQuickActions : defaultQuickActions;
 
   return (
     <Card className="p-4">
@@ -255,6 +363,38 @@ export default function AgentBoardChat({ agentId, agentName, boardId, aliases = 
           </select>
         </div>
       )}
+
+      {crmMode && selectedTask ? (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-amber-950">CRM-план</h3>
+              <p className="mt-1 text-xs text-amber-800">
+                AI CRM фиксирует здесь итог работы с Еленой: сегмент, сценарий, скрипты, approval и передачу в задачи продавцам.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={finalizeCrmPlan} disabled={crmActionLoading || messages.length === 0}>
+                Зафиксировать CRM-план
+              </Button>
+              <Button variant="default" size="sm" onClick={createSellerTasks} disabled={crmActionLoading || !crmPlan?.segment?.segment_id}>
+                Создать задачи продавцам
+              </Button>
+            </div>
+          </div>
+          {crmPlan ? (
+            <div className="mt-3 grid gap-2 text-xs text-amber-950 md:grid-cols-3">
+              <div><span className="font-medium">Статус:</span> {crmPlan.status || 'draft'}</div>
+              <div><span className="font-medium">Сегмент:</span> {crmPlan.segment?.segment_name || crmPlan.segment?.segment_id || 'не выбран'}</div>
+              <div><span className="font-medium">Клиентов:</span> {crmPlan.segment?.customer_count ?? 0}</div>
+              <div className="md:col-span-3"><span className="font-medium">Цель:</span> {crmPlan.goal || 'не зафиксирована'}</div>
+              <div className="md:col-span-3"><span className="font-medium">Скрипт:</span> {crmPlan.scripts?.main_message || crmPlan.scripts?.call_opener || 'пока не зафиксирован'}</div>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-amber-800">План пока не зафиксирован. Попросите AI CRM собрать итоговый CRM-план, затем нажмите «Зафиксировать CRM-план».</p>
+          )}
+        </div>
+      ) : null}
 
       <div className="mt-4 h-80 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
         {loading ? <p className="text-sm text-gray-500">Загружаю историю чата...</p> : null}

@@ -54,9 +54,9 @@ GLAME does not guarantee public market liquidity, exchange listing, buyback, rub
 
 ## What rate is used inside GLAME?
 
-The MVP reference rate for enabled utility operations is shown in the interface and current rules. For example, the pilot bridge can use 1 point -> 1 GLM or 1 GLM -> 1 point, while purchases of points can include a spread.
+The MVP reference rate for enabled utility operations is shown in the interface and current rules. For example, the pilot bridge can use 1 point -> 1 GLM or 1 GLM -> 1 point. Primary GLM distribution by GLAME can use the shown ruble reference and convert the payment amount into TON at the current operational TON/RUB rate.
 
-This internal reference is not a public market price guarantee.
+This internal reference is not a public market price guarantee, fixed exchange rate, liquidity promise or buyback obligation.
 
 ## What fees or spread can apply?
 

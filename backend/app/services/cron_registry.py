@@ -118,6 +118,20 @@ DEFAULT_CRON_JOBS: List[Dict[str, Any]] = [
         "parameters": {"period": "today", "approval_required": False},
     },
     {
+        "id": "traffic_daily_reporting",
+        "title": "Traffic & Growth — ежедневная read-only синхронизация",
+        "description": "Синхронизирует доступные кабинеты Яндекс Директа только на чтение и сохраняет ежедневный отчёт о трафике, расходе, конверсиях и свежести данных. Не меняет рекламу.",
+        "category": "traffic",
+        "target_agent": "traffic-growth-agent",
+        "task_type": "traffic_daily_reporting",
+        "schedule_type": "daily",
+        "time_of_day": "07:30",
+        "weekday": None,
+        "day_of_month": None,
+        "enabled": True,
+        "parameters": {"read_only": True, "period_days": 14, "report_checkpoints": [1, 3, 10, 14]},
+    },
+    {
         "id": "weekly_operational_review",
         "title": "Недельный operational review",
         "description": "Директор проводит недельный разбор задач, агентских результатов, блокеров и плана следующей недели.",
@@ -531,6 +545,18 @@ async def run_cron_job(db: AsyncSession, job_id: str, manual: bool = False) -> D
         db.add(task)
     await db.flush()
 
+    special_report: Optional[Dict[str, Any]] = None
+    if job.get("task_type") == "traffic_daily_reporting":
+        from app.services.traffic_reporting_service import run_traffic_daily_reporting
+
+        try:
+            special_report = await run_traffic_daily_reporting(db, task)
+        except Exception as exc:
+            task.status = InteractionStatus.FAILED.value
+            task.error_message = str(exc)[:1000]
+            db.add(AgentInteractionLog(task_id=task.id, agent_name="traffic-reporting-scheduler", event_type="traffic_daily_report_failed", event_data={"error": str(exc)[:1000]}, message="Не удалось выполнить ежедневный read-only отчёт Traffic & Growth."))
+            raise
+
     db.add(
         AgentInteractionLog(
             task_id=task.id,
@@ -578,10 +604,11 @@ async def run_cron_job(db: AsyncSession, job_id: str, manual: bool = False) -> D
             "completed_at": now,
             "metadata": _json_dumps(
                 {
-                    "task_type": job["task_type"],
-                    "parameters": job.get("parameters") or {},
-                    "recurrence_key": recurrence_key,
-                    "reused_existing_task": is_reused_task,
+                "task_type": job["task_type"],
+                "parameters": job.get("parameters") or {},
+                "recurrence_key": recurrence_key,
+                "reused_existing_task": is_reused_task,
+                "traffic_report": special_report,
                 }
             ),
         },

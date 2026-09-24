@@ -125,8 +125,8 @@ def _iter_sse_json(response):
 def main():
     payload_in = json.load(sys.stdin)
     prompt = payload_in["prompt"]
-    mime = payload_in["mime"]
-    image_b64 = payload_in["image_b64"]
+    mime = payload_in.get("mime") or "image/png"
+    image_b64 = payload_in.get("image_b64")
     quality = payload_in.get("quality") or "medium"
     size = payload_in.get("size") or "1024x1536"
 
@@ -145,16 +145,14 @@ def main():
         "model": CODEX_CHAT_MODEL,
         "store": False,
         "instructions": (
-            "You are the GLAME jewelry retouching agent. Use the provided source image "
-            "as the strict visual reference and fulfill the request through the image_generation tool."
+            "You are the GLAME visual content agent. Fulfill the request through the "
+            "image_generation tool. When a source image is provided, use it as a strict "
+            "visual reference; otherwise create the requested visual from the prompt."
         ),
         "input": [{
             "type": "message",
             "role": "user",
-            "content": [
-                {"type": "input_text", "text": prompt},
-                {"type": "input_image", "image_url": f"data:{mime};base64,{image_b64}"},
-            ],
+            "content": ([{"type": "input_text", "text": prompt}] + ([{"type": "input_image", "image_url": f"data:{mime};base64,{image_b64}"}] if image_b64 else [])),
         }],
         "tools": [{
             "type": "image_generation",

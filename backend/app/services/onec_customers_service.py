@@ -104,6 +104,7 @@ class OneCCustomersService:
         }
 
         last_exception = None
+        successful_register_query = False
         for attempt in range(max_retries):
             try:
                 logger.info(f"Запрос дисконтных карт (попытка {attempt + 1}/{max_retries}): {url}")
@@ -903,10 +904,9 @@ class OneCCustomersService:
             raise ValueError("API URL не настроен")
 
         # Пробуем сначала виртуальную таблицу остатков
-        loyalty_balances_endpoint = os.getenv(
-            "ONEC_LOYALTY_BALANCES_ENDPOINT",
-            "/AccumulationRegister_БонусныеБаллы_Остатки"
-        )
+        # The virtual balances table is not published in every 1C Fresh OData
+        # instance. Probe it only when a verified endpoint is configured.
+        loyalty_balances_endpoint = (os.getenv("ONEC_LOYALTY_BALANCES_ENDPOINT") or "").strip()
 
         loyalty_endpoint = os.getenv(
             "ONEC_LOYALTY_ENDPOINT",
@@ -946,42 +946,43 @@ class OneCCustomersService:
                     continue
 
                 # Пробуем виртуальную таблицу остатков
-                balances_url = f"{self.api_url.rstrip('/')}{loyalty_balances_endpoint}"
-                params = {
-                    "$filter": f"{field_name} eq guid'{filter_value}'",
-                    "$top": 1,
-                }
-                try:
-                    logger.info(
-                        "Попытка получить остаток из виртуальной таблицы (поле %s)",
-                        field_name,
-                    )
-                    response = await self.client.get(balances_url, params=params)
-                    response.raise_for_status()
+                if loyalty_balances_endpoint:
+                    balances_url = f"{self.api_url.rstrip('/')}{loyalty_balances_endpoint}"
+                    params = {
+                        "$filter": f"{field_name} eq guid'{filter_value}'",
+                        "$top": 1,
+                    }
+                    try:
+                        logger.info(
+                            "Попытка получить остаток из виртуальной таблицы (поле %s)",
+                            field_name,
+                        )
+                        response = await self.client.get(balances_url, params=params)
+                        response.raise_for_status()
 
-                    data = response.json()
-                    records = data.get("value", [])
-                    if records:
-                        record = records[0]
-                        # В виртуальной таблице остатков должно быть поле "Остаток" или "КоличествоОстаток"
-                        остаток = record.get("Остаток") or record.get("КоличествоОстаток") or record.get("Начислено")
-                        if остаток is not None:
-                            try:
-                                balance = int(float(остаток))
-                                source_id = record.get("БонуснаяКарта_Key") or filter_value
-                                logger.info("Получен остаток из виртуальной таблицы: %s", balance)
-                                return {"balance": balance, "source_id": source_id}
-                            except (TypeError, ValueError):
-                                pass
-                except httpx.HTTPStatusError as e:
-                    if e.response.status_code == 404:
-                        logger.debug("Виртуальная таблица остатков не найдена, используем RecordType")
-                    elif e.response.status_code == 400 and "Сегмент пути" in e.response.text:
-                        logger.debug("Поле %s не найдено в виртуальной таблице остатков", field_name)
-                    else:
-                        logger.debug("Ошибка при запросе виртуальной таблицы остатков: %s", e.response.status_code)
-                except Exception as e:
-                    logger.debug("Ошибка при запросе виртуальной таблицы остатков: %s", e)
+                        data = response.json()
+                        records = data.get("value", [])
+                        if records:
+                            record = records[0]
+                            # В виртуальной таблице остатков должно быть поле "Остаток" или "КоличествоОстаток"
+                            остаток = record.get("Остаток") or record.get("КоличествоОстаток") or record.get("Начислено")
+                            if остаток is not None:
+                                try:
+                                    balance = int(float(остаток))
+                                    source_id = record.get("БонуснаяКарта_Key") or filter_value
+                                    logger.info("Получен остаток из виртуальной таблицы: %s", balance)
+                                    return {"balance": balance, "source_id": source_id}
+                                except (TypeError, ValueError):
+                                    pass
+                    except httpx.HTTPStatusError as e:
+                        if e.response.status_code == 404:
+                            logger.debug("Виртуальная таблица остатков не найдена, используем RecordType")
+                        elif e.response.status_code == 400 and "Сегмент пути" in e.response.text:
+                            logger.debug("Поле %s не найдено в виртуальной таблице остатков", field_name)
+                        else:
+                            logger.debug("Ошибка при запросе виртуальной таблицы остатков: %s", e.response.status_code)
+                    except Exception as e:
+                        logger.debug("Ошибка при запросе виртуальной таблицы остатков: %s", e)
 
                 # Если виртуальная таблица не сработала, используем RecordType
                 url = f"{self.api_url.rstrip('/')}{loyalty_endpoint}"
@@ -1001,35 +1002,44 @@ class OneCCustomersService:
                     try:
                         response.raise_for_status()
                     except httpx.HTTPStatusError as e:
-                        if e.response.status_code == 500 and "AUTOORDER" in e.response.text:
-                            logger.warning(
-                                "1C не приняла $orderby для бонусов, повторяем запрос без сортировки."
-                            )
-                            params.pop("$orderby", None)
-                            response = await self.client.get(url, params=params)
-                            try:
-                                response.raise_for_status()
-                            except httpx.HTTPStatusError as no_order_error:
-                                if no_order_error.response.status_code == 500 and "Операция не разрешена" in no_order_error.response.text:
-                                    return await self._fetch_loyalty_balance_by_scan(
-                                        customer_key=customer_key,
-                                        discount_card_key=discount_card_key,
-                                        endpoint=loyalty_endpoint,
-                                    )
-                                raise
-                        elif e.response.status_code == 500 and "Операция не разрешена" in e.response.text:
-                            return await self._fetch_loyalty_balance_by_scan(
-                                customer_key=customer_key,
-                                discount_card_key=discount_card_key,
-                                endpoint=loyalty_endpoint,
-                            )
+                        if self._is_onec_query_restricted_error(e):
+                            if e.response.status_code == 500 and "AUTOORDER" in e.response.text:
+                                logger.warning(
+                                    "1C не приняла $orderby для бонусов, повторяем запрос без сортировки."
+                                )
+                                params.pop("$orderby", None)
+                                response = await self.client.get(url, params=params)
+                                try:
+                                    response.raise_for_status()
+                                except httpx.HTTPStatusError as no_order_error:
+                                    if self._is_onec_query_restricted_error(no_order_error):
+                                        return await self._fetch_loyalty_balance_by_scan(
+                                            customer_key=customer_key,
+                                            discount_card_key=discount_card_key,
+                                            endpoint=loyalty_endpoint,
+                                        )
+                                    raise
+                            else:
+                                logger.warning(
+                                    "1C запретила фильтр регистра бонусов (%s), используем scan fallback.",
+                                    e.response.status_code,
+                                )
+                                return await self._fetch_loyalty_balance_by_scan(
+                                    customer_key=customer_key,
+                                    discount_card_key=discount_card_key,
+                                    endpoint=loyalty_endpoint,
+                                )
                         else:
                             raise
 
                     data = response.json()
                     records = data.get("value", [])
+                    successful_register_query = True
                     if not records:
-                        return {"balance": 0, "source_id": None}
+                        # A card can be linked through another configured field
+                        # (for example, customer instead of bonus-card key).
+                        # Check every relation before concluding the balance is 0.
+                        continue
                     records = self._filter_records_by_date(records, None, None)
                     calculated = self._current_loyalty_balance_from_records(records)
 
@@ -1068,6 +1078,8 @@ class OneCCustomersService:
 
         if last_exception:
             raise last_exception
+        if successful_register_query:
+            return {"balance": 0, "source_id": None}
         return None
 
     def build_customer_profile(
@@ -1428,11 +1440,25 @@ class OneCCustomersService:
         return fields or ["ДисконтнаяКарта_Key"]
 
     @staticmethod
+    def _is_onec_query_restricted_error(error: httpx.HTTPStatusError) -> bool:
+        """Return True for 1C Fresh OData restrictions on WHERE/ORDERBY for registers."""
+        body = error.response.text or ""
+        if error.response.status_code == 403:
+            return True
+        if error.response.status_code in {400, 500} and (
+            "Операция не разрешена" in body
+            or "AUTOORDER" in body
+            or "Сегмент пути" in body
+        ):
+            return True
+        return False
+
+    @staticmethod
     def _loyalty_filter_fields() -> List[str]:
         # По умолчанию используем БонуснаяКарта_Key (правильное поле для AccumulationRegister_БонусныеБаллы_RecordType)
         raw = os.getenv(
             "ONEC_LOYALTY_FILTER_FIELDS",
-            "БонуснаяКарта_Key,ДисконтнаяКарта_Key,ВладелецКарты_Key,Контрагент_Key,Покупатель_Key",
+            "БонуснаяКарта_Key",
         )
         fields = [field.strip() for field in raw.split(",") if field.strip()]
         return fields or ["БонуснаяКарта_Key"]

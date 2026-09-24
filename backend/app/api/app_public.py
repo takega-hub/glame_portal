@@ -189,6 +189,10 @@ async def get_app_home_slides(
             "title": x.title,
             "subtitle": x.subtitle,
             "background_image_url": getattr(x, "background_image_url", None),
+            "background_mode": getattr(x, "background_mode", "image") or "image",
+            "background_color_hex": getattr(x, "background_color_hex", None),
+            "background_color_ral": getattr(x, "background_color_ral", None),
+            "text_color_hex": getattr(x, "text_color_hex", None),
             "image_url": x.image_url,
             "image_action_link": getattr(x, "image_action_link", None),
             "image_action_type": getattr(x, "image_action_type", None),
@@ -240,6 +244,7 @@ async def get_app_stores(
             "image_urls": _store_image_urls(x),
             "latitude": x.latitude,
             "longitude": x.longitude,
+            "stock_store_external_id": x.stock_store_external_id,
             "sort_order": x.sort_order,
             "is_active": x.is_active,
             "updated_at": x.updated_at.isoformat() if x.updated_at else None,
@@ -310,7 +315,7 @@ async def get_app_promotions(
 
     if active_only and normalized_status == "published":
         stmt = stmt.where(or_(AppPromotion.starts_at.is_(None), AppPromotion.starts_at <= now))
-        stmt = stmt.where(or_(AppPromotion.ends_at.is_(None), AppPromotion.ends_at >= now))
+        stmt = stmt.where(or_(AppPromotion.ends_at.is_(None), AppPromotion.ends_at > now))
 
     stmt = stmt.order_by(desc(AppPromotion.updated_at)).offset(skip).limit(limit)
     rows = (await db.execute(stmt)).scalars().all()
@@ -323,6 +328,12 @@ async def get_app_promotions(
             "starts_at": x.starts_at.isoformat() if x.starts_at else None,
             "ends_at": x.ends_at.isoformat() if x.ends_at else None,
             "status": x.status,
+            "discount_kind": x.discount_kind or "none",
+            "is_cart_discount": bool(x.is_cart_discount),
+            "group_size": int(x.group_size or 3),
+            "discounted_items_per_group": int(x.discounted_items_per_group or 1),
+            "discounted_item_price": int(x.discounted_item_price or 100),
+            "discount_config": x.discount_config or None,
             "updated_at": x.updated_at.isoformat() if x.updated_at else None,
         }
         for x in rows

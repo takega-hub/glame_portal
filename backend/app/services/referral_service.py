@@ -472,6 +472,7 @@ class ReferralService:
                 partner_title="У вас новый реферал GLAME",
                 lines=lines,
                 severity="info",
+                partner_category="referrals",
             )
         except Exception as error:  # noqa: BLE001
             logger.warning("Failed to send Telegram referral-attribution notification: %s", error)

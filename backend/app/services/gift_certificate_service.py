@@ -32,8 +32,50 @@ def _rub(amount_kopeks: int) -> int:
     return max(0, int(amount_kopeks or 0))
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def gift_certificate_amount_limits() -> dict[str, int]:
+    min_amount = max(1, _env_int("GIFT_CERTIFICATE_MIN_AMOUNT", 100_000))
+    max_amount = max(min_amount, _env_int("GIFT_CERTIFICATE_MAX_AMOUNT", 10_000_000))
+    step = max(1, _env_int("GIFT_CERTIFICATE_AMOUNT_STEP", 100))
+    return {
+        "min_amount": min_amount,
+        "max_amount": max_amount,
+        "step": step,
+    }
+
+
+def validate_gift_certificate_nominal(amount_kopeks: int) -> int:
+    nominal = _rub(amount_kopeks)
+    limits = gift_certificate_amount_limits()
+    if nominal < limits["min_amount"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Certificate nominal must be at least {limits['min_amount'] // 100} RUB",
+        )
+    if nominal > limits["max_amount"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Certificate nominal must be no more than {limits['max_amount'] // 100} RUB",
+        )
+    if nominal % limits["step"] != 0:
+        step_rub = limits["step"] / 100
+        raise HTTPException(
+            status_code=400,
+            detail=f"Certificate nominal must be a multiple of {step_rub:g} RUB",
+        )
+    return nominal
+
+
 def hash_certificate_pin(pin: str) -> str:
-    secret = os.getenv("GIFT_CERTIFICATE_SECRET") or os.getenv("JWT_SECRET_KEY") or "glame-gift-secret"
+    secret = os.getenv("GIFT_CERTIFICATE_SECRET") or os.getenv("JWT_SECRET_KEY")
+    if not secret:
+        raise RuntimeError("GIFT_CERTIFICATE_SECRET or JWT_SECRET_KEY must be configured")
     return hmac.new(secret.encode("utf-8"), str(pin).encode("utf-8"), hashlib.sha256).hexdigest()
 
 
@@ -52,6 +94,143 @@ class GiftCertificateService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def create_program_certificate(
+        self,
+        *,
+        recipient_user_id: UUID,
+        nominal_amount: int,
+        source: str,
+        source_idempotency_key: str,
+        recipient_name: Optional[str] = None,
+        recipient_phone: Optional[str] = None,
+        recipient_email: Optional[str] = None,
+        message: Optional[str] = None,
+        expires_in_days: int = 30,
+        buyer_user_id: Optional[UUID] = None,
+        meta: Optional[dict[str, Any]] = None,
+    ) -> tuple[GiftCertificate, str, bool]:
+        """Issue an active certificate from an internal CRM/loyalty program.
+
+        Unlike purchased certificates this flow has no order/payment. It is
+        idempotent by source key because daily CRM generators may run more than
+        once for the same customer/birthday.
+        """
+        if not source_idempotency_key:
+            raise HTTPException(status_code=400, detail="source_idempotency_key is required")
+
+        existing = (
+            await self.db.execute(
+                select(GiftCertificate).where(
+                    GiftCertificate.meta["source_idempotency_key"].as_string() == source_idempotency_key
+                )
+            )
+        ).scalar_one_or_none()
+        if existing:
+            existing_meta = existing.meta if isinstance(existing.meta, dict) else {}
+            return existing, str(existing_meta.get("delivery_pin") or ""), False
+
+        nominal = validate_gift_certificate_nominal(nominal_amount)
+        pin = generate_certificate_pin()
+        for _ in range(10):
+            number = generate_certificate_number()
+            exists = (
+                await self.db.execute(select(GiftCertificate).where(GiftCertificate.number == number))
+            ).scalar_one_or_none()
+            if not exists:
+                break
+        else:
+            raise HTTPException(status_code=500, detail="Could not generate certificate number")
+
+        cert_meta = {
+            **(meta or {}),
+            "delivery_pin": pin,
+            "source": source,
+            "source_idempotency_key": source_idempotency_key,
+            "program_certificate": True,
+            "validity_days": max(1, int(expires_in_days or 30)),
+        }
+        if os.getenv("ONEC_GIFT_CERTIFICATES_ENABLED", "true").lower() in {"0", "false", "no"}:
+            raise HTTPException(status_code=503, detail="CRM certificates require 1C gift certificate accounting")
+        organization_ref = os.getenv("ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY")
+        if not organization_ref:
+            raise HTTPException(status_code=503, detail="ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY is not configured")
+        try:
+            async with OneCGiftCertificateService() as onec:
+                onec_nomenclature = await onec.find_gift_nomenclature_by_nominal(nominal)
+                onec_custom_nominal = False
+                if not onec_nomenclature:
+                    onec_nomenclature = await onec.find_arbitrary_gift_nomenclature()
+                    onec_custom_nominal = bool(onec_nomenclature)
+                if not onec_nomenclature:
+                    raise RuntimeError(f"Gift certificate nominal {nominal // 100} RUB is not configured in 1C")
+                onec_series = await onec.create_series(
+                    certificate_number=number,
+                    gift_nomenclature_ref=str(onec_nomenclature["Ref_Key"]),
+                    sold=False,
+                )
+                series_ref = str(onec_series.get("Ref_Key") or "")
+                if not series_ref:
+                    raise RuntimeError("1C did not return the gift certificate series reference")
+                cert_meta["onec_series_ref_key"] = series_ref
+                cert_meta["onec_series_number"] = onec_series.get("Description") or number
+                if onec_custom_nominal:
+                    await onec.set_series_nominal(series_ref, nominal)
+                issued_doc = await onec.issue_program_balance(
+                    series_ref_key=series_ref,
+                    gift_nomenclature_ref=str(onec_nomenclature["Ref_Key"]),
+                    nominal_kopeks=nominal,
+                    organization_ref_key=organization_ref,
+                    certificate_number=number,
+                )
+                cert_meta["onec_balance_document_ref_key"] = issued_doc.get("Ref_Key")
+                cert_meta["onec_gift_nomenclature_ref_key"] = onec_nomenclature.get("Ref_Key")
+                cert_meta["onec_gift_nomenclature_name"] = onec_nomenclature.get("Description")
+                cert_meta["onec_gift_nomenclature_article"] = onec_nomenclature.get("Артикул")
+                cert_meta["onec_gift_nomenclature_nominal"] = onec_nomenclature.get("Номинал")
+                cert_meta["onec_gift_nomenclature_arbitrary"] = bool(onec_nomenclature.get("ПроизвольныйНоминал"))
+                if onec_custom_nominal:
+                    cert_meta["custom_nominal"] = True
+                    cert_meta["custom_nominal_amount"] = nominal
+                cert_meta["onec_sync_status"] = "balance_posted"
+        except Exception as exc:
+            logger.exception("Не удалось начислить программный подарочный сертификат в 1С")
+            raise HTTPException(status_code=502, detail=f"Could not activate program certificate in 1C: {exc}") from exc
+
+        now = _now()
+        cert = GiftCertificate(
+            number=number,
+            pin_hash=hash_certificate_pin(pin),
+            status="active",
+            currency="RUB",
+            nominal_amount=nominal,
+            balance_amount=nominal,
+            reserved_amount=0,
+            buyer_user_id=buyer_user_id or recipient_user_id,
+            recipient_user_id=recipient_user_id,
+            recipient_name=recipient_name,
+            recipient_phone=recipient_phone,
+            recipient_email=recipient_email,
+            message=message,
+            onec_certificate_id=cert_meta.get("onec_series_ref_key"),
+            onec_sale_document_id=cert_meta.get("onec_balance_document_ref_key"),
+            expires_at=now + timedelta(days=max(1, int(expires_in_days or 30))),
+            issued_at=now,
+            activated_at=now,
+            meta=cert_meta,
+        )
+        self.db.add(cert)
+        await self.db.flush()
+        self._add_tx(
+            cert,
+            "program_issue",
+            nominal,
+            created_by=buyer_user_id,
+            source=source,
+            external_operation_id=source_idempotency_key,
+            meta={"source": source, "source_idempotency_key": source_idempotency_key},
+        )
+        return cert, pin, True
+
     async def create_pending_certificate(
         self,
         *,
@@ -66,9 +245,11 @@ class GiftCertificateService:
         expires_in_days: int = 365,
         meta: Optional[dict[str, Any]] = None,
     ) -> tuple[GiftCertificate, str]:
-        nominal = _rub(nominal_amount)
-        if nominal <= 0:
-            raise HTTPException(status_code=400, detail="Certificate nominal must be positive")
+        nominal = validate_gift_certificate_nominal(nominal_amount)
+        if os.getenv("ONEC_GIFT_CERTIFICATES_ENABLED", "true").lower() in {"0", "false", "no"}:
+            raise HTTPException(status_code=503, detail="Electronic certificates require 1C gift certificate accounting")
+        if not os.getenv("ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY"):
+            raise HTTPException(status_code=503, detail="ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY is not configured")
 
         pin = generate_certificate_pin()
         for _ in range(10):
@@ -85,20 +266,30 @@ class GiftCertificateService:
         cert_meta.setdefault("delivery_pin", pin)
         onec_series = None
         onec_nomenclature = None
+        onec_custom_nominal = False
         if os.getenv("ONEC_GIFT_CERTIFICATES_ENABLED", "true").lower() not in {"0", "false", "no"}:
             try:
                 async with OneCGiftCertificateService() as onec:
                     onec_nomenclature = await onec.find_gift_nomenclature_by_nominal(nominal)
                     if not onec_nomenclature:
+                        onec_nomenclature = await onec.find_arbitrary_gift_nomenclature()
+                        onec_custom_nominal = bool(onec_nomenclature)
+                    if not onec_nomenclature:
                         raise HTTPException(
                             status_code=400,
-                            detail=f"Gift certificate nominal {nominal // 100} RUB is not configured in 1C",
+                            detail=(
+                                f"Gift certificate nominal {nominal // 100} RUB is not configured in 1C "
+                                "and arbitrary nominal gift certificate nomenclature was not found"
+                            ),
                         )
                     onec_series = await onec.create_series(
                         certificate_number=number,
                         gift_nomenclature_ref=str(onec_nomenclature["Ref_Key"]),
                         sold=False,
                     )
+                    if not onec_series or not onec_series.get("Ref_Key"):
+                        raise RuntimeError("1C did not return the gift certificate series reference")
+                    onec_series = await onec.set_series_nominal(str(onec_series["Ref_Key"]), nominal)
             except HTTPException:
                 raise
             except Exception as exc:
@@ -111,6 +302,13 @@ class GiftCertificateService:
             cert_meta["onec_gift_nomenclature_ref_key"] = onec_nomenclature.get("Ref_Key")
             cert_meta["onec_gift_nomenclature_name"] = onec_nomenclature.get("Description")
             cert_meta["onec_gift_nomenclature_article"] = onec_nomenclature.get("Артикул")
+            cert_meta["onec_gift_nomenclature_nominal"] = onec_nomenclature.get("Номинал")
+            cert_meta["onec_gift_nomenclature_arbitrary"] = bool(
+                onec_nomenclature.get("ПроизвольныйНоминал")
+            )
+        if onec_custom_nominal:
+            cert_meta["custom_nominal"] = True
+            cert_meta["custom_nominal_amount"] = nominal
 
         cert = GiftCertificate(
             number=number,
@@ -147,7 +345,7 @@ class GiftCertificateService:
         ).scalars().all()
         activated: list[GiftCertificate] = []
         for cert in rows:
-            await self._mark_onec_series_sold(cert, sold=True)
+            await self.ensure_onec_certificate_balance(cert, source="purchase")
             cert.status = "active"
             cert.balance_amount = int(cert.nominal_amount or 0)
             cert.reserved_amount = 0
@@ -163,6 +361,35 @@ class GiftCertificateService:
             )
             activated.append(cert)
         return activated
+
+    async def ensure_onec_certificate_balance(self, cert: GiftCertificate, *, source: str) -> None:
+        meta = cert.meta if isinstance(cert.meta, dict) else {}
+        series_ref = cert.onec_certificate_id or meta.get("onec_series_ref_key")
+        gift_ref = meta.get("onec_gift_nomenclature_ref_key")
+        organization_ref = os.getenv("ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY")
+        if not series_ref or not gift_ref or not organization_ref:
+            raise HTTPException(status_code=503, detail="Certificate accounting references are missing in 1C")
+        if os.getenv("ONEC_GIFT_CERTIFICATES_ENABLED", "true").lower() in {"0", "false", "no"}:
+            raise HTTPException(status_code=503, detail="Electronic certificates require 1C gift certificate accounting")
+        try:
+            async with OneCGiftCertificateService() as onec:
+                document = await onec.issue_program_balance(
+                    series_ref_key=str(series_ref),
+                    gift_nomenclature_ref=str(gift_ref),
+                    nominal_kopeks=int(cert.nominal_amount),
+                    organization_ref_key=organization_ref,
+                    certificate_number=cert.number,
+                    source=source,
+                )
+        except Exception as exc:
+            logger.exception("Не удалось провести остаток сертификата %s в 1С", cert.number)
+            raise HTTPException(status_code=502, detail=f"Could not activate certificate in 1C: {exc}") from exc
+        next_meta = dict(meta)
+        next_meta["onec_sync_status"] = "balance_posted"
+        if document.get("Ref_Key"):
+            next_meta["onec_balance_document_ref_key"] = document["Ref_Key"]
+            cert.onec_sale_document_id = str(document["Ref_Key"])
+        cert.meta = next_meta
 
     async def cancel_order_certificates(self, order_id: UUID) -> list[GiftCertificate]:
         rows = (

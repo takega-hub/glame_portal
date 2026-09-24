@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { api, type PersonalTrainingSummaryResponse, type SellerKpiRow, type SellerKpiSnapshot, type SellerShift } from '@/lib/api';
+import { api, type AdaptiveDailyPlanResponse, type SellerKpiRow, type SellerKpiSnapshot, type SellerShift } from '@/lib/api';
 import { useAuth } from '@/components/auth/AuthProvider';
 
 const currentMonth = new Date().toISOString().slice(0, 7);
@@ -127,7 +127,7 @@ export default function SellerPersonalKpiPage() {
   const [storeSellers, setStoreSellers] = useState<SellerKpiRow[]>([]);
   const [shifts, setShifts] = useState<SellerShift[]>([]);
   const [snapshots, setSnapshots] = useState<SellerKpiSnapshot[]>([]);
-  const [trainingSummary, setTrainingSummary] = useState<PersonalTrainingSummaryResponse | null>(null);
+  const [dailyPlan, setDailyPlan] = useState<AdaptiveDailyPlanResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,7 +138,7 @@ export default function SellerPersonalKpiPage() {
         setStoreSellers([]);
         setShifts([]);
         setSnapshots([]);
-        setTrainingSummary(null);
+        setDailyPlan(null);
         setError(null);
         setLoading(false);
         return;
@@ -168,23 +168,18 @@ export default function SellerPersonalKpiPage() {
         }));
         setSnapshots(snapshotResponse.snapshots || []);
         if (matched) {
-          const checks = matched.checks || 0;
-          const matchedItems = matched.items_sold || 0;
-          setTrainingSummary(await api.getSellerTrainingSummary({
-            seller_external_id: matched.seller_external_id || sellerExternalId || null,
-            seller_name: matched.seller_name || sellerNameParam || selfName || null,
-            store_name: matched.store_name || storeName || null,
-            kpi: {
-              completion_percent: matched.completion_percent,
-              avg_check: checks ? matched.revenue / checks : null,
-              items_per_check: checks ? matchedItems / checks : null,
-              revenue: matched.revenue,
-              revenue_plan: matched.revenue_plan,
-              checks: matched.checks,
-            },
-          }));
+          try {
+            setDailyPlan(await api.getAdaptiveDailyPlan({
+              month,
+              seller_external_id: matched.seller_external_id || sellerExternalId || null,
+              seller_name: matched.seller_name || sellerNameParam || selfName || null,
+              store_name: matched.store_name || storeName || null,
+            }));
+          } catch {
+            setDailyPlan(null);
+          }
         } else {
-          setTrainingSummary(null);
+          setDailyPlan(null);
         }
       } catch (e: any) {
         setError(e.response?.data?.detail || e.message || 'Не удалось загрузить личный KPI продавца');
@@ -217,44 +212,6 @@ export default function SellerPersonalKpiPage() {
       { label: 'Продажи/смена', fact: salesPerShift, plan: seller.avg_sales_per_shift_plan, percent: completion(salesPerShift, seller.avg_sales_per_shift_plan), format: 'money' },
     ];
   }, [avgCheck, avgItemPrice, itemsPerCheck, salesPerShift, seller, shiftCount]);
-
-  const dailyPlan = useMemo(() => {
-    if (!seller) return null;
-    const { daysInMonth, elapsedDays, daysLeftIncludingToday, isCurrentMonth } = monthProgress(month);
-    const revenuePlan = Number(seller.revenue_plan || 0);
-    const checksPlan = seller.checks_plan === null || seller.checks_plan === undefined ? null : Number(seller.checks_plan || 0);
-    const itemsPlan = seller.items_plan === null || seller.items_plan === undefined ? null : Number(seller.items_plan || 0);
-    const expectedRevenueToDate = revenuePlan ? (revenuePlan / daysInMonth) * elapsedDays : 0;
-    const expectedChecksToDate = checksPlan ? (checksPlan / daysInMonth) * elapsedDays : null;
-    const expectedItemsToDate = itemsPlan ? (itemsPlan / daysInMonth) * elapsedDays : null;
-    const remainingRevenue = Math.max(revenuePlan - Number(seller.revenue || 0), 0);
-    const remainingChecks = checksPlan === null ? null : Math.max(checksPlan - Number(seller.checks || 0), 0);
-    const remainingItems = itemsPlan === null ? null : Math.max(itemsPlan - Number(seller.items_sold || 0), 0);
-    const requiredDailyRevenue = remainingRevenue / daysLeftIncludingToday;
-    const requiredDailyChecks = remainingChecks === null ? null : remainingChecks / daysLeftIncludingToday;
-    const requiredDailyItems = remainingItems === null ? null : remainingItems / daysLeftIncludingToday;
-    const revenueGapToDate = Math.max(expectedRevenueToDate - Number(seller.revenue || 0), 0);
-    const checksGapToDate = expectedChecksToDate === null ? null : Math.max(expectedChecksToDate - Number(seller.checks || 0), 0);
-    const itemsGapToDate = expectedItemsToDate === null ? null : Math.max(expectedItemsToDate - Number(seller.items_sold || 0), 0);
-    return {
-      daysInMonth,
-      elapsedDays,
-      daysLeftIncludingToday,
-      isCurrentMonth,
-      expectedRevenueToDate,
-      expectedChecksToDate,
-      expectedItemsToDate,
-      remainingRevenue,
-      remainingChecks,
-      remainingItems,
-      requiredDailyRevenue,
-      requiredDailyChecks,
-      requiredDailyItems,
-      revenueGapToDate,
-      checksGapToDate,
-      itemsGapToDate,
-    };
-  }, [month, seller]);
 
   const trendData = useMemo(() => snapshots
     .map((snapshot) => {
@@ -365,56 +322,6 @@ export default function SellerPersonalKpiPage() {
             </div>
           </div>
 
-          {trainingSummary && (
-            <div className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-amber-50 p-5 shadow-sm">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-blue-700">KPI + обучение</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-gray-950">Что развивать, чтобы выполнить личный план</h2>
-                  <p className="mt-1 text-sm text-gray-600">Обучение связано с KPI как управленческая гипотеза: следующий учебный фокус проверяем через ближайшие смены и динамику продаж.</p>
-                </div>
-                <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${trainingSummary.summary.priority === 'high' ? 'bg-red-50 text-red-800' : 'bg-blue-50 text-blue-900'}`}>
-                  {trainingSummary.summary.priority === 'high' ? 'Высокий приоритет' : 'Учебный фокус'}
-                </div>
-              </div>
-              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl bg-white p-4 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Уровень</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-950">{trainingSummary.summary.level || '—'}</p>
-                  <p className="mt-1 text-sm text-gray-600">{trainingSummary.summary.completed_steps}/{trainingSummary.summary.total_steps} этапов</p>
-                </div>
-                <div className="rounded-2xl bg-white p-4 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Прогресс обучения</p>
-                  <p className="mt-2 text-2xl font-semibold text-blue-700">{trainingSummary.summary.progress_percent}%</p>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(trainingSummary.summary.progress_percent, 100)}%` }} /></div>
-                </div>
-                <div className="rounded-2xl bg-white p-4 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Аттестация</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-950">{trainingSummary.summary.attestation_ready ? 'Готов' : 'Не готов'}</p>
-                  <p className="mt-1 text-sm text-gray-600">допуск по прогрессу и компетенциям</p>
-                </div>
-                <div className="rounded-2xl bg-white p-4 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Следующий шаг</p>
-                  <p className="mt-2 text-lg font-semibold text-gray-950">{trainingSummary.summary.next_program_title || 'Программа не найдена'}</p>
-                  <p className="mt-1 text-sm text-gray-600">{trainingSummary.summary.next_action?.label || 'Назначить этап обучения'}</p>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl bg-white/85 p-4">
-                  <p className="text-sm font-semibold text-blue-900">Учебный фокус</p>
-                  <p className="mt-2 text-sm leading-6 text-gray-800">{trainingSummary.summary.recommended_training_focus}</p>
-                  {trainingSummary.summary.weakest_competencies.length ? <div className="mt-3 flex flex-wrap gap-2">{trainingSummary.summary.weakest_competencies.slice(0, 4).map((item) => <span key={item.code || item.label} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800">{item.label} · {item.percent}%</span>)}</div> : null}
-                </div>
-                <div className="rounded-2xl bg-white/85 p-4">
-                  <p className="text-sm font-semibold text-blue-900">Рекомендация руководителю</p>
-                  <p className="mt-2 text-sm leading-6 text-gray-800">{trainingSummary.summary.manager_recommendation}</p>
-                  {trainingSummary.summary.kpi_focus.length ? <p className="mt-3 text-xs text-gray-500">KPI-фокус: {trainingSummary.summary.kpi_focus.join(', ')}</p> : null}
-                </div>
-              </div>
-              {!trainingSummary.found && <p className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm text-amber-800">Аккаунт обучения для этого продавца пока не сопоставлен. KPI виден, но обучение нужно связать с пользователем/1C ID.</p>}
-            </div>
-          )}
-
           {dailyPlan && (
             <div className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-5 shadow-sm">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -422,41 +329,43 @@ export default function SellerPersonalKpiPage() {
                   <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">План на сегодня</p>
                   <h2 className="mt-2 text-2xl font-semibold text-gray-950">Что нужно сделать, чтобы выйти на месячный план</h2>
                   <p className="mt-1 text-sm text-gray-600">
-                    Расчёт корректируется от факта: план месяца минус уже выполнено, делим на оставшиеся дни.
+                    {dailyPlan.explanation}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 text-sm text-gray-700 shadow-sm">
-                  <p className="font-semibold text-gray-950">{dailyPlan.isCurrentMonth ? 'Сегодня' : 'Ориентир периода'}</p>
-                  <p>{dailyPlan.elapsedDays} из {dailyPlan.daysInMonth} дней · осталось {dailyPlan.daysLeftIncludingToday}</p>
+                  <p className="font-semibold text-gray-950">Расчёт на {dailyPlan.calculation_date}</p>
+                  <p>Рабочая цель: {formatMoney(dailyPlan.working_monthly_target)}</p>
                 </div>
               </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Нужно сегодня</p>
-                  <p className="mt-2 text-3xl font-semibold text-emerald-700">{formatMoney(dailyPlan.requiredDailyRevenue)}</p>
-                  <p className="mt-1 text-sm text-gray-600">средний дневной темп до конца месяца</p>
+                  <p className="mt-2 text-3xl font-semibold text-emerald-700">{formatMoney(dailyPlan.daily_plan_managerial)}</p>
+                  <p className="mt-1 text-sm text-gray-600">адаптивный план по весу дня</p>
                 </div>
                 <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Плановый темп к сегодняшнему дню</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-950">{formatMoney(dailyPlan.expectedRevenueToDate)}</p>
-                  <p className="mt-1 text-sm text-gray-600">добрать по темпу: {formatMoney(dailyPlan.revenueGapToDate)}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Прогноз месяца</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-950">{formatMoney(dailyPlan.forecast_month_total)}</p>
+                  <p className="mt-1 text-sm text-gray-600">отклонение: {formatMoney(Math.abs(dailyPlan.target_gap_amount || 0))}</p>
                 </div>
                 <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">До месячного плана осталось</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-950">{formatMoney(dailyPlan.remainingRevenue)}</p>
-                  <p className="mt-1 text-sm text-gray-600">из плана {formatMoney(seller.revenue_plan)}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">До рабочей цели осталось</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-950">{formatMoney(dailyPlan.remaining_to_target)}</p>
+                  <p className="mt-1 text-sm text-gray-600">факт: {formatMoney(dailyPlan.net_sales_fact)} · возвраты: {formatMoney(dailyPlan.returns_amount)}</p>
                 </div>
                 <div className="rounded-2xl border border-white/80 bg-white p-4 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Чеки и изделия на день</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-950">{formatNumber(dailyPlan.requiredDailyChecks, 1)} чеков</p>
-                  <p className="mt-1 text-sm text-gray-600">изделий: {formatNumber(dailyPlan.requiredDailyItems, 1)} · добрать изделий по темпу: {formatNumber(dailyPlan.itemsGapToDate, 1)}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Необходимый средний темп</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-950">{formatMoney(dailyPlan.required_daily_average)}</p>
+                  <p className="mt-1 text-sm text-gray-600">выполнение рабочей цели: {formatPercent(dailyPlan.working_target_completion_percent)}</p>
                 </div>
               </div>
 
               <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/85 p-4">
-                <p className="text-sm font-semibold text-emerald-800">Совет AI-тренера на сегодня</p>
-                <p className="mt-2 text-sm leading-6 text-gray-800">{buildDailyPlanRecommendation(dailyPlan)}</p>
+                <p className="text-sm font-semibold text-emerald-800">KPI-фокус: {dailyPlan.kpi_focus.title}</p>
+                <p className="mt-2 text-sm leading-6 text-gray-800">{dailyPlan.kpi_focus.action}</p>
+                <p className="mt-2 text-xs text-gray-500">Коэффициенты: день недели ×{dailyPlan.coefficients.weekday}, календарь ×{dailyPlan.coefficients.calendar}, pacing ×{dailyPlan.coefficients.pacing}. Сумма весов: {dailyPlan.coefficients.remaining_weights_sum}.</p>
+                {dailyPlan.warnings.map((warning) => <p key={warning} className="mt-2 text-xs text-amber-800">{warning}</p>)}
               </div>
             </div>
           )}

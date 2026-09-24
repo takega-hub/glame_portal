@@ -31,9 +31,15 @@ from app.models.app_setting import AppSetting
 from app.models.app_store import AppStore
 from app.models.product_stock import ProductStock
 from app.api.auth import get_current_user
+from app.services.customer_questionnaire_service import questionnaire_from_preferences
+from app.services.upload_security import validate_image_upload
 from app.agents.stylist_agent import StylistAgent
 from app.services.loyalty_service import LoyaltyService
-from app.services.purchase_product_fields import derive_purchase_brand, derive_purchase_category
+from app.services.purchase_product_fields import (
+    derive_purchase_brand,
+    derive_purchase_category,
+)
+from app.services.sales_record_filters import is_accessory_product
 from app.services.live_stylist_service import get_live_stylist_status
 from app.services.live_stylist_platform import ensure_live_stylist_schema, get_or_create_open_conversation
 
@@ -251,6 +257,8 @@ class CustomerProfileResponse(BaseModel):
     last_purchase_date: Optional[str]
     purchase_preferences: Optional[dict]
     preferred_delivery: Optional[dict] = None
+    delivery_addresses: Optional[List[dict]] = None
+    buyer_questionnaire: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -939,7 +947,9 @@ async def get_customer_profile(
         average_check=(current_user.average_check / 100) if current_user.average_check else None,
         last_purchase_date=current_user.last_purchase_date.isoformat() if current_user.last_purchase_date else None,
         purchase_preferences=current_user.purchase_preferences,
-        preferred_delivery=(current_user.preferences or {}).get("preferred_delivery")
+        preferred_delivery=(current_user.preferences or {}).get("preferred_delivery"),
+        delivery_addresses=(current_user.preferences or {}).get("delivery_addresses") or [],
+        buyer_questionnaire=questionnaire_from_preferences(current_user.preferences),
     )
 
 
@@ -1081,8 +1091,7 @@ async def send_stylist_chat_message(
         filename = _safe_upload_name(photo.filename)
         target = media_dir / filename
         content = await photo.read()
-        if len(content) > 8 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="Фото должно быть меньше 8 МБ")
+        validate_image_upload(content, photo.content_type, max_bytes=8 * 1024 * 1024)
         target.write_bytes(content)
         attachments.append(
             {
@@ -1329,6 +1338,7 @@ class CustomerProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
     preferred_delivery: Optional[Dict[str, Any]] = None
+    delivery_addresses: Optional[List[Dict[str, Any]]] = None
 
 
 @router.put("/profile")
@@ -1351,6 +1361,10 @@ async def update_customer_profile(
     if body.preferred_delivery is not None:
         prefs = dict(current_user.preferences or {})
         prefs["preferred_delivery"] = body.preferred_delivery
+        current_user.preferences = prefs
+    if body.delivery_addresses is not None:
+        prefs = dict(current_user.preferences or {})
+        prefs["delivery_addresses"] = body.delivery_addresses
         current_user.preferences = prefs
     
     await db.commit()
@@ -1402,6 +1416,18 @@ async def get_purchase_history(
     result = await db.execute(stmt)
     rows = result.all()
     
+    visible_rows = [
+        (purchase, product_name, product_article, product_brand, product_category)
+        for purchase, product_name, product_article, product_brand, product_category in rows
+        if not is_accessory_product(
+            product_name=purchase.product_name or product_name,
+            product_category=purchase.category or product_category,
+            product_article=purchase.product_article or product_article,
+            product_id=purchase.product_id_1c,
+            total_amount_kopecks=purchase.total_amount,
+        )
+    ]
+
     return [
         PurchaseHistoryItem(
             id=str(purchase.id),
@@ -1412,7 +1438,7 @@ async def get_purchase_history(
             category=derive_purchase_category(purchase.product_name or product_name, purchase.category or product_category),
             brand=derive_purchase_brand(purchase.product_name or product_name, purchase.brand or product_brand, product_category or purchase.category)
         )
-        for purchase, product_name, product_article, product_brand, product_category in rows
+        for purchase, product_name, product_article, product_brand, product_category in visible_rows
     ]
 
 

@@ -72,8 +72,6 @@ class _StylistChatScreenState extends ConsumerState<StylistChatScreen> {
         initialAutoSent = true;
         _send();
       });
-    } else if ((widget.productId ?? '').isNotEmpty) {
-      controller.text = 'Помогите подобрать украшения под меня';
     }
   }
 
@@ -2073,7 +2071,7 @@ class _AssistantProductVisualCardState
             ),
             if (widget.isOutOfStock)
               const Text(
-                'Нет в наличии',
+                'Скоро в наличии',
                 style: TextStyle(fontSize: 11, color: GlameColors.graphite),
               ),
             const SizedBox(height: 8),
@@ -2331,7 +2329,7 @@ class _Composer extends StatelessWidget {
           children: [
             if (quickTags.isNotEmpty)
               Container(
-                height: 72,
+                height: 60,
                 width: double.infinity,
                 decoration: const BoxDecoration(
                   border: Border(bottom: BorderSide(color: _chatBorder)),
@@ -2339,8 +2337,8 @@ class _Composer extends StatelessWidget {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 28,
-                    vertical: 16,
+                    horizontal: 20,
+                    vertical: 12,
                   ),
                   itemBuilder: (context, index) {
                     final tag = quickTags[index];
@@ -2396,13 +2394,13 @@ class _Composer extends StatelessWidget {
                 ),
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(28, 20, 28, 24),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   SizedBox(
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 48,
                     child: OutlinedButton(
                       onPressed: sending ? null : onPick,
                       style: OutlinedButton.styleFrom(
@@ -2412,10 +2410,10 @@ class _Composer extends StatelessWidget {
                         shape: const RoundedRectangleBorder(),
                         side: const BorderSide(color: _chatBorder),
                       ),
-                      child: const Icon(Icons.add, size: 30),
+                      child: const Icon(Icons.add, size: 26),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Focus(
                       onKeyEvent: (node, event) {
@@ -2432,8 +2430,8 @@ class _Composer extends StatelessWidget {
                       },
                       child: TextField(
                         controller: controller,
-                        minLines: 1,
-                        maxLines: 4,
+                        minLines: 2,
+                        maxLines: 5,
                         style: const TextStyle(color: _chatText, fontSize: 16),
                         cursorColor: _chatText,
                         textInputAction: TextInputAction.send,
@@ -2447,7 +2445,7 @@ class _Composer extends StatelessWidget {
                           fillColor: _chatSurfaceLow,
                           contentPadding: EdgeInsets.symmetric(
                             horizontal: 16,
-                            vertical: 16,
+                            vertical: 12,
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.zero,
@@ -2465,10 +2463,10 @@ class _Composer extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 10),
                   SizedBox(
-                    width: 56,
-                    height: 56,
+                    width: 48,
+                    height: 48,
                     child: FilledButton(
                       onPressed: sending ? null : onSend,
                       style: FilledButton.styleFrom(

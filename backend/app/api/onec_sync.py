@@ -5,15 +5,40 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Backgro
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional
+from urllib.parse import urlparse
 from pydantic import BaseModel
 import os
 import tempfile
 import logging
 from app.database.connection import get_db
+from app.api.dependencies import require_admin
+from app.models.user import User
 from app.services.onec_sync_service import OneCSyncService
+from app.services.upload_security import validate_onec_upload
 
 router = APIRouter(prefix="/api/1c", tags=["1C Sync"])
 logger = logging.getLogger(__name__)
+
+
+def _validate_yml_source_url(value: str) -> str:
+    """Allow YML imports only from configured public HTTPS source hosts."""
+    parsed = urlparse((value or "").strip())
+    allowed_hosts = {
+        host.strip().lower()
+        for host in os.getenv(
+            "ONEC_SYNC_ALLOWED_YML_HOSTS",
+            "glamejewelry.ru,www.glamejewelry.ru",
+        ).split(",")
+        if host.strip()
+    }
+    if parsed.scheme != "https" or not parsed.hostname or parsed.hostname.lower() not in allowed_hosts:
+        raise HTTPException(
+            status_code=400,
+            detail="YML URL must use HTTPS and an allowed source host",
+        )
+    if parsed.username or parsed.password or parsed.port not in (None, 443):
+        raise HTTPException(status_code=400, detail="Invalid YML source URL")
+    return parsed.geturl()
 
 
 # УДАЛЕНО: SyncFromTildaRequest - работаем только с файлами выгрузки 1С
@@ -46,7 +71,8 @@ async def sync_from_file(
     file: UploadFile = File(...),
     update_existing: bool = True,
     deactivate_missing: bool = False,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_admin()),
 ):
     """
     Синхронизация каталога товаров из файла
@@ -79,6 +105,7 @@ async def sync_from_file(
         suffix = f'.{file_ext}'
         with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix=suffix) as tmp:
             content = await file.read()
+            validate_onec_upload(file.filename, content)
             tmp.write(content)
             temp_file = tmp.name
         
@@ -116,7 +143,8 @@ async def sync_from_file(
 @router.post("/sync/yml", response_model=SyncResponse)
 async def sync_from_yml(
     request: SyncFromYmlRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_admin()),
 ):
     """
     Синхронизация каталога товаров из YML (Yandex Market Language) файла
@@ -127,9 +155,10 @@ async def sync_from_yml(
     Пример URL: https://glamejewelry.ru/tstore/yml/b743eb13397ad6a83d95caf72d40b7b2.yml
     """
     try:
+        yml_url = _validate_yml_source_url(request.yml_url)
         sync_service = OneCSyncService(db)
         stats = await sync_service.sync_from_yml(
-            yml_url=request.yml_url,
+            yml_url=yml_url,
             update_existing=request.update_existing,
             deactivate_missing=request.deactivate_missing
         )

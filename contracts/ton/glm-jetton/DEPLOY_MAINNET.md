@@ -7,7 +7,7 @@ Scope: deploy GLAME Coin (`GLM`) Jetton master to TON mainnet and mint initial b
 
 - Token: GLAME Coin (`GLM`)
 - Decimals: `9`
-- Metadata URL: `https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json`
+- Metadata URL: `https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata-mainnet-v2.json`
 - Icon URL: `https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png`
 - Treasury/bank wallet: `UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq`
 - Initial bank mint: `10000000 GLM`
@@ -26,7 +26,7 @@ Scope: deploy GLAME Coin (`GLM`) Jetton master to TON mainnet and mint initial b
 cd contracts/ton/glm-jetton
 npm run reference:status
 npm run build:status
-curl -fsS https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json
+curl -fsS https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata-mainnet-v2.json
 curl -fsS -I https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png
 ```
 
@@ -36,7 +36,7 @@ curl -fsS -I https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3
 cd contracts/ton/glm-jetton
 TON_NETWORK=mainnet \
 TON_ENDPOINT=https://toncenter.com/api/v2/jsonRPC \
-TON_GLM_METADATA_URL=https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json \
+TON_GLM_METADATA_URL=https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata-mainnet-v2.json \
 TON_JETTON_ADMIN_ADDRESS=UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq \
 TON_GLM_PRODUCTION_TREASURY_ADDRESS=UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq \
 npm run mainnet:prepare-deploy
@@ -79,3 +79,27 @@ Then run the printed `run_mint` command and confirm the transaction in the walle
    - `TON_GLM_JETTON_MASTER_ADDRESS=EQ...`
    - `TON_GLM_TREASURY_ADDRESS=UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq`
 3. Run a small mainnet smoke test before enabling user-facing mainnet operations.
+
+## Fix/Update Mainnet Metadata
+
+If a wallet shows stale testnet wording, an old icon, or an old metadata URL, update the Jetton master content URI.
+This is an admin-signed mainnet transaction; it does not mint or transfer GLM.
+
+```bash
+cd contracts/ton/glm-jetton
+TON_NETWORK=mainnet \
+TON_ENDPOINT=https://toncenter.com/api/v2/jsonRPC \
+TON_GLM_METADATA_URL=https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata-mainnet-v2.json \
+TON_JETTON_ADMIN_ADDRESS=UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq \
+npm run mainnet:prepare-content-update
+```
+
+Then run the printed `run_update` command and confirm the transaction with the bank/admin wallet.
+After confirmation, record the tx:
+
+```bash
+cd contracts/ton/glm-jetton
+npm run mainnet:record-content-update -- --content-tx-hash ...
+```
+
+Wallets may cache Jetton metadata for a while; after the on-chain content URI is updated, reopen the wallet or wait for cache refresh.

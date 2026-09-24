@@ -283,12 +283,14 @@ class GiftCertificateEmailService:
             logger.warning("SMS service is not configured; gift certificate SMS was not sent")
             return False
 
-        pin = _certificate_pin(cert)
-        nominal = _format_rub(int(cert.nominal_amount or 0))
-        text = f"GLAME: podarochnyj sertifikat {nominal}. Seriya {cert.number}."
-        if pin:
-            text += f" PIN {pin}."
-        text += " Pokazhite seriyu prodavcu ili vvedite v prilozhenii."
+        text = str(meta.get("sms_text") or "").strip()
+        if not text:
+            pin = _certificate_pin(cert)
+            nominal = _format_rub(int(cert.nominal_amount or 0))
+            text = f"GLAME: podarochnyj sertifikat {nominal}. Seriya {cert.number}."
+            if pin:
+                text += f" PIN {pin}."
+            text += " Pokazhite seriyu prodavcu ili vvedite v prilozhenii."
 
         response = await sms_service.send_sms(phone, text, sign=os.getenv("GIFT_CERTIFICATE_SMS_SIGN", "GLAME"))
         self._remember_sms_delivery_status(cert, "sent", response=response)

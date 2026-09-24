@@ -27,6 +27,7 @@ from app.models.stylist_chat_message import StylistChatMessage
 from app.models.user import User
 from app.models.look import Look
 from app.services.admin_access import normalize_role
+from app.services.upload_security import validate_image_upload
 from app.services.live_stylist_platform import (
     ensure_live_stylist_schema,
     get_or_create_open_conversation,
@@ -1408,8 +1409,7 @@ async def compose_stylist_message(
         media_dir.mkdir(parents=True, exist_ok=True)
     for photo in uploaded_photos:
         content = await photo.read()
-        if len(content) > 8 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail=f"Фото {photo.filename} должно быть меньше 8 МБ")
+        validate_image_upload(content, photo.content_type, max_bytes=8 * 1024 * 1024)
         filename = _safe_upload_name(photo.filename)
         target = media_dir / filename
         target.write_bytes(content)

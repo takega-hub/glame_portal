@@ -1,0 +1,63 @@
+{
+  "generated_at": "2026-07-16T09:13:14.176400+00:00",
+  "stale_hours": 48,
+  "bridge_operations_source": "glame_token_bridge_operations",
+  "checked_bridge_operations": 15,
+  "bridge_operations_total": 15,
+  "bridge_operations_missing_domain_count": 0,
+  "bridge_operations_stale_pending_count": 0,
+  "bridge_operations_consistency_issue_count": 0,
+  "bridge_operations_by_direction": {
+    "points_to_glm": {
+      "count": 11,
+      "amount_glm": 2450,
+      "statuses": {
+        "processed": 8,
+        "canceled": 2,
+        "superseded": 1
+      }
+    },
+    "glm_to_points": {
+      "count": 4,
+      "amount_glm": 1420,
+      "statuses": {
+        "canceled": 2,
+        "processed": 2
+      }
+    }
+  },
+  "bridge_operations_by_status": {
+    "processed": {
+      "count": 10,
+      "amount_glm": 2500
+    },
+    "canceled": {
+      "count": 4,
+      "amount_glm": 870
+    },
+    "superseded": {
+      "count": 1,
+      "amount_glm": 500
+    }
+  },
+  "checked_bridge_transactions": 4,
+  "checked_points_to_glm_transactions": 11,
+  "checked_total_transactions": 15,
+  "pending_count": 0,
+  "pending_reserved_glm": 0,
+  "processed_count": 2,
+  "processed_points": 750,
+  "points_to_glm_pending_count": 0,
+  "points_to_glm_processed_count": 8,
+  "points_to_glm_canceled_count": 2,
+  "ton_sent_waiting_count": 0,
+  "ton_processed_without_tx_count": 0,
+  "onec_ready_count": 0,
+  "onec_failed_count": 0,
+  "onec_spend_ready_count": 0,
+  "onec_spend_failed_count": 0,
+  "onec_cancel_spend_failed_count": 0,
+  "negative_accounts_count": 0,
+  "issues_count": 0,
+  "issues": []
+}

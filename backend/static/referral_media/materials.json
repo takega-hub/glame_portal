@@ -8,11 +8,13 @@
     "original_file_name": "glame_phrases.pdf",
     "content_type": "application/pdf",
     "size": 1396742,
-    "is_active": true,
+    "is_active": false,
     "sort_order": 10,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333",
-    "preview_file_name": "glame_phrases_preview.png"
+    "updated_at": "2026-07-07T13:02:07.621704",
+    "preview_file_name": "glame_phrases_preview.png",
+    "file_url": "/static/referral_media/glame_phrases.pdf",
+    "preview_url": "/static/referral_media/glame_phrases_preview.png"
   },
   {
     "id": "glame-seed-02",
@@ -27,7 +29,9 @@
     "sort_order": 20,
     "created_at": "2026-06-30T09:25:00.821333",
     "updated_at": "2026-06-30T09:25:00.821333",
-    "preview_file_name": "glame_pattern_01_preview.png"
+    "preview_file_name": "glame_pattern_01_preview.png",
+    "file_url": "/static/referral_media/glame_pattern_01.pdf",
+    "preview_url": "/static/referral_media/glame_pattern_01_preview.png"
   },
   {
     "id": "glame-seed-03",
@@ -42,7 +46,9 @@
     "sort_order": 30,
     "created_at": "2026-06-30T09:25:00.821333",
     "updated_at": "2026-06-30T09:25:00.821333",
-    "preview_file_name": "glame_pattern_02_preview.png"
+    "preview_file_name": "glame_pattern_02_preview.png",
+    "file_url": "/static/referral_media/glame_pattern_02.pdf",
+    "preview_url": "/static/referral_media/glame_pattern_02_preview.png"
   },
   {
     "id": "glame-seed-04",
@@ -56,7 +62,9 @@
     "is_active": true,
     "sort_order": 40,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333"
+    "updated_at": "2026-06-30T09:25:00.821333",
+    "file_url": "/static/referral_media/glame_logo_graph.png",
+    "preview_url": null
   },
   {
     "id": "glame-seed-05",
@@ -70,7 +78,9 @@
     "is_active": true,
     "sort_order": 50,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333"
+    "updated_at": "2026-06-30T09:25:00.821333",
+    "file_url": "/static/referral_media/glame_logo_silver.png",
+    "preview_url": null
   },
   {
     "id": "glame-seed-06",
@@ -84,7 +94,9 @@
     "is_active": true,
     "sort_order": 60,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333"
+    "updated_at": "2026-06-30T09:25:00.821333",
+    "file_url": "/static/referral_media/glame_logo_gray.png",
+    "preview_url": null
   },
   {
     "id": "glame-seed-07",
@@ -98,7 +110,9 @@
     "is_active": true,
     "sort_order": 70,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333"
+    "updated_at": "2026-06-30T09:25:00.821333",
+    "file_url": "/static/referral_media/glame_logo_black.png",
+    "preview_url": null
   },
   {
     "id": "glame-seed-08",
@@ -112,7 +126,9 @@
     "is_active": true,
     "sort_order": 80,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333"
+    "updated_at": "2026-06-30T09:25:00.821333",
+    "file_url": "/static/referral_media/glame_sign.png",
+    "preview_url": null
   },
   {
     "id": "glame-seed-09",
@@ -126,7 +142,9 @@
     "is_active": true,
     "sort_order": 90,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333"
+    "updated_at": "2026-06-30T09:25:00.821333",
+    "file_url": "/static/referral_media/glame_sign_graph_background.png",
+    "preview_url": null
   },
   {
     "id": "glame-seed-10",
@@ -140,7 +158,9 @@
     "is_active": true,
     "sort_order": 100,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333"
+    "updated_at": "2026-06-30T09:25:00.821333",
+    "file_url": "/static/referral_media/glame_sign_black_background.png",
+    "preview_url": null
   },
   {
     "id": "glame-seed-11",
@@ -154,7 +174,9 @@
     "is_active": true,
     "sort_order": 110,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333"
+    "updated_at": "2026-06-30T09:25:00.821333",
+    "file_url": "/static/referral_media/glame_sign_gray_background.png",
+    "preview_url": null
   },
   {
     "id": "glame-seed-12",
@@ -168,6 +190,8 @@
     "is_active": true,
     "sort_order": 120,
     "created_at": "2026-06-30T09:25:00.821333",
-    "updated_at": "2026-06-30T09:25:00.821333"
+    "updated_at": "2026-06-30T09:25:00.821333",
+    "file_url": "/static/referral_media/glame_sign_silver_background.png",
+    "preview_url": null
   }
 ]

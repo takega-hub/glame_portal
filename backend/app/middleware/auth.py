@@ -7,7 +7,9 @@ from sqlalchemy import select
 from uuid import UUID
 import os
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+JWT_SECRET_KEY = (os.getenv("JWT_SECRET_KEY") or "").strip()
+if not JWT_SECRET_KEY or JWT_SECRET_KEY in {"your-secret-key-change-in-production", "your_jwt_secret_key_change_in_production"}:
+    raise RuntimeError("JWT_SECRET_KEY must be configured with a unique production secret")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 security = HTTPBearer()

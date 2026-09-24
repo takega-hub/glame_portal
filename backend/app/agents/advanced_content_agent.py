@@ -637,6 +637,8 @@ class AdvancedContentAgent(ContentAgent):
             # Выполняем задачу в зависимости от типа
             if task.task_type == "content_generation":
                 result_data = await self._handle_content_generation_task(task)
+            elif task.task_type in {"advertising_creatives", "content_production"}:
+                result_data = await self._handle_advertising_creatives_task(task)
             elif task.task_type == "content_review":
                 result_data = await self._handle_content_review_task(task)
             elif task.task_type == "calendar_plan_generation":
@@ -704,6 +706,55 @@ class AdvancedContentAgent(ContentAgent):
             spec=input_data.get("spec", {})
         )
         
+        return result
+
+    async def _handle_advertising_creatives_task(self, task: AgentInteractionTask) -> Dict[str, Any]:
+        """Prepare an internal, approval-only ad creative package for GLAME."""
+        input_data = task.input_data or {}
+        requirements = task.requirements or {}
+        brief = input_data.get("campaign_brief") if isinstance(input_data.get("campaign_brief"), dict) else {}
+        query = " ".join(str(value or "") for value in [input_data.get("title"), input_data.get("description"), input_data.get("campaign_code"), brief.get("goal")])
+        brand_context = await self.get_brand_context(query, limit=5)
+        products = await self.recommendation_service.search_products(query_text=query, limit=8, only_active=True)
+        variants_required = max(1, min(int(requirements.get("variants_required") or 3), 6))
+        response_format = {
+            "summary": "Краткое описание пакета",
+            "approval_status": "needs_approval",
+            "ad_variants": [{"name": "Вариант 1", "headline": "Заголовок", "text": "Текст", "cta": "CTA", "rationale": "Почему подходит"}],
+            "media_brief": {"formats": ["поиск", "РСЯ/баннер", "короткое видео"], "assets_needed": ["Перечень медиа"], "visual_direction": "Направление"},
+            "compliance_notes": ["Не публиковать автоматически"],
+        }
+        prompt = f"""Подготовь пакет рекламных креативов для GLAME только для внутреннего согласования.
+
+Задача: {input_data.get('description') or input_data.get('title')}
+Кампания: {input_data.get('campaign_code') or 'не указана'}
+Площадка: {input_data.get('platform') or 'Яндекс'}
+Город: {input_data.get('city') or 'не указан'}
+Бриф кампании: {json.dumps(brief, ensure_ascii=False)}
+Требования: {json.dumps(requirements, ensure_ascii=False)}
+Подборка доступных медиа GLAME: {json.dumps((task.task_context or {}).get('campaign_media') or {}, ensure_ascii=False)}
+
+Контекст бренда:
+{self._format_brand_context(brand_context)}
+
+Товары GLAME — используй только реальные позиции, если упоминаешь товар:
+{self._format_products_for_prompt(products)}
+
+Верни ТОЛЬКО валидный JSON по заданной схеме. Создай ровно {variants_required} варианта.
+Не выдумывай скидки, наличие, цены и характеристики. Не публикуй и не запускай объявления: approval_status строго needs_approval.
+Для каждого варианта дай заголовок, основной текст, CTA и обоснование. В media_brief укажи конкретные id доступных медиа GLAME, если они есть; не создавай медиафайлы."""
+        system_prompt = await self.get_default_system_prompt_text()
+        result = await self.llm.generate_structured(
+            prompt=prompt,
+            response_format=response_format,
+            system_prompt=system_prompt,
+            temperature=0.5,
+            max_tokens=3000,
+        )
+        if isinstance(result, dict):
+            result["approval_status"] = "needs_approval"
+            result["must_not_publish_externally"] = True
+            result["used_glame_media_required"] = bool(requirements.get("must_use_glame_media"))
         return result
     
     async def _handle_content_review_task(self, task: AgentInteractionTask) -> Dict[str, Any]:

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, Calendar } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { fetchJson } from '@/lib/utils';
-import * as XLSX from 'xlsx';
+import { downloadCsv } from '@/lib/csv-export';
 import {
   Select,
   SelectContent,
@@ -420,8 +420,7 @@ export function SalesPanel() {
       ['Дата', 'Выручка', 'Посещения магазинов', 'Посещения сайта'],
       ...rows.map(r => [r.date, r.revenue, r.store_visitors, r.website_visits]),
     ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wsSummary = XLSX.utils.aoa_to_sheet([
+    const summary = [
       ['Метрика', 'Значение'],
       ['Выручка', totalRevenue],
       ['Чеки', totalOrders],
@@ -429,20 +428,8 @@ export function SalesPanel() {
       ['Посещения офлайн', totalVisitors],
       ['Конверсия офлайн, %', conversionRateOffline],
       ['Выручка на посетителя', revenuePerVisitor],
-    ]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Данные');
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Итоги');
-    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `analytics_${new Date().toISOString().split('T')[0]}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    ];
+    downloadCsv(`analytics_${new Date().toISOString().split('T')[0]}.csv`, [...wsData, [], ...summary]);
   };
 
   const exportPDF = () => {

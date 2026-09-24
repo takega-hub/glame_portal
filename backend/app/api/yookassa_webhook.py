@@ -11,7 +11,7 @@ from app.models.payment import Payment
 from app.services.gift_certificate_email_service import GiftCertificateEmailService
 from app.services.gift_certificate_service import GiftCertificateService
 from app.services.onec_order_xml_service import write_orders_xml_snapshot
-from app.services.yookassa_service import get_yookassa_service
+from app.services.yookassa_service import get_yookassa_service_for_db
 
 
 router = APIRouter()
@@ -38,7 +38,7 @@ async def yookassa_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    svc = get_yookassa_service()
+    svc = await get_yookassa_service_for_db(db)
     if not svc:
         raise HTTPException(status_code=500, detail="YOOKASSA is not configured")
 
@@ -62,7 +62,7 @@ async def yookassa_webhook(
         order = (
             await db.execute(select(Order).where(Order.id == payment.order_id))
         ).scalar_one_or_none()
-        if order and order.status in {"pending", "payment_pending"}:
+        if order and order.status in {"pending", "payment_pending", "paid"}:
             order.status = "paid"
             gift_service = GiftCertificateService(db)
             meta = order.meta if isinstance(order.meta, dict) else {}

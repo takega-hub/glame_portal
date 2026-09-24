@@ -6,14 +6,13 @@ Requires=docker.service
 [Service]
 Type=simple
 WorkingDirectory=/root/glame-platform
-EnvironmentFile=-/etc/glame-platform/glame-stack.env
+EnvironmentFile=/etc/glame-platform/glame-stack.env
 Environment=ROOT_DIR=/root/glame-platform
 Environment=ADMIN_PORT=3000
 Environment=BACKEND_HOST=127.0.0.1
 Environment=BACKEND_PORT=8000
 Environment=STOREFRONT_PORT=9092
 Environment=API_BASE_URL=https://portal.glamejewelry.ru
-Environment=DATABASE_URL=postgresql://glame_user:glame_password@127.0.0.1:5433/glame_db
 Environment=QDRANT_URL=http://127.0.0.1:6333
 Environment=REDIS_URL=redis://127.0.0.1:6379
 Environment=START_INFRA_SERVICES=true

@@ -16,6 +16,8 @@ This loyalty connection is utility support, not financial collateral, a redempti
 
 GLM is intended to be held in a supported blockchain wallet, currently TON Jetton in the pilot architecture. GLAME Platform may keep an operational ledger for requests, holds, audit, transaction hashes and reconciliation.
 
-The phrase "1 GLM = 1 ruble inside GLAME" means an internal product/service reference under active program rules and limits. It is not a public price guarantee, buyback promise or fixed exchange rate.
+The phrase "1 GLM = 1 ruble inside GLAME" means an internal product/service reference or a primary distribution price under active program rules and limits. It is not a public market price guarantee, buyback promise, fixed external exchange rate, liquidity promise or investment return.
 
 1C loyalty points and GLM are separate entities. Conversion between them happens only through approved bridge operations.
+
+GLM issuance and distribution are controlled by the Emission and Anti-Farm Policy. GLM rewards and bridge operations can be limited, held, reversed or blocked when fraud, returns, abnormal loops or accounting issues are detected.

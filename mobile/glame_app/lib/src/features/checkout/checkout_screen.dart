@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/formatters/phone.dart';
+import '../../core/layout/glame_layout.dart';
 import '../../core/theme/glame_theme.dart';
 import '../auth/auth_controller.dart';
 import '../auth/user.dart' as auth_model;
@@ -175,65 +176,92 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 24, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'ОФОРМЛЕНИЕ',
-                      style: TextStyle(
-                        fontSize: 40,
-                        height: 0.95,
-                        fontWeight: FontWeight.w400,
-                        color: GlameColors.whiteGlame,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isDesktop = GlameLayout.isDesktop(context);
+              final horizontalPadding = isDesktop ? 32.0 : 20.0;
+              return Center(
+                child: SizedBox(
+                  width: isDesktop
+                      ? constraints.maxWidth.clamp(0, 960).toDouble()
+                      : constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          horizontalPadding,
+                          24,
+                          horizontalPadding,
+                          0,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'ОФОРМЛЕНИЕ',
+                              style: TextStyle(
+                                fontSize: 40,
+                                height: 0.95,
+                                fontWeight: FontWeight.w400,
+                                color: GlameColors.whiteGlame,
+                              ),
+                            ),
+                            SizedBox(height: 10),
+                            Text(
+                              'Проверьте корзину, выберите доставку и подтвердите заказ',
+                              style: TextStyle(
+                                fontSize: 15,
+                                height: 1.35,
+                                color: GlameColors.coldLightGray,
+                              ),
+                            ),
+                            SizedBox(height: 18),
+                            SizedBox(
+                              width: 44,
+                              child: Divider(
+                                height: 1,
+                                color: GlameColors.steelGray,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      'Проверьте корзину, выберите доставку и подтвердите заказ',
-                      style: TextStyle(
-                        fontSize: 15,
-                        height: 1.35,
-                        color: GlameColors.coldLightGray,
+                      const SizedBox(height: 16),
+                      _Progress(steps: steps, active: step),
+                      const Divider(height: 1, color: GlameColors.borderGray),
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            horizontalPadding,
+                            20,
+                            horizontalPadding,
+                            24,
+                          ),
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 180),
+                            child: _buildStep(
+                              context,
+                              auth.user != null,
+                              cart,
+                              cartController,
+                              subtotal,
+                              totalBeforeBonuses,
+                              deliveryAmount,
+                              promotionDiscountAmount,
+                              bonusDiscountAmount,
+                              giftCertificateDiscountAmount,
+                              bonusPointsToUse,
+                              total,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 18),
-                    SizedBox(
-                      width: 44,
-                      child: Divider(height: 1, color: GlameColors.steelGray),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              _Progress(steps: steps, active: step),
-              const Divider(height: 1, color: GlameColors.borderGray),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    child: _buildStep(
-                      context,
-                      auth.user != null,
-                      cart,
-                      cartController,
-                      subtotal,
-                      totalBeforeBonuses,
-                      deliveryAmount,
-                      promotionDiscountAmount,
-                      bonusDiscountAmount,
-                      giftCertificateDiscountAmount,
-                      bonusPointsToUse,
-                      total,
-                    ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ),
       ),

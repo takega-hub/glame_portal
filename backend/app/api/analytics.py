@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, desc
+from sqlalchemy import select, func, and_, or_, desc, cast, String
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
 from uuid import UUID
@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, date, timezone
 import logging
 import httpx
 from app.database.connection import get_db
+from app.api.dependencies import require_admin
+from app.models.user import User
 from app.services.analytics_service import AnalyticsService
 from app.services.metrics_service import MetricsService
 from app.services.website_analytics_service import WebsiteAnalyticsService
@@ -29,6 +31,7 @@ from app.services.purchase_recommendation_service import PurchaseRecommendationS
 from app.services.demand_forecasting_service import DemandForecastingService
 from app.services.onec_stock_service import OneCStockService
 from app.services.stock_transfer_service import StockTransferService
+from app.services.store_aliases import effective_store_name
 from app.models.sales_record import SalesRecord
 from app.models.analytics_event import AnalyticsEvent
 
@@ -58,6 +61,22 @@ def _cache_clear_sales() -> None:
     for key in list(_CACHE.keys()):
         if key.startswith("daily-sources:") or key.startswith("sales_sources:"):
             _CACHE.pop(key, None)
+
+
+def _analytics_store_display_name(name: Optional[str], event_date: Optional[datetime | date] = None, store_id: Optional[str] = None) -> Optional[str]:
+    return effective_store_name(name, event_date or datetime.now(timezone.utc), store_id=store_id)
+
+
+def _analytics_store_aliases(name: Optional[str]) -> set[str]:
+    normalized = str(name or "").strip().lower().replace("ё", "е")
+    aliases = {normalized} if normalized else set()
+    if "центрум" in normalized or "centrum" in normalized:
+        aliases.add("centrum")
+    if "ялта" in normalized or "yalta" in normalized:
+        aliases.add("yalta")
+    if "меганом" in normalized or "meganom" in normalized or "мрия" in normalized or "mriya" in normalized:
+        aliases.update({"meganom", "mriya", "мрия"})
+    return aliases
 
 
 def get_period_dates(period: str) -> tuple:
@@ -172,7 +191,7 @@ async def list_sales_sources(
     try:
         stores_result = await db.execute(select(Store.id, Store.external_id, Store.name).order_by(Store.name.asc()))
         stores = [
-            {"id": str(row.id), "external_id": row.external_id, "name": row.name}
+            {"id": str(row.id), "external_id": row.external_id, "name": _analytics_store_display_name(row.name)}
             for row in stores_result.all()
             if row.name
         ]
@@ -285,7 +304,7 @@ async def get_daily_sales_by_sources(
             # Получаем названия магазинов
             from app.models.store import Store
             stores_map_result = await db.execute(select(Store.external_id, Store.name))
-            store_names = {row[0]: row[1] for row in stores_map_result.all() if row[0]}
+            store_names = {row[0]: _analytics_store_display_name(row[1]) for row in stores_map_result.all() if row[0]}
             legend = []
             for source_id in sorted({r.source_id for r in rows if r.source_id}):
                 legend.append({"id": source_id, "name": store_names.get(source_id, source_id)})
@@ -536,6 +555,7 @@ async def get_app_analytics_overview(
         events = await _load_app_events(db, start, end, channel)
         aggregate = _aggregate_app_events(events)
         events_by_type = aggregate["events_by_type"]
+
         return {
             "status": "success",
             "period": {"start": start.isoformat(), "end": end.isoformat()},
@@ -1091,7 +1111,8 @@ class FTPSyncRequest(BaseModel):
 @router.post("/ftp/sync")
 async def sync_ftp_store_visits(
     request: FTPSyncRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_admin()),
 ):
     """
     Синхронизация данных счетчиков магазинов через FTP
@@ -1252,7 +1273,10 @@ def _run_store_visits_sync() -> tuple[bool, str]:
 
 
 @router.post("/store-visits/sync")
-async def sync_store_visits_manual(db: AsyncSession = Depends(get_db)):
+async def sync_store_visits_manual(
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_admin()),
+):
     """
     Принудительная синхронизация данных счетчиков магазинов с FTP
     
@@ -1314,7 +1338,7 @@ async def get_stores(
                 {
                     "id": str(store.id),
                     "external_id": store.external_id,  # UUID из 1С
-                    "name": store.name,
+                    "name": _analytics_store_display_name(store.name),
                     "city": store.city,
                     "is_active": store.is_active
                 }
@@ -1447,6 +1471,7 @@ async def get_store_visits_daily(
         query = select(
             StoreVisit.date,
             Store.name.label('store_name'),
+            Store.external_id,
             func.sum(StoreVisit.visitor_count).label('visitors'),
             func.sum(StoreVisit.sales_count).label('sales'),
             func.sum(StoreVisit.revenue).label('revenue')
@@ -1455,24 +1480,27 @@ async def get_store_visits_daily(
         # Фильтр по магазину: та же логика, что в метриках (1c-sales) — по имени и алиасам FTP (CENTRUM, YALTA),
         # чтобы график посещаемости показывал те же данные, что и карточка «Посещаемость»
         selected_store_name = None
+        selected_store_external_id = None
         if store_id and store_id != "all":
             try:
                 if isinstance(store_id, str) and len(store_id) == 36 and store_id.count("-") == 4:
-                    store_by_id = await db.execute(select(Store.name).where(Store.id == UUID(store_id)).limit(1))
-                    row = store_by_id.scalar_one_or_none()
+                    store_by_id = await db.execute(select(Store.name, Store.external_id).where(Store.id == UUID(store_id)).limit(1))
+                    row = store_by_id.first()
                     if row is not None:
-                        selected_store_name = row if isinstance(row, str) else row[0]
+                        selected_store_name = row[0]
+                        selected_store_external_id = row[1]
             except (ValueError, TypeError):
                 pass
             if selected_store_name is None:
                 store_query = await db.execute(
-                    select(Store.name).where(
+                    select(Store.name, Store.external_id).where(
                         or_(Store.external_id == store_id, Store.name == store_id)
                     ).limit(1)
                 )
-                row = store_query.scalar_one_or_none()
+                row = store_query.first()
                 if row is not None:
-                    selected_store_name = row if isinstance(row, str) else row[0]
+                    selected_store_name = row[0]
+                    selected_store_external_id = row[1]
             if selected_store_name:
                 names_to_match = [selected_store_name]
                 store_name_lower = selected_store_name.lower()
@@ -1480,20 +1508,71 @@ async def get_store_visits_daily(
                     names_to_match.append("CENTRUM")
                 if "ялта" in store_name_lower or "yalta" in store_name_lower:
                     names_to_match.append("YALTA")
+                if "меганом" in store_name_lower or "meganom" in store_name_lower or "мрия" in store_name_lower or "mriya" in store_name_lower:
+                    names_to_match.extend(["Меганом", "МРИЯ", "MEGANOM", "MRIYA"])
                 query = query.where(Store.name.in_(names_to_match))
         
         # Текущий период
         current_query = query.where(
             and_(StoreVisit.date >= start_date, StoreVisit.date <= end_date)
-        ).group_by(StoreVisit.date, Store.name).order_by(StoreVisit.date)
+        ).group_by(StoreVisit.date, Store.name, Store.external_id).order_by(StoreVisit.date)
         
         current_result = await db.execute(current_query)
         current_data = current_result.all()
+
+        stores_meta_result = await db.execute(
+            select(Store.external_id, Store.name).where(Store.external_id.isnot(None))
+        )
+        stores_meta_rows = stores_meta_result.all()
+        store_name_by_external_id = {
+            external_id: _analytics_store_display_name(name) or name
+            for external_id, name in stores_meta_rows
+            if external_id
+        }
+        store_external_id_by_alias: dict[str, str] = {}
+        for external_id, name in stores_meta_rows:
+            if not external_id:
+                continue
+            for alias in _analytics_store_aliases(name):
+                store_external_id_by_alias.setdefault(alias, external_id)
+
+        receipt_key = func.coalesce(
+            SalesRecord.document_id,
+            SalesRecord.external_id,
+            cast(SalesRecord.id, String),
+        )
+        sales_by_store_query = select(
+            func.date(SalesRecord.sale_date).label("sale_day"),
+            SalesRecord.store_id.label("store_id"),
+            func.count(func.distinct(receipt_key)).label("sales"),
+            func.sum(SalesRecord.revenue).label("revenue"),
+        ).where(
+            and_(
+                func.date(SalesRecord.sale_date) >= start_date,
+                func.date(SalesRecord.sale_date) <= end_date,
+                SalesRecord.store_id.isnot(None),
+            )
+        )
+        if store_id and store_id != "all":
+            sales_store_id = selected_store_external_id or store_id
+            sales_by_store_query = sales_by_store_query.where(SalesRecord.store_id == sales_store_id)
+
+        sales_by_store_result = await db.execute(
+            sales_by_store_query.group_by(func.date(SalesRecord.sale_date), SalesRecord.store_id)
+        )
+        sales_by_date_and_store = {
+            (row.sale_day.isoformat(), row.store_id): {
+                "sales": int(row.sales or 0),
+                "revenue": float(row.revenue or 0.0),
+            }
+            for row in sales_by_store_result.all()
+            if row.store_id
+        }
         
         # Предыдущий период для сравнения
         comparison_query = query.where(
             and_(StoreVisit.date >= comparison_start, StoreVisit.date <= comparison_end)
-        ).group_by(StoreVisit.date, Store.name).order_by(StoreVisit.date)
+        ).group_by(StoreVisit.date, Store.name, Store.external_id).order_by(StoreVisit.date)
         
         comparison_result = await db.execute(comparison_query)
         comparison_data = comparison_result.all()
@@ -1501,7 +1580,7 @@ async def get_store_visits_daily(
         # Агрегируем данные по дням (все магазины вместе)
         daily_stats = {}
         for row in current_data:
-            date_str = row.date.isoformat()
+            date_str = row.date.date().isoformat() if isinstance(row.date, datetime) else row.date.isoformat()
             if date_str not in daily_stats:
                 daily_stats[date_str] = {
                     'date': date_str,
@@ -1511,13 +1590,59 @@ async def get_store_visits_daily(
                     'stores': []
                 }
             daily_stats[date_str]['visitors'] += int(row.visitors or 0)
-            daily_stats[date_str]['sales'] += int(row.sales or 0)
-            daily_stats[date_str]['revenue'] += float(row.revenue or 0.0)
+            store_external_id = row.external_id
+            if not store_external_id:
+                for alias in _analytics_store_aliases(row.store_name):
+                    if alias in store_external_id_by_alias:
+                        store_external_id = store_external_id_by_alias[alias]
+                        break
+            onec_sales = sales_by_date_and_store.get((date_str, store_external_id), {}) if store_external_id else {}
+            store_sales = int(onec_sales.get("sales") or row.sales or 0)
+            store_revenue = float(onec_sales.get("revenue") or row.revenue or 0.0)
+            daily_stats[date_str]['sales'] += store_sales
+            daily_stats[date_str]['revenue'] += store_revenue
             daily_stats[date_str]['stores'].append({
-                'name': row.store_name,
+                'name': store_name_by_external_id.get(store_external_id) or _analytics_store_display_name(row.store_name) or row.store_name,
                 'visitors': int(row.visitors or 0),
-                'sales': int(row.sales or 0),
-                'revenue': float(row.revenue or 0.0)
+                'sales': store_sales,
+                'revenue': store_revenue
+            })
+
+        visit_store_keys = {
+            (
+                row.date.date().isoformat() if isinstance(row.date, datetime) else row.date.isoformat(),
+                row.external_id
+                or next(
+                    (
+                        store_external_id_by_alias[alias]
+                        for alias in _analytics_store_aliases(row.store_name)
+                        if alias in store_external_id_by_alias
+                    ),
+                    None,
+                ),
+            )
+            for row in current_data
+        }
+        for (date_str, store_external_id), sales_data in sales_by_date_and_store.items():
+            if (date_str, store_external_id) in visit_store_keys:
+                continue
+            if date_str not in daily_stats:
+                daily_stats[date_str] = {
+                    'date': date_str,
+                    'visitors': 0,
+                    'sales': 0,
+                    'revenue': 0.0,
+                    'stores': []
+                }
+            store_sales = int(sales_data.get("sales") or 0)
+            store_revenue = float(sales_data.get("revenue") or 0.0)
+            daily_stats[date_str]['sales'] += store_sales
+            daily_stats[date_str]['revenue'] += store_revenue
+            daily_stats[date_str]['stores'].append({
+                'name': store_name_by_external_id.get(store_external_id, store_external_id),
+                'visitors': 0,
+                'sales': store_sales,
+                'revenue': store_revenue
             })
         
         # Статистика предыдущего периода
@@ -1528,6 +1653,14 @@ async def get_store_visits_daily(
         change_percent = 0
         if comparison_total > 0:
             change_percent = ((current_total - comparison_total) / comparison_total) * 100
+
+        response_daily_data = sorted(daily_stats.values(), key=lambda x: x['date'])
+        response_stores = sorted({
+            store.get("name")
+            for day in response_daily_data
+            for store in day.get("stores", [])
+            if store.get("name")
+        })
         
         return {
             "status": "success",
@@ -1546,8 +1679,8 @@ async def get_store_visits_daily(
                 "change": current_total - comparison_total,
                 "change_percent": round(change_percent, 2)
             },
-            "daily_data": sorted(daily_stats.values(), key=lambda x: x['date']),
-            "stores": list(set(row.store_name for row in current_data))
+            "daily_data": response_daily_data,
+            "stores": response_stores
         }
         
     except Exception as e:
@@ -2058,7 +2191,7 @@ async def get_1c_sales_by_store(
     
     # Получаем названия магазинов из базы данных
     stores_query = await db.execute(select(Store.external_id, Store.name))
-    store_names = {row[0]: row[1] for row in stores_query.all() if row[0]}
+    store_names = {row[0]: _analytics_store_display_name(row[1]) for row in stores_query.all() if row[0]}
     
     # Группируем по магазинам
     stores = {}
@@ -2526,7 +2659,8 @@ async def get_1c_sales_metrics(
         
         # Получаем названия магазинов из базы данных
         stores_query = await db.execute(select(Store.external_id, Store.name))
-        store_names = {row[0]: row[1] for row in stores_query.all() if row[0]}
+        store_names_raw = {row[0]: row[1] for row in stores_query.all() if row[0]}
+        store_names = {external_id: _analytics_store_display_name(name, store_id=external_id) for external_id, name in store_names_raw.items()}
         
         # Получаем данные по магазинам из SalesRecord
         by_store = {}
@@ -2638,7 +2772,11 @@ async def get_1c_sales_metrics(
         
         # Получаем названия магазинов из базы данных
         stores_query = await db.execute(select(Store.external_id, Store.name))
-        store_names = {row[0]: row[1] for row in stores_query.all() if row[0]}
+        store_names_raw = {row[0]: row[1] for row in stores_query.all() if row[0]}
+        store_names = {
+            external_id: _analytics_store_display_name(name, store_id=external_id)
+            for external_id, name in store_names_raw.items()
+        }
         
         # Группируем по магазинам из meta_data
         by_store = {}
@@ -2816,6 +2954,8 @@ async def get_1c_sales_metrics(
                     names_to_match.append("CENTRUM")
                 if "ялта" in store_name_lower or "yalta" in store_name_lower:
                     names_to_match.append("YALTA")
+                if "меганом" in store_name_lower or "meganom" in store_name_lower or "мрия" in store_name_lower or "mriya" in store_name_lower:
+                    names_to_match.extend(["Меганом", "МРИЯ", "MEGANOM", "MRIYA"])
                 visit_query = visit_query.where(Store.name.in_(names_to_match))
         
         visit_query = visit_query.group_by(Store.name, Store.external_id)
@@ -2824,7 +2964,7 @@ async def get_1c_sales_metrics(
         
         logger.info(f"Найдено записей о посещаемости: {len(visit_rows)}")
         for row in visit_rows:
-            store_name = row.store_name
+            store_name = _analytics_store_display_name(row.store_name) or row.store_name
             store_external_id = row.external_id
             visitors_count = int(row.total_visitors or 0)
             total_visitors += visitors_count
@@ -2854,13 +2994,14 @@ async def get_1c_sales_metrics(
         
         # При фильтре по одному магазину показываем в разбивке только его название (из 1С), без дубликата CENTRUM/Ялта
         if store_id and store_id != "all" and selected_store_name and total_visitors > 0:
+            selected_store_display_name = _analytics_store_display_name(selected_store_name) or selected_store_name
             visitors_by_store[store_id] = {
                 "visitor_count": total_visitors,
-                "store_name": selected_store_name
+                "store_name": selected_store_display_name
             }
-            visitors_by_store[selected_store_name] = {
+            visitors_by_store[selected_store_display_name] = {
                 "visitor_count": total_visitors,
-                "store_name": selected_store_name
+                "store_name": selected_store_display_name
             }
             # Убираем альясные названия из разбивки, чтобы не показывать "CENTRUM: 33" и "Центрум 2: 33" одновременно
             store_name_lower = selected_store_name.lower()
@@ -2947,7 +3088,11 @@ async def get_1c_sales_details(
         
         # Получаем названия магазинов
         stores_query = await db.execute(select(Store.external_id, Store.name))
-        store_names = {row[0]: row[1] for row in stores_query.all() if row[0]}
+        store_names_raw = {row[0]: row[1] for row in stores_query.all() if row[0]}
+        store_names = {
+            external_id: _analytics_store_display_name(name, store_id=external_id)
+            for external_id, name in store_names_raw.items()
+        }
         
         # Формируем запрос
         # Исключаем записи с нулевыми quantity и revenue (это могут быть служебные записи)
@@ -3035,7 +3180,7 @@ async def get_1c_sales_details(
                 'quantity': float(row[6]) if row[6] else 0.0,
                 'revenue': float(row[7]) if row[7] else 0.0,
                 'store_id': row[8],
-                'store_name': store_names.get(row[8], row[8]) if row[8] else None,
+                'store_name': effective_store_name(store_names_raw.get(row[8]), row[1], row[8]) if row[8] else None,
                 'channel': row[9] or 'offline',
                 'external_id': row[10],
                 'document_id': row[11],

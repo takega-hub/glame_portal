@@ -1,0 +1,38 @@
+{
+  "evidence_type": "glm_store_checkout_fulfilled_e2e",
+  "checked_at": "2026-07-17T10:06:00Z",
+  "network": "mainnet",
+  "operation": {
+    "redemption_id": "8411be71-2279-434c-a32a-3b6a521cbf7d",
+    "status": "fulfilled",
+    "amount_glm": 100,
+    "payment_method": "ton_glm",
+    "ton_payment_status": "verified",
+    "ton_tx_hash": "67kSm6/eA4pS4GUJedLxcABryM5Lvxp6CANug3smQwI=",
+    "fulfillment_status": "fulfilled",
+    "fulfilled_at": "2026-07-17T10:05:33.397307+00:00",
+    "ton_refund_required": false,
+    "admin_comment": "Production regression GLM Store checkout fulfilled."
+  },
+  "settlement": {
+    "runner": "run_glm_ton_settlement",
+    "reward_store_checked": 1,
+    "reward_store_processed": 1,
+    "reward_store_blocked": 0,
+    "reward_store_skipped": 0
+  },
+  "reconciliation": {
+    "pending_count": 0,
+    "processed_count": 3,
+    "issues_count": 0
+  },
+  "replay_idempotency": {
+    "status": "ok",
+    "issues_count": 0,
+    "checked": {
+      "bridge_operations": 18,
+      "transactions": 19,
+      "ton_tx_hashes": 15
+    }
+  }
+}

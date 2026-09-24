@@ -11,9 +11,13 @@ export type NavItem = {
 
 export const ACCOUNT_NAV_ITEMS: NavItem[] = [
   { name: 'Связь со стилистом', href: '/admin/live-stylist', icon: '💬', sectionId: 'customer_stylist' },
-  { name: 'План/Факт', href: '/profile/sellers/dashboard', sellerHref: '/profile/sellers/personal', icon: '🛍️', sectionId: 'sellers', matchPrefixes: ['/profile/sellers'] },
-  { name: 'Фото украшений', href: '/profile/sellers/jewelry-photo', icon: '📷', sectionId: 'sellers' },
+  { name: 'План/Факт', href: '/profile/sellers/dashboard', sellerHref: '/profile/sellers/personal', icon: '🛍️', sectionId: 'seller_dashboard', matchPrefixes: ['/profile/sellers/dashboard', '/profile/sellers/personal'] },
+  { name: 'CRM', href: '/admin/crm/tasks', sellerHref: '/profile/sellers/crm', icon: '☎️', sectionId: 'seller_crm', matchPrefixes: ['/profile/sellers/crm', '/admin/crm/tasks'] },
+  { name: 'Анкета покупателя', href: '/seller/customer-questionnaire', icon: '📝', sectionId: 'seller_customer_questionnaire' },
+  { name: 'Запросы клиентов', href: '/customer-requests', icon: '💎', sectionId: 'customer_requests' },
+  { name: 'Фото украшений', href: '/profile/sellers/jewelry-photo', icon: '📷', sectionId: 'jewelry_photo' },
   { name: 'Обучение GLAME', href: '/profile/training', icon: '🎓', sectionId: 'seller_training' },
+  { name: 'Стажёры', href: '/manager/training', icon: '🧑‍🎓', sectionId: 'manager_training' },
 ];
 
 export const NAVIGATION_GROUPS: Array<{ title: string; items: NavItem[] }> = [
@@ -46,6 +50,7 @@ export const NAVIGATION_GROUPS: Array<{ title: string; items: NavItem[] }> = [
       { name: 'Каталог товаров', href: '/products', icon: '💍', sectionId: 'products' },
       { name: 'Образы', href: '/looks', icon: '👗', sectionId: 'looks' },
       { name: 'Покупатели', href: '/admin/customers', icon: '👥', sectionId: 'customers' },
+      { name: 'Аналитика анкет', href: '/admin/customers/questionnaire-analytics', icon: '📋', sectionId: 'customers' },
       { name: 'Партнеры', href: '/admin/referrals', icon: '🤝', sectionId: 'referrals_admin' },
       { name: 'КРИПТО', href: '/admin/crypto', icon: '💠', sectionId: 'referrals_admin', matchPrefixes: ['/admin/crypto'] },
       { name: 'Товары за баллы', href: '/admin/crypto#reward-store', icon: '🎁', sectionId: 'referrals_admin', matchPrefixes: ['/admin/crypto'] },
@@ -74,8 +79,12 @@ export const NAVIGATION_GROUPS: Array<{ title: string; items: NavItem[] }> = [
 
 export const ALL_NAV_ITEMS = [...ACCOUNT_NAV_ITEMS, ...NAVIGATION_GROUPS.flatMap((group) => group.items)];
 
+const PATH_SECTION_OVERRIDES: NavItem[] = [
+  { name: 'Продавцы', href: '/profile/sellers', icon: '🛍️', sectionId: 'sellers' },
+];
+
 export function resolveNavHref(item: NavItem, role?: string | null): string {
-  if (role === 'seller' && item.sellerHref) return item.sellerHref;
+  if ((role === 'seller' || role === 'manager') && item.sellerHref) return item.sellerHref;
   return item.href;
 }
 
@@ -86,6 +95,8 @@ export function getFirstAllowedHref(sectionIds: string[] | undefined | null, rol
 }
 
 export function findSectionForPath(pathname: string): NavItem | null {
+  const override = PATH_SECTION_OVERRIDES.find((item) => pathname === item.href || pathname === `${item.href}/`);
+  if (override) return override;
   const candidates = [...ALL_NAV_ITEMS].sort((a, b) => b.href.length - a.href.length);
   return candidates.find((item) => {
     if (pathname === item.href || pathname.startsWith(`${item.href}/`)) return true;

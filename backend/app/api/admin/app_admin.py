@@ -1,4 +1,5 @@
 import logging
+import io
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -6,6 +7,7 @@ from uuid import UUID, uuid4
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from PIL import Image, ImageOps
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +22,8 @@ from app.models.app_lookbook import AppLookbook
 from app.models.app_promotion import AppPromotion
 from app.models.app_news import AppNews
 from app.models.app_store import AppStore
+from app.models.product_stock import ProductStock
+from app.models.store import Store
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +40,9 @@ def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
         if raw.endswith("Z"):
             raw = raw[:-1] + "+00:00"
         dt = datetime.fromisoformat(raw)
-        return dt
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
     except Exception:
         raise HTTPException(status_code=400, detail=f"Invalid datetime format: {value}")
 
@@ -46,6 +52,42 @@ def _normalize_status(value: Optional[str]) -> str:
     if v not in {"draft", "published", "archived"}:
         raise HTTPException(status_code=400, detail="Invalid status. Allowed: draft, published, archived")
     return v
+
+
+def _normalize_promotion_discount_kind(value: Any) -> str:
+    raw = str(value or "none").strip().lower()
+    if not raw:
+        raw = "none"
+    if raw not in {"none", "cheapest_for_fixed_price_per_group"}:
+        raise HTTPException(status_code=400, detail="Invalid promotion discount kind")
+    return raw
+
+
+def _positive_int(value: Any, default: int, *, min_value: int = 1, max_value: int = 999999999) -> int:
+    try:
+        number = int(value if value is not None else default)
+    except Exception:
+        number = default
+    return max(min_value, min(number, max_value))
+
+
+def _promotion_payload(x: AppPromotion) -> Dict[str, Any]:
+    return {
+        "id": str(x.id),
+        "title": x.title,
+        "banner_image_url": x.banner_image_url,
+        "body": x.body,
+        "starts_at": x.starts_at.isoformat() if x.starts_at else None,
+        "ends_at": x.ends_at.isoformat() if x.ends_at else None,
+        "status": x.status,
+        "discount_kind": x.discount_kind or "none",
+        "is_cart_discount": bool(x.is_cart_discount),
+        "group_size": int(x.group_size or 3),
+        "discounted_items_per_group": int(x.discounted_items_per_group or 1),
+        "discounted_item_price": int(x.discounted_item_price or 100),
+        "discount_config": x.discount_config or None,
+        "updated_at": x.updated_at.isoformat() if x.updated_at else None,
+    }
 
 
 def _normalize_placement(value: Optional[str]) -> str:
@@ -73,11 +115,45 @@ def _normalize_home_block_key(value: Optional[str]) -> str:
     return raw
 
 
+def _normalize_home_slide_background_mode(value: Optional[str]) -> str:
+    raw = (value or "image").strip().lower()
+    if raw not in {"image", "color"}:
+        raise HTTPException(status_code=400, detail="Invalid home slide background mode")
+    return raw
+
+
+def _normalize_home_slide_background_color(value: Optional[str]) -> Optional[str]:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if not re.fullmatch(r"#?[0-9a-fA-F]{6}", raw):
+        raise HTTPException(status_code=400, detail="background_color_hex must be a HEX color")
+    return f"#{raw.lstrip('#').upper()}"
+
+
+def _normalize_home_slide_background_ral(value: Optional[str]) -> Optional[str]:
+    raw = re.sub(r"\s+", " ", (value or "").strip().upper())
+    if not raw:
+        return None
+    if not re.fullmatch(r"RAL ?[0-9]{4}", raw):
+        raise HTTPException(status_code=400, detail="background_color_ral must use the RAL 0000 format")
+    return f"RAL {raw[-4:]}"
+
+
+def _normalize_home_slide_text_color(value: Optional[str]) -> Optional[str]:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if not re.fullmatch(r"#?[0-9a-fA-F]{6}", raw):
+        raise HTTPException(status_code=400, detail="text_color_hex must be a HEX color")
+    return f"#{raw.lstrip('#').upper()}"
+
+
 def _normalize_slide_action_type(value: Optional[str]) -> Optional[str]:
     raw = (value or "").strip().lower()
     if not raw:
         return None
-    if raw not in {"catalog", "looks", "selection", "stylist", "url", "home_block"}:
+    if raw not in {"catalog", "looks", "selection", "stylist", "url", "home_block", "news"}:
         raise HTTPException(status_code=400, detail="Invalid slide action type")
     return raw
 
@@ -119,6 +195,52 @@ APP_MEDIA_ALLOWED_TYPES = {
     "image/webp": ".webp",
 }
 APP_MEDIA_MAX_BYTES = 15 * 1024 * 1024
+APP_MEDIA_OPTIMIZED_EXT = ".webp"
+APP_MEDIA_OPTIMIZED_CONTENT_TYPE = "image/webp"
+APP_MEDIA_OPTIMIZATION_PROFILES = {
+    "home_slide": {"max_width": 1280, "max_height": 1920, "quality": 78},
+    "store": {"max_width": 1440, "max_height": 1920, "quality": 78},
+    "banner": {"max_width": 1440, "max_height": 1440, "quality": 78},
+    "lookbook": {"max_width": 1440, "max_height": 1920, "quality": 78},
+    "promotion": {"max_width": 1440, "max_height": 1440, "quality": 78},
+    "news": {"max_width": 1280, "max_height": 1280, "quality": 78},
+    "certificate_texture": {"max_width": 1200, "max_height": 800, "quality": 82},
+}
+
+
+def _optimize_app_admin_image(file_bytes: bytes, *, kind: str) -> tuple[bytes, str, str, Dict[str, Any]]:
+    profile = APP_MEDIA_OPTIMIZATION_PROFILES.get(kind, APP_MEDIA_OPTIMIZATION_PROFILES["home_slide"])
+    max_width = int(profile["max_width"])
+    max_height = int(profile["max_height"])
+    quality = int(profile["quality"])
+
+    try:
+        with Image.open(io.BytesIO(file_bytes)) as source:
+            image = ImageOps.exif_transpose(source)
+            original_width, original_height = image.size
+            image.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+
+            if image.mode not in {"RGB", "RGBA"}:
+                image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+
+            output = io.BytesIO()
+            image.save(output, format="WEBP", quality=quality, method=6)
+            optimized_bytes = output.getvalue()
+            width, height = image.size
+    except Exception as exc:
+        logger.exception("Failed to optimize app admin media upload: kind=%s", kind)
+        raise HTTPException(status_code=400, detail=f"Не удалось обработать изображение: {exc}") from exc
+
+    meta = {
+        "original_bytes": len(file_bytes),
+        "optimized_bytes": len(optimized_bytes),
+        "original_width": original_width,
+        "original_height": original_height,
+        "width": width,
+        "height": height,
+        "quality": quality,
+    }
+    return optimized_bytes, APP_MEDIA_OPTIMIZED_EXT, APP_MEDIA_OPTIMIZED_CONTENT_TYPE, meta
 
 
 def _store_slug(city: Optional[str], title: Optional[str]) -> Optional[str]:
@@ -232,13 +354,20 @@ async def upload_app_admin_media(
     if len(file_bytes) > APP_MEDIA_MAX_BYTES:
         raise HTTPException(status_code=400, detail="Файл превышает лимит 15 MB")
 
-    ext = APP_MEDIA_ALLOWED_TYPES[content_type]
+    optimized_bytes, ext, optimized_content_type, optimization = _optimize_app_admin_image(
+        file_bytes,
+        kind=safe_kind,
+    )
     target_dir = APP_MEDIA_DIR / safe_kind
     target_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{uuid4().hex}{ext}"
     target_path = target_dir / filename
-    target_path.write_bytes(file_bytes)
-    return {"url": f"/static/app_admin_media/{safe_kind}/{filename}"}
+    target_path.write_bytes(optimized_bytes)
+    return {
+        "url": f"/static/app_admin_media/{safe_kind}/{filename}",
+        "content_type": optimized_content_type,
+        "optimization": optimization,
+    }
 
 
 @router.get("/gift-certificate-textures")
@@ -284,6 +413,7 @@ def _store_payload(x: AppStore) -> Dict[str, Any]:
         "image_urls": image_urls,
         "latitude": x.latitude,
         "longitude": x.longitude,
+        "stock_store_external_id": x.stock_store_external_id,
         "sort_order": x.sort_order,
         "is_active": x.is_active,
         "updated_at": x.updated_at.isoformat() if x.updated_at else None,
@@ -294,6 +424,98 @@ def _store_payload(x: AppStore) -> Dict[str, Any]:
             image_url=x.image_url,
         ),
     }
+
+
+def _normalize_stock_store_external_id(value: Any) -> Optional[str]:
+    raw = str(value or "").strip()
+    return raw or None
+
+
+async def _ensure_inventory_store_link(db: AsyncSession, app_store: AppStore) -> None:
+    external_id = _normalize_stock_store_external_id(app_store.stock_store_external_id)
+    if not external_id:
+        return
+
+    row = (
+        await db.execute(select(Store).where(Store.external_id == external_id).limit(1))
+    ).scalar_one_or_none()
+    if row:
+        row.is_active = True
+        if not row.name:
+            row.name = app_store.title
+        if not row.city:
+            row.city = app_store.city
+        if not row.address:
+            row.address = app_store.address
+        if row.latitude is None:
+            row.latitude = app_store.latitude
+        if row.longitude is None:
+            row.longitude = app_store.longitude
+        return
+
+    db.add(
+        Store(
+            name=app_store.title,
+            address=app_store.address,
+            city=app_store.city,
+            latitude=app_store.latitude,
+            longitude=app_store.longitude,
+            external_id=external_id,
+            is_active=True,
+        )
+    )
+
+
+@router.get("/stock-stores")
+async def list_stock_stores(
+    current_user: User = Depends(require_content_manager()),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (
+        await db.execute(
+            select(
+                ProductStock.store_id.label("external_id"),
+                func.count(ProductStock.id).label("stock_rows"),
+                func.count(func.distinct(ProductStock.product_id)).label("products_count"),
+                func.coalesce(func.sum(ProductStock.available_quantity), 0).label("available_quantity"),
+                Store.id.label("store_id"),
+                Store.name.label("store_name"),
+                Store.city.label("store_city"),
+                Store.is_active.label("store_is_active"),
+                AppStore.id.label("app_store_id"),
+                AppStore.title.label("app_store_title"),
+            )
+            .select_from(ProductStock)
+            .outerjoin(Store, Store.external_id == ProductStock.store_id)
+            .outerjoin(AppStore, AppStore.stock_store_external_id == ProductStock.store_id)
+            .group_by(
+                ProductStock.store_id,
+                Store.id,
+                Store.name,
+                Store.city,
+                Store.is_active,
+                AppStore.id,
+                AppStore.title,
+            )
+            .order_by(func.coalesce(func.sum(ProductStock.available_quantity), 0).desc())
+        )
+    ).all()
+
+    return [
+        {
+            "external_id": row.external_id,
+            "store_id": str(row.store_id) if row.store_id else None,
+            "name": row.store_name,
+            "city": row.store_city,
+            "is_active": bool(row.store_is_active) if row.store_id else None,
+            "app_store_id": str(row.app_store_id) if row.app_store_id else None,
+            "app_store_title": row.app_store_title,
+            "stock_rows": int(row.stock_rows or 0),
+            "products_count": int(row.products_count or 0),
+            "available_quantity": float(row.available_quantity or 0),
+        }
+        for row in rows
+    ]
 
 
 def _normalize_store_image_urls(payload: Dict[str, Any]) -> List[str]:
@@ -321,6 +543,10 @@ def _home_slide_payload(x: AppHomeSlide) -> Dict[str, Any]:
         "title": x.title,
         "subtitle": x.subtitle,
         "background_image_url": getattr(x, "background_image_url", None),
+        "background_mode": getattr(x, "background_mode", "image") or "image",
+        "background_color_hex": getattr(x, "background_color_hex", None),
+        "background_color_ral": getattr(x, "background_color_ral", None),
+        "text_color_hex": getattr(x, "text_color_hex", None),
         "image_url": x.image_url,
         "image_action_link": x.image_action_link,
         "image_action_type": x.image_action_type,
@@ -382,11 +608,13 @@ async def create_store(
         image_urls=image_urls,
         latitude=(float(payload.get("latitude")) if payload.get("latitude") not in {None, ""} else None),
         longitude=(float(payload.get("longitude")) if payload.get("longitude") not in {None, ""} else None),
+        stock_store_external_id=_normalize_stock_store_external_id(payload.get("stock_store_external_id")),
         sort_order=int(payload.get("sort_order") or 0),
         is_active=bool(payload.get("is_active", True)),
         updated_by_user_id=current_user.id,
     )
     db.add(store)
+    await _ensure_inventory_store_link(db, store)
     await db.commit()
     await db.refresh(store)
     return {"id": str(store.id)}
@@ -429,6 +657,8 @@ async def update_store(
         store.latitude = (float(payload.get("latitude")) if str(payload.get("latitude")).strip() else None)
     if payload.get("longitude") is not None:
         store.longitude = (float(payload.get("longitude")) if str(payload.get("longitude")).strip() else None)
+    if "stock_store_external_id" in payload:
+        store.stock_store_external_id = _normalize_stock_store_external_id(payload.get("stock_store_external_id"))
     if payload.get("sort_order") is not None:
         store.sort_order = int(payload.get("sort_order") or 0)
     if payload.get("is_active") is not None:
@@ -447,6 +677,7 @@ async def update_store(
     )
 
     store.updated_by_user_id = current_user.id
+    await _ensure_inventory_store_link(db, store)
     await db.commit()
     return {"success": True}
 
@@ -616,10 +847,27 @@ async def create_home_slide(
     current_user: User = Depends(require_content_manager()),
     db: AsyncSession = Depends(get_db),
 ):
+    block_key = _normalize_home_block_key(payload.get("block_key"))
+    background_mode = _normalize_home_slide_background_mode(
+        payload.get("background_mode")
+    )
+    background_color_hex = _normalize_home_slide_background_color(
+        payload.get("background_color_hex")
+    )
     title = str(payload.get("title") or "").strip() or None
     image_url = str(payload.get("image_url") or "").strip()
-    if not image_url:
+    background_image_url = (
+        str(payload.get("background_image_url")).strip()
+        if payload.get("background_image_url")
+        else None
+    )
+    is_block6 = block_key == "service_how_to_buy"
+    if not is_block6 and not image_url:
         raise HTTPException(status_code=400, detail="image_url is required")
+    if is_block6 and background_mode == "image" and not (background_image_url or image_url):
+        raise HTTPException(status_code=400, detail="background_image_url is required for image background")
+    if is_block6 and background_mode == "color" and not background_color_hex:
+        raise HTTPException(status_code=400, detail="background_color_hex is required for color background")
     primary_button_text = _normalize_optional_button_text(
         payload.get("primary_button_text")
     )
@@ -628,14 +876,16 @@ async def create_home_slide(
     )
 
     slide = AppHomeSlide(
-        block_key=_normalize_home_block_key(payload.get("block_key")),
+        block_key=block_key,
         title=title,
         subtitle=(str(payload.get("subtitle")).strip() if payload.get("subtitle") else None),
-        background_image_url=(
-            str(payload.get("background_image_url")).strip()
-            if payload.get("background_image_url")
-            else None
+        background_image_url=background_image_url,
+        background_mode=background_mode,
+        background_color_hex=background_color_hex,
+        background_color_ral=_normalize_home_slide_background_ral(
+            payload.get("background_color_ral")
         ),
+        text_color_hex=_normalize_home_slide_text_color(payload.get("text_color_hex")),
         image_url=image_url,
         image_action_link=(
             str(payload.get("image_action_link")).strip()
@@ -710,57 +960,73 @@ async def update_home_slide(
 
     if payload.get("block_key") is not None:
         slide.block_key = _normalize_home_block_key(payload.get("block_key"))
-    if payload.get("title") is not None:
+    if "title" in payload:
         slide.title = str(payload.get("title") or "").strip() or None
-    if payload.get("subtitle") is not None:
+    if "subtitle" in payload:
         slide.subtitle = str(payload.get("subtitle") or "").strip() or None
-    if payload.get("background_image_url") is not None:
+    if "background_image_url" in payload:
         slide.background_image_url = (
             str(payload.get("background_image_url") or "").strip() or None
         )
+    if "background_mode" in payload:
+        slide.background_mode = _normalize_home_slide_background_mode(
+            payload.get("background_mode")
+        )
+    if "background_color_hex" in payload:
+        slide.background_color_hex = _normalize_home_slide_background_color(
+            payload.get("background_color_hex")
+        )
+    if "background_color_ral" in payload:
+        slide.background_color_ral = _normalize_home_slide_background_ral(
+            payload.get("background_color_ral")
+        )
+    if "text_color_hex" in payload:
+        slide.text_color_hex = _normalize_home_slide_text_color(
+            payload.get("text_color_hex")
+        )
     if payload.get("image_url") is not None:
         slide.image_url = str(payload.get("image_url") or "").strip()
-    if payload.get("image_action_link") is not None:
+    if "image_action_link" in payload:
         slide.image_action_link = (
             str(payload.get("image_action_link") or "").strip() or None
         )
-    if payload.get("image_action_type") is not None:
+    if "image_action_type" in payload:
         slide.image_action_type = _normalize_slide_action_type(
             payload.get("image_action_type")
         )
-    if payload.get("image_action_payload") is not None:
+    if "image_action_payload" in payload:
         slide.image_action_payload = _normalize_slide_action_payload(
             payload.get("image_action_payload")
         )
-    if payload.get("primary_button_text") is not None:
+    if "primary_button_text" in payload:
         slide.primary_button_text = (
             str(payload.get("primary_button_text") or "").strip() or None
         )
-    if payload.get("primary_button_link") is not None:
+    if "primary_button_link" in payload:
         slide.primary_button_link = (
             str(payload.get("primary_button_link") or "").strip() or None
         )
-    if payload.get("primary_button_action_type") is not None:
+    if "primary_button_action_type" in payload:
         slide.primary_button_action_type = _normalize_slide_action_type(
             payload.get("primary_button_action_type")
         )
-    if payload.get("primary_button_action_payload") is not None:
+    if "primary_button_action_payload" in payload:
         slide.primary_button_action_payload = _normalize_slide_action_payload(
             payload.get("primary_button_action_payload")
         )
-    if payload.get("secondary_button_text") is not None:
+    if "secondary_button_text" in payload:
         slide.secondary_button_text = (
             str(payload.get("secondary_button_text") or "").strip() or None
         )
-    if payload.get("secondary_button_link") is not None:
+    if "secondary_button_link" in payload:
         slide.secondary_button_link = (
             str(payload.get("secondary_button_link") or "").strip() or None
         )
-    if payload.get("secondary_button_action_type") is not None:
+    if "secondary_button_action_type" in payload:
         slide.secondary_button_action_type = _normalize_slide_action_type(
             payload.get("secondary_button_action_type")
         )
-    if payload.get("secondary_button_action_payload") is not None:
+    if "secondary_button_action_payload" in payload:
         slide.secondary_button_action_payload = _normalize_slide_action_payload(
             payload.get("secondary_button_action_payload")
         )
@@ -769,8 +1035,18 @@ async def update_home_slide(
     if payload.get("is_active") is not None:
         slide.is_active = bool(payload.get("is_active"))
 
-    if not (slide.image_url or "").strip():
+    is_block6 = slide.block_key == "service_how_to_buy"
+    is_block6_color = is_block6 and (slide.background_mode or "image") == "color"
+    if not is_block6 and not (slide.image_url or "").strip():
         raise HTTPException(status_code=400, detail="image_url is required")
+    if (
+        is_block6
+        and not is_block6_color
+        and not ((slide.background_image_url or "").strip() or (slide.image_url or "").strip())
+    ):
+        raise HTTPException(status_code=400, detail="background_image_url is required for image background")
+    if is_block6_color and not slide.background_color_hex:
+        raise HTTPException(status_code=400, detail="background_color_hex is required for color background")
     if not slide.primary_button_text:
         slide.primary_button_link = None
         slide.primary_button_action_type = None
@@ -925,19 +1201,7 @@ async def list_promotions(
         stmt = stmt.where(AppPromotion.status == _normalize_status(status))
     stmt = stmt.order_by(desc(AppPromotion.updated_at))
     rows = (await db.execute(stmt)).scalars().all()
-    return [
-        {
-            "id": str(x.id),
-            "title": x.title,
-            "banner_image_url": x.banner_image_url,
-            "body": x.body,
-            "starts_at": x.starts_at.isoformat() if x.starts_at else None,
-            "ends_at": x.ends_at.isoformat() if x.ends_at else None,
-            "status": x.status,
-            "updated_at": x.updated_at.isoformat() if x.updated_at else None,
-        }
-        for x in rows
-    ]
+    return [_promotion_payload(x) for x in rows]
 
 
 @router.post("/promotions")
@@ -959,6 +1223,14 @@ async def create_promotion(
         starts_at=_parse_iso_datetime(payload.get("starts_at")),
         ends_at=_parse_iso_datetime(payload.get("ends_at")),
         status=_normalize_status(payload.get("status")),
+        discount_kind=_normalize_promotion_discount_kind(payload.get("discount_kind")),
+        is_cart_discount=bool(payload.get("is_cart_discount")),
+        group_size=_positive_int(payload.get("group_size"), 3, min_value=2, max_value=99),
+        discounted_items_per_group=_positive_int(
+            payload.get("discounted_items_per_group"), 1, min_value=1, max_value=99
+        ),
+        discounted_item_price=_positive_int(payload.get("discounted_item_price"), 100, min_value=0),
+        discount_config=payload.get("discount_config") if isinstance(payload.get("discount_config"), dict) else None,
         updated_by_user_id=current_user.id,
     )
     db.add(promo)
@@ -993,6 +1265,20 @@ async def update_promotion(
         promo.ends_at = _parse_iso_datetime(payload.get("ends_at"))
     if payload.get("status") is not None:
         promo.status = _normalize_status(payload.get("status"))
+    if "discount_kind" in payload:
+        promo.discount_kind = _normalize_promotion_discount_kind(payload.get("discount_kind"))
+    if "is_cart_discount" in payload:
+        promo.is_cart_discount = bool(payload.get("is_cart_discount"))
+    if "group_size" in payload:
+        promo.group_size = _positive_int(payload.get("group_size"), 3, min_value=2, max_value=99)
+    if "discounted_items_per_group" in payload:
+        promo.discounted_items_per_group = _positive_int(
+            payload.get("discounted_items_per_group"), 1, min_value=1, max_value=99
+        )
+    if "discounted_item_price" in payload:
+        promo.discounted_item_price = _positive_int(payload.get("discounted_item_price"), 100, min_value=0)
+    if "discount_config" in payload:
+        promo.discount_config = payload.get("discount_config") if isinstance(payload.get("discount_config"), dict) else None
     promo.updated_by_user_id = current_user.id
     await db.commit()
     return {"success": True}

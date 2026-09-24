@@ -15,15 +15,20 @@ from app.models.store import Store
 from app.models.customer_segment import CustomerSegment
 from app.models.user_segment import UserSegment
 from sqlalchemy import update
+from app.services.store_aliases import (
+    CENTRUM_STORE_ID_1C,
+    LEGACY_MEGANOM_STORE_ID_1C,
+    MEGANOM_TO_MRIYA_START_DATE,
+    MRIYA_STORE_ID_1C,
+    YALTA_STORE_ID_1C,
+    effective_store_id,
+    effective_store_name,
+)
 
 logger = logging.getLogger(__name__)
 
-CENTRUM_STORE_ID_1C = "6c3a8322-a2ab-11f0-96fc-fa163e4cc04e"
-YALTA_STORE_ID_1C = "3daee4e4-a2ab-11f0-96fc-fa163e4cc04e"
-MEGANOM_STORE_ID_1C = "8cebda58-a2ab-11f0-96fc-fa163e4cc04e"
-CLOSED_STORE_REDIRECTS = {
-    MEGANOM_STORE_ID_1C: CENTRUM_STORE_ID_1C,
-}
+MEGANOM_STORE_ID_1C = LEGACY_MEGANOM_STORE_ID_1C
+CLOSED_STORE_REDIRECTS: Dict[str, str] = {}
 
 
 def _normalize_city(value: Optional[str]) -> str:
@@ -61,21 +66,30 @@ class CustomerAnalyticsService:
         
         Также обновляет город пользователя, если магазин однозначно определяет город:
         - Ялта, Набережная 18 -> Ялта
-        - Меганом, Центрум -> Симферополь
+        - Центрум -> Симферополь
+        - МРИЯ -> Оползневое
         """
-        # Считаем покупки по store_id_1c
+        # Считаем покупки по эффективному магазину: касса Меганома после
+        # 2026-06-01 физически работает в МРИИ.
         rows = await self.db.execute(
             select(
                 PurchaseHistory.store_id_1c,
-                func.count().label("cnt"),
-                func.coalesce(func.sum(PurchaseHistory.total_amount), 0).label("total_amount"),
-                func.max(PurchaseHistory.purchase_date).label("last_purchase_date"),
+                PurchaseHistory.total_amount,
+                PurchaseHistory.purchase_date,
             )
             .where(PurchaseHistory.user_id == user_id, PurchaseHistory.store_id_1c.isnot(None))
-            .group_by(PurchaseHistory.store_id_1c)
         )
-        stats = rows.all()
-        total = sum(r[1] for r in stats) or 0
+        raw_stats = rows.all()
+        grouped_stats: Dict[str, Dict[str, Any]] = {}
+        for row in raw_stats:
+            mapped_store_id = effective_store_id(row.store_id_1c, row.purchase_date) or row.store_id_1c
+            bucket = grouped_stats.setdefault(mapped_store_id, {"store_id_1c": mapped_store_id, "cnt": 0, "total_amount": 0, "last_purchase_date": None})
+            bucket["cnt"] += 1
+            bucket["total_amount"] += int(row.total_amount or 0)
+            if row.purchase_date and (bucket["last_purchase_date"] is None or row.purchase_date > bucket["last_purchase_date"]):
+                bucket["last_purchase_date"] = row.purchase_date
+        stats = list(grouped_stats.values())
+        total = sum(int(r["cnt"] or 0) for r in stats) or 0
         if not stats:
             user_row = await self.db.execute(select(User.city).where(User.id == user_id))
             city = user_row.scalar_one_or_none()
@@ -87,18 +101,18 @@ class CustomerAnalyticsService:
             best = max(
                 stats,
                 key=lambda x: (
-                    int(x.cnt or 0),
-                    int(x.total_amount or 0),
-                    x.last_purchase_date or datetime.min.replace(tzinfo=timezone.utc),
+                    int(x["cnt"] or 0),
+                    int(x["total_amount"] or 0),
+                    x["last_purchase_date"] or datetime.min.replace(tzinfo=timezone.utc),
                 ),
             )
-            best_store_id_1c = CLOSED_STORE_REDIRECTS.get(best.store_id_1c, best.store_id_1c)
-            best_cnt = best.cnt
+            best_store_id_1c = str(best["store_id_1c"])
+            best_cnt = int(best["cnt"] or 0)
 
         # Находим название
         store_row = await self.db.execute(select(Store.name, Store.city).where(Store.external_id == best_store_id_1c))
         store_data = store_row.first()
-        name = store_data.name if store_data else None
+        name = effective_store_name(store_data.name if store_data else None, datetime.now(timezone.utc), best_store_id_1c)
         store_city = store_data.city if store_data else None
         share = (best_cnt / total) if total else 0.0
         
@@ -120,6 +134,8 @@ class CustomerAnalyticsService:
                 new_city = "Ялта"
             elif "меганом" in normalized_name or "центрум" in normalized_name:
                 new_city = "Симферополь"
+            elif "мрия" in normalized_name:
+                new_city = store_city or "Оползневое"
             
             if new_city:
                 update_values["city"] = new_city

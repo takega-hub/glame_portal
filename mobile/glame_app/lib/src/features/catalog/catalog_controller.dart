@@ -287,7 +287,7 @@ class CatalogController extends StateNotifier<CatalogState> {
         brand: state.brand,
         search: state.search,
         inStock: state.inStockOnly || state.storeId != null ? true : null,
-        hasImages: true,
+        hasImages: _isNewProductsSection(state.category) ? null : true,
         priceMin: state.priceMin,
         priceMax: state.priceMax,
         material: state.material,
@@ -338,7 +338,7 @@ class CatalogController extends StateNotifier<CatalogState> {
         brand: state.brand,
         search: state.search,
         inStock: state.inStockOnly || state.storeId != null ? true : null,
-        hasImages: true,
+        hasImages: _isNewProductsSection(state.category) ? null : true,
         priceMin: state.priceMin,
         priceMax: state.priceMax,
         material: state.material,
@@ -383,6 +383,9 @@ String? _norm(String? value) {
   final next = (value ?? '').trim();
   return next.isEmpty ? null : next;
 }
+
+bool _isNewProductsSection(String? category) =>
+    (category ?? '').trim().toLowerCase() == 'новинки';
 
 String? _normCategory(String? value) {
   final next = _norm(value);

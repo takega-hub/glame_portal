@@ -17,7 +17,7 @@ from app.models.product_stock import ProductStock
 from app.models.user import User
 from app.services.gift_certificate_email_service import GiftCertificateEmailService
 from app.services.gift_certificate_service import GiftCertificateService
-from app.services.yookassa_service import get_yookassa_service
+from app.services.yookassa_service import get_yookassa_service_for_db
 
 
 router = APIRouter()
@@ -155,10 +155,18 @@ async def _sync_payment_with_provider(
 ) -> None:
     if not payment or payment.provider != "yookassa" or not payment.external_id:
         return
-    if payment.status in {"succeeded", "canceled"}:
+    if payment.status == "canceled":
+        return
+    meta = order.meta if isinstance(order.meta, dict) else {}
+    if payment.status == "succeeded":
+        if meta.get("order_type") == "gift_certificate_purchase":
+            activated = await GiftCertificateService(db).activate_order_certificates(order.id, payment.id)
+            order.status = "paid"
+            if activated:
+                await GiftCertificateEmailService(db).send_for_certificates(activated)
         return
 
-    svc = get_yookassa_service()
+    svc = await get_yookassa_service_for_db(db)
     if not svc:
         return
 
@@ -167,9 +175,8 @@ async def _sync_payment_with_provider(
     payment.status = remote_status
     payment.raw = remote
 
-    if remote_status == "succeeded" and order.status in {"pending", "payment_pending"}:
+    if remote_status == "succeeded" and order.status in {"pending", "payment_pending", "paid"}:
         order.status = "paid"
-        meta = order.meta if isinstance(order.meta, dict) else {}
         gift_service = GiftCertificateService(db)
         if meta.get("order_type") == "gift_certificate_purchase":
             activated = await gift_service.activate_order_certificates(order.id, payment.id)
@@ -315,7 +322,7 @@ async def refresh_payment(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    svc = get_yookassa_service()
+    svc = await get_yookassa_service_for_db(db)
     if not svc:
         raise HTTPException(status_code=500, detail="YOOKASSA is not configured")
 

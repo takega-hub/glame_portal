@@ -19,6 +19,7 @@ from app.models.product import Product
 from app.services.onec_sales_service import OneCSalesService
 from app.services.sales_product_link_service import SalesProductLinkService
 from app.services.purchase_product_fields import derive_purchase_brand, derive_purchase_category
+from app.services.store_aliases import LEGACY_MEGANOM_STORE_ID_1C, MRIYA_STORE_ID_1C
 
 logger = logging.getLogger(__name__)
 
@@ -136,8 +137,8 @@ class OneCSalesSyncService:
                 SELECT
                     u.id AS user_uuid,
                     CASE
-                        WHEN sr.store_id = '8cebda58-a2ab-11f0-96fc-fa163e4cc04e'
-                        THEN '6c3a8322-a2ab-11f0-96fc-fa163e4cc04e'
+                        WHEN sr.store_id = :legacy_meganom_store_id AND sr.sale_date >= TIMESTAMPTZ '2026-06-01 00:00:00+00'
+                        THEN :mriya_store_id
                         ELSE sr.store_id
                     END AS store_id_1c,
                     COUNT(*) AS cnt
@@ -169,11 +170,271 @@ class OneCSalesSyncService:
             """
             await self.db.execute(
                 text(sql),
-                {"batch_id": batch_id, "start_ts": start_date, "end_ts": end_date},
+                {
+                    "batch_id": batch_id,
+                    "start_ts": start_date,
+                    "end_ts": end_date,
+                    "legacy_meganom_store_id": LEGACY_MEGANOM_STORE_ID_1C,
+                    "mriya_store_id": MRIYA_STORE_ID_1C,
+                },
             )
             await self.db.commit()
         except Exception:
             logging.getLogger(__name__).warning("Failed to refresh preferred store after sync", exc_info=True)
+
+    async def refresh_purchase_history_from_sales_records(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> Dict[str, Any]:
+        """
+        Обновляет клиентскую витрину purchase_history из детальных чеков sales_records.
+        """
+        updated = 0
+        inserted = 0
+        affected_users: list[uuid.UUID] = []
+
+        try:
+            update_result = await self.db.execute(
+                text(
+                    """
+                    WITH matched AS (
+                        SELECT
+                            ph.id AS purchase_id,
+                            sr.sale_date,
+                            sr.document_id,
+                            sr.store_id,
+                            sr.product_id AS product_id_1c,
+                            sr.product_article,
+                            sr.product_name,
+                            GREATEST(1, ROUND(ABS(COALESCE(NULLIF(sr.quantity, 0), 1)))::int) AS qty,
+                            ROUND(COALESCE(sr.revenue, 0) * 100)::int AS amount_kopecks,
+                            sr.product_category,
+                            sr.product_brand,
+                            p.id AS local_product_id,
+                            json_build_object(
+                                'source', 'sales_records',
+                                'sales_record_id', sr.id,
+                                'external_id', sr.external_id,
+                                'document_id', sr.document_id,
+                                'raw_data', sr.raw_data
+                            )::json AS meta
+                        FROM sales_records sr
+                        JOIN users u ON u.customer_id_1c = sr.customer_id
+                        JOIN purchase_history ph
+                          ON ph.user_id = u.id
+                         AND COALESCE(ph.document_id_1c, '') = COALESCE(sr.document_id, '')
+                         AND COALESCE(ph.product_id_1c, '') = COALESCE(sr.product_id, '')
+                         AND (ph.purchase_date AT TIME ZONE 'UTC')::date = (sr.sale_date AT TIME ZONE 'UTC')::date
+                        LEFT JOIN LATERAL (
+                            SELECT pr.id
+                            FROM products pr
+                            WHERE pr.external_id = sr.product_id
+                               OR (sr.product_article IS NOT NULL AND pr.article = sr.product_article)
+                               OR (sr.product_article IS NOT NULL AND pr.external_code = sr.product_article)
+                            ORDER BY
+                                CASE WHEN pr.external_id = sr.product_id THEN 0 ELSE 1 END,
+                                pr.created_at ASC NULLS LAST
+                            LIMIT 1
+                        ) p ON TRUE
+                        WHERE sr.sale_date >= :start_date
+                          AND sr.sale_date <= :end_date
+                          AND sr.customer_id IS NOT NULL
+                          AND sr.customer_id <> ''
+                          AND sr.customer_id <> '00000000-0000-0000-0000-000000000000'
+                          AND sr.document_id IS NOT NULL
+                    )
+                    UPDATE purchase_history ph
+                    SET purchase_date = matched.sale_date,
+                        store_id_1c = matched.store_id,
+                        product_article = COALESCE(matched.product_article, ph.product_article),
+                        product_name = COALESCE(matched.product_name, ph.product_name),
+                        quantity = matched.qty,
+                        price = CASE WHEN matched.qty > 0 THEN matched.amount_kopecks / matched.qty ELSE matched.amount_kopecks END,
+                        total_amount = matched.amount_kopecks,
+                        product_id = COALESCE(matched.local_product_id, ph.product_id),
+                        category = COALESCE(matched.product_category, ph.category),
+                        brand = COALESCE(matched.product_brand, ph.brand),
+                        sync_metadata = matched.meta
+                    FROM matched
+                    WHERE ph.id = matched.purchase_id
+                    """
+                ),
+                {"start_date": start_date, "end_date": end_date},
+            )
+            updated = update_result.rowcount or 0
+
+            insert_result = await self.db.execute(
+                text(
+                    """
+                    WITH raw_rows AS (
+                        SELECT
+                            u.id AS user_id,
+                            sr.sale_date,
+                            (sr.sale_date AT TIME ZONE 'UTC')::date AS sale_day,
+                            sr.document_id,
+                            sr.store_id,
+                            sr.product_id AS product_id_1c,
+                            sr.product_article,
+                            sr.product_name,
+                            COALESCE(sr.quantity, 0) AS quantity,
+                            COALESCE(sr.revenue, 0) AS revenue,
+                            sr.product_category,
+                            sr.product_brand,
+                            p.id AS local_product_id,
+                            sr.id AS sales_record_id,
+                            sr.external_id,
+                            sr.raw_data
+                        FROM sales_records sr
+                        JOIN users u ON u.customer_id_1c = sr.customer_id
+                        LEFT JOIN LATERAL (
+                            SELECT pr.id
+                            FROM products pr
+                            WHERE pr.external_id = sr.product_id
+                               OR (sr.product_article IS NOT NULL AND pr.article = sr.product_article)
+                               OR (sr.product_article IS NOT NULL AND pr.external_code = sr.product_article)
+                            ORDER BY
+                                CASE WHEN pr.external_id = sr.product_id THEN 0 ELSE 1 END,
+                                pr.created_at ASC NULLS LAST
+                            LIMIT 1
+                        ) p ON TRUE
+                        WHERE sr.sale_date >= :start_date
+                          AND sr.sale_date <= :end_date
+                          AND sr.customer_id IS NOT NULL
+                          AND sr.customer_id <> ''
+                          AND sr.customer_id <> '00000000-0000-0000-0000-000000000000'
+                          AND sr.document_id IS NOT NULL
+	                          AND NOT EXISTS (
+	                              SELECT 1
+	                              FROM purchase_history ph
+	                              WHERE ph.user_id = u.id
+	                                AND COALESCE(ph.document_id_1c, '') = COALESCE(sr.document_id, '')
+	                                AND COALESCE(ph.product_id_1c, '') = COALESCE(sr.product_id, '')
+	                                AND (ph.purchase_date AT TIME ZONE 'UTC')::date = (sr.sale_date AT TIME ZONE 'UTC')::date
+	                          )
+                    ),
+                    source_rows AS (
+                        SELECT
+                            user_id,
+                            MIN(sale_date) AS sale_date,
+                            document_id,
+                            MAX(store_id) AS store_id,
+                            product_id_1c,
+                            MAX(product_article) AS product_article,
+                            MAX(product_name) AS product_name,
+                            GREATEST(1, ROUND(ABS(COALESCE(NULLIF(SUM(quantity), 0), 1)))::int) AS qty,
+                            ROUND(SUM(revenue) * 100)::int AS amount_kopecks,
+                            MAX(product_category) AS product_category,
+                            MAX(product_brand) AS product_brand,
+                            (array_agg(local_product_id) FILTER (WHERE local_product_id IS NOT NULL))[1] AS local_product_id,
+                            json_build_object(
+                                'source', 'sales_records',
+                                'sales_record_ids', json_agg(sales_record_id),
+                                'external_ids', json_agg(external_id),
+                                'document_id', document_id,
+                                'raw_data', json_agg(raw_data)
+                            )::json AS meta
+                        FROM raw_rows
+                        GROUP BY user_id, document_id, product_id_1c, sale_day
+                    )
+                    INSERT INTO purchase_history (
+                        id,
+                        user_id,
+                        purchase_date,
+                        document_id_1c,
+                        store_id_1c,
+                        product_id,
+                        product_id_1c,
+                        product_article,
+                        product_name,
+                        quantity,
+                        price,
+                        total_amount,
+                        category,
+                        brand,
+                        sync_metadata
+                    )
+                    SELECT
+                        gen_random_uuid(),
+                        user_id,
+                        sale_date,
+                        document_id,
+                        store_id,
+                        local_product_id,
+                        product_id_1c,
+                        product_article,
+                        product_name,
+                        qty,
+                        CASE WHEN qty > 0 THEN amount_kopecks / qty ELSE amount_kopecks END,
+                        amount_kopecks,
+                        product_category,
+                        product_brand,
+                        meta
+                    FROM source_rows
+                    """
+                ),
+                {"start_date": start_date, "end_date": end_date},
+            )
+            inserted = insert_result.rowcount or 0
+
+            users_result = await self.db.execute(
+                text(
+                    """
+                    SELECT DISTINCT u.id
+                    FROM sales_records sr
+                    JOIN users u ON u.customer_id_1c = sr.customer_id
+                    WHERE sr.sale_date >= :start_date
+                      AND sr.sale_date <= :end_date
+                      AND sr.customer_id IS NOT NULL
+                      AND sr.customer_id <> ''
+                      AND sr.customer_id <> '00000000-0000-0000-0000-000000000000'
+                    """
+                ),
+                {"start_date": start_date, "end_date": end_date},
+            )
+            affected_users = [row[0] for row in users_result.fetchall() if row and row[0]]
+
+            await self.db.commit()
+
+            linked_count = 0
+            if inserted or updated:
+                linked_count = await SalesProductLinkService(
+                    self.db
+                ).backfill_missing_purchase_product_links(limit=200000)
+
+            attribution_result: Dict[str, Any] | None = None
+            if affected_users:
+                try:
+                    from app.services.crm_interaction_attribution_service import CrmInteractionAttributionService
+
+                    attribution_result = await CrmInteractionAttributionService(
+                        self.db
+                    ).update_purchase_conversions(user_ids=affected_users)
+                except Exception:
+                    logger.warning(
+                        "Не удалось обновить CRM-конверсии после обновления purchase_history",
+                        exc_info=True,
+                    )
+
+            logger.info(
+                "purchase_history обновлена из sales_records: inserted=%s updated=%s users=%s linked=%s",
+                inserted,
+                updated,
+                len(affected_users),
+                linked_count,
+            )
+
+            return {
+                "inserted": inserted,
+                "updated": updated,
+                "affected_users": len(affected_users),
+                "linked_products": linked_count,
+                "crm_interaction_attribution": attribution_result,
+            }
+        except Exception:
+            await self.db.rollback()
+            logger.error("Не удалось обновить purchase_history из sales_records", exc_info=True)
+            raise
     
     async def __aenter__(self):
         self.sales_service = OneCSalesService()
@@ -233,7 +494,8 @@ class OneCSalesSyncService:
         
         logger.info(f"Получено {len(orders)} записей о продажах из 1С")
 
-        if not orders and (datetime.now() - start_date).days < 30:
+        now_for_period = datetime.now(start_date.tzinfo) if start_date.tzinfo else datetime.now()
+        if not orders and (now_for_period - start_date).days < 30:
             logger.warning(f"Внимание: Не получено данных о продажах за период {start_date.date()} - {end_date.date()}. Возможно, проблема на стороне 1С или используется неверный регистр.")
         
         # Логируем статистику по магазинам и товарам для отладки
@@ -583,6 +845,8 @@ class OneCSalesSyncService:
             await self._refresh_preferred_store_for_period(start_date, end_date, batch_id)
         except Exception:
             logger.warning("Не удалось обновить предпочитаемый магазин по результатам синхронизации", exc_info=True)
+
+        purchase_history_sync = await self.refresh_purchase_history_from_sales_records(start_date, end_date)
         
         # Логируем итоговую статистику по магазинам и товарам
         if inserted > 0 or updated > 0:
@@ -609,7 +873,8 @@ class OneCSalesSyncService:
             "total_records": len(orders),
             "inserted": inserted,
             "updated": updated,
-            "skipped": skipped
+            "skipped": skipped,
+            "purchase_history_sync": purchase_history_sync,
         }
 
     async def _cleanup_records_for_check_period(

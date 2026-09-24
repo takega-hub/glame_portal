@@ -17,6 +17,12 @@ interface CustomerProfile {
   total_spent: number;
   average_check: number | null;
   last_purchase_date: string | null;
+  buyer_questionnaire?: {
+    contact_channels?: string[];
+    do_not_contact?: boolean;
+    purchase_for?: string[];
+    glame_values?: string[];
+  } | null;
 }
 
 interface PurchaseStats {
@@ -229,6 +235,18 @@ export default function CustomerCabinetPage() {
           </div>
         )}
 
+        {profile?.buyer_questionnaire && (
+          <div className="bg-white rounded-lg shadow p-6 mb-8">
+            <h2 className="text-xl font-bold text-gray-900">Моя анкета</h2>
+            <p className="mt-2 text-sm text-gray-500">Мы используем эти ответы, чтобы предлагать подходящие украшения и удобный способ связи.</p>
+            <div className="mt-5 grid gap-4 md:grid-cols-3 text-sm">
+              <ProfileAnswer label="Связь" value={profile.buyer_questionnaire.do_not_contact ? 'Не получать сообщения' : (profile.buyer_questionnaire.contact_channels || []).join(', ') || 'Не указано'} />
+              <ProfileAnswer label="Покупаю" value={(profile.buyer_questionnaire.purchase_for || []).join(', ') || 'Не указано'} />
+              <ProfileAnswer label="Важно для меня" value={(profile.buyer_questionnaire.glame_values || []).join(', ') || 'Не указано'} />
+            </div>
+          </div>
+        )}
+
         {/* Информация о сегменте */}
         {profile?.customer_segment && (
           <div className="bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg shadow p-6 text-white mb-8">
@@ -247,4 +265,8 @@ export default function CustomerCabinetPage() {
       </div>
     </div>
   );
+}
+
+function ProfileAnswer({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg bg-gray-50 p-4"><p className="text-xs text-gray-500">{label}</p><p className="mt-1 font-medium text-gray-900">{value}</p></div>;
 }

@@ -1,0 +1,15 @@
+{
+  "schema": "glame_crypto_tonkeeper_verification_evidence_v1",
+  "created_at": "2026-07-17T00:00:00Z",
+  "status": "merged",
+  "pull_request": "https://github.com/tonkeeper/ton-assets/pull/5779",
+  "asset_file": "jettons/GLM.yaml",
+  "mainnet_jetton_master": "EQBaHSwImRBl25rWgCpG1is_g_fByAt-dT36APLnywC7v2fl",
+  "raw_address": "0:5a1d2c08991065db9ad6802a46d62b3f83f7c1c80b7e753dfa00f2e7cb00bbbf",
+  "metadata_url": "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata-mainnet-v2.json",
+  "icon_url": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png",
+  "notes": [
+    "Tonkeeper asset-list PR was merged; wallet cache propagation can still lag by wallet/client cache.",
+    "Token metadata and icon were verified after on-chain content URI update."
+  ]
+}

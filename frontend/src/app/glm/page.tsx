@@ -11,12 +11,14 @@ import {
   LockKeyhole,
   MapPin,
   ReceiptText,
+  RefreshCcw,
   ShieldCheck,
   Smartphone,
   Store,
   UserPlus,
   Wallet,
 } from 'lucide-react';
+import GlmFeedbackForm from '@/components/referral/GlmFeedbackForm';
 
 export const metadata: Metadata = {
   title: 'GLM Coin | CryptoGLAME',
@@ -72,18 +74,18 @@ const offlineStores = [
 ];
 
 const tokenomics = [
-  ['Bank / treasury', 'Основной запас GLM хранится на банковском кошельке GLAME и распределяется по правилам программы.'],
-  ['Hot-wallet', 'Операционный кошелек пополняется лимитированными партиями для быстрых выплат партнерам.'],
+  ['Банк GLAME', 'Основной запас GLM хранится на банковском кошельке GLAME и распределяется по правилам программы.'],
+  ['Рабочий кошелек', 'Операционный кошелек пополняется лимитированными партиями для быстрых выплат партнерам.'],
   ['Loyalty backing', 'GLM имеет utility-связь с реальными баллами лояльности, которые начисляются за покупки украшений в GLAME.'],
-  ['Utility demand', 'Спрос формируется GLM Store, мобильным приложением, партнерскими механиками, онлайн-сервисами и bridge-сценариями.'],
-  ['No promise', 'GLAME не обещает рост цены, buyback, листинг на бирже или фиксированный публичный курс.'],
+  ['Сценарии использования', 'Спрос формируется GLM Store, мобильным приложением, партнерскими механиками, онлайн-сервисами и обменом с бонусными баллами.'],
+  ['Граница риска', 'GLAME не обещает рост цены, выкуп, листинг, ликвидность, доходность или фиксированный публичный курс.'],
 ];
 
 const roadmap = [
-  ['01', 'Mainnet launch', 'Выпуск GLM Jetton, публичная metadata, hot-wallet и прозрачная treasury-модель.'],
-  ['02', 'Partner utility', 'Автоматические выплаты партнерам, GLM Store, история операций и Telegram-уведомления.'],
-  ['03', 'Trust layer', 'Верификация токена в wallet asset lists, публичный audit journal и расширение правил bridge.'],
-  ['04', 'Ecosystem', 'Новые товары, закрытые дропы, онлайн-сервисы и дополнительные партнерские сценарии.'],
+  ['01', 'Запуск в TON', 'Выпуск GLM Jetton, публичная информация о токене, рабочий кошелек и прозрачная модель банка GLAME.'],
+  ['02', 'Польза для партнеров', 'Автоматические выплаты партнерам, GLM Store, история операций и Telegram-уведомления.'],
+  ['03', 'Доверие', 'Верификация токена в кошельках, публичный журнал аудита и расширение правил обмена.'],
+  ['04', 'Экосистема', 'Новые товары, закрытые дропы, онлайн-сервисы и дополнительные партнерские сценарии без обещания рыночной цены.'],
 ];
 
 export default function GlmLandingPage() {
@@ -114,7 +116,7 @@ export default function GlmLandingPage() {
               GLM Coin
             </h1>
             <p className="mt-7 max-w-2xl text-lg leading-8 text-white/72">
-              Клубная монета GLAME в сети TON для партнерских начислений, GLM Store, онлайн-сервисов и bridge-операций с бонусными баллами.
+              Клубная монета GLAME в сети TON для партнерских начислений, GLM Store, онлайн-сервисов и обмена с бонусными баллами.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -124,7 +126,7 @@ export default function GlmLandingPage() {
                 Зарабатывать GLM <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="/static/glm_policy/jetton-metadata.json"
+                href="/static/glm_policy/jetton-metadata-mainnet-v2.json"
                 className="inline-flex items-center justify-center gap-2 border border-white/20 px-6 py-4 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:border-white/45"
               >
                 Metadata <ExternalLink className="h-4 w-4" />
@@ -227,7 +229,7 @@ export default function GlmLandingPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.34em] text-[#c9b56a]">Tokenomics</p>
             <h2 className="mt-4 text-3xl font-semibold tracking-normal text-white sm:text-4xl">Ограниченный выпуск и управляемое распределение</h2>
             <p className="mt-5 max-w-xl text-base leading-8 text-white/64">
-              GLM выпускается в ограниченном количестве и распределяется через банк GLAME, hot-wallet и правила партнерской программы. Экономика строится на использовании, реальных покупках и баллах лояльности, а не на обещании роста.
+              GLM выпускается в ограниченном количестве и распределяется через банк GLAME, рабочий кошелек и правила партнерской программы. Экономика строится на использовании, реальных покупках и баллах лояльности, а не на обещании роста цены, выкупа или ликвидности.
             </p>
           </div>
           <div className="divide-y divide-white/10 border border-white/10">
@@ -242,6 +244,47 @@ export default function GlmLandingPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:py-24">
+        <div className="grid gap-10 lg:grid-cols-[.85fr_1.15fr]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.34em] text-[#c9b56a]">GLAME exchange</p>
+            <h2 className="mt-4 text-3xl font-semibold tracking-normal text-white sm:text-4xl">Покупка и обмен GLM через GLAME</h2>
+            <p className="mt-5 max-w-xl text-base leading-8 text-white/64">
+              В партнерском кабинете GLAME можно купить GLM за GRAM и создать пилотную заявку на обратный обмен GLM в GRAM. Операции проходят через подтвержденный TON-кошелек и журнал аудита.
+            </p>
+            <Link
+              href="https://partner.glamejewelry.ru/referral"
+              className="mt-7 inline-flex items-center justify-center gap-2 border border-white/20 px-6 py-4 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:border-white/45"
+            >
+              Открыть кабинет <ExternalLink className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <article className="border border-white/10 bg-white/[0.03] p-6">
+              <Coins className="h-6 w-6 text-[#c9b56a]" />
+              <h3 className="mt-5 text-lg font-semibold text-white">Купить GLM за GRAM</h3>
+              <p className="mt-3 text-sm leading-6 text-white/62">
+                Пользователь отправляет GRAM в treasury GLAME, а GLM отправляется из рабочего кошелька в подтвержденный TON-кошелек после проверки оплаты.
+              </p>
+            </article>
+            <article className="border border-white/10 bg-white/[0.03] p-6">
+              <RefreshCcw className="h-6 w-6 text-[#c9b56a]" />
+              <h3 className="mt-5 text-lg font-semibold text-white">Продать GLM в GLAME</h3>
+              <p className="mt-3 text-sm leading-6 text-white/62">
+                Пилотный exchange desk принимает заявки на GLM-перевод в treasury и операторскую GRAM-выплату по текущим лимитам, spread и резерву.
+              </p>
+            </article>
+            <article className="border border-white/10 bg-white/[0.03] p-6 md:col-span-2">
+              <ShieldCheck className="h-6 w-6 text-[#c9b56a]" />
+              <h3 className="mt-5 text-lg font-semibold text-white">Без обещания ликвидности</h3>
+              <p className="mt-3 text-sm leading-6 text-white/62">
+                GLAME не обещает постоянный выкуп, фиксированный рыночный курс, рост цены или доходность. Exchange desk нужен для контролируемой проверки спроса и utility-оборота внутри CryptoGLAME.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:py-24">
         <div className="grid gap-10 lg:grid-cols-[.95fr_1.05fr] lg:items-end">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.34em] text-[#c9b56a]">Offline GLAME</p>
@@ -250,7 +293,7 @@ export default function GlmLandingPage() {
               В офлайн-магазинах GLAME покупатели получают и используют обычные бонусные баллы 1C. CryptoGLAME добавляет второй слой: баллы можно перевести в GLM в TON-кошельке, а перед покупкой вернуть GLM обратно в баллы по действующим правилам программы.
             </p>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-white/52">
-              Поэтому GLM поддержан не абстрактной идеей, а реальной операционной системой GLAME: магазинами, покупками украшений, начислением баллов и проверяемыми bridge-операциями. Это utility-связь, а не финансовая гарантия цены.
+              Поэтому GLM поддержан не абстрактной идеей, а реальной операционной системой GLAME: магазинами, покупками украшений, начислением баллов и проверяемыми операциями обмена. Это utility-связь, а не финансовая гарантия цены.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -280,7 +323,7 @@ export default function GlmLandingPage() {
             <Landmark className="h-7 w-7 text-[#c9b56a]" />
             <h3 className="mt-5 text-xl font-semibold">Чем поддержана</h3>
             <p className="mt-4 text-sm leading-7 text-white/62">
-              Реальными магазинами GLAME, бонусными баллами за покупки украшений, партнерской программой, GLM Store и правилами bridge.
+              Реальными магазинами GLAME, бонусными баллами за покупки украшений, партнерской программой, GLM Store и правилами обмена.
             </p>
           </div>
           <div className="border border-white/10 bg-white/[0.03] p-7">
@@ -324,6 +367,9 @@ export default function GlmLandingPage() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
+        <div className="mb-10">
+          <GlmFeedbackForm />
+        </div>
         <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
           <div>
             <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.22em] text-white/45">
@@ -332,7 +378,7 @@ export default function GlmLandingPage() {
               <span className="inline-flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-[#c9b56a]" /> Utility only</span>
             </div>
             <p className="mt-5 max-w-3xl text-sm leading-7 text-white/56">
-              Вся открытая информация о правилах, рисках, metadata и bridge-процессах доступна в публичных документах GLAME. Условия программы могут меняться, если это требуется для безопасности, учета или защиты от злоупотреблений.
+              Вся открытая информация о правилах, рисках, данных токена и процессах обмена доступна в публичных документах GLAME. Условия программы могут меняться, если это требуется для безопасности, учета или защиты от злоупотреблений.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row md:flex-col">
@@ -341,6 +387,12 @@ export default function GlmLandingPage() {
             </Link>
             <Link href="/static/glm_policy/risk-disclosure.md" className="border border-white/15 px-5 py-3 text-center text-sm font-semibold text-white/75 hover:border-white/40 hover:text-white">
               Risk disclosure
+            </Link>
+            <Link href="/static/glm_policy/emission-policy.md" className="border border-white/15 px-5 py-3 text-center text-sm font-semibold text-white/75 hover:border-white/40 hover:text-white">
+              Emission policy
+            </Link>
+            <Link href="/glm/audit" className="border border-white/15 px-5 py-3 text-center text-sm font-semibold text-white/75 hover:border-white/40 hover:text-white">
+              Audit journal
             </Link>
           </div>
         </div>

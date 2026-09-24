@@ -3,12 +3,14 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import mimetypes
 from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +42,9 @@ from app.models.user import User
 from app.services.admin_access import normalize_role
 from app.services.seller_kpi_service import SellerKPIService
 from app.services.hermes_agent_runtime import HermesAgentRuntime, hermes_runtime_config_from_env
+from app.services.image_generation_service import ImageGenerationService
+from app.services.trainee_attestation import TRAINEE_BLANK_SOURCE, trainee_attestation_task, trainee_evaluation_fallback
+from app.services.trainee_lesson_flow import evaluate_trainee_lesson_quiz, trainee_lesson_flow
 from app.services.consultant_training_service import (
     apply_step_submission_progress,
     build_attestation_payload,
@@ -81,6 +86,7 @@ from app.services.consultant_training_service import (
     build_training_material_slides_progress_payload,
     build_training_material_progress_analytics_payload,
     build_training_material_learning_pack_payload,
+    build_training_material_question_pool,
     DEFAULT_TRAINING_MATERIAL_REFORMATTER_PROMPT,
     TRAINING_MATERIAL_REFORMATTER_AGENT_TYPE,
     build_step_material_practice_gate_payload,
@@ -101,10 +107,51 @@ from app.services.consultant_training_service import (
     should_request_revision,
 )
 
-MANAGER_ROLES = ["admin", "manager", "marketer"]
+# The full AI trainer is a curriculum administration tool. Store managers use
+# the separate, deliberately limited /manager/training API below.
+MANAGER_ROLES = ["admin", "marketer"]
+TRAINEE_MANAGER_ROLES = ["admin", "manager"]
 SELLER_ROLES = ["admin", "manager", "seller"]
 
 router = APIRouter()
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+TRAINING_MEDIA_LIBRARY_ROOTS: dict[str, tuple[Path, str]] = {
+    "content": (PROJECT_ROOT / "static" / "content_media", "Контент платформы"),
+    "posts": (PROJECT_ROOT / "static" / "content_post_images", "Готовые визуалы для контента"),
+    "looks": (PROJECT_ROOT / "static" / "look_images", "Сгенерированные образы"),
+    "brand": (PROJECT_ROOT / "mobile" / "glame_app" / "assets" / "images", "Брендовая библиотека GLAME"),
+    "training": (PROJECT_ROOT / "static" / "training_slide_uploads", "Загруженные для обучения"),
+    "generated": (PROJECT_ROOT / "static" / "training_slide_visuals", "AI Contentmaker · обучение"),
+}
+TRAINING_MEDIA_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def _training_image_extension(content: bytes) -> str | None:
+    """Recognise the small set of raster formats accepted by the slide editor."""
+    if content.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+def _training_media_library_file(source: str, asset_path: str) -> tuple[Path, str]:
+    source_key = (source or "").strip()
+    root_payload = TRAINING_MEDIA_LIBRARY_ROOTS.get(source_key)
+    if not root_payload:
+        raise HTTPException(status_code=404, detail="Папка медиатеки не найдена")
+    root, label = root_payload
+    relative = Path(asset_path)
+    if not asset_path or relative.is_absolute() or ".." in relative.parts or relative.suffix.lower() not in TRAINING_MEDIA_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Некорректный путь к изображению")
+    resolved_root = root.resolve()
+    candidate = (resolved_root / relative).resolve()
+    if not candidate.is_relative_to(resolved_root) or not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Изображение не найдено")
+    return candidate, label
 
 
 class TopicCreateRequest(BaseModel):
@@ -196,6 +243,8 @@ class StepCreateRequest(BaseModel):
 class StepSubmissionCreateRequest(BaseModel):
     practice_answer: str | None = None
     evening_review: str | None = None
+    quiz_answers: dict = Field(default_factory=dict)
+    quiz_started_at: str | None = None
     voice_answer: VoiceAnswerRequest | None = None
 
 
@@ -267,6 +316,11 @@ class TrainingProgramAssignmentRequest(BaseModel):
     note: str | None = None
 
 
+class TraineeProgramAssignmentRequest(BaseModel):
+    seller_user_id: UUID
+    note: str | None = None
+
+
 class TrainingProgramUnassignRequest(BaseModel):
     archive: bool = False
 
@@ -329,6 +383,18 @@ class TrainingMaterialVisualAssetsAttachAllRequest(BaseModel):
     create_missing_slides: bool = True
     replace_existing_slide_images: bool = False
     note: str | None = "Все визуалы подтверждены и добавлены в draft-слайды руководителем"
+
+
+class TrainingMaterialSlideVisualGenerateRequest(BaseModel):
+    prompt: str | None = Field(default=None, max_length=5000)
+    provider: str = "hermes"
+    model_profile: str | None = None
+
+
+class TrainingMaterialSlideImageUploadRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    content_base64: str = Field(min_length=10)
+    mime_type: str | None = None
 
 
 class TrainingMaterialLearningPackRequest(BaseModel):
@@ -518,6 +584,7 @@ def build_learning_pack_generation_user_prompt(material_payload: dict, target_sl
         f"Категория: {material_payload.get('category') or 'Общее'}\n"
         f"Программа: {material_payload.get('program_code') or 'не указана'}\n"
         f"Теги: {', '.join(material_payload.get('tags') or [])}\n\n"
+        "Короткий опросник создаётся только по слайдам этого урока: один вопрос на показанный слайд, максимум 5. Не задавай вопросы о следующих уроках, темах, которых нет на слайдах, или о финальной аттестации до её этапа.\n\n"
         "Исходник:\n"
         f"{(material_payload.get('markdown_content') or '')[:12000]}"
     )
@@ -578,6 +645,65 @@ def parse_structured_agent_json(raw_content: str) -> dict:
     return {"raw_response": raw_content[:2000], "parse_error": "Не удалось распознать JSON в ответе"}
 
 
+async def evaluate_trainee_attestation_with_agent(answer_payload: dict) -> dict:
+    """Ask the training agent for a preliminary assessment, with a safe local fallback.
+
+    The manager remains the decision maker; the agent never certifies a trainee.
+    """
+    fallback = trainee_evaluation_fallback(answer_payload)
+    task = trainee_attestation_task()
+    prompt = (
+        "Ты — AI-наставник GLAME. Оцени ответы стажёра по каждому вопросу строго, "
+        "но доброжелательно. Не придумывай факты о GLAME. Верни только JSON формата "
+        '{"score": number 0..100, "overall_summary": string, "gaps": [string], '
+        '"manager_recommendation": string, "question_results": '
+        '[{"question_id": string, "score": number 0..5, "max_score": 5, "status": "passed|revision", "comment": string}]}. '
+        "Это предварительная оценка, финальное решение всегда за управляющим.\n\n"
+        f"Вопросы:\n{json.dumps(task['questions'], ensure_ascii=False)}\n\n"
+        f"Ответы стажёра:\n{json.dumps(answer_payload, ensure_ascii=False)}"
+    )
+    try:
+        result = await HermesAgentRuntime(hermes_runtime_config_from_env()).run_task(
+            agent_id="trainee_attestation_assessor",
+            system_prompt="Оценивай только на основании предоставленных ответов. Отвечай валидным JSON без markdown.",
+            task_payload={"task_type": "trainee_attestation_assessment", "prompt": prompt, "max_tokens": 5000, "generation_options": {"temperature": 0.1}},
+        )
+        if not result.success:
+            raise ValueError(result.error or "AI runtime did not return an assessment")
+        generated = parse_structured_agent_json(result.output)
+        question_ids = {item["id"] for item in task["questions"]}
+        raw_results = generated.get("question_results")
+        if not isinstance(raw_results, list):
+            raise ValueError("AI response does not contain question_results")
+        normalized_results = []
+        for item in raw_results:
+            if not isinstance(item, dict) or item.get("question_id") not in question_ids:
+                continue
+            try:
+                score = max(0, min(5, int(float(item.get("score", 0)))))
+            except (TypeError, ValueError):
+                score = 0
+            normalized_results.append({
+                "question_id": item["question_id"], "score": score, "max_score": 5,
+                "status": "passed" if score >= 3 else "revision",
+                "comment": str(item.get("comment") or "Нужен более развёрнутый ответ.")[:700],
+            })
+        if len(normalized_results) < max(1, len(question_ids) // 2):
+            raise ValueError("AI response contains too few assessed questions")
+        total = sum(item["score"] for item in normalized_results)
+        return {
+            "score": round(total / (len(question_ids) * 5) * 100), "max_score": 100,
+            "question_results": normalized_results,
+            "overall_summary": str(generated.get("overall_summary") or "AI-наставник подготовил предварительную оценку.")[:1800],
+            "gaps": [str(item)[:120] for item in (generated.get("gaps") or []) if str(item).strip()][:12],
+            "manager_recommendation": str(generated.get("manager_recommendation") or "Проведите короткий устный разбор сложных тем.")[:1200],
+            "assessment_mode": "ai_agent", "requires_manager_review": True,
+        }
+    except Exception as error:
+        fallback["ai_core_error"] = str(error)[:300]
+        return fallback
+
+
 def merge_agent_learning_pack_payload(base_pack: dict, generated: dict, prompt_info: dict) -> dict:
     slides = generated.get("slides") if isinstance(generated, dict) else None
     if not isinstance(slides, list) or not slides:
@@ -623,25 +749,14 @@ def merge_agent_learning_pack_payload(base_pack: dict, generated: dict, prompt_i
             base_pack.setdefault("assessment", {})["criteria"] = [str(item) for item in assessment.get("criteria") if str(item).strip()]
         if assessment.get("manager_review_note"):
             base_pack.setdefault("assessment", {})["manager_review_note"] = str(assessment.get("manager_review_note"))
-        if isinstance(assessment.get("question_pool"), list):
-            question_pool = []
-            for index, item in enumerate(assessment.get("question_pool") or [], start=1):
-                if not isinstance(item, dict):
-                    continue
-                question = str(item.get("question") or "").strip()
-                if not question:
-                    continue
-                question_pool.append({
-                    "question": question,
-                    "type": str(item.get("type") or "short_answer").strip()[:60],
-                    "difficulty": str(item.get("difficulty") or "medium").strip()[:40],
-                    "expected_answer": str(item.get("expected_answer") or item.get("answer") or "Ответ должен показать понимание материала и корректное применение в GLAME-языке.").strip(),
-                    "criteria": [str(criterion) for criterion in (item.get("criteria") or []) if str(criterion).strip()],
-                    "order_index": int(item.get("order_index") or index * 10) if str(item.get("order_index") or "").isdigit() else index * 10,
-                    "review_required": True,
-                })
-            if question_pool:
-                base_pack.setdefault("assessment", {})["question_pool"] = question_pool[:12]
+    # Do not trust an agent-generated pool to stay in scope. The server rebuilds
+    # it solely from the normalized slides that the trainee will actually see.
+    lesson_slides = base_pack.get("slides") if isinstance(base_pack.get("slides"), list) else []
+    base_pack.setdefault("assessment", {})["question_pool"] = build_training_material_question_pool(slides=lesson_slides, target_count=5)
+    base_pack["assessment"]["scope"] = {
+        "kind": "current_lesson_slides_only",
+        "slide_orders": [int(slide.get("order_index") or 0) for slide in lesson_slides if isinstance(slide, dict)],
+    }
     base_pack["agent"] = {**prompt_info, "generation_mode": "llm_system_prompt", "review_required": True}
     return base_pack
 
@@ -696,6 +811,9 @@ def apply_learning_pack_metadata_to_material(material: ConsultantTrainingMateria
             "criteria": assessment.get("criteria") or [],
             "manager_review_note": assessment.get("manager_review_note"),
             "question_pool": assessment.get("question_pool") or [],
+            # The scope is displayed to the administrator and makes it
+            # auditable that a lesson check never tests another lesson.
+            "scope": assessment.get("scope") or {},
         },
         "agent": pack.get("agent") or {},
         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -818,6 +936,7 @@ def step_payload(step: ConsultantTrainingStep) -> dict:
         "practice_text": step.practice_text,
         "answer_template": step.answer_template,
         "assessment_rubric": step.assessment_rubric or {},
+        "learning_flow": trainee_lesson_flow(step.title, step.lesson_text, step.answer_template, step.practice_text),
         "competencies": step.competencies or [],
         "unlock_rule": step.unlock_rule or {},
         "is_required": bool(step.is_required),
@@ -832,6 +951,14 @@ def step_submission_payload(submission: ConsultantTrainingStepSubmission, step: 
     payload["reviewed_at"] = iso(submission.reviewed_at)
     payload["sent_to_consultant_at"] = iso(submission.sent_to_consultant_at)
     payload["reviewed_by_user_id"] = str(submission.reviewed_by_user_id) if submission.reviewed_by_user_id else None
+    evaluation = submission.ai_evaluation or {}
+    if evaluation.get("assessment_type") == "lesson_quiz":
+        payload["lesson_report"] = {
+            "type": "lesson_quiz", "score": evaluation.get("score"), "passed": bool(evaluation.get("passed")),
+            "correct_answers": evaluation.get("correct_answers"), "total_questions": evaluation.get("total_questions"),
+            "duration_seconds": evaluation.get("quiz_duration_seconds"), "started_at": evaluation.get("quiz_started_at"),
+            "completed_at": evaluation.get("quiz_submitted_at"),
+        }
     return payload
 
 
@@ -841,6 +968,8 @@ def attestation_payload(attestation: ConsultantTrainingAttestation, competency_p
     payload["submitted_at"] = iso(attestation.submitted_at)
     payload["reviewed_at"] = iso(attestation.reviewed_at)
     payload["task_payload"] = attestation.task_payload or {}
+    if include_internal:
+        payload["answer_payload"] = attestation.answer_payload or {}
     return payload
 
 
@@ -1070,6 +1199,138 @@ async def unassign_admin_training_program(
     }
 
 
+@router.get("/manager/training/trainees")
+async def manager_trainee_training_dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role(TRAINEE_MANAGER_ROLES)),
+):
+    """A deliberately small manager view: trainee assignment, progress and final check.
+
+    Unlike /admin/consultant-training it does not expose program, lesson or
+    material management endpoints.
+    """
+    await ensure_consultant_training_schema(db)
+    program = await db.scalar(select(ConsultantTrainingProgram).where(
+        ConsultantTrainingProgram.code == "trainee_base",
+        ConsultantTrainingProgram.status == "active",
+    ))
+    if not program:
+        raise HTTPException(status_code=404, detail="Активная программа стажёра не найдена")
+    sellers = (await db.execute(select(User).where(
+        User.is_customer.is_(False), User.role == "seller",
+    ).order_by(User.full_name.asc()))).scalars().all()
+    managed_store_names: list[str] = []
+    if current_user.role == "manager":
+        managed_store_names = await SellerKPIService(db)._managed_store_names(current_user)
+        allowed_stores = {SellerKPIService._normalize_store_name(name) for name in managed_store_names if name}
+        sellers = [
+            seller for seller in sellers
+            if SellerKPIService._normalize_store_name((seller.preferences or {}).get("seller_store_name") or (seller.preferences or {}).get("staff_store_name")) in allowed_stores
+        ]
+    enrollments = (await db.execute(select(ConsultantTrainingEnrollment).where(
+        ConsultantTrainingEnrollment.program_id == program.id,
+    ))).scalars().all()
+    enrollment_by_seller = {str(item.seller_user_id): item for item in enrollments}
+    attestations = (await db.execute(select(ConsultantTrainingAttestation).where(
+        ConsultantTrainingAttestation.program_id == program.id,
+        ConsultantTrainingAttestation.attestation_type == "trainee_blank_2025",
+    ).order_by(desc(ConsultantTrainingAttestation.created_at)))).scalars().all()
+    latest_attestation: dict[str, ConsultantTrainingAttestation] = {}
+    for item in attestations:
+        latest_attestation.setdefault(str(item.seller_user_id), item)
+    step_submission_rows = (await db.execute(
+        select(ConsultantTrainingStepSubmission, ConsultantTrainingStep)
+        .join(ConsultantTrainingStep, ConsultantTrainingStep.id == ConsultantTrainingStepSubmission.step_id)
+        .where(ConsultantTrainingStepSubmission.program_id == program.id)
+        .order_by(desc(ConsultantTrainingStepSubmission.created_at))
+        .limit(300)
+    )).all()
+    lesson_reports_by_seller: dict[str, list[dict]] = {}
+    for submission, step in step_submission_rows:
+        report = step_submission_payload(submission, step, include_internal=True).get("lesson_report")
+        if report:
+            lesson_reports_by_seller.setdefault(str(submission.seller_user_id), []).append({
+                "step_title": step.title, "status": submission.review_status, "score": submission.ai_score,
+                "submitted_at": iso(submission.created_at), "report": report,
+            })
+
+    rows = []
+    for seller in sellers:
+        enrollment = enrollment_by_seller.get(str(seller.id))
+        if enrollment:
+            cards = await _seller_program_cards(db, seller)
+            card = next((item for item in cards if item.get("code") == "trainee_base"), None)
+        else:
+            card = None
+        attestation = latest_attestation.get(str(seller.id))
+        result = attestation_payload(attestation, attestation.competency_snapshot or {}, include_internal=True) if attestation else None
+        if result:
+            result["answers"] = attestation.answer_payload or {}
+        rows.append({
+            "seller": user_payload(seller), "assigned": bool(enrollment and enrollment.status != "archived"),
+            "enrollment": enrollment_payload(enrollment), "progress": (card or {}).get("progress") or {"completed_steps": 0, "total_steps": 0, "percent": 0},
+            "next_assignment": (card or {}).get("next_assignment"), "attestation": result,
+            "lesson_reports": lesson_reports_by_seller.get(str(seller.id), [])[:12],
+        })
+    assigned_rows = [item for item in rows if item["assigned"]]
+    return {
+        "program": program_payload(program),
+        "summary": {
+            "trainees": len(assigned_rows),
+            "in_progress": sum(1 for item in assigned_rows if (item["progress"] or {}).get("percent", 0) < 100),
+            "completed_learning": sum(1 for item in assigned_rows if (item["progress"] or {}).get("percent", 0) >= 100),
+            "awaiting_review": sum(1 for item in assigned_rows if (item.get("attestation") or {}).get("status") == "review_pending"),
+            "managed_store_names": managed_store_names,
+        },
+        "trainees": rows,
+    }
+
+
+@router.post("/manager/training/trainees/assign")
+async def assign_trainee_program_by_manager(
+    payload: TraineeProgramAssignmentRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role(TRAINEE_MANAGER_ROLES)),
+):
+    """Managers can only assign the fixed trainee programme, never edit programmes."""
+    await ensure_consultant_training_schema(db)
+    program = await db.scalar(select(ConsultantTrainingProgram).where(
+        ConsultantTrainingProgram.code == "trainee_base", ConsultantTrainingProgram.status == "active",
+    ))
+    seller = await db.get(User, payload.seller_user_id)
+    if not program:
+        raise HTTPException(status_code=404, detail="Активная программа стажёра не найдена")
+    if not seller or seller.is_customer or seller.role != "seller":
+        raise HTTPException(status_code=404, detail="Продавец не найден")
+    if current_user.role == "manager":
+        managed_store_names = await SellerKPIService(db)._managed_store_names(current_user)
+        allowed_stores = {SellerKPIService._normalize_store_name(name) for name in managed_store_names if name}
+        seller_store = SellerKPIService._normalize_store_name((seller.preferences or {}).get("seller_store_name") or (seller.preferences or {}).get("staff_store_name"))
+        if not seller_store or seller_store not in allowed_stores:
+            raise HTTPException(status_code=403, detail="Можно назначать обучение только продавцам своего магазина")
+    other_enrollments = (await db.execute(select(ConsultantTrainingEnrollment).where(
+        ConsultantTrainingEnrollment.seller_user_id == seller.id,
+        ConsultantTrainingEnrollment.program_id != program.id,
+    ))).scalars().all()
+    for item in other_enrollments:
+        if item.status not in {"completed", "certified", "archived"}:
+            item.status = "locked"
+            item.meta = {**(item.meta or {}), "locked_by_program_assignment": str(program.id), "locked_by_user_id": str(current_user.id)}
+    enrollment = await db.scalar(select(ConsultantTrainingEnrollment).where(
+        ConsultantTrainingEnrollment.program_id == program.id,
+        ConsultantTrainingEnrollment.seller_user_id == seller.id,
+    ))
+    if not enrollment:
+        enrollment = ConsultantTrainingEnrollment(program_id=program.id, seller_user_id=seller.id, status="available", meta={})
+        db.add(enrollment)
+    enrollment.status = "available" if enrollment.status in {"locked", "archived"} else enrollment.status
+    enrollment.started_at = enrollment.started_at or datetime.now(timezone.utc)
+    enrollment.meta = {**(enrollment.meta or {}), "assigned_by_user_id": str(current_user.id), "assigned_at": datetime.now(timezone.utc).isoformat(), "assignment_note": payload.note, "assignment_source": "manager_trainee_light"}
+    await db.commit()
+    await db.refresh(enrollment)
+    return {"seller": user_payload(seller), "program": program_payload(program), "enrollment": enrollment_payload(enrollment), "message": "Программа стажёра назначена"}
+
+
 @router.get("/admin/consultant-training/programs/{program_id}/modules")
 async def list_admin_program_modules(
     program_id: UUID,
@@ -1222,6 +1483,48 @@ async def _seller_program_cards(db: AsyncSession, current_user: User) -> list[di
     return cards
 
 
+async def _admin_training_catalog_cards(db: AsyncSession) -> list[dict]:
+    """Read-only programme catalogue for an administrator's profile view.
+
+    It intentionally does not create enrollments or touch learner progress.
+    A seller still receives exactly one programme assigned by the manager.
+    """
+    programs = (await db.execute(
+        select(ConsultantTrainingProgram)
+        .where(ConsultantTrainingProgram.status == "active")
+        .order_by(ConsultantTrainingProgram.order_index.asc())
+    )).scalars().all()
+    cards: list[dict] = []
+    for program in programs:
+        modules = (await db.execute(
+            select(ConsultantTrainingModule)
+            .where(ConsultantTrainingModule.program_id == program.id)
+            .order_by(ConsultantTrainingModule.order_index.asc())
+        )).scalars().all()
+        steps: list[ConsultantTrainingStep] = []
+        for module in modules:
+            steps.extend((await db.execute(
+                select(ConsultantTrainingStep)
+                .where(ConsultantTrainingStep.module_id == module.id)
+                .order_by(ConsultantTrainingStep.order_index.asc())
+            )).scalars().all())
+        structure = build_program_structure_payload(
+            program=program_payload(program),
+            modules=[module_payload(module) for module in modules],
+            steps=[step_payload(step) for step in steps],
+            step_progress={},
+        )
+        card = build_program_card_payload(
+            program=program_payload(program),
+            enrollment={"status": "available", "total_steps": len(steps)},
+            next_assignment=structure.get("next_step"),
+        )
+        card["preview_mode"] = True
+        card["cta"] = "Просмотреть программу"
+        cards.append(card)
+    return cards
+
+
 async def _training_subject_user(db: AsyncSession, current_user: User, seller_user_id: UUID | None = None) -> User:
     """Resolve seller whose training page is being viewed.
 
@@ -1246,12 +1549,23 @@ async def list_seller_training_programs(
     current_user: User = Depends(require_any_role(SELLER_ROLES)),
 ):
     await ensure_consultant_training_schema(db)
+    if current_user.role == "admin" and seller_user_id is None:
+        cards = await _admin_training_catalog_cards(db)
+        return {
+            "programs": cards,
+            "summary": {"level": "Администратор", "program_count": len(cards), "catalog_mode": True},
+        }
     subject_user = await _training_subject_user(db, current_user, seller_user_id)
     cards = await _seller_program_cards(db, subject_user)
+    # A learner receives one route assigned by the manager. Locked and
+    # unassigned programmes are deliberately not a catalogue in this API.
+    cards = [card for card in cards if card.get("status") not in {"locked", "archived", "access_requested"}]
+    current_cards = [card for card in cards if card.get("status") in {"available", "opened", "in_progress", "waiting_review", "needs_revision"}]
+    cards = current_cards or cards
     active_level = "Стажер"
     if any(card["code"] == "stylist_academy" and card["status"] in {"in_progress", "completed", "certified"} for card in cards):
         active_level = "Junior Consultant"
-    return {"programs": cards, "summary": {"level": active_level, "program_count": len(cards)}}
+    return {"programs": cards[:1], "summary": {"level": active_level, "program_count": min(1, len(cards))}}
 
 
 @router.post("/profile/training/programs/{program_id}/request-access")
@@ -1325,32 +1639,79 @@ async def get_seller_training_program(
     current_user: User = Depends(require_any_role(SELLER_ROLES)),
 ):
     await ensure_consultant_training_schema(db)
+    admin_catalog_mode = current_user.role == "admin" and seller_user_id is None
     subject_user = await _training_subject_user(db, current_user, seller_user_id)
     program = await db.get(ConsultantTrainingProgram, program_id)
     if not program or program.status != "active":
         raise HTTPException(status_code=404, detail="Программа обучения не найдена")
-    enrollment = await db.scalar(select(ConsultantTrainingEnrollment).where(ConsultantTrainingEnrollment.program_id == program.id, ConsultantTrainingEnrollment.seller_user_id == subject_user.id))
-    if enrollment and enrollment.status == "archived":
-        raise HTTPException(status_code=404, detail="Эта программа не назначена продавцу")
-    if not enrollment:
-        has_any_assignment = await db.scalar(select(ConsultantTrainingEnrollment.id).where(ConsultantTrainingEnrollment.seller_user_id == subject_user.id).limit(1))
-        if has_any_assignment:
+    enrollment = None if admin_catalog_mode else await db.scalar(select(ConsultantTrainingEnrollment).where(ConsultantTrainingEnrollment.program_id == program.id, ConsultantTrainingEnrollment.seller_user_id == subject_user.id))
+    if not admin_catalog_mode:
+        if enrollment and enrollment.status in {"archived", "locked"}:
             raise HTTPException(status_code=404, detail="Эта программа не назначена продавцу")
-        enrollment = ConsultantTrainingEnrollment(program_id=program.id, seller_user_id=subject_user.id, status="available")
-        db.add(enrollment)
-        await db.flush()
+        if not enrollment:
+            raise HTTPException(status_code=404, detail="Эта программа не назначена продавцу")
     modules = (await db.execute(select(ConsultantTrainingModule).where(ConsultantTrainingModule.program_id == program.id).order_by(ConsultantTrainingModule.order_index.asc()))).scalars().all()
     steps: list[ConsultantTrainingStep] = []
     for module in modules:
         steps.extend((await db.execute(select(ConsultantTrainingStep).where(ConsultantTrainingStep.module_id == module.id).order_by(ConsultantTrainingStep.order_index.asc()))).scalars().all())
-    step_progress = (enrollment.meta or {}).get("step_progress", {})
-    await db.commit()
-    return build_program_structure_payload(
+    step_progress = (enrollment.meta or {}).get("step_progress", {}) if enrollment else {}
+    if not admin_catalog_mode:
+        await db.commit()
+    payload = build_program_structure_payload(
         program=program_payload(program),
         modules=[module_payload(module) for module in modules],
         steps=[step_payload(step) for step in steps],
         step_progress=step_progress,
     )
+    # A learner (and the admin's learner-mode preview) must see the approved
+    # slide deck attached to the lesson — never the old text-only fallback
+    # generated from the step description.
+    step_ids = [step.id for step in steps]
+    links = (await db.execute(
+        select(ConsultantTrainingStepMaterial)
+        .where(
+            ConsultantTrainingStepMaterial.program_id == program.id,
+            ConsultantTrainingStepMaterial.step_id.in_(step_ids),
+        )
+        .order_by(ConsultantTrainingStepMaterial.step_id.asc(), ConsultantTrainingStepMaterial.order_index.asc())
+    )).scalars().all() if step_ids else []
+    linked_material_ids = [link.material_id for link in links]
+    materials = (await db.execute(
+        select(ConsultantTrainingMaterial).where(
+            ConsultantTrainingMaterial.id.in_(linked_material_ids),
+            ConsultantTrainingMaterial.status == "published",
+        )
+    )).scalars().all() if linked_material_ids else []
+    material_by_id = {material.id: material for material in materials}
+    slide_rows = (await db.execute(
+        select(ConsultantTrainingMaterialSlide)
+        .where(ConsultantTrainingMaterialSlide.material_id.in_(list(material_by_id)))
+        .order_by(ConsultantTrainingMaterialSlide.order_index.asc(), ConsultantTrainingMaterialSlide.title.asc())
+    )).scalars().all() if material_by_id else []
+    slides_by_material: dict[UUID, list[ConsultantTrainingMaterialSlide]] = {}
+    for slide in slide_rows:
+        slides_by_material.setdefault(slide.material_id, []).append(slide)
+    links_by_step: dict[str, list[ConsultantTrainingStepMaterial]] = {}
+    for link in links:
+        links_by_step.setdefault(str(link.step_id), []).append(link)
+    for module in payload["modules"]:
+        for step_payload_item in module["steps"]:
+            step_links = links_by_step.get(step_payload_item["id"], [])
+            step_payload_item["lesson_material_count"] = len(step_links)
+            step_payload_item["lesson_materials"] = [
+                {
+                    "id": str(material.id),
+                    "title": material.title,
+                    "role": link.role,
+                    "slides": build_training_material_slides_payload(
+                        slides_by_material.get(material.id, []), seller_safe=True,
+                    )["slides"],
+                }
+                for link in step_links
+                if (material := material_by_id.get(link.material_id)) is not None
+            ]
+    payload["preview_mode"] = admin_catalog_mode
+    return payload
 
 
 async def _get_program_step_or_404(db: AsyncSession, program_id: UUID, step_id: UUID) -> tuple[ConsultantTrainingProgram, ConsultantTrainingStep]:
@@ -1407,6 +1768,31 @@ async def _step_material_practice_gate(db: AsyncSession, *, step_id: UUID, selle
     return build_step_material_practice_gate_payload(step_materials=visible_links, material_progress=material_progress)
 
 
+@router.post("/profile/training/programs/{program_id}/steps/{step_id}/quiz-start")
+async def start_seller_training_step_quiz(
+    program_id: UUID,
+    step_id: UUID,
+    seller_user_id: UUID | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role(SELLER_ROLES)),
+):
+    """Server timestamp used for a trustworthy lesson-quiz duration report."""
+    await ensure_consultant_training_schema(db)
+    subject_user = await _training_subject_user(db, current_user, seller_user_id)
+    program, step = await _get_program_step_or_404(db, program_id, step_id)
+    if program.code != "trainee_base" or not trainee_lesson_flow(step.title, step.lesson_text, step.answer_template, step.practice_text):
+        raise HTTPException(status_code=409, detail="Для этого урока нет короткого опросника")
+    enrollment = await _get_or_create_enrollment(db, program.id, subject_user.id)
+    started_at = datetime.now(timezone.utc)
+    meta = dict(enrollment.meta or {})
+    sessions = dict(meta.get("quiz_sessions") or {})
+    sessions[str(step.id)] = started_at.isoformat()
+    meta["quiz_sessions"] = sessions
+    enrollment.meta = meta
+    await db.commit()
+    return {"quiz_started_at": started_at.isoformat()}
+
+
 @router.post("/profile/training/programs/{program_id}/steps/{step_id}/submit")
 async def submit_seller_training_step(
     program_id: UUID,
@@ -1446,10 +1832,36 @@ async def submit_seller_training_step(
         raise HTTPException(status_code=409, detail={"message": "Сначала изучите обязательные слайды материала", "practice_gate": practice_gate})
 
     voice_metadata = build_voice_answer_metadata(payload.voice_answer, current_user=current_user)
-    answer_text = build_answer_text_with_voice(payload.practice_answer, voice_metadata)
-    evaluation = evaluate_submission_quality(answer_text, expected_focus=step.practice_text or step.title)
-    evaluation = attach_voice_metadata_to_evaluation(evaluation, voice_metadata)
-    review_status = "revision_draft" if should_request_revision(evaluation) else "review_pending"
+    quiz_evaluation = evaluate_trainee_lesson_quiz(step.title, payload.quiz_answers or {}) if program.code == "trainee_base" else None
+    if quiz_evaluation:
+        if len(payload.quiz_answers or {}) < quiz_evaluation["total_questions"]:
+            raise HTTPException(status_code=422, detail="Ответьте на все вопросы короткого опросника")
+        answer_text = json.dumps(payload.quiz_answers or {}, ensure_ascii=False)
+        submitted_at = datetime.now(timezone.utc)
+        stored_sessions = (enrollment.meta or {}).get("quiz_sessions") or {}
+        stored_started_at = stored_sessions.get(str(step.id)) if isinstance(stored_sessions, dict) else None
+        try:
+            quiz_started_at = datetime.fromisoformat(str(stored_started_at or payload.quiz_started_at or "").replace("Z", "+00:00"))
+            if quiz_started_at.tzinfo is None:
+                quiz_started_at = quiz_started_at.replace(tzinfo=timezone.utc)
+            duration_seconds = max(0, min(7200, round((submitted_at - quiz_started_at).total_seconds())))
+        except (TypeError, ValueError):
+            quiz_started_at = submitted_at
+            duration_seconds = 0
+        evaluation = {
+            **quiz_evaluation,
+            "assessment_type": "lesson_quiz",
+            "quiz_started_at": quiz_started_at.isoformat(),
+            "quiz_submitted_at": submitted_at.isoformat(),
+            "quiz_duration_seconds": duration_seconds,
+            "summary": "Урок закрыт автоматически после прохождения короткого опросника." if quiz_evaluation["passed"] else "Опросник не пройден. Повторите материал и попробуйте снова.",
+        }
+        review_status = "accepted" if quiz_evaluation["passed"] else "revision_draft"
+    else:
+        answer_text = build_answer_text_with_voice(payload.practice_answer, voice_metadata)
+        evaluation = evaluate_submission_quality(answer_text, expected_focus=step.practice_text or step.title)
+        evaluation = attach_voice_metadata_to_evaluation(evaluation, voice_metadata)
+        review_status = "revision_draft" if should_request_revision(evaluation) else "review_pending"
     submission = ConsultantTrainingStepSubmission(
         program_id=program.id,
         step_id=step.id,
@@ -1463,7 +1875,7 @@ async def submit_seller_training_step(
     )
     db.add(submission)
     await db.flush()
-    enrollment.status = "needs_revision" if review_status == "revision_draft" else "waiting_review"
+    enrollment.status = "needs_revision" if review_status == "revision_draft" else ("in_progress" if review_status == "accepted" else "waiting_review")
     enrollment.meta = apply_step_submission_progress(
         current_meta=enrollment.meta or {},
         step_id=str(step.id),
@@ -1471,9 +1883,13 @@ async def submit_seller_training_step(
         review_status=review_status,
         ai_score=submission.ai_score,
     )
+    quiz_sessions = dict((enrollment.meta or {}).get("quiz_sessions") or {})
+    quiz_sessions.pop(str(step.id), None)
+    enrollment.meta = {**(enrollment.meta or {}), "quiz_sessions": quiz_sessions}
     await db.commit()
     await db.refresh(submission)
-    return {"submission": step_submission_payload(submission, step, include_internal=False), "note": "Ответ отправлен. Обратная связь появится после проверки руководителем."}
+    note = "Урок закрыт. Следующий урок уже доступен." if review_status == "accepted" else ("Повторите материал и пройдите короткий опросник ещё раз." if quiz_evaluation else "Ответ отправлен. Обратная связь появится после проверки руководителем.")
+    return {"submission": step_submission_payload(submission, step, include_internal=False), "note": note}
 
 
 @router.get("/admin/consultant-training/step-submissions")
@@ -2164,6 +2580,44 @@ async def generate_admin_training_material_learning_pack(
     return pack
 
 
+@router.post("/admin/consultant-training/materials/{material_id}/lesson-quiz/rebuild")
+async def rebuild_admin_training_material_lesson_quiz(
+    material_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role(MANAGER_ROLES)),
+):
+    """Replace an old generic pool with questions scoped to saved lesson slides."""
+    await ensure_consultant_training_schema(db)
+    material = await db.get(ConsultantTrainingMaterial, material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Учебный материал не найден")
+    slides = (await db.execute(
+        select(ConsultantTrainingMaterialSlide)
+        .where(ConsultantTrainingMaterialSlide.material_id == material_id)
+        .order_by(ConsultantTrainingMaterialSlide.order_index.asc(), ConsultantTrainingMaterialSlide.title.asc())
+    )).scalars().all()
+    slide_payloads = [build_training_material_slide_payload(slide, include_internal=True) for slide in slides]
+    if not slide_payloads:
+        raise HTTPException(status_code=409, detail="Сначала добавьте слайды урока — опросник строится только по ним")
+    previous_pack = ((material.extraction_metadata or {}).get("learning_pack") or {})
+    previous_assessment = previous_pack.get("assessment") if isinstance(previous_pack.get("assessment"), dict) else {}
+    question_pool = build_training_material_question_pool(slides=slide_payloads, target_count=5)
+    pack = {
+        "status": previous_pack.get("status") or "draft_review_required",
+        "practice": previous_pack.get("practice") or {},
+        "assessment": {
+            "criteria": previous_assessment.get("criteria") or [],
+            "manager_review_note": previous_assessment.get("manager_review_note") or "Проверьте соответствие вопросов показанным слайдам перед публикацией.",
+            "question_pool": question_pool,
+            "scope": {"kind": "current_lesson_slides_only", "slide_orders": [slide["order_index"] for slide in slide_payloads]},
+        },
+        "agent": {**(previous_pack.get("agent") or {}), "question_pool_generation": "saved_lesson_slides_only", "review_required": True},
+    }
+    apply_learning_pack_metadata_to_material(material, pack)
+    await db.commit()
+    return {"question_pool": question_pool, "slides": slide_payloads, "message": f"Опросник пересобран по {len(question_pool)} показанным слайдам этого урока."}
+
+
 @router.delete("/admin/consultant-training/materials/{material_id}")
 async def delete_admin_training_material(
     material_id: UUID,
@@ -2241,9 +2695,9 @@ async def attach_all_admin_training_material_visual_assets(
         raise HTTPException(status_code=404, detail="Учебный материал не найден")
     extraction = dict(material.extraction_metadata or {})
     raw_assets = list(extraction.get("visual_assets") or [])
-    public_assets = [asset for asset in build_training_material_visual_assets_payload(extraction, include_content=True) if asset.get("image_url") and asset.get("status") != "rejected"]
+    public_assets = [asset for asset in build_training_material_visual_assets_payload(extraction, include_content=True) if asset.get("image_url") and asset.get("status") != "rejected" and asset.get("source") == "ai_contentmaker"]
     if not public_assets:
-        raise HTTPException(status_code=404, detail="Нет доступных визуальных ассетов для добавления")
+        raise HTTPException(status_code=409, detail="PDF-страницы и скриншоты не добавляются в учебные слайды. Сгенерируйте брендовый визуал через AI Contentmaker для нужного слайда.")
     slides = (await db.execute(
         select(ConsultantTrainingMaterialSlide)
         .where(ConsultantTrainingMaterialSlide.material_id == material_id)
@@ -2311,6 +2765,161 @@ async def attach_all_admin_training_material_visual_assets(
     }
 
 
+@router.post("/admin/consultant-training/materials/{material_id}/slides/{slide_id}/generate-visual")
+async def generate_admin_training_material_slide_visual(
+    material_id: UUID,
+    slide_id: UUID,
+    payload: TrainingMaterialSlideVisualGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role(MANAGER_ROLES)),
+):
+    """Generate a learner-facing GLAME visual through the platform Contentmaker.
+
+    Source-document pages are explicitly excluded: visual generation is based on
+    on the slide's learning idea and records the provenance for admin review.
+    """
+    await ensure_consultant_training_schema(db)
+    material = await db.get(ConsultantTrainingMaterial, material_id)
+    slide = await db.get(ConsultantTrainingMaterialSlide, slide_id)
+    if not material or not slide or slide.material_id != material_id:
+        raise HTTPException(status_code=404, detail="Материал или слайд не найден")
+    base_prompt = (payload.prompt or slide.image_prompt or "").strip()
+    if not base_prompt:
+        base_prompt = (
+            "GLAME Academy learning slide visual. Premium contemporary jewelry editorial, "
+            f"topic: {material.topic or material.title}; slide idea: {slide.title}; "
+            f"learning context: {(slide.body or material.description or material.title)[:900]}. "
+            "Visualize the idea through jewelry, styling, customer service mood or an elegant abstract composition. "
+            "GLAME premium aesthetic, deep navy, warm ivory, subtle amber accents, clean fashion editorial composition, 16:9. "
+            "No documents, no screenshots, no interface, no readable text, no letters, no watermark, no logo."
+        )
+    try:
+        generated = await ImageGenerationService(db=db).generate_custom_image(
+            prompt=base_prompt,
+            provider=payload.provider or "auto",
+            model_profile=payload.model_profile,
+            asset_group="training_slide_visuals",
+            filename_prefix="glame_training_slide",
+            aspect_ratio="16:9",
+            no_text_on_image=True,
+            allow_text_only_fallback=False,
+        )
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f"AI Contentmaker не смог подготовить визуал: {error}") from error
+    slide.image_url = generated["url"]
+    slide.image_prompt = generated["prompt_used"]
+    slide.meta = {
+        **(slide.meta or {}),
+        "visual_source": "ai_contentmaker",
+        "visual_generated_by": "platform_contentmaker",
+        "visual_provider": generated.get("provider"),
+        "visual_model": generated.get("model"),
+        "visual_generated_at": datetime.now(timezone.utc).isoformat(),
+        "visual_generated_by_user_id": str(current_user.id),
+        "review_required": True,
+    }
+    await db.commit()
+    await db.refresh(slide)
+    return {
+        "slide": build_training_material_slide_payload(slide, include_internal=True),
+        "generation": {key: generated.get(key) for key in ("url", "prompt_used", "provider", "model", "asset_group", "attempts")},
+        "message": "AI Contentmaker подготовил брендовый визуал для слайда. Проверьте его перед публикацией.",
+    }
+
+
+@router.get("/admin/consultant-training/media-library")
+async def list_admin_training_media_library(
+    query: str | None = Query(default=None, max_length=120),
+    source: str | None = Query(default=None, max_length=40),
+    limit: int = Query(default=120, ge=1, le=300),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role(MANAGER_ROLES)),
+):
+    """Aggregate approved platform image folders for explicit admin selection."""
+    await ensure_consultant_training_schema(db)
+    query_normalized = (query or "").strip().lower()
+    requested_sources = [source] if source else list(TRAINING_MEDIA_LIBRARY_ROOTS.keys())
+    assets: list[dict] = []
+    folders: list[dict] = []
+    for source_key in requested_sources:
+        root_payload = TRAINING_MEDIA_LIBRARY_ROOTS.get(source_key)
+        if not root_payload:
+            continue
+        root, label = root_payload
+        count = 0
+        if root.exists():
+            for file_path in sorted(root.rglob("*"), key=lambda item: item.stat().st_mtime if item.is_file() else 0, reverse=True):
+                if not file_path.is_file() or file_path.suffix.lower() not in TRAINING_MEDIA_EXTENSIONS:
+                    continue
+                relative = file_path.relative_to(root).as_posix()
+                searchable = f"{label} {relative}".lower()
+                if query_normalized and query_normalized not in searchable:
+                    continue
+                assets.append({
+                    "id": f"{source_key}:{relative}",
+                    "source": source_key,
+                    "folder": label,
+                    "filename": file_path.name,
+                    "path": relative,
+                    "size_bytes": file_path.stat().st_size,
+                    "url": f"/api/admin/consultant-training/media-library/assets/{source_key}/{quote(relative)}",
+                })
+                count += 1
+                if len(assets) >= limit:
+                    break
+        folders.append({"id": source_key, "title": label, "available": count})
+        if len(assets) >= limit:
+            break
+    return {"assets": assets, "folders": folders, "query": query or "", "limit": limit}
+
+
+@router.get("/admin/consultant-training/media-library/assets/{source}/{asset_path:path}")
+async def get_admin_training_media_library_asset(
+    source: str,
+    asset_path: str,
+    current_user: User = Depends(require_any_role(MANAGER_ROLES)),
+):
+    file_path, _ = _training_media_library_file(source, asset_path)
+    return FileResponse(file_path, media_type=mimetypes.guess_type(file_path.name)[0] or "application/octet-stream")
+
+
+@router.post("/admin/consultant-training/materials/{material_id}/slides/{slide_id}/upload-image")
+async def upload_admin_training_material_slide_image(
+    material_id: UUID,
+    slide_id: UUID,
+    payload: TrainingMaterialSlideImageUploadRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_any_role(MANAGER_ROLES)),
+):
+    await ensure_consultant_training_schema(db)
+    slide = await db.get(ConsultantTrainingMaterialSlide, slide_id)
+    if not slide or slide.material_id != material_id:
+        raise HTTPException(status_code=404, detail="Слайд не найден")
+    raw_content = payload.content_base64.split(",", 1)[-1].strip()
+    try:
+        content = base64.b64decode(raw_content, validate=True)
+    except (ValueError, binascii.Error) as error:
+        raise HTTPException(status_code=400, detail="Не удалось прочитать загруженное изображение") from error
+    if not content or len(content) > 12 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Изображение должно быть не пустым и не больше 12 МБ")
+    detected_extension = _training_image_extension(content)
+    if not detected_extension:
+        raise HTTPException(status_code=400, detail="Поддерживаются JPG, PNG и WEBP")
+    mime_type = (payload.mime_type or "").lower().split(";", 1)[0]
+    expected_extension = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}.get(mime_type)
+    if expected_extension and expected_extension != detected_extension:
+        raise HTTPException(status_code=400, detail="Тип выбранного файла не совпадает с его содержимым")
+    storage_dir = PROJECT_ROOT / "static" / "training_slide_uploads"
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"slide_{slide.id}_{uuid4().hex}{detected_extension}"
+    (storage_dir / filename).write_bytes(content)
+    slide.image_url = f"/static/training_slide_uploads/{filename}"
+    slide.meta = {**(slide.meta or {}), "visual_source": "admin_upload", "visual_uploaded_by_user_id": str(current_user.id), "visual_uploaded_at": datetime.now(timezone.utc).isoformat(), "review_required": True}
+    await db.commit()
+    await db.refresh(slide)
+    return {"slide": build_training_material_slide_payload(slide, include_internal=True), "message": "Фото загружено и привязано к слайду. Проверьте его перед публикацией."}
+
+
 @router.patch("/admin/consultant-training/materials/{material_id}/visual-assets/{asset_id}")
 async def review_admin_training_material_visual_asset(
     material_id: UUID,
@@ -2328,6 +2937,8 @@ async def review_admin_training_material_visual_asset(
         slide = await db.get(ConsultantTrainingMaterialSlide, payload.slide_id)
         if not slide or slide.material_id != material_id:
             raise HTTPException(status_code=404, detail="Слайд не найден для этого материала")
+    if slide and payload.apply_to_slide:
+        raise HTTPException(status_code=409, detail="Визуалы из PDF нельзя ставить в учебные слайды. Используйте AI Contentmaker в редакторе слайда.")
     try:
         updated_extraction = build_training_material_visual_asset_update_payload(
             material.extraction_metadata or {},
@@ -2544,6 +3155,7 @@ async def review_admin_training_material_extraction(
 @router.get("/admin/consultant-training/step-materials")
 async def list_admin_step_material_links(
     step_id: UUID | None = Query(default=None),
+    material_id: UUID | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_any_role(MANAGER_ROLES)),
 ):
@@ -2551,11 +3163,29 @@ async def list_admin_step_material_links(
     query = select(ConsultantTrainingStepMaterial).order_by(ConsultantTrainingStepMaterial.step_id.asc(), ConsultantTrainingStepMaterial.order_index.asc())
     if step_id:
         query = query.where(ConsultantTrainingStepMaterial.step_id == step_id)
+    if material_id:
+        query = query.where(ConsultantTrainingStepMaterial.material_id == material_id)
     links = (await db.execute(query)).scalars().all()
     material_ids = [link.material_id for link in links]
     materials = (await db.execute(select(ConsultantTrainingMaterial).where(ConsultantTrainingMaterial.id.in_(material_ids)))).scalars().all() if material_ids else []
     material_by_id = {material.id: material for material in materials}
-    return {"links": [build_step_material_link_payload(link, material=material_by_id.get(link.material_id), include_internal=True) for link in links]}
+    program_ids = [link.program_id for link in links if link.program_id]
+    module_ids = [link.module_id for link in links if link.module_id]
+    step_ids = [link.step_id for link in links if link.step_id]
+    programs = (await db.execute(select(ConsultantTrainingProgram).where(ConsultantTrainingProgram.id.in_(program_ids)))).scalars().all() if program_ids else []
+    modules = (await db.execute(select(ConsultantTrainingModule).where(ConsultantTrainingModule.id.in_(module_ids)))).scalars().all() if module_ids else []
+    steps = (await db.execute(select(ConsultantTrainingStep).where(ConsultantTrainingStep.id.in_(step_ids)))).scalars().all() if step_ids else []
+    program_by_id = {item.id: item for item in programs}
+    module_by_id = {item.id: item for item in modules}
+    step_by_id = {item.id: item for item in steps}
+    payloads = []
+    for link in links:
+        payload = build_step_material_link_payload(link, material=material_by_id.get(link.material_id), include_internal=True)
+        payload["program_title"] = getattr(program_by_id.get(link.program_id), "title", None)
+        payload["module_title"] = getattr(module_by_id.get(link.module_id), "title", None)
+        payload["step_title"] = getattr(step_by_id.get(link.step_id), "title", None)
+        payloads.append(payload)
+    return {"links": payloads}
 
 
 @router.post("/admin/consultant-training/step-materials")
@@ -3339,7 +3969,8 @@ async def start_seller_attestation(
     enrollment, profile = await _seller_competency_profile_for_program(db, program, subject_user.id)
     if not profile.get("attestation_ready"):
         raise HTTPException(status_code=409, detail="Пока недостаточно закрытых компетенций для аттестации")
-    task_payload = {
+    is_trainee_program = program.code == "trainee_base"
+    task_payload = trainee_attestation_task() if is_trainee_program else {
         "title": "Аттестация GLAME",
         "cases": [
             "Опишите клиентский сценарий и подберите украшение через эффект на образ.",
@@ -3347,11 +3978,16 @@ async def start_seller_attestation(
             "Назовите, какие компетенции применены в ответе.",
         ],
     }
+    started_at = datetime.now(timezone.utc)
+    task_payload = {
+        **task_payload,
+        "started_at": started_at.isoformat(),
+    }
     attestation = ConsultantTrainingAttestation(
         program_id=program.id,
         enrollment_id=enrollment.id if enrollment else None,
         seller_user_id=subject_user.id,
-        attestation_type=payload.attestation_type,
+        attestation_type="trainee_blank_2025" if is_trainee_program else payload.attestation_type,
         status="draft",
         task_payload=task_payload,
         competency_snapshot=profile,
@@ -3375,13 +4011,39 @@ async def submit_seller_attestation(
     attestation = await db.get(ConsultantTrainingAttestation, attestation_id)
     if not attestation or attestation.seller_user_id != subject_user.id:
         raise HTTPException(status_code=404, detail="Аттестация не найдена")
+    if attestation.status != "draft":
+        raise HTTPException(status_code=409, detail="Эта попытка уже завершена и передана на проверку")
+    submitted_at = datetime.now(timezone.utc)
+    task_payload = attestation.task_payload or {}
+    started_at_raw = task_payload.get("started_at")
+    try:
+        started_at = datetime.fromisoformat(str(started_at_raw).replace("Z", "+00:00")) if started_at_raw else attestation.created_at
+        if started_at and started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        started_at = attestation.created_at
+    if started_at and started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    duration_seconds = max(0, int((submitted_at - (started_at or submitted_at)).total_seconds()))
+    time_limit_minutes = max(1, int(task_payload.get("time_limit_minutes") or 45))
+    time_limit_seconds = time_limit_minutes * 60
+    time_limit_exceeded = duration_seconds > time_limit_seconds
     text_answer = " ".join(str(value) for value in (payload.answer_payload or {}).values())
-    evaluation = evaluate_submission_quality(text_answer, expected_focus="аттестация GLAME эффект образ клиент фраза")
+    evaluation = await evaluate_trainee_attestation_with_agent(payload.answer_payload or {}) if attestation.attestation_type == "trainee_blank_2025" else evaluate_submission_quality(text_answer, expected_focus="аттестация GLAME эффект образ клиент фраза")
+    evaluation = {
+        **evaluation,
+        "assessment_duration_seconds": duration_seconds,
+        "time_limit_minutes": time_limit_minutes,
+        "time_limit_seconds": time_limit_seconds,
+        "time_limit_exceeded": time_limit_exceeded,
+        "started_at": started_at.isoformat() if started_at else None,
+        "submitted_at": submitted_at.isoformat(),
+    }
     attestation.answer_payload = payload.answer_payload or {}
     attestation.ai_score = evaluation.get("score")
     attestation.ai_evaluation = evaluation
-    attestation.status = "review_pending"
-    attestation.submitted_at = datetime.now(timezone.utc)
+    attestation.status = "time_expired" if time_limit_exceeded else "review_pending"
+    attestation.submitted_at = submitted_at
     await db.commit()
     await db.refresh(attestation)
     return attestation_payload(attestation, attestation.competency_snapshot or {}, include_internal=False)

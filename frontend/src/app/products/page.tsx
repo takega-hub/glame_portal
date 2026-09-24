@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { Product } from '@/types';
 import ProductCard from '@/components/products/ProductCard';
 import OneCSyncUpload from '@/components/products/OneCSyncUpload';
-import * as XLSX from 'xlsx';
+import { downloadCsv } from '@/lib/csv-export';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -280,45 +280,9 @@ export default function ProductsPage() {
         ]),
       ];
       
-      // Создаем рабочую книгу
-      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-      
-      // Настраиваем ширину колонок
-      worksheet['!cols'] = [
-        { wch: 15 }, // Артикул
-        { wch: 50 }, // Название
-        { wch: 80 }, // Описание
-      ];
-      
-      // Создаем рабочую книгу
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Товары');
-      
-      // Генерируем файл
-      const excelBuffer = XLSX.write(workbook, { 
-        bookType: 'xlsx', 
-        type: 'array',
-        cellStyles: true,
-      });
-      
-      // Создаем blob и скачиваем
-      const blob = new Blob([excelBuffer], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-      });
-      
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `products_descriptions_${new Date().toISOString().split('T')[0]}.xlsx`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // Освобождаем память
-      URL.revokeObjectURL(url);
+      downloadCsv(`products_descriptions_${new Date().toISOString().split('T')[0]}.csv`, worksheetData);
     } catch (e: any) {
-      const errorMessage = e.response?.data?.detail || e.message || 'Ошибка при экспорте в XLSX';
+      const errorMessage = e.response?.data?.detail || e.message || 'Ошибка при экспорте в CSV';
       setError(errorMessage);
       alert(`Ошибка при экспорте: ${errorMessage}`);
     } finally {

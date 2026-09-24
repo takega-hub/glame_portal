@@ -138,12 +138,12 @@ TOUCHPOINT_PRIORITIES = [
 ```
 
 Preserve birthday rules:
-- 3% -> 500 бонусов
-- 5% -> 1 000 бонусов
-- 7% -> 2 000 бонусов
-- 10% -> 3 000 бонусов
-- VIP -> 5 000 бонусов
-- birthday window: D-3 / D / D+3
+- до 20 000 ₽ -> 500 бонусов, действуют 30 дней
+- 20 000–49 999 ₽ -> 1 000 бонусов, действуют 30 дней
+- 50 000–99 999 ₽ -> 2 000 бонусов, действуют 30 дней
+- 100 000–299 999 ₽ -> сертификат 5 000 ₽ + звонок, действует 6 месяцев
+- 300 000 ₽+ -> сертификат 5 000 ₽ + звонок + цветы, действует 6 месяцев
+- D−3 is the communication/accrual start, not the gift validity period.
 - only show birthday tasks where bonus is already accrued/verified and not previously processed.
 
 ---

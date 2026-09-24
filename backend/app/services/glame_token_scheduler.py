@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import desc, select
@@ -38,6 +39,7 @@ def glm_token_scheduler_status(app) -> dict:
     auto_transfer_task = getattr(app.state, "glm_ton_auto_transfer_task", None)
     onec_retry_task = getattr(app.state, "glm_onec_bridge_retry_task", None)
     telegram_alert_task = getattr(app.state, "glm_telegram_alert_task", None)
+    audit_publish_task = getattr(app.state, "glm_audit_hash_publish_task", None)
     return {
         "hold_release": {
             "enabled": _env_bool("GLM_HOLD_RELEASE_SCHEDULER_ENABLED", "true"),
@@ -68,6 +70,14 @@ def glm_token_scheduler_status(app) -> dict:
             "status": task_status(telegram_alert_task),
             "interval_minutes": int(os.getenv("GLM_TELEGRAM_ALERTS_INTERVAL_MINUTES", "15") or 15),
             "cooldown_minutes": int(os.getenv("GLM_TELEGRAM_ALERTS_COOLDOWN_MINUTES", "60") or 60),
+            "warning_digest_enabled": _env_bool("GLM_TELEGRAM_ALERTS_WARNING_DIGEST_ENABLED", "true"),
+            "warning_digest_minutes": int(os.getenv("GLM_TELEGRAM_ALERTS_WARNING_DIGEST_MINUTES", "240") or 240),
+        },
+        "audit_hash_publish": {
+            "enabled": _env_bool("GLM_AUDIT_HASH_PUBLISH_SCHEDULER_ENABLED", "false"),
+            "status": task_status(audit_publish_task),
+            "interval_minutes": int(os.getenv("GLM_AUDIT_HASH_PUBLISH_INTERVAL_MINUTES", "1440") or 1440),
+            "publish_lag_days": int(os.getenv("GLM_AUDIT_HASH_PUBLISH_LAG_DAYS", "1") or 1),
         },
     }
 
@@ -190,7 +200,30 @@ async def run_glm_onec_bridge_retry(limit: int | None = None) -> dict:
 async def run_glm_telegram_alerts(*, force: bool = False) -> dict:
     async with AsyncSessionLocal() as db:
         result = await GlmTelegramAlertService(db).run_once(force=force)
+        await db.commit()
         logger.info("GLM Telegram alerts finished: %s", result)
+        return result
+
+
+async def run_glm_audit_hash_publish() -> dict:
+    lag_days = max(0, int(os.getenv("GLM_AUDIT_HASH_PUBLISH_LAG_DAYS", "1") or 1))
+    target_date = (datetime.now(timezone.utc) - timedelta(days=lag_days)).date()
+    async with AsyncSessionLocal() as db:
+        row = await GlameTokenService(db).publish_daily_audit_hash(
+            audit_date=target_date,
+            admin_user_id=None,
+            publisher="scheduler",
+        )
+        await db.commit()
+        result = {
+            "status": "published",
+            "audit_date": target_date.isoformat(),
+            "root_hash": row.root_hash,
+            "transactions_count": int(row.transactions_count or 0),
+            "accounts_count": int(row.accounts_count or 0),
+            "public_reference": row.public_reference,
+        }
+        logger.info("GLM daily audit hash published: %s", result)
         return result
 
 
@@ -309,6 +342,29 @@ async def glm_telegram_alert_loop(stop_event: asyncio.Event) -> None:
             pass
 
 
+async def glm_audit_hash_publish_loop(stop_event: asyncio.Event) -> None:
+    interval_minutes = int(os.getenv("GLM_AUDIT_HASH_PUBLISH_INTERVAL_MINUTES", "1440"))
+    initial_delay = int(os.getenv("GLM_AUDIT_HASH_PUBLISH_INITIAL_DELAY_SECONDS", "900"))
+
+    try:
+        await asyncio.wait_for(stop_event.wait(), timeout=max(initial_delay, 0))
+        return
+    except asyncio.TimeoutError:
+        pass
+
+    while not stop_event.is_set():
+        try:
+            await run_glm_audit_hash_publish()
+        except Exception:
+            logger.error("GLM audit hash publish failed", exc_info=True)
+
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=max(interval_minutes, 60) * 60)
+            break
+        except asyncio.TimeoutError:
+            pass
+
+
 async def start_glm_hold_release_scheduler(app) -> None:
     if not _env_bool("GLM_HOLD_RELEASE_SCHEDULER_ENABLED", "true"):
         logger.info("GLM hold release scheduler disabled by env.")
@@ -386,6 +442,22 @@ async def start_glm_telegram_alert_scheduler(app) -> None:
         "GLM Telegram alert scheduler started (interval=%s minutes, cooldown=%s minutes).",
         os.getenv("GLM_TELEGRAM_ALERTS_INTERVAL_MINUTES", "15"),
         os.getenv("GLM_TELEGRAM_ALERTS_COOLDOWN_MINUTES", "60"),
+    )
+
+
+async def start_glm_audit_hash_publish_scheduler(app) -> None:
+    if not _env_bool("GLM_AUDIT_HASH_PUBLISH_SCHEDULER_ENABLED", "false"):
+        logger.info("GLM audit hash publish scheduler disabled by env.")
+        return
+
+    stop_event = asyncio.Event()
+    task = asyncio.create_task(glm_audit_hash_publish_loop(stop_event))
+    app.state.glm_audit_hash_publish_stop_event = stop_event
+    app.state.glm_audit_hash_publish_task = task
+    logger.info(
+        "GLM audit hash publish scheduler started (interval=%s minutes, lag_days=%s).",
+        os.getenv("GLM_AUDIT_HASH_PUBLISH_INTERVAL_MINUTES", "1440"),
+        os.getenv("GLM_AUDIT_HASH_PUBLISH_LAG_DAYS", "1"),
     )
 
 
@@ -482,3 +554,22 @@ async def stop_glm_telegram_alert_scheduler(app) -> None:
                 pass
 
     logger.info("GLM Telegram alert scheduler stopped")
+
+
+async def stop_glm_audit_hash_publish_scheduler(app) -> None:
+    stop_event = getattr(app.state, "glm_audit_hash_publish_stop_event", None)
+    task = getattr(app.state, "glm_audit_hash_publish_task", None)
+
+    if stop_event:
+        stop_event.set()
+    if task:
+        try:
+            await asyncio.wait_for(task, timeout=5.0)
+        except asyncio.TimeoutError:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+    logger.info("GLM audit hash publish scheduler stopped")

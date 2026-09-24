@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { TonConnectButton, useTonAddress, useTonConnectModal, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 import {
@@ -10,14 +10,18 @@ import {
   BarChart3,
   Check,
   Clipboard,
+  Coins,
   Download,
   FileCheck2,
   FileText,
   ImageIcon,
   Landmark,
   LockKeyhole,
+  LogOut,
+  MessageCircle,
   ReceiptText,
   RefreshCcw,
+  Send,
   ShieldCheck,
   UserRoundCheck,
   Users,
@@ -28,6 +32,8 @@ type RewardType = 'points' | 'cash';
 type PortalView =
   | 'landing'
   | 'login'
+  | 'forgotPassword'
+  | 'resetPassword'
   | 'join'
   | 'cashSetup'
   | 'dashboard'
@@ -36,8 +42,8 @@ type PortalView =
   | 'payouts'
   | 'crypto'
   | 'media'
-  | 'profile'
-  | 'states';
+  | 'support'
+  | 'profile';
 
 interface Summary {
   registrations: number;
@@ -153,6 +159,38 @@ interface TokenSummary {
     points_expires_days?: number;
     description: string;
   };
+  primary_sale_policy?: {
+    enabled: boolean;
+    currency: string;
+    display_currency?: string;
+    rub_per_glm?: string;
+    ton_rub_rate?: string | null;
+    ton_per_glm: string;
+    pricing_source?: string;
+    pricing_error?: string | null;
+    pricing_checked_at?: string | null;
+    min_glm: number;
+    max_glm: number;
+    description: string;
+  };
+  exchange_desk_policy?: {
+    enabled: boolean;
+    currency: string;
+    network?: string;
+    display_currency?: string;
+    rub_per_glm?: string;
+    payout_rub_per_glm?: string;
+    sell_spread_percent?: string;
+    ton_rub_rate?: string | null;
+    ton_per_glm: string;
+    pricing_source?: string;
+    pricing_error?: string | null;
+    pricing_checked_at?: string | null;
+    min_glm: number;
+    max_glm: number;
+    daily_limit_glm?: number;
+    description: string;
+  };
   referral_campaign?: {
     active: boolean;
     code: string;
@@ -257,6 +295,20 @@ interface GlmTransactionItem {
   ton_deposit_requested_at?: string | null;
   ton_deposit_query_id?: string | null;
   ton_deposit_last_lookup?: Record<string, any> | null;
+  rub_amount?: string | null;
+  rub_per_glm?: string | null;
+  ton_rub_rate?: string | null;
+  pricing_source?: string | null;
+  pricing_checked_at?: string | null;
+  pricing_error?: string | null;
+  ton_amount?: string | null;
+  ton_amount_nanoton?: string | null;
+  ton_payment_status?: string | null;
+  ton_payment_tx_hash?: string | null;
+  ton_payment_requested_at?: string | null;
+  ton_payment_last_lookup?: Record<string, any> | null;
+  ton_payment_verification?: Record<string, any> | null;
+  gram_payout_status?: string | null;
   debit_source?: string | null;
   expected_ton_sender_address?: string | null;
   treasury_address?: string | null;
@@ -278,6 +330,12 @@ interface PartnerProfile {
   discount_card_number?: string | null;
   telegram_chat_id?: string | null;
   telegram_notifications_enabled?: boolean;
+  telegram_notification_subscriptions?: {
+    partner_updates?: boolean;
+    referrals?: boolean;
+    crypto?: boolean;
+    marketing?: boolean;
+  };
 }
 
 interface PartnerMember {
@@ -322,6 +380,17 @@ interface MediaMaterial {
   original_file_name: string;
   content_type?: string | null;
   size: number;
+}
+
+interface SupportMessage {
+  id: string;
+  ticket_code: string;
+  source: string;
+  direction: 'user_to_admin' | 'admin_to_user' | string;
+  status: string;
+  subject?: string | null;
+  message: string;
+  created_at?: string | null;
 }
 
 const money = (value: number) =>
@@ -570,7 +639,7 @@ const referralLevels = [
 const tokenomicsRows = [
   ['Rewards/community', '40%', 'покупки, рефералы, активности'],
   ['GLAME treasury', '20%', 'резерв и операции по регламенту'],
-  ['Liquidity', '15%', 'будущие пары GLM/TON и GLM/USDT'],
+  ['Market review reserve', '15%', 'резерв до отдельного legal/security решения'],
   ['Team', '10%', 'долгий vesting'],
   ['Partners/ambassadors', '10%', 'партнерские кампании и статусы'],
   ['Reserve', '5%', 'страховой и операционный резерв'],
@@ -579,9 +648,9 @@ const tokenomicsRows = [
 const cryptoRoadmapRows = [
   ['01', 'История операций', 'Платформа фиксирует начисления, заявки и TON-транзакции; GLM хранится в TON-кошельке.'],
   ['02', 'Wallet link', 'Партнер привязывает TON-кошелек в кабинете.'],
-  ['03', 'Обмен баллов', 'Перевод баллов в GLM и пилот внутреннего marketplace.'],
+  ['03', 'Обмен баллов', 'Перевод баллов в GLM и обратно по правилам bridge.'],
   ['04', 'TON transfer', 'Отправка GLM в TON-кошелек после проверки.'],
-  ['05', 'DEX liquidity', 'Ограниченные пары GLM/TON и GLM/USDT без гарантии цены.'],
+  ['05', 'Market review', 'Любые рыночные механики - только после отдельного legal/security решения.'],
 ];
 
 const emptySummary: Summary = {
@@ -640,10 +709,10 @@ const navItems: Array<{ view: PortalView; label: string; icon: typeof BarChart3 
   { view: 'referrals', label: 'Рефералы', icon: Users },
   { view: 'commissions', label: 'Начисления', icon: ReceiptText },
   { view: 'payouts', label: 'Выплаты', icon: WalletCards },
-  { view: 'crypto', label: 'CryptoGLAME', icon: BadgeCheck },
   { view: 'media', label: 'Медиаматериалы', icon: ImageIcon },
+  { view: 'support', label: 'Связь', icon: MessageCircle },
   { view: 'profile', label: 'Профиль', icon: UserRoundCheck },
-  { view: 'states', label: 'Статусы', icon: AlertTriangle },
+  { view: 'crypto', label: 'CryptoGLAME', icon: BadgeCheck },
 ];
 
 const mediaCategoryLabels: Record<string, string> = {
@@ -738,13 +807,14 @@ const formatRussianPhone = (value: string) => {
   const national = digits.startsWith('7') ? digits.slice(1) : digits;
   const parts = ['+7'];
   if (national.length > 0) parts.push(national.slice(0, 3));
-  if (national.length > 3) parts.push(national.slice(3, 5));
-  if (national.length > 5) parts.push(national.slice(5, 7));
-  if (national.length > 7) parts.push(national.slice(7, 10));
+  if (national.length > 3) parts.push(national.slice(3, 6));
+  if (national.length > 6) parts.push(national.slice(6, 8));
+  if (national.length > 8) parts.push(national.slice(8, 10));
   return parts.filter(Boolean).join(' ');
 };
 
 const isValidRussianPhone = (value: string) => /^7\d{10}$/.test(normalizeRussianPhoneDigits(value));
+const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
 export default function ReferralPortalPage() {
   const [view, setView] = useState<PortalView>('landing');
@@ -757,16 +827,36 @@ export default function ReferralPortalPage() {
   const [payouts, setPayouts] = useState<PayoutItem[]>([]);
   const [glmTransactions, setGlmTransactions] = useState<GlmTransactionItem[]>([]);
   const [mediaMaterials, setMediaMaterials] = useState<MediaMaterial[]>([]);
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[]>([]);
   const [profile, setProfile] = useState<PartnerProfile>({});
   const [member, setMember] = useState<PartnerMember>({});
   const [ratePromotion, setRatePromotion] = useState<RatePromotion | null>(null);
-  const [, setAccessToken] = useState<string | null>(null);
-  const [joinForm, setJoinForm] = useState({ lastName: '', firstName: '', middleName: '', phone: '+7', password: '', offerAccepted: false });
+  const [accessToken, setAccessToken] = useState<string | null>(() => (
+    typeof document !== 'undefined' && document.cookie.includes('__Host-glame_csrf=') ? 'cookie' : null
+  ));
+  const hasCookieSession = () => typeof document !== 'undefined' && document.cookie.includes('__Host-glame_csrf=');
+  const fetch = (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers);
+    const csrfCookie = document.cookie.split('; ').find((item) => item.startsWith('__Host-glame_csrf='));
+    const csrfToken = csrfCookie ? decodeURIComponent(csrfCookie.slice('__Host-glame_csrf='.length)) : null;
+    if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
+    if (headers.get('Authorization') === 'Bearer null' || headers.get('Authorization') === 'Bearer cookie') headers.delete('Authorization');
+    return window.fetch(input, { ...init, credentials: 'include', headers });
+  };
+  const [joinForm, setJoinForm] = useState({ lastName: '', firstName: '', middleName: '', phone: '+7', email: '', emailConfirm: '', password: '', offerAccepted: false });
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinLoading, setJoinLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ phone: '+7', password: '' });
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [forgotForm, setForgotForm] = useState({ email: '' });
+  const [forgotMessage, setForgotMessage] = useState<string | null>(null);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [resetForm, setResetForm] = useState({ token: '', password: '', confirm: '' });
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -774,6 +864,10 @@ export default function ReferralPortalPage() {
   const [telegramMessage, setTelegramMessage] = useState<string | null>(null);
   const [telegramError, setTelegramError] = useState<string | null>(null);
   const [telegramLoading, setTelegramLoading] = useState(false);
+  const [supportForm, setSupportForm] = useState({ subject: '', message: '' });
+  const [supportMessage, setSupportMessage] = useState<string | null>(null);
+  const [supportError, setSupportError] = useState<string | null>(null);
+  const [supportLoading, setSupportLoading] = useState(false);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [manualSyncLoading, setManualSyncLoading] = useState(false);
   const [manualSyncMessage, setManualSyncMessage] = useState<string | null>(null);
@@ -793,6 +887,8 @@ export default function ReferralPortalPage() {
   const [glmToPointsMessage, setGlmToPointsMessage] = useState<string | null>(null);
   const [glmToPointsError, setGlmToPointsError] = useState<string | null>(null);
   const [glmToPointsLoading, setGlmToPointsLoading] = useState(false);
+  const [buyGlmAmount, setBuyGlmAmount] = useState('');
+  const [sellGlmAmount, setSellGlmAmount] = useState('');
   const [tonConnectUI] = useTonConnectUI();
   const { open: openTonConnectModal } = useTonConnectModal();
   const tonWallet = useTonWallet();
@@ -811,6 +907,23 @@ export default function ReferralPortalPage() {
   const effectiveRate = ratePromotion?.status === 'active' && promoRate > 0 ? promoRate : baseRate;
   const onchainGlmBalance = Number.parseFloat(String(token.onchain_balance?.balance_glm ?? '0')) || 0;
   const onchainGlmLabel = token.onchain_balance?.status === 'ok' ? `${token.onchain_balance.balance_glm} ${token.token_code}` : '—';
+  const primarySalePolicy = token.primary_sale_policy;
+  const primarySaleAmount = Number.parseInt(buyGlmAmount, 10) || 0;
+  const primarySaleRubPerGlm = Number(primarySalePolicy?.rub_per_glm || 1);
+  const primarySaleRubAmount = primarySaleAmount > 0
+    ? Number((primarySaleAmount * primarySaleRubPerGlm).toFixed(2))
+    : 0;
+  const primarySaleTonAmount = primarySaleAmount > 0
+    ? Number((primarySaleAmount * Number(primarySalePolicy?.ton_per_glm || 0)).toFixed(9))
+    : 0;
+  const exchangeDeskPolicy = token.exchange_desk_policy;
+  const exchangeDeskAmount = Number.parseInt(sellGlmAmount, 10) || 0;
+  const exchangeDeskRubAmount = exchangeDeskAmount > 0
+    ? Number((exchangeDeskAmount * Number(exchangeDeskPolicy?.payout_rub_per_glm || 0)).toFixed(2))
+    : 0;
+  const exchangeDeskGramAmount = exchangeDeskAmount > 0
+    ? Number((exchangeDeskAmount * Number(exchangeDeskPolicy?.ton_per_glm || 0)).toFixed(9))
+    : 0;
   const onchainStatusLabel =
     token.onchain_balance?.status === 'ok'
       ? 'считано из TON'
@@ -830,7 +943,7 @@ export default function ReferralPortalPage() {
       }),
     [commissions]
   );
-  const isPortalView = view !== 'landing' && view !== 'login' && view !== 'join' && view !== 'cashSetup';
+  const isPortalView = view !== 'landing' && view !== 'login' && view !== 'forgotPassword' && view !== 'resetPassword' && view !== 'join' && view !== 'cashSetup';
   const groupedMediaMaterials = useMemo(() => {
     return mediaMaterials.reduce<Record<string, MediaMaterial[]>>((acc, item) => {
       const key = item.category || 'other';
@@ -838,6 +951,16 @@ export default function ReferralPortalPage() {
       return acc;
     }, {});
   }, [mediaMaterials]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const resetToken = params.get('reset_token');
+    if (!resetToken) return;
+    setResetForm((prev) => ({ ...prev, token: resetToken }));
+    setResetMessage(null);
+    setResetError(null);
+    setView('resetPassword');
+  }, []);
 
   useEffect(() => {
     if (!partnerCode) {
@@ -887,23 +1010,56 @@ export default function ReferralPortalPage() {
   };
 
   const loadDashboard = async (token?: string | null, goDashboard = false) => {
-    const authToken = token || window.localStorage.getItem('glame_partner_access_token');
+    const authToken = token || accessToken;
     setAccessToken(authToken);
-    if (!authToken) return false;
     const resp = await fetch('/api/referrals/me/dashboard?period=30d', {
       credentials: 'include',
-      headers: { Authorization: `Bearer ${authToken}` },
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
     });
     if (!resp.ok) return false;
     const data = await resp.json();
     applyDashboard(data);
+    void fetch('/api/referrals/me/support-messages', {
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+      .then((supportResp) => (supportResp.ok ? supportResp.json() : null))
+      .then((supportData) => {
+        if (supportData?.messages && Array.isArray(supportData.messages)) setSupportMessages(supportData.messages);
+      })
+      .catch(() => undefined);
     if (goDashboard) setView('dashboard');
     return true;
   };
 
+  const logout = () => {
+    void fetch('/api/auth/logout', { method: 'POST' });
+    setAccessToken(null);
+    setSummary(emptySummary);
+    setToken(emptyToken);
+    setReferrals([]);
+    setCommissions([]);
+    setPayouts([]);
+    setGlmTransactions([]);
+    setSupportMessages([]);
+    setProfile({});
+    setMember({});
+    setRatePromotion(null);
+    setPartnerCode(null);
+    setQrDataUrl(null);
+    setManualSyncMessage(null);
+    setManualSyncError(null);
+    setSupportForm({ subject: '', message: '' });
+    setSupportMessage(null);
+    setSupportError(null);
+    setLoginForm({ phone: '+7', password: '' });
+    setLoginError(null);
+    setView('login');
+  };
+
   const prepareTonConnectProof = useCallback(async () => {
-    const token = window.localStorage.getItem('glame_partner_access_token');
-    if (!token) {
+    const token = accessToken;
+    if (!token && !hasCookieSession()) {
       setWalletError('Нужно войти заново.');
       return false;
     }
@@ -962,8 +1118,8 @@ export default function ReferralPortalPage() {
     if (member.crypto_wallet?.status === 'verified' && member.crypto_wallet?.address === tonWallet.account.address) return;
 
     const verifyTonProof = async () => {
-      const token = window.localStorage.getItem('glame_partner_access_token');
-      if (!token) {
+      const token = accessToken;
+      if (!token && !hasCookieSession()) {
         setWalletError('Нужно войти заново.');
         return;
       }
@@ -1011,8 +1167,7 @@ export default function ReferralPortalPage() {
   }, [member.crypto_wallet?.address, member.crypto_wallet?.status, tonFriendlyAddress, tonRawAddress, tonWallet, verifiedTonProofKey]);
 
   const loadMediaMaterials = async (token?: string | null) => {
-    const authToken = token || window.localStorage.getItem('glame_partner_access_token');
-    if (!authToken) return;
+    const authToken = token || accessToken;
     setMediaLoading(true);
     try {
       const resp = await fetch('/api/referrals/media-materials', {
@@ -1025,6 +1180,24 @@ export default function ReferralPortalPage() {
     } finally {
       setMediaLoading(false);
     }
+  };
+
+  const downloadMediaMaterial = async (item: MediaMaterial) => {
+    const authToken = accessToken;
+    const resp = await fetch(`/api/referrals/media-materials/${item.id}/download`, {
+      credentials: 'include',
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (!resp.ok) return;
+    const blob = await resp.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = item.original_file_name || `${item.title || 'glame-material'}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -1043,6 +1216,8 @@ export default function ReferralPortalPage() {
     const middleName = joinForm.middleName.trim();
     const fullName = [lastName, firstName, middleName].filter(Boolean).join(' ');
     const phone = normalizeRussianPhoneDigits(joinForm.phone);
+    const email = joinForm.email.trim().toLowerCase();
+    const emailConfirm = joinForm.emailConfirm.trim().toLowerCase();
     const password = joinForm.password;
     if (!lastName || !firstName) {
       setJoinError('Укажите фамилию и имя.');
@@ -1050,6 +1225,14 @@ export default function ReferralPortalPage() {
     }
     if (!isValidRussianPhone(joinForm.phone)) {
       setJoinError('Укажите корректный российский номер телефона.');
+      return;
+    }
+    if (!isValidEmail(email)) {
+      setJoinError('Укажите корректный email.');
+      return;
+    }
+    if (email !== emailConfirm) {
+      setJoinError('Email и подтверждение email не совпадают.');
       return;
     }
     if (password.length < 6) {
@@ -1071,6 +1254,7 @@ export default function ReferralPortalPage() {
           middle_name: middleName || null,
           full_name: fullName,
           phone,
+          email,
           password,
           offer_accepted: joinForm.offerAccepted,
         }),
@@ -1081,7 +1265,6 @@ export default function ReferralPortalPage() {
         return;
       }
       if (data?.access_token) {
-        window.localStorage.setItem('glame_partner_access_token', data.access_token);
         setAccessToken(data.access_token);
       }
       applyDashboard(data?.dashboard);
@@ -1115,16 +1298,79 @@ export default function ReferralPortalPage() {
         setLoginError('Неверный телефон или пароль.');
         return;
       }
-      window.localStorage.setItem('glame_partner_access_token', data.access_token);
-      window.localStorage.setItem('glame_partner_refresh_token', data.refresh_token || '');
-      window.localStorage.setItem('glame_access_token', data.access_token);
-      window.localStorage.setItem('glame_refresh_token', data.refresh_token || '');
-      const ok = await loadDashboard(data.access_token, true);
+      setAccessToken(null);
+      const ok = await loadDashboard(null, true);
       if (!ok) setLoginError('Партнерская программа еще не подключена для этого пользователя.');
     } catch {
       setLoginError('Не удалось войти.');
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  const submitForgotPassword = async () => {
+    const email = forgotForm.email.trim().toLowerCase();
+    setForgotError(null);
+    setForgotMessage(null);
+    if (!isValidEmail(email)) {
+      setForgotError('Введите корректный email.');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      const resp = await fetch('/api/auth/password-reset/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setForgotError(data?.detail || 'Не удалось отправить ссылку.');
+        return;
+      }
+      setForgotMessage(data?.message || 'Если email найден, мы отправим ссылку для восстановления пароля.');
+    } catch {
+      setForgotError('Не удалось связаться с сервером.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const submitPasswordReset = async () => {
+    setResetError(null);
+    setResetMessage(null);
+    if (resetForm.password.length < 6) {
+      setResetError('Пароль должен быть не короче 6 символов.');
+      return;
+    }
+    if (resetForm.password !== resetForm.confirm) {
+      setResetError('Пароли не совпадают.');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      const resp = await fetch('/api/auth/password-reset/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetForm.token, new_password: resetForm.password }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setResetError(data?.detail || 'Не удалось обновить пароль.');
+        return;
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+      if (data?.access_token) {
+        setAccessToken(null);
+        const ok = await loadDashboard(null, true);
+        if (ok) return;
+      }
+      setLoginError('Пароль обновлен. Войдите с новым паролем.');
+      setView('login');
+    } catch {
+      setResetError('Не удалось связаться с сервером.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -1139,7 +1385,7 @@ export default function ReferralPortalPage() {
       setPasswordError('Пароли не совпадают.');
       return;
     }
-    const token = window.localStorage.getItem('glame_partner_access_token');
+    const token = accessToken;
     if (!token) {
       setPasswordError('Нужно войти заново.');
       return;
@@ -1168,7 +1414,7 @@ export default function ReferralPortalPage() {
   const submitTelegramBind = async () => {
     setTelegramError(null);
     setTelegramMessage(null);
-    const token = window.localStorage.getItem('glame_partner_access_token');
+    const token = accessToken;
     if (!token) {
       setTelegramError('Нужно войти заново.');
       return;
@@ -1193,6 +1439,46 @@ export default function ReferralPortalPage() {
     }
   };
 
+  const updateTelegramPreferences = async (patch: {
+    notifications_enabled?: boolean;
+    partner_updates?: boolean;
+    referrals?: boolean;
+    crypto?: boolean;
+    marketing?: boolean;
+  }) => {
+    setTelegramError(null);
+    setTelegramMessage(null);
+    const token = accessToken;
+    if (!token) {
+      setTelegramError('Нужно войти заново.');
+      return;
+    }
+    setTelegramLoading(true);
+    try {
+      const resp = await fetch('/api/referrals/me/telegram-notifications/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(patch),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setTelegramError(data?.detail || 'Не удалось сохранить Telegram-настройки.');
+        return;
+      }
+      setProfile((prev) => ({
+        ...prev,
+        telegram_chat_id: data.profile?.telegram_chat_id ?? prev.telegram_chat_id,
+        telegram_notifications_enabled: data.profile?.telegram_notifications_enabled ?? prev.telegram_notifications_enabled,
+        telegram_notification_subscriptions: data.profile?.telegram_notification_subscriptions ?? prev.telegram_notification_subscriptions,
+      }));
+      setTelegramMessage('Telegram-настройки сохранены.');
+    } catch {
+      setTelegramError('Не удалось сохранить Telegram-настройки.');
+    } finally {
+      setTelegramLoading(false);
+    }
+  };
+
   const copy = async (value: string, key: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -1204,7 +1490,7 @@ export default function ReferralPortalPage() {
   };
 
   const syncReferralsFromOneC = async () => {
-    const token = window.localStorage.getItem('glame_partner_access_token');
+    const token = accessToken;
     if (!token) {
       setManualSyncError('Нужно войти заново.');
       return;
@@ -1232,8 +1518,47 @@ export default function ReferralPortalPage() {
     }
   };
 
+  const submitSupportMessage = async () => {
+    const token = accessToken;
+    if (!token) {
+      setSupportError('Нужно войти заново.');
+      return;
+    }
+    if (supportForm.message.trim().length < 3) {
+      setSupportError('Напишите сообщение чуть подробнее.');
+      return;
+    }
+    setSupportLoading(true);
+    setSupportMessage(null);
+    setSupportError(null);
+    try {
+      const resp = await fetch('/api/referrals/me/support-messages', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          subject: supportForm.subject.trim() || null,
+          message: supportForm.message.trim(),
+          category: view === 'crypto' ? 'crypto' : 'partner',
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setSupportError(data?.detail || 'Не удалось отправить сообщение.');
+        return;
+      }
+      if (data?.message) setSupportMessages((prev) => [...prev, data.message]);
+      setSupportForm({ subject: '', message: '' });
+      setSupportMessage(`Сообщение отправлено администратору. Код обращения: ${data?.ticket_code || '—'}.`);
+    } catch {
+      setSupportError('Не удалось связаться с сервером.');
+    } finally {
+      setSupportLoading(false);
+    }
+  };
+
   const submitCryptoWallet = async () => {
-    const token = window.localStorage.getItem('glame_partner_access_token');
+    const token = accessToken;
     if (!token) {
       setWalletError('Нужно войти заново.');
       return;
@@ -1280,7 +1605,7 @@ export default function ReferralPortalPage() {
   };
 
   const continuePendingGlmStorePayment = async (redemptionId: string) => {
-    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    const tokenValue = accessToken;
     if (!tokenValue) {
       setRedeemError('Нужно войти заново.');
       return;
@@ -1313,7 +1638,7 @@ export default function ReferralPortalPage() {
   };
 
   const cancelPendingGlmStorePayment = async (redemptionId: string) => {
-    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    const tokenValue = accessToken;
     if (!tokenValue) {
       setRedeemError('Нужно войти заново.');
       return;
@@ -1343,7 +1668,7 @@ export default function ReferralPortalPage() {
   };
 
   const submitGlmStoreRedeem = async (sku: string) => {
-    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    const tokenValue = accessToken;
     if (!tokenValue) {
       setRedeemError('Нужно войти заново.');
       return;
@@ -1396,7 +1721,7 @@ export default function ReferralPortalPage() {
   };
 
   const submitRewardStorePointsRedeem = async (sku: string) => {
-    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    const tokenValue = accessToken;
     if (!tokenValue) {
       setRedeemError('Нужно войти заново.');
       return;
@@ -1428,7 +1753,7 @@ export default function ReferralPortalPage() {
   };
 
   const submitBonusConversion = async () => {
-    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    const tokenValue = accessToken;
     if (!tokenValue) {
       setConvertError('Нужно войти заново.');
       return;
@@ -1466,7 +1791,7 @@ export default function ReferralPortalPage() {
   };
 
   const submitGlmToPointsBridge = async () => {
-    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    const tokenValue = accessToken;
     if (!tokenValue) {
       setGlmToPointsError('Нужно войти заново.');
       return;
@@ -1502,6 +1827,80 @@ export default function ReferralPortalPage() {
     }
   };
 
+  const submitBuyGlmWithTon = async () => {
+    const tokenValue = accessToken;
+    if (!tokenValue) {
+      setGlmToPointsError('Нужно войти заново.');
+      return;
+    }
+    const amountGlm = Number.parseInt(buyGlmAmount, 10);
+    if (!amountGlm || amountGlm <= 0) {
+      setGlmToPointsError('Укажите количество GLM.');
+      return;
+    }
+    setGlmToPointsLoading(true);
+    setGlmToPointsMessage(null);
+    setGlmToPointsError(null);
+    try {
+      const resp = await fetch('/api/referrals/me/glm-primary-sale/buy', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenValue}` },
+        body: JSON.stringify({ amount_glm: amountGlm }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setGlmToPointsError(data?.detail || 'Не удалось создать покупку GLM за TON.');
+        return;
+      }
+      setToken((prev) => ({ ...prev, ...(data.token || {}) }));
+      setBuyGlmAmount('');
+      setGlmToPointsMessage(`Создана заявка на покупку ${amountGlm} GLM за TON. Подтвердите TON-перевод в кошельке.`);
+      await loadDashboard(tokenValue, false);
+    } catch {
+      setGlmToPointsError('Не удалось связаться с сервером.');
+    } finally {
+      setGlmToPointsLoading(false);
+    }
+  };
+
+  const submitSellGlmForTon = async () => {
+    const tokenValue = accessToken;
+    if (!tokenValue) {
+      setGlmToPointsError('Нужно войти заново.');
+      return;
+    }
+    const amountGlm = Number.parseInt(sellGlmAmount, 10);
+    if (!amountGlm || amountGlm <= 0) {
+      setGlmToPointsError('Укажите количество GLM.');
+      return;
+    }
+    setGlmToPointsLoading(true);
+    setGlmToPointsMessage(null);
+    setGlmToPointsError(null);
+    try {
+      const resp = await fetch('/api/referrals/me/glm-exchange-desk/sell-for-ton', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenValue}` },
+        body: JSON.stringify({ amount_glm: amountGlm }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setGlmToPointsError(data?.detail || 'Не удалось создать заявку GLM -> GRAM.');
+        return;
+      }
+      setToken((prev) => ({ ...prev, ...(data.token || {}) }));
+      setSellGlmAmount('');
+      setGlmToPointsMessage(`Создана заявка на обмен ${amountGlm} GLM в GRAM. Подтвердите GLM-перевод в кошельке.`);
+      await loadDashboard(tokenValue, false);
+    } catch {
+      setGlmToPointsError('Не удалось связаться с сервером.');
+    } finally {
+      setGlmToPointsLoading(false);
+    }
+  };
+
   const pendingGlmToPointsBridge = useMemo(
     () =>
       glmTransactions.find(
@@ -1512,14 +1911,37 @@ export default function ReferralPortalPage() {
       ) || null,
     [glmTransactions]
   );
-  const glmDepositTreasuryAddress = pendingGlmToPointsBridge?.treasury_address || token.onchain_policy?.treasury_address || null;
+  const pendingBuyGlmWithTonSale = useMemo(
+    () =>
+      glmTransactions.find(
+        (item) =>
+          item.type === 'claim' &&
+          ['pending_payment', 'pending'].includes(item.status) &&
+          item.reason === 'buy_glm_with_ton'
+      ) || null,
+    [glmTransactions]
+  );
+  const pendingSellGlmForTonExchange = useMemo(
+    () =>
+      glmTransactions.find(
+        (item) =>
+          item.type === 'bridge' &&
+          item.status === 'pending' &&
+          item.reason === 'sell_glm_for_ton'
+      ) || null,
+    [glmTransactions]
+  );
+  const glmDepositTreasuryAddress = pendingSellGlmForTonExchange?.treasury_address || pendingGlmToPointsBridge?.treasury_address || token.onchain_policy?.treasury_address || null;
   const pendingGlmToPointsStatus = useMemo(() => {
     if (!pendingGlmToPointsBridge) return null;
+    const isPurchase = pendingGlmToPointsBridge.reason === 'buy_loyalty_points';
+    const targetPoints = pendingGlmToPointsBridge.target_points || Math.abs(pendingGlmToPointsBridge.amount);
+    const actionLabel = isPurchase ? 'покупку баллов' : 'перевод GLM в баллы';
     if (pendingGlmToPointsBridge.deposit_tx_hash || pendingGlmToPointsBridge.ton_deposit_verification?.ok) {
       return {
         code: 'verified',
         title: 'TON-перевод найден',
-        text: `TON-транзакция найдена. GLAME проверяет перевод и начислит ${pendingGlmToPointsBridge.target_points || Math.abs(pendingGlmToPointsBridge.amount)} баллов после обработки 1С.`,
+        text: `TON-транзакция найдена. GLAME проверяет ${actionLabel} и начислит ${targetPoints} баллов после обработки 1С.`,
       };
     }
     const depositStatus = pendingGlmToPointsBridge.ton_deposit_status || pendingGlmToPointsBridge.ton_deposit_last_lookup?.status || null;
@@ -1527,25 +1949,49 @@ export default function ReferralPortalPage() {
       return {
         code: 'waiting_for_deposit',
         title: 'Ждем TON-перевод',
-        text: `Если вы уже подтвердили перевод, дождитесь появления транзакции в TON. GLAME проверит поступление автоматически. Сумма: ${Math.abs(pendingGlmToPointsBridge.amount)} GLM.`,
+        text: `Если вы уже подтвердили перевод, дождитесь появления транзакции в TON. GLAME проверит поступление автоматически. К оплате: ${Math.abs(pendingGlmToPointsBridge.amount)} GLM, к начислению: ${targetPoints} баллов.`,
       };
     }
     if (depositStatus === 'wallet_request_prepared') {
       return {
         code: 'wallet_request_prepared',
         title: 'Подтвердите в кошельке',
-        text: `Подтвердите отправку ${Math.abs(pendingGlmToPointsBridge.amount)} GLM в TON-кошельке. После появления транзакции баллы начислятся автоматически.`,
+        text: `Подтвердите отправку ${Math.abs(pendingGlmToPointsBridge.amount)} GLM в TON-кошельке. После появления транзакции начислим ${targetPoints} баллов автоматически.`,
       };
     }
     return {
       code: 'pending',
       title: 'Ожидает подтверждения',
-      text: `Подтвердите отправку ${Math.abs(pendingGlmToPointsBridge.amount)} GLM из привязанного кошелька в GLAME. После проверки TON-перевода баллы начислятся автоматически.`,
+      text: `Подтвердите отправку ${Math.abs(pendingGlmToPointsBridge.amount)} GLM из привязанного кошелька в GLAME. После проверки TON-перевода начислим ${targetPoints} баллов автоматически.`,
     };
   }, [pendingGlmToPointsBridge]);
 
+  const pendingSellGlmForTonStatus = useMemo(() => {
+    if (!pendingSellGlmForTonExchange) return null;
+    const depositStatus = pendingSellGlmForTonExchange.ton_deposit_status || pendingSellGlmForTonExchange.ton_deposit_last_lookup?.status || null;
+    if (pendingSellGlmForTonExchange.deposit_tx_hash || pendingSellGlmForTonExchange.ton_deposit_verification?.ok) {
+      return {
+        code: 'verified',
+        title: 'GLM-перевод найден',
+        text: `GLAME проверяет поступление ${Math.abs(pendingSellGlmForTonExchange.amount)} GLM и подготовит GRAM-выплату по лимитам exchange desk.`,
+      };
+    }
+    if (depositStatus === 'wallet_request_prepared') {
+      return {
+        code: 'wallet_request_prepared',
+        title: 'Подтвердите в кошельке',
+        text: `Подтвердите отправку ${Math.abs(pendingSellGlmForTonExchange.amount)} GLM в treasury GLAME. После проверки оператор закроет GRAM-выплату.`,
+      };
+    }
+    return {
+      code: 'pending',
+      title: 'Ожидает GLM-перевода',
+      text: `Отправьте ${Math.abs(pendingSellGlmForTonExchange.amount)} GLM из подтвержденного кошелька в GLAME. GRAM-выплата не гарантируется как постоянный выкуп и проходит по текущим лимитам.`,
+    };
+  }, [pendingSellGlmForTonExchange]);
+
   const confirmPendingGlmToPointsBridgeTransfer = async () => {
-    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    const tokenValue = accessToken;
     if (!tokenValue) {
       setGlmToPointsError('Нужно войти заново.');
       return;
@@ -1585,7 +2031,107 @@ export default function ReferralPortalPage() {
       const message = String(error?.message || '');
       setGlmToPointsError(
         message.toLowerCase().includes('insufficient')
-          ? 'В кошельке не хватает testnet GRAM для комиссии TON. Пополните testnet-кошелек через faucet и повторите подтверждение.'
+          ? 'В кошельке не хватает GRAM для комиссии сети TON. Пополните кошелек и повторите подтверждение.'
+          : message || 'TON-транзакция отменена или не отправлена.'
+      );
+      setGlmToPointsMessage(null);
+    } finally {
+      setGlmToPointsLoading(false);
+    }
+  };
+
+  const confirmPendingBuyGlmWithTonPayment = async () => {
+    const tokenValue = accessToken;
+    if (!tokenValue) {
+      setGlmToPointsError('Нужно войти заново.');
+      return;
+    }
+    if (!pendingBuyGlmWithTonSale) {
+      setGlmToPointsError('Нет pending-заявки на покупку GLM за GRAM.');
+      return;
+    }
+    if (!tonWallet) {
+      setGlmToPointsMessage('Подключите подтвержденный TON-кошелек, затем подтвердите оплату GRAM.');
+      openTonConnectModal();
+      return;
+    }
+    if (token.claim_wallet_address && tonWallet.account.address !== token.claim_wallet_address) {
+      setGlmToPointsError('Подключенный TON-кошелек отличается от подтвержденного кошелька партнера.');
+      return;
+    }
+    setGlmToPointsLoading(true);
+    setGlmToPointsError(null);
+    setGlmToPointsMessage('Откройте кошелек и подтвердите GRAM-перевод в GLAME.');
+    try {
+      const resp = await fetch(`/api/referrals/me/glm-primary-sale/${pendingBuyGlmWithTonSale.id}/ton-transaction`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${tokenValue}` },
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setGlmToPointsError(data?.detail || 'Не удалось подготовить GRAM-транзакцию.');
+        setGlmToPointsMessage(null);
+        return;
+      }
+      await tonConnectUI.sendTransaction(data.transaction);
+      setGlmToPointsMessage('GRAM-оплата отправлена в кошелек. После подтверждения в сети GLAME проверит оплату и отправит GLM автоматически.');
+      await loadDashboard(tokenValue, false);
+    } catch (error: any) {
+      const message = String(error?.message || '');
+      setGlmToPointsError(
+        message.toLowerCase().includes('insufficient')
+          ? 'В кошельке не хватает GRAM для оплаты или комиссии сети TON.'
+          : message || 'TON-транзакция отменена или не отправлена.'
+      );
+      setGlmToPointsMessage(null);
+    } finally {
+      setGlmToPointsLoading(false);
+    }
+  };
+
+  const confirmPendingSellGlmForTonDeposit = async () => {
+    const tokenValue = accessToken;
+    if (!tokenValue) {
+      setGlmToPointsError('Нужно войти заново.');
+      return;
+    }
+    if (!pendingSellGlmForTonExchange) {
+      setGlmToPointsError('Нет pending-заявки GLM -> GRAM.');
+      return;
+    }
+    if (!tonWallet) {
+      setGlmToPointsMessage('Подключите подтвержденный TON-кошелек, затем подтвердите перевод GLM.');
+      openTonConnectModal();
+      return;
+    }
+    if (token.claim_wallet_address && tonWallet.account.address !== token.claim_wallet_address) {
+      setGlmToPointsError('Подключенный TON-кошелек отличается от подтвержденного кошелька партнера.');
+      return;
+    }
+    setGlmToPointsLoading(true);
+    setGlmToPointsError(null);
+    setGlmToPointsMessage('Откройте кошелек и подтвердите GLM-перевод в GLAME.');
+    try {
+      const resp = await fetch(`/api/referrals/me/glm-exchange-desk/sell-for-ton/${pendingSellGlmForTonExchange.id}/ton-transaction`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${tokenValue}` },
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setGlmToPointsError(data?.detail || 'Не удалось подготовить GLM-транзакцию.');
+        setGlmToPointsMessage(null);
+        return;
+      }
+      await tonConnectUI.sendTransaction(data.transaction);
+      setGlmToPointsMessage('GLM-транзакция отправлена в кошелек. После подтверждения в сети GLAME проверит поступление и подготовит GRAM-выплату.');
+      await loadDashboard(tokenValue, false);
+    } catch (error: any) {
+      const message = String(error?.message || '');
+      setGlmToPointsError(
+        message.toLowerCase().includes('insufficient')
+          ? 'В кошельке не хватает GRAM для комиссии сети TON.'
           : message || 'TON-транзакция отменена или не отправлена.'
       );
       setGlmToPointsMessage(null);
@@ -1595,7 +2141,7 @@ export default function ReferralPortalPage() {
   };
 
   const cancelPendingGlmToPointsBridge = async () => {
-    const tokenValue = window.localStorage.getItem('glame_partner_access_token');
+    const tokenValue = accessToken;
     if (!tokenValue) {
       setGlmToPointsError('Нужно войти заново.');
       return;
@@ -1620,6 +2166,40 @@ export default function ReferralPortalPage() {
       }
       setToken((prev) => ({ ...prev, ...(data.token || {}) }));
       setGlmToPointsMessage('Заявка GLM -> баллы отменена. GLM не списывались, потому что TON-перевод не был подтвержден.');
+      await loadDashboard(tokenValue, false);
+    } catch {
+      setGlmToPointsError('Не удалось связаться с сервером.');
+    } finally {
+      setGlmToPointsLoading(false);
+    }
+  };
+
+  const cancelPendingSellGlmForTon = async () => {
+    const tokenValue = accessToken;
+    if (!tokenValue) {
+      setGlmToPointsError('Нужно войти заново.');
+      return;
+    }
+    if (!pendingSellGlmForTonExchange) {
+      setGlmToPointsError('Нет pending-заявки GLM -> GRAM.');
+      return;
+    }
+    setGlmToPointsLoading(true);
+    setGlmToPointsError(null);
+    setGlmToPointsMessage(null);
+    try {
+      const resp = await fetch(`/api/referrals/me/glm-exchange-desk/sell-for-ton/${pendingSellGlmForTonExchange.id}/cancel`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Authorization: `Bearer ${tokenValue}` },
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setGlmToPointsError(data?.detail || 'Не удалось отменить заявку.');
+        return;
+      }
+      setToken((prev) => ({ ...prev, ...(data.token || {}) }));
+      setGlmToPointsMessage('Заявка GLM -> GRAM отменена. GRAM-выплата не создавалась, потому что GLM-перевод не был подтвержден.');
       await loadDashboard(tokenValue, false);
     } catch {
       setGlmToPointsError('Не удалось связаться с сервером.');
@@ -1685,9 +2265,18 @@ export default function ReferralPortalPage() {
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8f9194]">partner.glamejewelry.ru</div>
                 <div className="mt-1 text-lg font-semibold">Кабинет партнера</div>
               </div>
-              <div className="hidden items-center gap-2 md:flex">
-                <StatusBadge tone="ok">Программа активна</StatusBadge>
-                {rewardType === 'cash' && member.onec_agency_contract_id ? <StatusBadge tone="ok">Договор активен</StatusBadge> : <StatusBadge>{rewardType === 'cash' ? statusRu(member.cash_status) : 'Баллы GLAME'}</StatusBadge>}
+              <div className="flex items-center gap-2">
+                <div className="hidden items-center gap-2 md:flex">
+                  <StatusBadge tone="ok">Программа активна</StatusBadge>
+                  {rewardType === 'cash' && member.onec_agency_contract_id ? <StatusBadge tone="ok">Договор активен</StatusBadge> : <StatusBadge>{rewardType === 'cash' ? statusRu(member.cash_status) : 'Баллы GLAME'}</StatusBadge>}
+                </div>
+                <button
+                  onClick={logout}
+                  className="inline-flex min-h-[36px] items-center justify-center gap-2 border border-[#44474a] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#c5c6ca] transition hover:border-[#e2e2e5] hover:text-[#e2e2e5]"
+                >
+                  <LogOut size={15} />
+                  <span className="hidden sm:inline">Выход</span>
+                </button>
               </div>
             </header>
           ) : null}
@@ -1797,10 +2386,59 @@ export default function ReferralPortalPage() {
                   <button disabled={loginLoading} onClick={() => void submitLogin()} className="mt-4 w-full border border-[#e2e2e5] bg-[#e2e2e5] px-5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-[#171c1f] disabled:cursor-wait disabled:opacity-60">
                     {loginLoading ? 'Входим...' : 'Войти'}
                   </button>
+                  <button onClick={() => { setForgotError(null); setForgotMessage(null); setView('forgotPassword'); }} className="mt-4 text-sm text-[#c5c6ca] underline underline-offset-4">
+                    Забыл пароль
+                  </button>
                   <a href={`mailto:${PROGRAM_EMAIL}`} className="mt-5 block text-sm text-[#c5c6ca] underline-offset-4 hover:underline">
                     Написать в партнерскую программу: {PROGRAM_EMAIL}
                   </a>
                   <button onClick={() => setView('landing')} className="mt-4 text-sm text-[#8f9194]">Назад к программе</button>
+                </div>
+              </section>
+            ) : null}
+
+            {view === 'forgotPassword' ? (
+              <section className="mx-auto flex min-h-[calc(100vh-48px)] max-w-xl items-center">
+                <div className="w-full border border-[#44474a] bg-[#121416] p-6 md:p-8">
+                  <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">Восстановление</div>
+                  <h1 className="mt-4 text-4xl font-semibold">Забыли пароль?</h1>
+                  <p className="mt-4 text-sm leading-6 text-[#c5c6ca]">
+                    Введите email, указанный в профиле партнера. Мы отправим одноразовую ссылку для установки нового пароля.
+                  </p>
+                  <label className="mt-8 block text-xs uppercase tracking-[0.16em] text-[#8f9194]">Email</label>
+                  <input
+                    value={forgotForm.email}
+                    onChange={(event) => setForgotForm({ email: event.target.value })}
+                    type="email"
+                    className="mt-3 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-4 text-[#e2e2e5] outline-none"
+                    autoComplete="email"
+                  />
+                  {forgotMessage ? <div className="mt-4 border border-[#43564a] bg-[#17251d] p-3 text-sm text-[#b9dec5]">{forgotMessage}</div> : null}
+                  {forgotError ? <div className="mt-4 border border-[#7a3a3a] bg-[#1a1111] p-3 text-sm text-[#f0c7c7]">{forgotError}</div> : null}
+                  <button disabled={forgotLoading} onClick={() => void submitForgotPassword()} className="mt-4 w-full border border-[#e2e2e5] bg-[#e2e2e5] px-5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-[#171c1f] disabled:cursor-wait disabled:opacity-60">
+                    {forgotLoading ? 'Отправляем...' : 'Отправить ссылку'}
+                  </button>
+                  <button onClick={() => setView('login')} className="mt-4 text-sm text-[#8f9194]">Назад ко входу</button>
+                </div>
+              </section>
+            ) : null}
+
+            {view === 'resetPassword' ? (
+              <section className="mx-auto flex min-h-[calc(100vh-48px)] max-w-xl items-center">
+                <div className="w-full border border-[#44474a] bg-[#121416] p-6 md:p-8">
+                  <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">Новый пароль</div>
+                  <h1 className="mt-4 text-4xl font-semibold">Задайте пароль</h1>
+                  <p className="mt-4 text-sm leading-6 text-[#c5c6ca]">Ссылка одноразовая. После сохранения пароля войдите по телефону и новому паролю.</p>
+                  <label className="mt-8 block text-xs uppercase tracking-[0.16em] text-[#8f9194]">Новый пароль</label>
+                  <input value={resetForm.password} onChange={(event) => setResetForm((prev) => ({ ...prev, password: event.target.value }))} type="password" className="mt-3 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-4 text-[#e2e2e5] outline-none" />
+                  <label className="mt-4 block text-xs uppercase tracking-[0.16em] text-[#8f9194]">Повторите пароль</label>
+                  <input value={resetForm.confirm} onChange={(event) => setResetForm((prev) => ({ ...prev, confirm: event.target.value }))} type="password" className="mt-3 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-4 text-[#e2e2e5] outline-none" />
+                  {resetMessage ? <div className="mt-4 border border-[#43564a] bg-[#17251d] p-3 text-sm text-[#b9dec5]">{resetMessage}</div> : null}
+                  {resetError ? <div className="mt-4 border border-[#7a3a3a] bg-[#1a1111] p-3 text-sm text-[#f0c7c7]">{resetError}</div> : null}
+                  <button disabled={resetLoading || !!resetMessage} onClick={() => void submitPasswordReset()} className="mt-4 w-full border border-[#e2e2e5] bg-[#e2e2e5] px-5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-[#171c1f] disabled:cursor-wait disabled:opacity-60">
+                    {resetLoading ? 'Сохраняем...' : 'Сохранить пароль'}
+                  </button>
+                  <button onClick={() => setView('login')} className="mt-4 text-sm text-[#8f9194]">Перейти ко входу</button>
                 </div>
               </section>
             ) : null}
@@ -1834,7 +2472,7 @@ export default function ReferralPortalPage() {
                           <StatusBadge tone="warn">После уровня Stylish Pro</StatusBadge>
                         </div>
                       </div>
-                      <div className="grid gap-4 border-t border-[#44474a] p-6 md:grid-cols-2 xl:grid-cols-5">
+                      <div className="grid gap-4 border-t border-[#44474a] p-6 md:grid-cols-2 xl:grid-cols-3">
                         <label className="block">
                           <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Фамилия</span>
                           <input value={joinForm.lastName} onChange={(event) => setJoinForm((prev) => ({ ...prev, lastName: event.target.value }))} className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none" autoComplete="family-name" />
@@ -1860,10 +2498,30 @@ export default function ReferralPortalPage() {
                           />
                         </label>
                         <label className="block">
+                          <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Email</span>
+                          <input
+                            value={joinForm.email}
+                            onChange={(event) => setJoinForm((prev) => ({ ...prev, email: event.target.value }))}
+                            type="email"
+                            className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none"
+                            autoComplete="email"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Подтвердите email</span>
+                          <input
+                            value={joinForm.emailConfirm}
+                            onChange={(event) => setJoinForm((prev) => ({ ...prev, emailConfirm: event.target.value }))}
+                            type="email"
+                            className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none"
+                            autoComplete="email"
+                          />
+                        </label>
+                        <label className="block">
                           <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Пароль</span>
                           <input value={joinForm.password} onChange={(event) => setJoinForm((prev) => ({ ...prev, password: event.target.value }))} type="password" className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none" />
                         </label>
-                        <label className="flex items-start gap-3 border border-[#44474a] bg-[#1a1c1e] p-4 text-sm leading-6 text-[#c5c6ca] md:col-span-2 xl:col-span-5">
+                        <label className="flex items-start gap-3 border border-[#44474a] bg-[#1a1c1e] p-4 text-sm leading-6 text-[#c5c6ca] md:col-span-2 xl:col-span-3">
                           <input
                             type="checkbox"
                             checked={joinForm.offerAccepted}
@@ -1877,7 +2535,7 @@ export default function ReferralPortalPage() {
                             </a>
                           </span>
                         </label>
-                        {joinError ? <div className="border border-[#7a3a3a] bg-[#1a1111] p-4 text-sm text-[#f0c7c7] md:col-span-3">{joinError}</div> : null}
+                        {joinError ? <div className="border border-[#7a3a3a] bg-[#1a1111] p-4 text-sm text-[#f0c7c7] md:col-span-2 xl:col-span-3">{joinError}</div> : null}
                       </div>
                     </>
                   ) : null}
@@ -1946,7 +2604,7 @@ export default function ReferralPortalPage() {
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center gap-3"><Check className="text-[#b9dec5]" /> Балльный режим активен</div>
+                          <div className="flex items-center gap-3"><Check className="text-[#b9dec5]" /> Режим бонусов GLAME</div>
                           <div className="flex items-center gap-3"><WalletCards className="text-[#c5c6ca]" /> Доступно {profile.loyalty_points || 0} баллов</div>
                           <div className="flex items-start gap-3 text-[#c5c6ca]">
                             <LockKeyhole className="mt-0.5 shrink-0" />
@@ -1966,26 +2624,26 @@ export default function ReferralPortalPage() {
                 </div>
 
                 {ratePromotion && rewardType === 'points' ? (
-                  <div className="border border-[#d8c88c] bg-[#19170f] p-5">
+                  <div className="border border-[#4d8f61] bg-[#101a13] p-5">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[#d8c88c]">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[#8fd29b]">
                           <BadgeCheck size={16} /> Акция для партнеров
                         </div>
-                        <h2 className="mt-3 text-2xl font-semibold text-[#f4f0dd]">{ratePromotion.title}</h2>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#d8d0aa]">
+                        <h2 className="mt-3 text-2xl font-semibold text-[#ecf7ee]">{ratePromotion.title}</h2>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[#bfdcc5]">
                           {ratePromotion.status === 'active' ? 'Сейчас действует повышенное начисление:' : 'Запланировано повышенное начисление:'}{' '}
                           {ratePromotion.rate_percent}% от суммы покупок рефералов в баллах GLAME.
                         </p>
                       </div>
-                      <div className="border border-[#6a6040] px-5 py-4 text-left md:min-w-72">
-                        <div className="text-xs uppercase tracking-[0.2em] text-[#a9a17a]">{ratePromotion.status === 'active' ? 'Действует до' : 'Период'}</div>
-                        <div className="mt-2 text-lg font-semibold text-[#f4f0dd]">
+                      <div className="border border-[#3c6d49] bg-[#132118] px-5 py-4 text-left md:min-w-72">
+                        <div className="text-xs uppercase tracking-[0.2em] text-[#8fd29b]">{ratePromotion.status === 'active' ? 'Действует до' : 'Период'}</div>
+                        <div className="mt-2 text-lg font-semibold text-[#ecf7ee]">
                           {ratePromotion.status === 'active'
                             ? dateRu(ratePromotion.ends_at)
                             : `${dateRu(ratePromotion.starts_at)} — ${dateRu(ratePromotion.ends_at)}`}
                         </div>
-                        <div className="mt-1 text-sm text-[#bfb68a]">Стандартная ставка: {baseRate}%</div>
+                        <div className="mt-1 text-sm text-[#bfdcc5]">Стандартная ставка: {baseRate}%</div>
                       </div>
                     </div>
                   </div>
@@ -1996,40 +2654,6 @@ export default function ReferralPortalPage() {
                   <Metric label="Покупки" value={`${summary.purchases}`} sub={`${summary.active_referrals} активных рефералов`} />
                   <Metric label="Оборот" value={money(summary.referral_revenue)} sub="без доставки" />
                   <Metric label={rewardType === 'cash' ? 'Начислено в 1С' : 'Зачислено баллов'} value={rewardType === 'cash' ? money(summary.accrued_in_1c) : `${summary.posted_points} баллов`} sub="после холда" />
-                </div>
-
-                <div className="border border-[#44474a] bg-[#121416] p-5">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">{token.token_name}</div>
-                      <div className="mt-3 text-3xl font-semibold">{onchainGlmLabel}</div>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-[#c5c6ca]">
-                        GLM хранится в TON-кошельке. Баллы GLAME, GLM в TON и внутренний холд показаны отдельно, чтобы обмены не смешивались в один баланс.
-                      </p>
-                    </div>
-                    <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4 md:min-w-[560px]">
-                      <div className="border border-[#2c3033] bg-[#0c0e10] p-4">
-                        <div className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Баллы GLAME</div>
-                        <div className="mt-2 text-xl font-semibold">{profile.loyalty_points || 0}</div>
-                        <div className="mt-1 text-xs text-[#8f9194]">для скидки и обмена</div>
-                      </div>
-                      <div className="border border-[#2c3033] bg-[#0c0e10] p-4">
-                        <div className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">GLM в TON</div>
-                        <div className="mt-2 text-xl font-semibold">{onchainGlmLabel}</div>
-                        <div className="mt-1 text-xs text-[#8f9194]">{onchainStatusLabel}</div>
-                      </div>
-                      <div className="border border-[#2c3033] bg-[#0c0e10] p-4">
-                        <div className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">GLM в холде</div>
-                        <div className="mt-2 text-xl font-semibold">{token.hold_balance} {token.token_code}</div>
-                        <div className="mt-1 text-xs text-[#8f9194]">ожидает release</div>
-                      </div>
-                      <div className="border border-[#2c3033] bg-[#0c0e10] p-4">
-                        <div className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">TON-заявки</div>
-                        <div className="mt-2 text-xl font-semibold">{token.pending_claim_amount || 0} {token.token_code}</div>
-                        <div className="mt-1 text-xs text-[#8f9194]">в обработке</div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="grid gap-6 xl:grid-cols-2">
@@ -2094,7 +2718,20 @@ export default function ReferralPortalPage() {
 
             {view === 'crypto' ? (
               <section>
-                <PageTitle title="CryptoGLAME" subtitle="GLAME Coin, TON-кошелек, обмен баллов и дорожная карта полноценного токена GLM." />
+                <PageTitle
+                  title="CryptoGLAME"
+                  subtitle="GLAME Coin, TON-кошелек, обмен баллов и дорожная карта полноценного токена GLM."
+                  action={
+                    <a
+                      href="https://partner.glamejewelry.ru/glm"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex min-h-10 items-center justify-center border border-[#44474a] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#f2f2f4] transition hover:border-[#e2e2e5] hover:bg-[#e2e2e5] hover:text-[#0d0f10]"
+                    >
+                      О проекте Crypto GLAME
+                    </a>
+                  }
+                />
 
                 <div className="grid gap-6">
                   <div className="order-2 border border-[#44474a] bg-[#121416] p-5">
@@ -2108,13 +2745,40 @@ export default function ReferralPortalPage() {
                       <a href="/static/glm_policy/risk-disclosure.md" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">Risk disclosure</a>
                       <a href="/static/glm_policy/bridge-rules.md" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">Правила обмена</a>
                       <a href="/static/glm_policy/faq.md" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">FAQ</a>
-                      <a href="/api/referrals/glm-audit-hashes/public" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">Audit journal</a>
+                      <a href="/glm/audit" target="_blank" rel="noreferrer" className="border border-[#44474a] px-3 py-2 text-[#c5c6ca]">Audit journal</a>
                     </div>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <Metric label="Баллы GLAME" value={`${profile.loyalty_points || 0}`} sub="доступны к списанию" />
-                      <Metric label="GLM в TON" value={onchainGlmLabel} sub={onchainStatusLabel} />
-                      <Metric label="TON wallet" value={token.claim_wallet_address ? 'Подключен' : 'Не подключен'} sub={token.claim_enabled ? 'вывод разрешен' : 'нужна проверка'} />
-                      <Metric label="GLM в отправке" value={`${token.pending_claim_amount || 0} GLM`} sub="ожидает TON" />
+                    <div className="mt-5 border border-[#44474a] bg-[#0c0e10] p-5">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">Сводка GLAME Coin</div>
+                          <div className="mt-3 text-3xl font-semibold">{onchainGlmLabel}</div>
+                          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#c5c6ca]">
+                            Баллы GLAME, GLM в TON и внутренний холд показаны отдельно, чтобы обмены не смешивались в один баланс.
+                          </p>
+                        </div>
+                        <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4 md:min-w-[560px]">
+                          <div className="border border-[#2c3033] bg-[#121416] p-4">
+                            <div className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Баллы GLAME</div>
+                            <div className="mt-2 text-xl font-semibold">{profile.loyalty_points || 0}</div>
+                            <div className="mt-1 text-xs text-[#8f9194]">для скидки и обмена</div>
+                          </div>
+                          <div className="border border-[#2c3033] bg-[#121416] p-4">
+                            <div className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">GLM в TON</div>
+                            <div className="mt-2 text-xl font-semibold">{onchainGlmLabel}</div>
+                            <div className="mt-1 text-xs text-[#8f9194]">{onchainStatusLabel}</div>
+                          </div>
+                          <div className="border border-[#2c3033] bg-[#121416] p-4">
+                            <div className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">GLM в холде</div>
+                            <div className="mt-2 text-xl font-semibold">{token.hold_balance} {token.token_code}</div>
+                            <div className="mt-1 text-xs text-[#8f9194]">ожидает release</div>
+                          </div>
+                          <div className="border border-[#2c3033] bg-[#121416] p-4">
+                            <div className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">TON-заявки</div>
+                            <div className="mt-2 text-xl font-semibold">{token.pending_claim_amount || 0} {token.token_code}</div>
+                            <div className="mt-1 text-xs text-[#8f9194]">в обработке</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <div className="mt-5 border border-[#44474a] bg-[#0c0e10] p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -2152,6 +2816,133 @@ export default function ReferralPortalPage() {
                           <div key={benefit} className="border border-[#333537] bg-[#121416] px-3 py-2 text-xs leading-5 text-[#c5c6ca]">{benefit}</div>
                         ))}
                       </div>
+                    </div>
+                    <div className="mt-5 border border-[#44474a] bg-[#0c0e10] p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-[#e2e2e5]">Купить GLM за GRAM</div>
+                          <div className="mt-1 text-xs leading-5 text-[#8f9194]">
+                            Покупка GLM из банка GLAME: вы отправляете GRAM на кошелек GLAME, а GLM отправляется из рабочего кошелька в ваш подтвержденный TON-кошелек после проверки оплаты.
+                          </div>
+                          <div className="mt-2 text-xs leading-5 text-[#8f9194]">
+                            Курс распределения: 1 GLM = {primarySalePolicy?.rub_per_glm || 1} ₽ · GRAM/RUB: {primarySalePolicy?.ton_rub_rate || 'не задан'}{primarySalePolicy?.pricing_source ? ` (${primarySalePolicy.pricing_source})` : ''} · лимит {primarySalePolicy?.min_glm || 0}-{primarySalePolicy?.max_glm || 0} GLM
+                            {primarySalePolicy?.enabled ? '' : ' · сейчас отключено'}
+                          </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[minmax(140px,1fr)_auto]">
+                          <input
+                            value={buyGlmAmount}
+                            onChange={(event) => setBuyGlmAmount(event.target.value.replace(/[^\d]/g, ''))}
+                            placeholder="100"
+                            inputMode="numeric"
+                            className="min-h-[44px] border border-[#44474a] bg-[#121416] px-4 py-3 text-[#e2e2e5] outline-none"
+                          />
+                          <button
+                            disabled={glmToPointsLoading || !token.claim_wallet_address || !!pendingBuyGlmWithTonSale || !primarySalePolicy?.enabled}
+                            onClick={() => void submitBuyGlmWithTon()}
+                            className="inline-flex min-h-[44px] items-center justify-center gap-2 border border-[#e2e2e5] bg-[#e2e2e5] px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#171c1f] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Coins size={15} /> {glmToPointsLoading ? 'Создаем...' : 'Купить GLM'}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <Metric label="Получите" value={`${primarySaleAmount || 0} GLM`} sub="после GRAM settlement" />
+                        <Metric label="Сумма" value={`${primarySaleRubAmount || 0} ₽`} sub="по курсу GLAME" />
+                        <Metric label="К оплате" value={`${primarySaleTonAmount || 0} GRAM`} sub="по GRAM/RUB без комиссии кошелька" />
+                        <Metric label="Ваш GLM" value={onchainGlmLabel} sub={onchainStatusLabel} />
+                      </div>
+                      <div className="mt-3 border border-[#5a4b24] bg-[#19160b] p-3 text-xs leading-5 text-[#f1d982]">
+                        GLM не является инвестицией, обещанием роста цены, гарантией выкупа или ликвидности. Покупка нужна для utility-сценариев CryptoGLAME: статус, GLM Store, баллы и партнерские механики.
+                      </div>
+                      {pendingBuyGlmWithTonSale ? (
+                        <div className="mt-3 border border-[#5a4b24] bg-[#19160b] p-4">
+                          <div className="text-sm font-semibold text-[#f7e2a8]">
+                            Ожидает GRAM-оплаты: {pendingBuyGlmWithTonSale.amount} GLM = {pendingBuyGlmWithTonSale.rub_amount || pendingBuyGlmWithTonSale.amount} ₽ · к оплате {pendingBuyGlmWithTonSale.ton_amount || '—'} GRAM
+                          </div>
+                          <div className="mt-2 text-xs leading-5 text-[#f1d982]">
+                            Статус: {statusRu(pendingBuyGlmWithTonSale.ton_payment_status || pendingBuyGlmWithTonSale.status)}. После подтверждения GRAM-перевода GLM отправятся в ваш кошелек автоматически.
+                          </div>
+                          <button
+                            disabled={glmToPointsLoading || pendingBuyGlmWithTonSale.status !== 'pending_payment'}
+                            onClick={() => void confirmPendingBuyGlmWithTonPayment()}
+                            className="mt-3 inline-flex min-h-[40px] items-center justify-center gap-2 border border-[#e2e2e5] bg-[#e2e2e5] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#171c1f] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <WalletCards size={15} /> Подтвердить GRAM-оплату
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="mt-5 border border-[#44474a] bg-[#0c0e10] p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-[#e2e2e5]">Продать GLM в GLAME за GRAM</div>
+                          <div className="mt-1 text-xs leading-5 text-[#8f9194]">
+                            Пилотный exchange desk: вы переводите GLM в treasury GLAME, а GRAM-выплата закрывается оператором по текущим лимитам и наличию резерва.
+                          </div>
+                          <div className="mt-2 text-xs leading-5 text-[#8f9194]">
+                            Ориентир выплаты: {exchangeDeskPolicy?.payout_rub_per_glm || '—'} ₽ за 1 GLM · spread {exchangeDeskPolicy?.sell_spread_percent || '—'}% · GRAM/RUB: {exchangeDeskPolicy?.ton_rub_rate || 'не задан'} · лимит {exchangeDeskPolicy?.min_glm || 0}-{exchangeDeskPolicy?.max_glm || 0} GLM
+                            {exchangeDeskPolicy?.enabled ? '' : ' · сейчас отключено'}
+                          </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[minmax(140px,1fr)_auto]">
+                          <input
+                            value={sellGlmAmount}
+                            onChange={(event) => setSellGlmAmount(event.target.value.replace(/[^\d]/g, ''))}
+                            placeholder="100"
+                            inputMode="numeric"
+                            className="min-h-[44px] border border-[#44474a] bg-[#121416] px-4 py-3 text-[#e2e2e5] outline-none"
+                          />
+                          <button
+                            disabled={glmToPointsLoading || !token.claim_wallet_address || !!pendingSellGlmForTonExchange || !exchangeDeskPolicy?.enabled}
+                            onClick={() => void submitSellGlmForTon()}
+                            className="inline-flex min-h-[44px] items-center justify-center gap-2 border border-[#e2e2e5] bg-[#e2e2e5] px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#171c1f] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <RefreshCcw size={15} /> {glmToPointsLoading ? 'Создаем...' : 'Продать GLM'}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <Metric label="Отправите" value={`${exchangeDeskAmount || 0} GLM`} sub="из TON-кошелька" />
+                        <Metric label="Оценка" value={`${exchangeDeskRubAmount || 0} ₽`} sub="по текущему правилу GLAME" />
+                        <Metric label="К выплате" value={`${exchangeDeskGramAmount || 0} GRAM`} sub="после проверки GLM" />
+                        <Metric label="Ваш GLM" value={onchainGlmLabel} sub={onchainStatusLabel} />
+                      </div>
+                      <div className="mt-3 border border-[#5a4b24] bg-[#19160b] p-3 text-xs leading-5 text-[#f1d982]">
+                        Это не публичная гарантия выкупа и не фиксированная рыночная цена. GLAME может менять лимиты, spread, временно останавливать exchange desk и проверять операции вручную.
+                      </div>
+                      {pendingSellGlmForTonExchange ? (
+                        <div className="mt-3 border border-[#6d5b2f] bg-[#1d190f] p-3 text-sm text-[#f0d99c]">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <div className="text-sm font-semibold text-[#f7e2a8]">{pendingSellGlmForTonStatus?.title || 'Заявка GLM -> GRAM'}</div>
+                              <div className="mt-1 text-sm leading-5">{pendingSellGlmForTonStatus?.text}</div>
+                              <div className="mt-1 text-xs leading-5 text-[#d7c485]">
+                                Ожидаемая выплата: {pendingSellGlmForTonExchange.ton_amount || '—'} GRAM · сумма {pendingSellGlmForTonExchange.rub_amount || '—'} ₽.
+                              </div>
+                            </div>
+                            <span className="inline-flex shrink-0 border border-[#6d5b2f] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em]">
+                              {statusRu(pendingSellGlmForTonStatus?.code)}
+                            </span>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              disabled={glmToPointsLoading}
+                              onClick={() => void confirmPendingSellGlmForTonDeposit()}
+                              className="inline-flex min-h-[40px] items-center justify-center gap-2 border border-[#e2e2e5] bg-[#e2e2e5] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#171c1f] disabled:cursor-wait disabled:opacity-60"
+                            >
+                              <WalletCards size={15} /> {glmToPointsLoading ? 'Открываем кошелек...' : 'Отправить GLM'}
+                            </button>
+                            <button
+                              disabled={glmToPointsLoading}
+                              onClick={() => void cancelPendingSellGlmForTon()}
+                              className="inline-flex min-h-[40px] items-center justify-center gap-2 border border-[#6d5b2f] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f0d99c] disabled:cursor-wait disabled:opacity-60"
+                            >
+                              Отменить заявку
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="mt-5 border border-[#44474a] bg-[#0c0e10] p-4">
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -2486,23 +3277,37 @@ export default function ReferralPortalPage() {
                     </div>
                   </div>
                   <div className="border border-[#44474a] bg-[#121416] p-5">
-                    <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">GLM обмен внутри GLAME</div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">GLM внутри GLAME</div>
+                    <h3 className="mt-3 text-lg font-semibold text-[#e2e2e5]">Один клубный токен для онлайн-сценариев и баллов</h3>
                     <p className="mt-3 text-sm leading-6 text-[#c5c6ca]">
-                      {token.internal_value_rule?.disclaimer || 'Внутренняя ценность GLM применяется только по правилам программы и не является обещанием обратного выкупа.'}
+                      GLM хранится в вашем TON-кошельке. Для покупок в офлайн-магазине его можно перевести в бонусные баллы GLAME, а для онлайн-сценариев использовать напрямую там, где поддержана оплата GLM.
                     </p>
-                    <p className="mt-3 text-xs leading-5 text-[#8f9194]">
+                    <div className="mt-4 grid gap-3">
+                      <div className="flex gap-3 border border-[#333537] bg-[#0c0e10] p-4">
+                        <WalletCards className="mt-0.5 h-5 w-5 shrink-0 text-[#c9b56a]" />
+                        <div>
+                          <div className="text-sm font-semibold text-[#e2e2e5]">Фактический баланс в TON</div>
+                          <div className="mt-1 text-xs leading-5 text-[#8f9194]">Платформа показывает GLM из подключенного кошелька и ведет историю заявок, но не заменяет ваш кошелек.</div>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 border border-[#333537] bg-[#0c0e10] p-4">
+                        <RefreshCcw className="mt-0.5 h-5 w-5 shrink-0 text-[#c9b56a]" />
+                        <div>
+                          <div className="text-sm font-semibold text-[#e2e2e5]">Bridge с баллами GLAME</div>
+                          <div className="mt-1 text-xs leading-5 text-[#8f9194]">Баллы можно перевести в GLM, а GLM - обратно в баллы перед покупкой по правилам программы.</div>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 border border-[#333537] bg-[#0c0e10] p-4">
+                        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#c9b56a]" />
+                        <div>
+                          <div className="text-sm font-semibold text-[#e2e2e5]">Без инвестиционного обещания</div>
+                          <div className="mt-1 text-xs leading-5 text-[#8f9194]">GLAME не обещает рост цены, обратный выкуп, листинг, ликвидность или фиксированный внешний курс.</div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="mt-4 text-xs leading-5 text-[#8f9194]">
                       {token.expiry_policy?.description || 'GLM не сгорает по календарю. Бонусные баллы GLAME живут по текущим правилам и могут сгорать до перевода в GLM.'}
                     </p>
-                    <div className="mt-4">
-                      <DataTable
-                        headers={['Категория', 'Лимит', 'Правило']}
-                        rows={(token.acceptance_rules || []).map((rule) => [
-                          rule.category,
-                          `${rule.limit_percent}%`,
-                          rule.note,
-                        ])}
-                      />
-                    </div>
                   </div>
                 </div>
 
@@ -2560,18 +3365,18 @@ export default function ReferralPortalPage() {
                 </div>
 
                 <div className="mt-6 grid gap-4 lg:grid-cols-3">
-                  <StateCard icon={BadgeCheck} title="1 GLM = 1 ₽ внутри GLAME" text="Внутренний прием работает по правилам программы и лимитам списания, а не как обязательный выкуп за рубли." />
+                  <StateCard icon={BadgeCheck} title="1 GLM = 1 ₽ внутри GLAME" text="Это внутренний ориентир для разрешенных операций GLAME, а не рыночный курс, обязательный выкуп или рублевое обеспечение." />
                   <StateCard icon={RefreshCcw} title="GLM -> баллы GLAME" text="Для физического магазина GLM сначала переводится в баллы, а на кассе списываются уже баллы GLAME." />
-                  <StateCard icon={LockKeyhole} title="Без обещания цены" text="GLM может стать торгуемым TON Jetton, но рыночная цена определяется спросом, ликвидностью и utility." />
+                  <StateCard icon={LockKeyhole} title="Без обещания цены" text="GLAME не обещает рост цены, ликвидность, листинг, обратный выкуп или возможность продажи по фиксированному курсу." />
                 </div>
 
                 <div className="mt-6 border border-[#44474a] bg-[#121416] p-5">
                   <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">Правила запуска</div>
                   <div className="mt-4 grid gap-3 text-sm leading-6 text-[#c5c6ca] md:grid-cols-2">
                     <div>GLM появляется из реальных покупок, рефералов, бонусов и полезных действий, а не из пустой эмиссии.</div>
-                    <div>GLM можно будет передавать и обменивать только после отдельного legal/KYC/AML трека.</div>
-                    <div>GLAME не гарантирует рыночную цену, но развивает применение GLM в онлайн-покупках, сервисах и закрытых дропах.</div>
-                    <div>Лимиты списания защищают маржу: новые коллекции, основной ассортимент и clearance получают разные правила.</div>
+                    <div>Любые рыночные механики рассматриваются только после отдельного legal/security/KYC/AML решения.</div>
+                    <div>GLAME развивает применение GLM в онлайн-покупках, сервисах и закрытых дропах без обещаний цены или доходности.</div>
+                    <div>Правила обмена, лимиты и спорные операции фиксируются в журнале аудита и могут проверяться администратором.</div>
                   </div>
                 </div>
               </section>
@@ -2609,9 +3414,9 @@ export default function ReferralPortalPage() {
                                   <span>{item.original_file_name}</span>
                                   <span>{fileSizeRu(item.size)}</span>
                                 </div>
-                                <a href={item.file_url} download className="mt-4 inline-flex items-center justify-center gap-2 border border-[#e2e2e5] bg-[#e2e2e5] px-4 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[#171c1f]">
+                                <button onClick={() => void downloadMediaMaterial(item)} className="mt-4 inline-flex items-center justify-center gap-2 border border-[#e2e2e5] bg-[#e2e2e5] px-4 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-[#171c1f]">
                                   <Download size={16} /> Скачать
-                                </a>
+                                </button>
                               </div>
                             </article>
                           );
@@ -2619,6 +3424,62 @@ export default function ReferralPortalPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </section>
+            ) : null}
+
+            {view === 'support' ? (
+              <section>
+                <PageTitle title="Связь с GLAME" subtitle="Напишите вопрос по партнерской программе, начислениям, рефералам или CryptoGLAME. Ответ появится здесь и придет в Telegram/email, если канал подключен." />
+                <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+                  <div className="border border-[#44474a] bg-[#121416] p-5">
+                    <div className="text-xs uppercase tracking-[0.18em] text-[#8f9194]">Новое сообщение</div>
+                    <label className="mt-4 block">
+                      <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Тема</span>
+                      <input
+                        value={supportForm.subject}
+                        onChange={(event) => setSupportForm((prev) => ({ ...prev, subject: event.target.value }))}
+                        className="mt-2 w-full border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none"
+                        placeholder="Например, начисления"
+                      />
+                    </label>
+                    <label className="mt-4 block">
+                      <span className="text-xs uppercase tracking-[0.16em] text-[#8f9194]">Сообщение</span>
+                      <textarea
+                        value={supportForm.message}
+                        onChange={(event) => setSupportForm((prev) => ({ ...prev, message: event.target.value }))}
+                        className="mt-2 min-h-[180px] w-full resize-y border border-[#44474a] bg-[#0c0e10] px-4 py-3 text-[#e2e2e5] outline-none"
+                        placeholder="Опишите вопрос или проблему"
+                      />
+                    </label>
+                    {supportError ? <div className="mt-4 border border-[#7a3a3a] bg-[#1a1111] p-3 text-sm text-[#f0c7c7]">{supportError}</div> : null}
+                    {supportMessage ? <div className="mt-4 border border-[#43564a] bg-[#17251d] p-3 text-sm text-[#b9dec5]">{supportMessage}</div> : null}
+                    <button disabled={supportLoading} onClick={() => void submitSupportMessage()} className="mt-4 inline-flex w-full items-center justify-center gap-2 border border-[#e2e2e5] bg-[#e2e2e5] px-5 py-4 text-sm font-semibold uppercase tracking-[0.14em] text-[#171c1f] disabled:cursor-wait disabled:opacity-60">
+                      <Send size={16} /> {supportLoading ? 'Отправляем...' : 'Отправить'}
+                    </button>
+                  </div>
+                  <div className="border border-[#44474a] bg-[#121416] p-5">
+                    <div className="text-xs uppercase tracking-[0.18em] text-[#8f9194]">История</div>
+                    <div className="mt-4 space-y-3">
+                      {supportMessages.length === 0 ? (
+                        <div className="border border-[#333537] bg-[#0c0e10] p-5 text-sm text-[#8f9194]">Сообщений пока нет</div>
+                      ) : (
+                        supportMessages.map((item) => {
+                          const isAdmin = item.direction === 'admin_to_user';
+                          return (
+                            <article key={item.id} className={`border p-4 ${isAdmin ? 'border-[#43564a] bg-[#17251d]' : 'border-[#333537] bg-[#0c0e10]'}`}>
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-[0.14em] text-[#8f9194]">
+                                <span>{isAdmin ? 'GLAME' : 'Вы'} · {item.ticket_code}</span>
+                                <span>{dateRu(item.created_at)}</span>
+                              </div>
+                              {item.subject ? <div className="mt-3 text-sm font-semibold text-[#e2e2e5]">{item.subject}</div> : null}
+                              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-[#c5c6ca]">{item.message}</p>
+                            </article>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -2662,6 +3523,37 @@ export default function ReferralPortalPage() {
                       {telegramLoading ? 'Открываем...' : profile.telegram_notifications_enabled ? 'Переподключить' : 'Открыть Telegram'}
                     </button>
                   </div>
+                  {profile.telegram_chat_id ? (
+                    <div className="mt-5 grid gap-3 md:grid-cols-2">
+                      <label className="flex min-h-[48px] items-center gap-3 border border-[#333537] bg-[#0c0e10] px-4 py-3 text-sm text-[#c5c6ca]">
+                        <input
+                          type="checkbox"
+                          checked={!!profile.telegram_notifications_enabled}
+                          onChange={(event) => void updateTelegramPreferences({ notifications_enabled: event.target.checked })}
+                          disabled={telegramLoading}
+                          className="h-4 w-4"
+                        />
+                        Все Telegram-уведомления
+                      </label>
+                      {[
+                        ['partner_updates', 'Новости партнерской программы'],
+                        ['referrals', 'Рефералы и начисления'],
+                        ['crypto', 'CryptoGLAME операции'],
+                        ['marketing', 'Акции и рассылки'],
+                      ].map(([key, label]) => (
+                        <label key={key} className="flex min-h-[48px] items-center gap-3 border border-[#333537] bg-[#0c0e10] px-4 py-3 text-sm text-[#c5c6ca]">
+                          <input
+                            type="checkbox"
+                            checked={profile.telegram_notification_subscriptions?.[key as keyof NonNullable<PartnerProfile['telegram_notification_subscriptions']>] ?? true}
+                            onChange={(event) => void updateTelegramPreferences({ [key]: event.target.checked })}
+                            disabled={telegramLoading || !profile.telegram_notifications_enabled}
+                            className="h-4 w-4"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
                   {telegramError ? <div className="mt-4 border border-[#7a3a3a] bg-[#1a1111] p-3 text-sm text-[#f0c7c7]">{telegramError}</div> : null}
                   {telegramMessage ? <div className="mt-4 border border-[#43564a] bg-[#17251d] p-3 text-sm text-[#b9dec5]">{telegramMessage}</div> : null}
                 </div>
@@ -2690,16 +3582,6 @@ export default function ReferralPortalPage() {
               </section>
             ) : null}
 
-            {view === 'states' ? (
-              <section>
-                <PageTitle title="Состояния аккаунта" subtitle="Сценарии, которые портал показывает при модерации, ошибке 1С или блокировке." />
-                <div className="grid gap-4 md:grid-cols-3">
-                  <StateCard icon={RefreshCcw} title="На проверке" text="Данные отправлены, договор и контрагент создаются после проверки." />
-                  <StateCard icon={LockKeyhole} title="Выплаты недоступны" text="Для денежного режима нужен активный агентский договор в 1С." />
-                  <StateCard icon={AlertTriangle} title="Ошибка синхронизации" text={`Напишите в партнерскую программу: ${PROGRAM_EMAIL}. Технические логи партнеру не показываем.`} />
-                </div>
-              </section>
-            ) : null}
           </div>
         </main>
       </div>
@@ -2707,11 +3589,14 @@ export default function ReferralPortalPage() {
   );
 }
 
-function PageTitle({ title, subtitle }: { title: string; subtitle: string }) {
+function PageTitle({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
   return (
     <div className="mb-6 border border-[#44474a] bg-[#121416] p-5">
       <div className="text-xs uppercase tracking-[0.2em] text-[#8f9194]">GLAME Referral</div>
-      <h1 className="mt-3 text-3xl font-semibold">{title}</h1>
+      <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <h1 className="text-3xl font-semibold">{title}</h1>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
       <p className="mt-3 max-w-3xl text-sm leading-6 text-[#c5c6ca]">{subtitle}</p>
     </div>
   );

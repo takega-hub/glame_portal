@@ -148,6 +148,10 @@ export interface AppHomeSlide {
   title: string | null;
   subtitle: string | null;
   background_image_url: string | null;
+  background_mode: 'image' | 'color';
+  background_color_hex: string | null;
+  background_color_ral: string | null;
+  text_color_hex: string | null;
   image_url: string;
   image_action_link: string | null;
   image_action_type: string | null;
@@ -185,6 +189,12 @@ export interface AppPromotion {
   starts_at: string | null;
   ends_at: string | null;
   status: AppPublicationStatus;
+  discount_kind?: 'none' | 'cheapest_for_fixed_price_per_group';
+  is_cart_discount?: boolean;
+  group_size?: number;
+  discounted_items_per_group?: number;
+  discounted_item_price?: number;
+  discount_config?: Record<string, any> | null;
   updated_at: string | null;
 }
 
@@ -210,6 +220,7 @@ export interface AppStore {
   image_urls?: string[];
   latitude: number | null;
   longitude: number | null;
+  stock_store_external_id?: string | null;
   slug?: string | null;
   card_image_url?: string | null;
   hero_image_url?: string | null;

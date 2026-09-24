@@ -47,6 +47,43 @@ flutter build web --release --dart-define=API_BASE_URL=https://portal.glamejewel
 
 Артефакты будут в `mobile/glame_app/build/web`.
 
+### Важно: локальный storefront и рабочий домен - это разные публикации
+
+В текущей инфраструктуре `http://5.101.179.47:9092` раздаёт сборку прямо
+из `mobile/glame_app/build/web`. Это удобно для быстрой внутренней проверки,
+но **не обновляет** `https://app.glamejewelry.ru`.
+
+Рабочий домен nginx раздаёт отдельный каталог:
+
+```text
+/var/www/glame_app_web
+```
+
+Поэтому после изменения Flutter-кода для публикации на рабочем домене нужно
+использовать штатный скрипт из корня репозитория:
+
+```bash
+BUILD_ID=$(date +%Y%m%d%H%M%S) \
+API_BASE_URL=https://portal.glamejewelry.ru \
+PWA_STRATEGY=none \
+WEB_ROOT=/var/www/glame_app_web \
+scripts/deploy_flutter_web.sh
+```
+
+Скрипт собирает приложение, добавляет версию к bundle и синхронизирует
+`build/web` с web-root рабочего домена. Перезапуск `glame-stack.service`
+для этого шага не требуется.
+
+Проверка, что домен действительно выдаёт новую сборку:
+
+```bash
+curl -sS https://app.glamejewelry.ru/flutter_bootstrap.js \
+  | rg -o 'main\\.dart\\.js\\?v=[0-9]+'
+```
+
+Версия должна совпадать с `BUILD_ID` деплоя. Если на `9092` изменения есть,
+а на `app.glamejewelry.ru` нет, почти всегда пропущен именно этот deploy-шаг.
+
 Важно про обновления:
 - По умолчанию Flutter Web использует PWA service worker (`--pwa-strategy=offline-first`), и из-за кэша браузер может не сразу увидеть новую версию.
 - Для preview-окружения можно отключить PWA кэш:

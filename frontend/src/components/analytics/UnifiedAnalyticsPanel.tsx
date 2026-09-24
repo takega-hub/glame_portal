@@ -45,12 +45,24 @@ const normalizeStoreName = (name: string) =>
     .replace(/[^a-zа-я0-9]+/g, ' ')
     .trim();
 
+const storeDisplayName = (name: string) => {
+  const normalized = normalizeStoreName(name);
+  if (normalized.includes('меганом') || normalized.includes('meganom') || normalized.includes('мрия') || normalized.includes('mriya')) {
+    return 'МРИЯ';
+  }
+  return String(name || '').trim();
+};
+
 const storeAliasNames = (name: string) => {
   const normalized = normalizeStoreName(name);
   const aliases = new Set<string>([normalized]);
   if (normalized.includes('центрум') || normalized.includes('centrum')) aliases.add('centrum');
   if (normalized.includes('ялта') || normalized.includes('yalta')) aliases.add('yalta');
-  if (normalized.includes('меганом') || normalized.includes('meganom')) aliases.add('meganom');
+  if (normalized.includes('меганом') || normalized.includes('meganom') || normalized.includes('мрия') || normalized.includes('mriya')) {
+    aliases.add('meganom');
+    aliases.add('mriya');
+    aliases.add('мрия');
+  }
   return aliases;
 };
 
@@ -130,7 +142,10 @@ export function UnifiedAnalyticsPanel() {
     try {
       const { data } = await fetchJson<{ status?: string; stores: any[]; channels: string[] }>('/api/analytics/sources');
       const seenNames = new Set<string>();
-      const stores = (data.stores || []).filter((s) => {
+      const stores = (data.stores || []).map((s) => ({
+        ...s,
+        name: storeDisplayName(String(s?.name || "")),
+      })).filter((s) => {
         const name = String(s?.name || "").trim();
         const sourceId = String(s?.external_id || s?.id || "").trim();
 
@@ -175,7 +190,7 @@ export function UnifiedAnalyticsPanel() {
           date: d.date.split('T')[0],
           visitors: d.visitors ?? 0,
           stores: (d.stores || []).map(store => ({
-            name: String(store.name || '').trim(),
+            name: storeDisplayName(String(store.name || '').trim()),
             visitors: store.visitors ?? 0,
             sales: store.sales ?? 0,
             revenue: store.revenue ?? 0,
@@ -210,7 +225,10 @@ export function UnifiedAnalyticsPanel() {
         daily: Array<{ date: string; sources: Record<string, number> }>;
       }>(url);
       if (data.status === 'success') {
-        setLegend(data.legend || []);
+        setLegend((data.legend || []).map(item => ({
+          ...item,
+          name: storeDisplayName(item.name || item.id),
+        })));
         setDailySources(data.daily || []);
       } else {
         setLegend([]);
@@ -378,7 +396,7 @@ export function UnifiedAnalyticsPanel() {
           if (!matchesSelectedAlias) return;
         }
         const key = `store_visitors__${normalized.replace(/\s+/g, '_')}`;
-        const prev = series.get(key) || { key, name: store.name, visitors: 0 };
+        const prev = series.get(key) || { key, name: storeDisplayName(store.name), visitors: 0 };
         prev.visitors += store.visitors || 0;
         series.set(key, prev);
       });
@@ -461,7 +479,7 @@ export function UnifiedAnalyticsPanel() {
       const meta = legend.find(l => l.id === id);
       rows.set(id, {
         id,
-        name: meta?.name || availableStores.find(s => (s.external_id || s.id) === id)?.name || id,
+        name: storeDisplayName(meta?.name || availableStores.find(s => (s.external_id || s.id) === id)?.name || id),
         color: SOURCE_COLORS[idx % SOURCE_COLORS.length],
         revenue: 0,
         visitors: 0,
@@ -580,7 +598,7 @@ export function UnifiedAnalyticsPanel() {
     return (
       <div className="flex flex-wrap gap-2">
         {ids.map((id, idx) => {
-          const name = legend.find(l => l.id === id)?.name || id;
+          const name = storeDisplayName(legend.find(l => l.id === id)?.name || id);
           const active = selected.has(id);
           const color = SOURCE_COLORS[idx % SOURCE_COLORS.length];
           return (
@@ -767,7 +785,7 @@ export function UnifiedAnalyticsPanel() {
                     key={id}
                     yAxisId="left"
                     dataKey={id}
-                    name={legend.find(l => l.id === id)?.name || id}
+                    name={storeDisplayName(legend.find(l => l.id === id)?.name || id)}
                     stackId="revenue"
                     fill={SOURCE_COLORS[idx % SOURCE_COLORS.length]}
                     radius={idx === 0 ? [4,4,0,0] : [0,0,0,0]}
@@ -825,7 +843,7 @@ export function UnifiedAnalyticsPanel() {
                       />
                     </div>
                     <div className="mt-1 text-xs text-gray-500">
-                      {store.revenueShare.toFixed(1)}% выручки · {formatNumber(store.visitors)} посетителей · {formatCurrency(store.revenuePerVisitor)} / посетителя
+                      {store.revenueShare.toFixed(1)}% выручки · {formatNumber(store.visitors)} посетителей · {formatNumber(store.sales)} чеков · {formatCurrency(store.revenuePerVisitor)} / посетителя
                     </div>
                   </div>
                 ))}
@@ -856,10 +874,12 @@ export function UnifiedAnalyticsPanel() {
                       <div className="text-gray-500">₽ / входящего</div>
                       <div className="font-bold text-gray-900">{formatCurrency(store.revenuePerVisitor)}</div>
                     </div>
-                    <div>
-                      <div className="text-gray-500">Конверсия</div>
-                      <div className="font-bold text-gray-900">{store.conversion === null ? 'нет чеков' : `${store.conversion.toFixed(1)}%`}</div>
-                    </div>
+	                    <div>
+	                      <div className="text-gray-500">Конверсия</div>
+	                      <div className="font-bold text-gray-900">
+	                        {store.sales <= 0 ? 'нет чеков' : store.visitors <= 0 || store.conversion === null ? 'нет входящих' : `${store.conversion.toFixed(1)}%`}
+	                      </div>
+	                    </div>
                   </div>
                 </div>
               ))}

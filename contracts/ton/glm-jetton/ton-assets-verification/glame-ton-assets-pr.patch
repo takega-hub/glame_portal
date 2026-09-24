@@ -1,0 +1,31 @@
+From 14b2fc3723f0506016f7cfa690838b9fee26bfca Mon Sep 17 00:00:00 2001
+From: GLAME <dev@glame.local>
+Date: Tue, 7 Jul 2026 10:25:47 +0000
+Subject: [PATCH] Add GLAME Coin GLM jetton
+
+---
+ jettons/GLM.yaml | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+ create mode 100644 jettons/GLM.yaml
+
+diff --git a/jettons/GLM.yaml b/jettons/GLM.yaml
+new file mode 100644
+index 0000000..2e0fce5
+--- /dev/null
++++ b/jettons/GLM.yaml
+@@ -0,0 +1,12 @@
++name: GLAME Coin
++description: GLAME club utility token for CryptoGLAME rewards, GLM Store utility and bridge operations with real GLAME loyalty points.
++address: 0:5a1d2c08991065db9ad6802a46d62b3f83f7c1c80b7e753dfa00f2e7cb00bbbf
++symbol: GLM
++decimals: 9
++image: "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png"
++websites:
++  - "https://glamejewelry.ru"
++  - "https://partner.glamejewelry.ru/glm"
++  - "https://partner.glamejewelry.ru/referral"
++social:
++  - "https://t.me/glamejewelry"
+-- 
+2.43.0
+

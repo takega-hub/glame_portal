@@ -19,14 +19,16 @@ load_dotenv(find_dotenv(usecwd=True), override=False)
 # Получаем DATABASE_URL из переменных окружения
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Если DATABASE_URL не задан, используем значения по умолчанию
+# DATABASE_URL may be assembled from explicitly configured DB_* variables.
+# Never use deployable default credentials.
 if not DATABASE_URL:
-    DB_HOST = os.getenv("DB_HOST", "localhost")
-    # В docker-compose Postgres проброшен на 5433 (чтобы не конфликтовать с локальным postgres.exe)
+    DB_HOST = os.getenv("DB_HOST")
     DB_PORT = os.getenv("DB_PORT", "5433")
-    DB_USER = os.getenv("DB_USER", "glame_user")
-    DB_PASSWORD = os.getenv("DB_PASSWORD", "glame_password")
-    DB_NAME = os.getenv("DB_NAME", "glame_db")
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_NAME = os.getenv("DB_NAME")
+    if not all([DB_HOST, DB_USER, DB_PASSWORD, DB_NAME]):
+        raise RuntimeError("DATABASE_URL or DB_HOST, DB_USER, DB_PASSWORD and DB_NAME must be configured")
     
     # Формируем async URL через psycopg3 (postgresql+psycopg://)
     DATABASE_URL = f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"

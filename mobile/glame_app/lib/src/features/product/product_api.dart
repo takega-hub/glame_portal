@@ -25,7 +25,7 @@ class ProductApi {
   Future<List<dynamic>> getProductRecommendations(String id) async {
     final resp = await _dio.get(
       '/products/$id/recommendations',
-      queryParameters: const {'limit': 3},
+      queryParameters: const {'limit': 12},
     );
     return (resp.data as List<dynamic>?) ?? const [];
   }

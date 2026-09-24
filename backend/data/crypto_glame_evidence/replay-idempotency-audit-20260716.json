@@ -1,0 +1,34 @@
+{
+  "schema": "glame_replay_idempotency_audit_v1",
+  "status": "ok",
+  "checked_at": "2026-07-16T09:08:59.329347+00:00",
+  "checked": {
+    "bridge_operations": 15,
+    "transactions": 15,
+    "ton_tx_hashes": 11
+  },
+  "checks": [
+    {
+      "code": "ton_tx_hash_uniqueness",
+      "status": "ok",
+      "message": "0 duplicated TON tx hash groups across bridge/store/refund."
+    },
+    {
+      "code": "processed_bridge_has_ton_tx",
+      "status": "ok",
+      "message": "0 processed bridge operations do not have TON tx hash."
+    },
+    {
+      "code": "store_paid_has_ton_tx",
+      "status": "ok",
+      "message": "0 GLM Store paid orders do not have TON tx hash."
+    },
+    {
+      "code": "refund_sent_has_ton_tx",
+      "status": "ok",
+      "message": "0 TON refunds marked sent/verified without TON tx hash."
+    }
+  ],
+  "issues_count": 0,
+  "issues": []
+}

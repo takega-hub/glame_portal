@@ -12,8 +12,8 @@ export default function Home() {
   useEffect(() => {
     if (loading) return;
     if (!isAuthenticated) return void router.replace('/login');
-    router.replace(getFirstAllowedHref(user?.allowed_sections));
-  }, [loading, isAuthenticated, user?.allowed_sections, router]);
+    router.replace(getFirstAllowedHref(user?.allowed_sections, user?.role));
+  }, [loading, isAuthenticated, user?.allowed_sections, user?.role, router]);
 
   if (!isAuthenticated) {
     return null;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import * as XLSX from 'xlsx';
+import { downloadCsv, objectRowsToCsvRows } from '@/lib/csv-export';
 import { communication, BatchGenerateRequest, GenerateMessageResponse, apiClient, BatchGenerateAsyncResponse } from '@/lib/api';
 
 const STORAGE_KEY_CUSTOM_EVENTS = 'glame_custom_event_types';
@@ -330,26 +330,8 @@ export default function BatchMessageGenerator() {
       console.log('Exporting data:', data.length, 'messages');
 
       // Создаем рабочую книгу
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(data);
-
-      // Настраиваем ширину колонок
-      const colWidths = [
-        { wch: 20 }, // Номер телефона
-        { wch: 20 }, // Имя
-        { wch: 15 }, // Пол
-        { wch: 10 }, // Сегмент
-        { wch: 60 }, // Сообщение
-        { wch: 40 }  // CTA
-      ];
-      ws['!cols'] = colWidths;
-
-      // Добавляем лист в книгу
-      XLSX.utils.book_append_sheet(wb, ws, 'Сообщения');
-
-      // Сохраняем файл
-      const fileName = `messages_${new Date().toISOString().split('T')[0]}_${Date.now()}.xlsx`;
-      XLSX.writeFile(wb, fileName);
+      const fileName = `messages_${new Date().toISOString().split('T')[0]}_${Date.now()}.csv`;
+      downloadCsv(fileName, objectRowsToCsvRows(data));
       
       console.log('File exported successfully:', fileName);
       alert(`Файл ${fileName} успешно сохранен!`);

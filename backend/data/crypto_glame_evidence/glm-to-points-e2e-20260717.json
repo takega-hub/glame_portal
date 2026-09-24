@@ -1,0 +1,45 @@
+{
+  "evidence_type": "glm_to_points_e2e",
+  "checked_at": "2026-07-17T09:40:00Z",
+  "network": "mainnet",
+  "operation": {
+    "operation_id": "e2e0ef30-6a12-4e06-b700-e57da105c71b",
+    "transaction_id": "69d69c74-5843-4b5d-b03a-4e5980826504",
+    "direction": "glm_to_points",
+    "status": "processed",
+    "points_amount": 100,
+    "glm_amount": 100,
+    "ton_status": "tx_hash_present",
+    "ton_tx_hash": "v52LBvVF/glnzRbmgfZgu4pE7p8Xehz4+fOxuWJaPYo=",
+    "ton_deposit_verification_status": "verified",
+    "onec_status": "success",
+    "onec_document_id": "7c2d39b2-81c3-11f1-86ad-fa163e4cc04e"
+  },
+  "settlement": {
+    "runner": "run_glm_ton_settlement",
+    "glm_to_points_checked": 1,
+    "glm_to_points_processed": 1,
+    "glm_to_points_blocked": 0,
+    "glm_to_points_skipped": 0
+  },
+  "reconciliation": {
+    "checked_bridge_operations": 17,
+    "bridge_operations_total": 17,
+    "pending_count": 0,
+    "processed_count": 3,
+    "processed_points": 850,
+    "ton_sent_waiting_count": 0,
+    "onec_ready_count": 0,
+    "onec_failed_count": 0,
+    "issues_count": 0
+  },
+  "replay_idempotency": {
+    "status": "ok",
+    "issues_count": 0,
+    "checked": {
+      "bridge_operations": 17,
+      "transactions": 17,
+      "ton_tx_hashes": 13
+    }
+  }
+}

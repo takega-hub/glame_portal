@@ -1,0 +1,21 @@
+{
+  "name": "GLAME Coin",
+  "symbol": "GLM",
+  "decimals": "9",
+  "description": "GLAME club utility token for CryptoGLAME rewards, GLM Store utility and bridge operations with real GLAME loyalty points.",
+  "image": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png",
+  "websites": [
+    "https://glamejewelry.ru",
+    "https://partner.glamejewelry.ru/glm",
+    "https://partner.glamejewelry.ru/referral"
+  ],
+  "social": [
+    "https://t.me/glamejewelry"
+  ],
+  "policy": {
+    "token_policy": "https://partner.glamejewelry.ru/static/glm_policy/token-policy.md",
+    "risk_disclosure": "https://partner.glamejewelry.ru/static/glm_policy/risk-disclosure.md",
+    "bridge_rules": "https://partner.glamejewelry.ru/static/glm_policy/bridge-rules.md",
+    "audit_journal": "https://partner.glamejewelry.ru/api/referrals/glm-audit-hashes/public"
+  }
+}

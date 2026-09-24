@@ -1,0 +1,49 @@
+{
+  "evidence_type": "buy_glm_with_ton_e2e",
+  "checked_at": "2026-07-17T09:56:00Z",
+  "network": "mainnet",
+  "operation": {
+    "transaction_id": "0cc4cec7-da05-4444-996f-a5771b679d81",
+    "operation_id": "28995945-6939-4a7d-93c2-ba56ac536d7f",
+    "direction": "buy_glm_with_ton",
+    "status": "processed",
+    "operation_status": "processed",
+    "amount_glm": 150,
+    "rub_amount": "150.00",
+    "ton_amount": "1.281284850",
+    "ton_rub_rate": "117.07",
+    "ton_payment_status": "verified",
+    "ton_payment_tx_hash": "IOppmq/P2fuedTXOu3lLQLZN9vqtuU2Xcp2OpdiMnIw=",
+    "ton_payment_validation_status": "ton_payment_checks_passed",
+    "auto_transfer_status": "settled",
+    "auto_transfer_tx_hash": "2TkCmlWdkdbk9iXvC7WEaNdB5A5ZJA0XFwMlYY+uTZM=",
+    "operation_ton_status": "settled"
+  },
+  "settlement": {
+    "runner": "run_glm_ton_settlement",
+    "buy_glm_with_ton_checked": 1,
+    "buy_glm_with_ton_processed": 1,
+    "buy_glm_with_ton_blocked": 0,
+    "buy_glm_with_ton_skipped": 0
+  },
+  "auto_transfer": {
+    "runner": "run_glm_ton_auto_transfer",
+    "checked": 1,
+    "settled": 1,
+    "blocked": 0
+  },
+  "reconciliation": {
+    "pending_count": 0,
+    "processed_count": 3,
+    "issues_count": 0
+  },
+  "replay_idempotency": {
+    "status": "ok",
+    "issues_count": 0,
+    "checked": {
+      "bridge_operations": 18,
+      "transactions": 18,
+      "ton_tx_hashes": 14
+    }
+  }
+}

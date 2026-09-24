@@ -40,6 +40,39 @@ interface BirthdayCrmCard {
   status: string;
 }
 
+interface CustomerSyncStatus {
+  total_customers: number;
+  last_sync: string | null;
+  last_successful_full_sync?: {
+    completed_at?: string | null;
+    updated_at?: string | null;
+    source?: string | null;
+    task_id?: string | null;
+  } | null;
+  active_tasks: number;
+  errors: string[];
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function syncSourceLabel(source?: string | null) {
+  if (!source) return null;
+  if (source.includes('scheduled') || source.includes('nightly')) return 'Автоматическая';
+  if (source.includes('admin')) return 'Ручной запуск';
+  return source;
+}
+
 function AdminCustomersContent() {
   const { loading } = useAuth();
   const router = useRouter();
@@ -66,6 +99,9 @@ function AdminCustomersContent() {
   const [exporting, setExporting] = useState(false);
   const [birthdayCards, setBirthdayCards] = useState<BirthdayCrmCard[]>([]);
   const [birthdayLoading, setBirthdayLoading] = useState(false);
+  const [birthdayLoaded, setBirthdayLoaded] = useState(false);
+  const [showBirthdayModal, setShowBirthdayModal] = useState(false);
+  const [customerSyncStatus, setCustomerSyncStatus] = useState<CustomerSyncStatus | null>(null);
 
   // Определяем loadCustomers до использования в useEffect
   const loadCustomers = useCallback(async () => {
@@ -107,10 +143,20 @@ function AdminCustomersContent() {
         params: { days_ahead: 3, limit: 100 },
       });
       setBirthdayCards(response.data.cards || []);
+      setBirthdayLoaded(true);
     } catch (error) {
       console.error('Error loading birthday CRM:', error);
     } finally {
       setBirthdayLoading(false);
+    }
+  }, []);
+
+  const loadCustomerSyncStatus = useCallback(async () => {
+    try {
+      const response = await apiClient.get<CustomerSyncStatus>('/api/admin/1c/sync/status');
+      setCustomerSyncStatus(response.data);
+    } catch (error) {
+      console.error('Error loading customer sync status:', error);
     }
   }, []);
 
@@ -146,7 +192,7 @@ function AdminCustomersContent() {
   useEffect(() => {
     if (loading) return;
     loadStats();
-    loadBirthdayCrm();
+    loadCustomerSyncStatus();
     if (!segmentsLoadedRef.current) {
       loadSegments();
     }
@@ -191,6 +237,7 @@ function AdminCustomersContent() {
           setTimeout(() => {
             loadCustomers();
             loadStats();
+            loadCustomerSyncStatus();
             setSyncStatus(null);
             setShowSyncModal(false);
             setSyncTaskId(null);
@@ -276,6 +323,11 @@ function AdminCustomersContent() {
     }
   };
 
+  const openBirthdayModal = () => {
+    setShowBirthdayModal(true);
+    if (!birthdayLoaded && !birthdayLoading) void loadBirthdayCrm();
+  };
+
   const handleUpdateSegments = async () => {
     if (syncing) return;
     
@@ -344,44 +396,68 @@ function AdminCustomersContent() {
           <Link href="/" className="text-pink-600 hover:text-pink-700 mb-4 inline-block">
             ← Назад
           </Link>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Управление покупателями</h1>
-            <div className="flex gap-3">
-              <button
-                onClick={handleExportXlsx}
-                disabled={exporting || syncing}
-                className={`px-4 py-2 rounded-md font-medium ${
-                  exporting || syncing
-                    ? 'bg-gray-400 text-white cursor-not-allowed'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                }`}
-                title="Выгрузить список покупателей в XLSX (без истории покупок)"
-              >
-                {exporting ? 'Выгрузка...' : '📤 Выгрузить xlsx'}
-              </button>
-              <button
-                onClick={handleUpdateSegments}
-                disabled={syncing}
-                className={`px-4 py-2 rounded-md font-medium ${
-                  syncing
-                    ? 'bg-gray-400 text-white cursor-not-allowed'
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-                title="Обновить сегменты для всех покупателей"
-              >
-                {syncing ? 'Обновление...' : '🏷️ Обновить сегменты'}
-              </button>
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className={`px-4 py-2 rounded-md font-medium ${
-                  syncing
-                    ? 'bg-gray-400 text-white cursor-not-allowed'
-                    : 'bg-pink-600 text-white hover:bg-pink-700'
-                }`}
-              >
-                {syncing ? 'Синхронизация...' : '🔄 Синхронизация с 1С'}
-              </button>
+            <div className="flex flex-col items-stretch gap-2 lg:items-end">
+              <div className="rounded-md border border-gray-200 bg-white px-3 py-2 text-left shadow-sm lg:text-right">
+                <div className="text-xs text-gray-500">Последняя успешная полная синхронизация</div>
+                <div className="mt-0.5 text-sm font-semibold text-gray-900">
+                  {formatDateTime(customerSyncStatus?.last_successful_full_sync?.completed_at) || 'Не фиксировалась'}
+                </div>
+                {customerSyncStatus?.last_successful_full_sync?.completed_at && (
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    {syncSourceLabel(customerSyncStatus.last_successful_full_sync.source)}
+                  </div>
+                )}
+                {!customerSyncStatus?.last_successful_full_sync?.completed_at && customerSyncStatus?.last_sync && (
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    Последнее обновление записей: {formatDateTime(customerSyncStatus.last_sync)}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-3 lg:justify-end">
+                <button
+                  onClick={handleExportXlsx}
+                  disabled={exporting || syncing}
+                  className={`px-4 py-2 rounded-md font-medium ${
+                    exporting || syncing
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                  title="Выгрузить список покупателей в XLSX (без истории покупок)"
+                >
+                  {exporting ? 'Выгрузка...' : '📤 Выгрузить xlsx'}
+                </button>
+                <button
+                  onClick={handleUpdateSegments}
+                  disabled={syncing}
+                  className={`px-4 py-2 rounded-md font-medium ${
+                    syncing
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                  title="Обновить сегменты для всех покупателей"
+                >
+                  {syncing ? 'Обновление...' : '🏷️ Обновить сегменты'}
+                </button>
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className={`px-4 py-2 rounded-md font-medium ${
+                    syncing
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-pink-600 text-white hover:bg-pink-700'
+                  }`}
+                >
+                  {syncing ? 'Синхронизация...' : '🔄 Синхронизация с 1С'}
+                </button>
+                <button
+                  onClick={openBirthdayModal}
+                  className="px-4 py-2 rounded-md font-medium bg-white text-pink-700 border border-pink-200 hover:bg-pink-50"
+                >
+                  🎂 Дни рождения
+                </button>
+              </div>
             </div>
           </div>
           {syncStatus && (
@@ -438,74 +514,6 @@ function AdminCustomersContent() {
             </div>
           </div>
         )}
-
-        {/* Birthday CRM */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8 border border-pink-100">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Birthday CRM: ближайшие 3 дня</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Карточки формируются по реальным чекам: сопутствующие материалы исключены, чеки клиента в течение 1 часа объединяются. Отправка клиентам не выполняется — это черновики для менеджера.
-              </p>
-            </div>
-            <button
-              onClick={loadBirthdayCrm}
-              disabled={birthdayLoading}
-              className="px-3 py-2 text-sm rounded-md border border-pink-200 text-pink-700 hover:bg-pink-50 disabled:opacity-50"
-            >
-              {birthdayLoading ? 'Обновление...' : 'Обновить'}
-            </button>
-          </div>
-          {birthdayCards.length === 0 ? (
-            <div className="text-sm text-gray-500 bg-gray-50 rounded-md px-4 py-3">
-              {birthdayLoading ? 'Загружаем карточки...' : 'Нет клиентов с днем рождения в ближайшие 3 дня.'}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {birthdayCards.map((card) => (
-                <div key={card.customer_id} className="rounded-lg border border-pink-100 bg-pink-50/40 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Link href={`/admin/customers/${card.customer_id}`} className="font-semibold text-gray-900 hover:text-pink-700">
-                        {card.full_name || card.phone || 'Клиент'}
-                      </Link>
-                      <div className="text-xs text-gray-500 mt-1">
-                        ДР: {card.next_birthday ? new Date(card.next_birthday).toLocaleDateString('ru-RU') : '—'} · через {card.days_until_birthday} дн.
-                      </div>
-                    </div>
-                    <span className="px-2 py-1 rounded-full text-xs font-semibold bg-white text-pink-700 border border-pink-200">
-                      {card.crm_segment}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 mt-4 text-xs">
-                    <div className="bg-white rounded p-2">
-                      <div className="text-gray-500">Реальные чеки</div>
-                      <div className="font-semibold text-gray-900">{card.real_receipts_count}</div>
-                    </div>
-                    <div className="bg-white rounded p-2">
-                      <div className="text-gray-500">Сумма</div>
-                      <div className="font-semibold text-gray-900">{(card.real_total_spent / 100).toLocaleString('ru-RU')} ₽</div>
-                    </div>
-                    <div className="bg-white rounded p-2">
-                      <div className="text-gray-500">Средний чек</div>
-                      <div className="font-semibold text-gray-900">{(card.average_receipt / 100).toLocaleString('ru-RU')} ₽</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 text-sm">
-                    <div className="font-medium text-gray-900">{card.recommended_bonus.title}</div>
-                    <div className="text-gray-600">{card.recommended_bonus.description}</div>
-                  </div>
-                  <div className="mt-3 rounded-md bg-white p-3 text-sm text-gray-700 whitespace-pre-wrap">
-                    {card.draft_message}
-                  </div>
-                  <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1">
-                    Статус: черновик, автоотправка выключена. Бонус требует ручного подтверждения.
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
         {/* Фильтры */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -759,6 +767,83 @@ function AdminCustomersContent() {
           </div>
         )}
       </div>
+
+      {/* Birthday CRM is loaded only when the manager asks to see it. */}
+      {showBirthdayModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="birthday-crm-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowBirthdayModal(false);
+          }}
+        >
+          <div className="flex max-h-[90vh] w-full max-w-6xl flex-col rounded-lg bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
+              <div>
+                <h2 id="birthday-crm-title" className="text-xl font-semibold text-gray-900">Birthday CRM: ближайшие 3 дня</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  Карточки формируются по реальным чекам; подарок определяется по условиям ДР-программы.
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  onClick={() => void loadBirthdayCrm()}
+                  disabled={birthdayLoading}
+                  className="rounded-md border border-pink-200 px-3 py-2 text-sm text-pink-700 hover:bg-pink-50 disabled:opacity-50"
+                >
+                  {birthdayLoading ? 'Обновление...' : 'Обновить'}
+                </button>
+                <button
+                  onClick={() => setShowBirthdayModal(false)}
+                  className="px-2 text-2xl leading-none text-gray-400 hover:text-gray-600"
+                  aria-label="Закрыть"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              {birthdayCards.length === 0 ? (
+                <div className="rounded-md bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                  {birthdayLoading ? 'Загружаем карточки...' : 'Нет клиентов с днем рождения в ближайшие 3 дня.'}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {birthdayCards.map((card) => (
+                    <div key={card.customer_id} className="rounded-lg border border-pink-100 bg-pink-50/40 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <Link href={`/admin/customers/${card.customer_id}`} className="font-semibold text-gray-900 hover:text-pink-700">
+                            {card.full_name || card.phone || 'Клиент'}
+                          </Link>
+                          <div className="mt-1 text-xs text-gray-500">
+                            ДР: {card.next_birthday ? new Date(card.next_birthday).toLocaleDateString('ru-RU') : '—'} · через {card.days_until_birthday} дн.
+                          </div>
+                        </div>
+                        <span className="rounded-full border border-pink-200 bg-white px-2 py-1 text-xs font-semibold text-pink-700">
+                          {card.crm_segment}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                        <div className="rounded bg-white p-2"><div className="text-gray-500">Реальные чеки</div><div className="font-semibold text-gray-900">{card.real_receipts_count}</div></div>
+                        <div className="rounded bg-white p-2"><div className="text-gray-500">Сумма</div><div className="font-semibold text-gray-900">{(card.real_total_spent / 100).toLocaleString('ru-RU')} ₽</div></div>
+                        <div className="rounded bg-white p-2"><div className="text-gray-500">Средний чек</div><div className="font-semibold text-gray-900">{(card.average_receipt / 100).toLocaleString('ru-RU')} ₽</div></div>
+                      </div>
+                      <div className="mt-3 text-sm"><div className="font-medium text-gray-900">{card.recommended_bonus.title}</div><div className="text-gray-600">{card.recommended_bonus.description}</div></div>
+                      <div className="mt-3 whitespace-pre-wrap rounded-md bg-white p-3 text-sm text-gray-700">{card.draft_message}</div>
+                      <div className="mt-3 rounded border border-amber-100 bg-amber-50 px-2 py-1 text-xs text-amber-700">
+                        Статус: подарок рассчитан автоматически. Начисление бонусов или выпуск сертификата выполняется системой по условиям ДР-программы.
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модальное окно синхронизации */}
       {showSyncModal && (

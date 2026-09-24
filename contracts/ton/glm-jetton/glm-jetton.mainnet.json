@@ -7,7 +7,7 @@
     "decimals": 9,
     "description": "GLAME club utility token for CryptoGLAME online rewards, bridge operations and GLM Store utility.",
     "image": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png",
-    "metadata_url": "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json"
+    "metadata_url": "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata-mainnet-v2.json"
   },
   "policy": {
     "no_investment_promise": true,
@@ -50,6 +50,30 @@
       "verified_total_supply_glm": "10000000",
       "verified_destination_balance_glm": "10000000",
       "note": "Initial 10000000 GLM mainnet bank mint verified on-chain through Toncenter: total supply and treasury Jetton wallet balance match."
+    }
+  ],
+  "metadata_updates": [
+    {
+      "status": "onchain_verified",
+      "metadata_url": "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json",
+      "image_url": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png",
+      "jetton_master_address": "EQBaHSwImRBl25rWgCpG1is_g_fByAt-dT36APLnywC7v2fl",
+      "admin_address": "UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq",
+      "tx_hash": "/BG9GiyynGQOQNqZx48Fx9YKoBPdzoIULZYGGF7JV4c=",
+      "recorded_at": "2026-07-07T11:59:58.897Z",
+      "verified_at": "2026-07-07T12:00:23Z",
+      "note": "Mainnet GLM Jetton master content URI updated to production metadata URL."
+    },
+    {
+      "status": "onchain_verified",
+      "metadata_url": "https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata-mainnet-v2.json",
+      "image_url": "https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png",
+      "jetton_master_address": "EQBaHSwImRBl25rWgCpG1is_g_fByAt-dT36APLnywC7v2fl",
+      "admin_address": "UQAY9ub55iQ3U9G8r6h74Mk2GPaNVy8YkJSHkGyV1-Hn_7Dq",
+      "tx_hash": "aW+OvAAOf94aw3q5sDuuLIvg2zzvZgyOishx/LPco1o=",
+      "recorded_at": "2026-07-07T12:20:25.135Z",
+      "verified_at": "2026-07-07T12:20:09Z",
+      "note": "Mainnet GLM Jetton master content URI updated to versioned production metadata URL after TonAPI cache refresh issue."
     }
   ]
 }

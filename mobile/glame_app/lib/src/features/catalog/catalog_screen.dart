@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/glame_theme.dart';
+import '../../core/layout/glame_layout.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/formatters/rub.dart';
 import '../auth/auth_controller.dart';
@@ -16,6 +17,13 @@ import '../product/product_providers.dart';
 import '../wishlist/wishlist_controller.dart';
 
 const double _glameMediaAspectRatio = 3 / 4;
+
+Future<void> showCatalogSearchDialog(BuildContext context) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => const _CatalogSearchDialog(),
+  );
+}
 
 class CatalogScreen extends ConsumerStatefulWidget {
   final String title;
@@ -45,18 +53,12 @@ class CatalogScreen extends ConsumerStatefulWidget {
 
 class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   final scroll = ScrollController();
-  final searchController = TextEditingController();
-  Timer? _searchDebounce;
   String? selectedCategory;
 
   @override
   void initState() {
     super.initState();
     selectedCategory = _normalizeCategory(widget.initialCategory);
-    final initialSearch = (widget.initialSearch ?? '').trim();
-    if (initialSearch.isNotEmpty) {
-      searchController.text = initialSearch;
-    }
     scroll.addListener(() {
       if (!scroll.hasClients) return;
       final maxScroll = scroll.position.maxScrollExtent;
@@ -101,7 +103,6 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     final nextSearch = (widget.initialSearch ?? '').trim();
     setState(() {
       selectedCategory = next;
-      searchController.text = nextSearch;
     });
     ref
         .read(catalogControllerProvider.notifier)
@@ -116,8 +117,6 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
   @override
   void dispose() {
     scroll.dispose();
-    _searchDebounce?.cancel();
-    searchController.dispose();
     super.dispose();
   }
 
@@ -143,102 +142,117 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
         'SALE',
       ],
     );
-    final isWideScreen = MediaQuery.of(context).size.width > 768;
+    final isWideScreen = GlameLayout.isTablet(context);
+    final gutter = GlameLayout.horizontalGutter(context);
+    // Keep the established 16px phone grid geometry; larger viewports use
+    // the shared responsive gutter.
+    final gridGutter = isWideScreen ? gutter : 16.0;
+    final catalogColumns = GlameLayout.catalogColumns(context);
 
     return Scaffold(
       backgroundColor: GlameColors.nearBlack,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(context),
-            _buildSearchAndActions(context, catalog, characteristicsAsync),
-            _buildCategoryTabs(categories, isWideScreen),
-            Expanded(
-              child: RefreshIndicator(
-                color: GlameColors.whiteGlame,
-                onRefresh: controller.refresh,
-                child: CustomScrollView(
-                  controller: scroll,
-                  slivers: [
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                        isWideScreen ? 40 : 16,
-                        18,
-                        isWideScreen ? 40 : 16,
-                        28,
-                      ),
-                      sliver: SliverGrid(
-                        delegate: SliverChildBuilderDelegate((context, i) {
-                          final item = groupedItems[i];
-                          return _ProductCardDarkrain(
-                            key: ValueKey(
-                              (item['id'] as String?) ??
-                                  (item['article'] as String?) ??
-                                  '$i',
-                            ),
-                            item: item,
-                            pickMode: widget.pickLookBase,
-                            onPick: widget.pickLookBase
-                                ? (product) => context.pop(product)
-                                : null,
-                          );
-                        }, childCount: groupedItems.length),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: catalog.oneColumn
-                              ? 1
-                              : (isWideScreen ? 4 : 2),
-                          mainAxisSpacing: isWideScreen ? 30 : 22,
-                          crossAxisSpacing: isWideScreen ? 24 : 14,
-                          childAspectRatio: catalog.oneColumn
-                              ? (isWideScreen ? 2.25 : 0.92)
-                              : widget.pickLookBase
-                              ? (isWideScreen ? 0.56 : 0.48)
-                              : (isWideScreen ? 0.62 : 0.52),
+        child: GlameContentWidth(
+          child: Column(
+            children: [
+              _buildHeader(context, catalog, characteristicsAsync),
+              _buildCatalogControls(
+                context,
+                categories,
+                catalog,
+                characteristicsAsync,
+                isWideScreen,
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  color: GlameColors.whiteGlame,
+                  onRefresh: controller.refresh,
+                  child: CustomScrollView(
+                    controller: scroll,
+                    slivers: [
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          gridGutter,
+                          isWideScreen ? 28 : 18,
+                          gridGutter,
+                          isWideScreen ? 44 : 28,
+                        ),
+                        sliver: SliverGrid(
+                          delegate: SliverChildBuilderDelegate((context, i) {
+                            final item = groupedItems[i];
+                            return _ProductCardDarkrain(
+                              key: ValueKey(
+                                (item['id'] as String?) ??
+                                    (item['article'] as String?) ??
+                                    '$i',
+                              ),
+                              item: item,
+                              pickMode: widget.pickLookBase,
+                              onPick: widget.pickLookBase
+                                  ? (product) => context.pop(product)
+                                  : null,
+                            );
+                          }, childCount: groupedItems.length),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: catalog.oneColumn
+                                    ? 1
+                                    : catalogColumns,
+                                mainAxisSpacing: isWideScreen ? 30 : 22,
+                                crossAxisSpacing: isWideScreen ? 24 : 14,
+                                childAspectRatio: catalog.oneColumn
+                                    ? (isWideScreen ? 2.25 : 0.92)
+                                    : widget.pickLookBase
+                                    ? (isWideScreen ? 0.56 : 0.48)
+                                    : (isWideScreen ? 0.62 : 0.52),
+                              ),
                         ),
                       ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.all(isWideScreen ? 40 : 16),
-                        child: Column(
-                          children: [
-                            if (catalog.loading)
-                              const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 20),
-                                  child: CircularProgressIndicator(
-                                    color: GlameColors.whiteGlame,
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.all(gridGutter),
+                          child: Column(
+                            children: [
+                              if (catalog.loading)
+                                const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 20),
+                                    child: CircularProgressIndicator(
+                                      color: GlameColors.whiteGlame,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            const SizedBox.shrink(),
-                          ],
+                              const SizedBox.shrink(),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    final isWideScreen = MediaQuery.of(context).size.width > 768;
+  Widget _buildHeader(
+    BuildContext context,
+    CatalogState catalog,
+    AsyncValue<Map<String, dynamic>> characteristicsAsync,
+  ) {
+    final isWideScreen = GlameLayout.isTablet(context);
+    final gutter = GlameLayout.horizontalGutter(context);
+    final controller = ref.read(catalogControllerProvider.notifier);
+    final activeFilters = _activeFiltersCount(catalog);
     final title = widget.pickLookBase ? 'ВЫБЕРИТЕ ОСНОВУ' : widget.title;
     final storeTitle = _normalizeValue(widget.initialStoreTitle);
     final backRoute = _normalizeValue(widget.storeBackRoute);
     final showBack = widget.pickLookBase || backRoute != null;
     return Container(
-      padding: EdgeInsets.fromLTRB(
-        isWideScreen ? 40 : 20,
-        24,
-        isWideScreen ? 40 : 20,
-        16,
-      ),
+      padding: EdgeInsets.fromLTRB(gutter, 24, gutter, 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -265,14 +279,36 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: isWideScreen ? 44 : 36,
-                    fontWeight: FontWeight.w400,
-                    height: 0.95,
-                    color: GlameColors.whiteGlame,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: isWideScreen ? 44 : 36,
+                          fontWeight: FontWeight.w400,
+                          height: 0.95,
+                          color: GlameColors.whiteGlame,
+                        ),
+                      ),
+                    ),
+                    _CatalogControlIcon(
+                      tooltip: 'Фильтры',
+                      icon: Icons.tune,
+                      badge: activeFilters,
+                      selected: activeFilters > 0,
+                      onTap: () =>
+                          _openFilters(context, catalog, characteristicsAsync),
+                    ),
+                    const SizedBox(width: 8),
+                    _CatalogControlIcon(
+                      tooltip: catalog.oneColumn ? 'Плитка' : 'Список',
+                      icon: catalog.oneColumn
+                          ? Icons.grid_view
+                          : Icons.view_agenda,
+                      onTap: controller.toggleLayout,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Container(width: 54, height: 1, color: GlameColors.steelGray),
@@ -297,145 +333,39 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     );
   }
 
-  Widget _buildSearchAndActions(
+  Widget _buildCatalogControls(
     BuildContext context,
+    List<String> categories,
     CatalogState catalog,
     AsyncValue<Map<String, dynamic>> characteristicsAsync,
+    bool isWideScreen,
   ) {
-    final isWideScreen = MediaQuery.of(context).size.width > 768;
-    final controller = ref.read(catalogControllerProvider.notifier);
-    final activeFilters = _activeFiltersCount(catalog);
+    final gutter = GlameLayout.horizontalGutter(context);
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        isWideScreen ? 40 : 20,
-        0,
-        isWideScreen ? 40 : 20,
-        12,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: searchController,
-                  textInputAction: TextInputAction.search,
-                  onChanged: (value) {
-                    _searchDebounce?.cancel();
-                    _searchDebounce = Timer(
-                      const Duration(milliseconds: 350),
-                      () {
-                        ref
-                            .read(catalogControllerProvider.notifier)
-                            .setSearch(value);
-                      },
-                    );
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Поиск по каталогу',
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon: catalog.search == null
-                        ? null
-                        : IconButton(
-                            tooltip: 'Очистить',
-                            onPressed: () {
-                              _searchDebounce?.cancel();
-                              searchController.clear();
-                              ref
-                                  .read(catalogControllerProvider.notifier)
-                                  .setSearch(null);
-                            },
-                            icon: const Icon(Icons.close, size: 18),
-                          ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  IconButton.outlined(
-                    tooltip: 'Фильтры',
-                    onPressed: () =>
-                        _openFilters(context, catalog, characteristicsAsync),
-                    style: IconButton.styleFrom(
-                      foregroundColor: GlameColors.whiteGlame,
-                      side: BorderSide(
-                        color: activeFilters > 0
-                            ? GlameColors.whiteGlame
-                            : GlameColors.borderGray,
-                      ),
-                      shape: const RoundedRectangleBorder(),
-                    ),
-                    icon: const Icon(Icons.tune),
-                  ),
-                  if (activeFilters > 0)
-                    Positioned(
-                      top: -3,
-                      right: -3,
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        alignment: Alignment.center,
-                        decoration: const BoxDecoration(
-                          color: GlameColors.whiteGlame,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          activeFilters.toString(),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: GlameColors.nearBlack,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 10),
-              IconButton.outlined(
-                tooltip: catalog.oneColumn ? 'Плитка' : 'Список',
-                onPressed: () {
-                  ref.read(catalogControllerProvider.notifier).toggleLayout();
-                },
-                style: IconButton.styleFrom(
-                  foregroundColor: GlameColors.whiteGlame,
-                  side: const BorderSide(color: GlameColors.borderGray),
-                  shape: const RoundedRectangleBorder(),
-                ),
-                icon: Icon(
-                  catalog.oneColumn ? Icons.grid_view : Icons.view_agenda,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          InkWell(
-            onTap: () => controller.setInStockOnly(!catalog.inStockOnly),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: Checkbox(
-                    value: catalog.inStockOnly,
-                    onChanged: (value) =>
-                        controller.setInStockOnly(value ?? false),
-                    activeColor: GlameColors.whiteGlame,
-                    checkColor: GlameColors.nearBlack,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Text(
-                  'В наличии',
-                  style: TextStyle(fontSize: 13, color: GlameColors.whiteGlame),
-                ),
-              ],
-            ),
-          ),
-        ],
+      padding: EdgeInsets.fromLTRB(gutter, 0, gutter, 12),
+      child: SizedBox(
+        height: 48,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: categories.length,
+          separatorBuilder: (_, _) => SizedBox(width: isWideScreen ? 12 : 8),
+          itemBuilder: (context, index) {
+            final label = categories[index];
+            final isActive =
+                (index == 0 && selectedCategory == null) ||
+                selectedCategory == label;
+            return _CatalogControlChip(
+              label: label.toUpperCase(),
+              selected: isActive,
+              onTap: () {
+                setState(() => selectedCategory = index == 0 ? null : label);
+                ref
+                    .read(catalogControllerProvider.notifier)
+                    .setCategory(index == 0 ? null : label);
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -568,66 +498,6 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
     return count;
   }
 
-  Widget _buildCategoryTabs(List<String> categories, bool isWideScreen) {
-    return Container(
-      padding: EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: GlameColors.borderGray.withAlpha(130)),
-        ),
-      ),
-      child: SizedBox(
-        height: 36,
-        child: ListView.separated(
-          padding: EdgeInsets.symmetric(horizontal: isWideScreen ? 40 : 20),
-          scrollDirection: Axis.horizontal,
-          itemCount: categories.length,
-          separatorBuilder: (_, _) => SizedBox(width: isWideScreen ? 32 : 16),
-          itemBuilder: (context, i) {
-            final label = categories[i];
-            final isActive =
-                (i == 0 && selectedCategory == null) ||
-                selectedCategory == label;
-            return InkWell(
-              onTap: () {
-                setState(() {
-                  selectedCategory = i == 0 ? null : label;
-                });
-                ref
-                    .read(catalogControllerProvider.notifier)
-                    .setCategory(i == 0 ? null : label);
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: isActive
-                        ? GlameColors.whiteGlame
-                        : GlameColors.borderGray.withAlpha(120),
-                  ),
-                  color: isActive ? GlameColors.whiteGlame : Colors.transparent,
-                ),
-                child: Center(
-                  child: Text(
-                    label.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 11,
-                      letterSpacing: 0.8,
-                      fontWeight: isActive ? FontWeight.w500 : FontWeight.w400,
-                      color: isActive
-                          ? GlameColors.nearBlack
-                          : GlameColors.coldLightGray,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
   List<Map<String, dynamic>> _groupCatalogItems(
     List<Map<String, dynamic>> items,
   ) {
@@ -729,10 +599,10 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       namesByLower.putIfAbsent(name.toLowerCase(), () => name);
     }
 
-    // Customer catalog must expose only product categories here.
-    // Brand/line values (AGafi, Antura, Eva Rites, etc.) and marketing
-    // collections (NEW/SALE) belong to filters or dedicated collection flows.
+    // Customer catalog exposes product categories and the 1C-managed
+    // "Новинки" section. Brand and line values stay out of quick filters.
     const customerCategories = [
+      'Новинки',
       'Серьги',
       'Кольца',
       'Колье',
@@ -745,6 +615,204 @@ class _CatalogScreenState extends ConsumerState<CatalogScreen> {
       result.add(namesByLower[label.toLowerCase()] ?? label);
     }
     return result;
+  }
+}
+
+class _CatalogControlChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CatalogControlChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: selected ? GlameColors.whiteGlame : Colors.transparent,
+            border: Border.all(
+              color: selected
+                  ? GlameColors.whiteGlame
+                  : GlameColors.borderGray.withAlpha(120),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 0.7,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected
+                      ? GlameColors.nearBlack
+                      : GlameColors.coldLightGray,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CatalogControlIcon extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final int badge;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CatalogControlIcon({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+    this.badge = 0,
+    this.selected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Tooltip(
+          message: tooltip,
+          child: Material(
+            color: selected ? GlameColors.whiteGlame : Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              child: SizedBox(
+                width: 36,
+                height: 36,
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: selected
+                      ? GlameColors.nearBlack
+                      : GlameColors.whiteGlame,
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (badge > 0)
+          Positioned(
+            top: -5,
+            right: -5,
+            child: Container(
+              width: 17,
+              height: 17,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: GlameColors.whiteGlame,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                badge.toString(),
+                style: const TextStyle(
+                  fontSize: 9,
+                  color: GlameColors.nearBlack,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _CatalogSearchDialog extends ConsumerStatefulWidget {
+  const _CatalogSearchDialog();
+
+  @override
+  ConsumerState<_CatalogSearchDialog> createState() =>
+      _CatalogSearchDialogState();
+}
+
+class _CatalogSearchDialogState extends ConsumerState<_CatalogSearchDialog> {
+  final _controller = TextEditingController();
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.text = ref.read(catalogControllerProvider).search ?? '';
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    _debounce?.cancel();
+    ref.read(catalogControllerProvider.notifier).setSearch(_controller.text);
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: GlameColors.nearBlack,
+      shape: const RoundedRectangleBorder(),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 540),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
+          child: Row(
+            children: [
+              const Icon(Icons.search, color: GlameColors.whiteGlame),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  cursorColor: GlameColors.nearBlack,
+                  onSubmitted: (_) => _submit(),
+                  onChanged: (value) {
+                    _debounce?.cancel();
+                    _debounce = Timer(
+                      const Duration(milliseconds: 350),
+                      () => ref
+                          .read(catalogControllerProvider.notifier)
+                          .setSearch(value),
+                    );
+                  },
+                  style: const TextStyle(color: GlameColors.nearBlack),
+                  decoration: const InputDecoration(
+                    hintText: 'Поиск по каталогу',
+                    hintStyle: TextStyle(color: GlameColors.steelGray),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Закрыть',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close, color: GlameColors.whiteGlame),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -951,9 +1019,7 @@ class _ProductCardDarkrain extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            isAvailable
-                ? 'В наличии: ${_formatStockAmount(totalStock)} шт.'
-                : 'Нет в наличии',
+            isAvailable ? 'В наличии' : 'Скоро в наличии',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -1031,11 +1097,6 @@ class _ProductCardDarkrain extends ConsumerWidget {
       return _asStockNumber(specs['quantity']) ?? 0;
     }
     return 0;
-  }
-
-  String _formatStockAmount(num value) {
-    if (value == value.roundToDouble()) return value.toInt().toString();
-    return value.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '');
   }
 
   int? _asInt(dynamic value) {

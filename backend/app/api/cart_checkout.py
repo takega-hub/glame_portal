@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import get_current_user, normalize_phone
@@ -18,6 +18,7 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
 from app.models.product import Product
+from app.models.app_promotion import AppPromotion
 from app.models.glame_token import GlameTokenAccount
 from app.models.referral import ReferralAttribution, ReferralCommission, ReferralProgramMember
 from app.models.user import User
@@ -28,7 +29,7 @@ from app.services.onec_user_sync_service import OneCUserSyncService
 from app.services.onec_order_xml_service import write_orders_xml_snapshot
 from app.services.referral_service import ReferralService
 from app.services.glame_token_service import GlameTokenService
-from app.services.yookassa_service import get_yookassa_service
+from app.services.yookassa_service import get_yookassa_service_for_db
 
 
 router = APIRouter()
@@ -264,10 +265,32 @@ async def _save_preferred_delivery(
     if not isinstance(delivery, dict) or not delivery:
         return
     prefs = dict(current_user.preferences or {})
-    prefs["preferred_delivery"] = dict(delivery)
+    clean_delivery = dict(delivery)
+    save_to_profile = bool(clean_delivery.pop("save_to_profile", False))
+    prefs["preferred_delivery"] = clean_delivery
+    if save_to_profile:
+        addresses = prefs.get("delivery_addresses")
+        if not isinstance(addresses, list):
+            addresses = []
+        key = _delivery_identity_key(clean_delivery)
+        next_addresses = [
+            x for x in addresses
+            if not isinstance(x, dict) or _delivery_identity_key(x) != key
+        ]
+        next_addresses.insert(0, clean_delivery)
+        prefs["delivery_addresses"] = next_addresses[:12]
     current_user.preferences = prefs
     await db.commit()
     await db.refresh(current_user)
+
+
+def _delivery_identity_key(delivery: Dict[str, Any]) -> str:
+    method = str(delivery.get("method") or delivery.get("type") or "").strip().lower()
+    if method == "cdek":
+        method = "pvz"
+    if method == "pickup":
+        return f"pickup:{delivery.get('store_id') or delivery.get('store_name') or delivery.get('address')}"
+    return f"pvz:{delivery.get('pvz_code') or delivery.get('address')}"
 
 
 async def _get_or_create_cart(db: AsyncSession, user_id: UUID) -> Cart:
@@ -279,6 +302,99 @@ async def _get_or_create_cart(db: AsyncSession, user_id: UUID) -> Cart:
     await db.commit()
     await db.refresh(cart)
     return cart
+
+
+async def _active_cart_promotions(db: AsyncSession) -> List[AppPromotion]:
+    now = datetime.now(timezone.utc)
+    rows = (
+        await db.execute(
+            select(AppPromotion)
+            .where(AppPromotion.status == "published")
+            .where(AppPromotion.is_cart_discount == True)
+            .where(or_(AppPromotion.starts_at.is_(None), AppPromotion.starts_at <= now))
+            .where(or_(AppPromotion.ends_at.is_(None), AppPromotion.ends_at > now))
+        )
+    ).scalars().all()
+    return list(rows)
+
+
+def _calculate_fixed_price_group_discount(
+    promotion: AppPromotion,
+    lines: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    group_size = max(2, int(promotion.group_size or 3))
+    discounted_per_group = max(1, int(promotion.discounted_items_per_group or 1))
+    discounted_per_group = min(discounted_per_group, group_size - 1)
+    fixed_price = max(0, int(promotion.discounted_item_price or 0))
+
+    units: List[Dict[str, Any]] = []
+    for line in lines:
+        qty = max(0, int(line.get("quantity") or 0))
+        unit_price = max(0, int(line.get("unit_price") or 0))
+        for _ in range(qty):
+            units.append(
+                {
+                    "product_id": line.get("product_id"),
+                    "cart_item_id": line.get("cart_item_id"),
+                    "unit_price": unit_price,
+                }
+            )
+
+    discounted_units_count = (len(units) // group_size) * discounted_per_group
+    if discounted_units_count <= 0:
+        return {"amount": 0, "discounted_items": []}
+
+    cheapest_units = sorted(units, key=lambda x: int(x.get("unit_price") or 0))[
+        :discounted_units_count
+    ]
+    discounted_items = []
+    amount = 0
+    for unit in cheapest_units:
+        unit_price = int(unit.get("unit_price") or 0)
+        discount = max(0, unit_price - fixed_price)
+        if discount <= 0:
+            continue
+        amount += discount
+        discounted_items.append(
+            {
+                "product_id": unit.get("product_id"),
+                "cart_item_id": unit.get("cart_item_id"),
+                "unit_price": unit_price,
+                "discounted_price": fixed_price,
+                "discount_amount": discount,
+            }
+        )
+
+    return {"amount": amount, "discounted_items": discounted_items}
+
+
+async def _calculate_cart_promotion_discount(
+    db: AsyncSession,
+    lines: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    promotions = await _active_cart_promotions(db)
+    best: Optional[Dict[str, Any]] = None
+    for promotion in promotions:
+        if (promotion.discount_kind or "none") != "cheapest_for_fixed_price_per_group":
+            continue
+        calc = _calculate_fixed_price_group_discount(promotion, lines)
+        amount = int(calc.get("amount") or 0)
+        candidate = {
+            "id": str(promotion.id),
+            "title": promotion.title,
+            "discount_kind": promotion.discount_kind,
+            "amount": amount,
+            "group_size": int(promotion.group_size or 3),
+            "discounted_items_per_group": int(promotion.discounted_items_per_group or 1),
+            "discounted_item_price": int(promotion.discounted_item_price or 100),
+            "discounted_items": calc.get("discounted_items") or [],
+        }
+        if best is None or amount > int(best.get("amount") or 0):
+            best = candidate
+
+    if best is None or int(best.get("amount") or 0) <= 0:
+        return {"amount": 0, "applied_promotions": []}
+    return {"amount": int(best["amount"]), "applied_promotions": [best]}
 
 
 @router.get("/cart")
@@ -296,11 +412,20 @@ async def get_cart(
 
     resp_items = []
     subtotal = 0
+    promotion_lines: List[Dict[str, Any]] = []
     for item in items:
         product = products.get(item.product_id)
         unit_price = int(getattr(product, "price", 0) or 0) if product else 0
         line_total = unit_price * int(item.quantity or 0)
         subtotal += line_total
+        promotion_lines.append(
+            {
+                "cart_item_id": str(item.id),
+                "product_id": str(item.product_id),
+                "quantity": int(item.quantity or 0),
+                "unit_price": unit_price,
+            }
+        )
         resp_items.append(
             {
                 "id": str(item.id),
@@ -319,10 +444,21 @@ async def get_cart(
             }
         )
 
+    promotion_discount = await _calculate_cart_promotion_discount(db, promotion_lines)
+    promo_discount_amount = min(int(promotion_discount.get("amount") or 0), subtotal)
+    total = max(0, subtotal - promo_discount_amount)
+
     return {
         "cart_id": str(cart.id),
         "items": resp_items,
-        "totals": {"subtotal": subtotal, "currency": "RUB"},
+        "totals": {
+            "subtotal": subtotal,
+            "discount_amount": promo_discount_amount,
+            "promotion_discount_amount": promo_discount_amount,
+            "total": total,
+            "currency": "RUB",
+            "applied_promotions": promotion_discount.get("applied_promotions") or [],
+        },
     }
 
 
@@ -429,6 +565,7 @@ async def checkout(
     subtotal = 0
     order_items: List[OrderItem] = []
     glm_limit_lines: List[Dict[str, Any]] = []
+    promotion_lines: List[Dict[str, Any]] = []
     for ci in cart_items:
         product = products.get(ci.product_id)
         if not product or not product.is_active:
@@ -437,6 +574,14 @@ async def checkout(
         qty = int(ci.quantity or 0)
         line_total = unit_price * qty
         subtotal += line_total
+        promotion_lines.append(
+            {
+                "cart_item_id": str(ci.id),
+                "product_id": str(product.id),
+                "quantity": qty,
+                "unit_price": unit_price,
+            }
+        )
         glm_limit_lines.append(
             {
                 "product_id": str(product.id),
@@ -455,7 +600,10 @@ async def checkout(
         )
 
     delivery_amount = int(body.delivery_amount or 0)
-    discount_amount = int(body.discount_amount or 0)
+    manual_discount_amount = int(body.discount_amount or 0)
+    promotion_discount = await _calculate_cart_promotion_discount(db, promotion_lines)
+    promotion_discount_amount = min(int(promotion_discount.get("amount") or 0), subtotal)
+    discount_amount = manual_discount_amount + promotion_discount_amount
     gross_total = subtotal + delivery_amount
     if discount_amount > gross_total:
         raise HTTPException(status_code=400, detail="Invalid discount amount")
@@ -523,7 +671,7 @@ async def checkout(
     if gross_total <= 0:
         raise HTTPException(status_code=400, detail="Invalid total amount")
     if payment_method == "card" and total > 0:
-        svc = get_yookassa_service()
+        svc = await get_yookassa_service_for_db(db)
         if not svc:
             raise HTTPException(status_code=500, detail="YOOKASSA is not configured")
 
@@ -531,6 +679,14 @@ async def checkout(
     await _save_preferred_delivery(db, current_user, body.delivery)
 
     order_meta = dict(body.meta or {})
+    applied_promotions = promotion_discount.get("applied_promotions") or []
+    if promotion_discount_amount > 0 and applied_promotions:
+        order_meta["promotion_discount"] = {
+            "amount": promotion_discount_amount,
+            "promotions": applied_promotions,
+        }
+    if manual_discount_amount > 0:
+        order_meta["manual_discount"] = {"amount": manual_discount_amount}
     if bonus_points_to_spend > 0:
         order_meta["bonus_payment"] = {
             "points": bonus_points_to_spend,
@@ -663,6 +819,7 @@ async def checkout(
                 "glm_amount": glm_amount_to_spend,
                 "glm_discount_amount": glm_discount_amount,
                 "gift_certificate_amount": gift_certificate_amount,
+                "promotion_discount_amount": promotion_discount_amount,
                 "gift_certificate_number": GiftCertificateService.normalize_number(gift_certificate_number)
                 if gift_certificate_amount > 0
                 else None,
@@ -690,6 +847,8 @@ async def checkout(
             "glm_amount_spent": glm_amount_to_spend,
             "glm_discount_amount": glm_discount_amount,
             "gift_certificate_amount": gift_certificate_amount,
+            "promotion_discount_amount": promotion_discount_amount,
+            "applied_promotions": applied_promotions,
         }
 
     if payment_method == "cod":
@@ -709,6 +868,7 @@ async def checkout(
                 "glm_amount": glm_amount_to_spend,
                 "glm_discount_amount": glm_discount_amount,
                 "gift_certificate_amount": gift_certificate_amount,
+                "promotion_discount_amount": promotion_discount_amount,
                 "gift_certificate_number": GiftCertificateService.normalize_number(gift_certificate_number)
                 if gift_certificate_amount > 0
                 else None,
@@ -736,6 +896,8 @@ async def checkout(
             "glm_amount_spent": glm_amount_to_spend,
             "glm_discount_amount": glm_discount_amount,
             "gift_certificate_amount": gift_certificate_amount,
+            "promotion_discount_amount": promotion_discount_amount,
+            "applied_promotions": applied_promotions,
         }
 
     return_url = str(body.return_url).strip()
@@ -756,6 +918,7 @@ async def checkout(
             "glm_amount": str(glm_amount_to_spend),
             "glm_discount_amount": str(glm_discount_amount),
             "gift_certificate_amount": str(gift_certificate_amount),
+            "promotion_discount_amount": str(promotion_discount_amount),
             "gift_certificate_number": GiftCertificateService.normalize_number(gift_certificate_number)
             if gift_certificate_amount > 0
             else "",
@@ -800,4 +963,6 @@ async def checkout(
         "glm_amount_spent": glm_amount_to_spend,
         "glm_discount_amount": glm_discount_amount,
         "gift_certificate_amount": gift_certificate_amount,
+        "promotion_discount_amount": promotion_discount_amount,
+        "applied_promotions": applied_promotions,
     }

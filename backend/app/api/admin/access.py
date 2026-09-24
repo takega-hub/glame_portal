@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import hash_password
+from app.api.auth import get_current_user, hash_password
 from app.api.dependencies import require_admin
 from app.database.connection import get_db
 from app.models.admin_access import AdminRoleAccess
@@ -48,10 +49,29 @@ class RoleAccessUpdate(BaseModel):
 class StaffUserResponse(BaseModel):
     id: str
     email: str | None
+    phone: str | None = None
     full_name: str | None = None
+    staff_login: str | None = None
     role: str | None
     role_label: str | None = None
     is_customer: bool = False
+
+
+class OnlineStaffResponse(BaseModel):
+    id: str
+    email: str | None
+    full_name: str | None = None
+    role: str | None = None
+    role_label: str | None = None
+    current_path: str | None = None
+    last_seen_at: str
+    seconds_ago: int
+
+
+class OnlinePresenceResponse(BaseModel):
+    online_count: int
+    window_seconds: int
+    users: list[OnlineStaffResponse]
 
 
 class StaffCreateRequest(BaseModel):
@@ -77,14 +97,34 @@ def _role_or_400(role: str | None) -> str:
 
 def _staff_response(user: User) -> StaffUserResponse:
     role = normalize_role(getattr(user, "role", None))
+    preferences = user.preferences if isinstance(getattr(user, "preferences", None), dict) else {}
     return StaffUserResponse(
         id=str(user.id),
         email=getattr(user, "email", None),
+        phone=getattr(user, "phone", None),
         full_name=getattr(user, "full_name", None),
+        staff_login=preferences.get("staff_login"),
         role=role,
         role_label=ROLE_LABELS.get(role or ""),
         is_customer=bool(getattr(user, "is_customer", False)),
     )
+
+
+async def _ensure_presence_schema(db: AsyncSession) -> None:
+    await db.execute(text("""
+        CREATE TABLE IF NOT EXISTS platform_user_presence (
+            user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            current_path TEXT,
+            user_agent TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """))
+    await db.execute(text("""
+        CREATE INDEX IF NOT EXISTS ix_platform_user_presence_last_seen
+        ON platform_user_presence (last_seen_at DESC)
+    """))
+    await db.commit()
 
 
 @router.get("/sections", response_model=list[AdminSectionResponse])
@@ -161,9 +201,88 @@ async def list_staff(
         select(User)
         .where(User.is_customer.is_(False))
         .where(or_(User.role.in_(roles), User.email.is_not(None)))
-        .order_by(User.email.asc().nullslast())
+        .order_by(User.full_name.asc().nullslast(), User.email.asc().nullslast())
     )
     return [_staff_response(user) for user in result.scalars().all()]
+
+
+@router.post("/presence/heartbeat")
+async def heartbeat_presence(
+    request: Request,
+    payload: dict[str, str | None] | None = Body(default=None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if bool(getattr(current_user, "is_customer", False)):
+        return {"status": "ignored"}
+
+    await _ensure_presence_schema(db)
+    payload = payload or {}
+    current_path = str(payload.get("path") or "")[:512] or None
+    user_agent = (request.headers.get("user-agent") or "")[:512] or None
+    await db.execute(text("""
+        INSERT INTO platform_user_presence (user_id, last_seen_at, current_path, user_agent)
+        VALUES (:user_id, now(), :current_path, :user_agent)
+        ON CONFLICT (user_id) DO UPDATE SET
+            last_seen_at = EXCLUDED.last_seen_at,
+            current_path = EXCLUDED.current_path,
+            user_agent = EXCLUDED.user_agent
+    """), {
+        "user_id": current_user.id,
+        "current_path": current_path,
+        "user_agent": user_agent,
+    })
+    await db.execute(text("DELETE FROM platform_user_presence WHERE last_seen_at < now() - interval '1 day'"))
+    await db.commit()
+    return {"status": "ok"}
+
+
+@router.get("/presence/online", response_model=OnlinePresenceResponse)
+async def online_presence(
+    window_seconds: int = 120,
+    _current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    await _ensure_presence_schema(db)
+    window_seconds = max(30, min(int(window_seconds or 120), 900))
+    threshold = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
+    result = await db.execute(text("""
+        SELECT
+            u.id::text AS id,
+            u.email,
+            u.full_name,
+            u.role,
+            p.current_path,
+            p.last_seen_at
+        FROM platform_user_presence p
+        JOIN users u ON u.id = p.user_id
+        WHERE p.last_seen_at >= :threshold
+          AND u.is_customer IS FALSE
+        ORDER BY p.last_seen_at DESC, u.full_name ASC NULLS LAST, u.email ASC NULLS LAST
+    """), {"threshold": threshold})
+    now = datetime.now(timezone.utc)
+    users = []
+    for row in result.fetchall():
+        item = row._mapping
+        last_seen_at = item["last_seen_at"]
+        if last_seen_at.tzinfo is None:
+            last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
+        role = normalize_role(item.get("role"))
+        users.append(OnlineStaffResponse(
+            id=item["id"],
+            email=item.get("email"),
+            full_name=item.get("full_name"),
+            role=role,
+            role_label=ROLE_LABELS.get(role or ""),
+            current_path=item.get("current_path"),
+            last_seen_at=last_seen_at.isoformat(),
+            seconds_ago=max(0, int((now - last_seen_at).total_seconds())),
+        ))
+    return OnlinePresenceResponse(
+        online_count=len(users),
+        window_seconds=window_seconds,
+        users=users,
+    )
 
 
 @router.post("/staff", response_model=StaffUserResponse, status_code=status.HTTP_201_CREATED)

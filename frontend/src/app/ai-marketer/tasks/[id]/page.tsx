@@ -1490,6 +1490,7 @@ export default function TaskPage() {
   const [loadingTask, setLoadingTask] = useState(false);
   const [loadingChatHistory, setLoadingChatHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [taskNotFound, setTaskNotFound] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [agentMode, setAgentMode] = useState<AgentMode>('auto');
@@ -1529,19 +1530,27 @@ export default function TaskPage() {
   useEffect(() => {
     if (id) {
       loadTask();
-      loadChatHistory();
     }
   }, [id]);
 
   async function loadTask() {
     setLoadingTask(true);
     setError(null);
+    setTaskNotFound(false);
     try {
       const taskData = await agentInteractions.getTask(id as string);
       setTask(taskData);
-    } catch (e) {
+      await loadChatHistory();
+    } catch (e: any) {
       console.error('Failed to load task', { taskId: id, error: e });
-      setError('Не удалось загрузить задачу');
+      if (e?.response?.status === 404) {
+        setTask(null);
+        setChat([]);
+        setTaskNotFound(true);
+        setError('Задача удалена или больше не существует');
+      } else {
+        setError('Не удалось загрузить задачу');
+      }
     } finally {
       setLoadingTask(false);
     }
@@ -1716,7 +1725,25 @@ export default function TaskPage() {
 
   if (!task) {
     if (loadingTask) return <div>Загрузка…</div>;
-    return <div className="p-4 text-red-600">{error || 'Задача не найдена'}</div>;
+    return (
+      <main className="min-h-screen bg-gray-50 p-6">
+        <div className="mx-auto max-w-2xl rounded-2xl bg-white p-6 shadow">
+          <p className="text-sm uppercase tracking-wide text-gray-500">AI-задача</p>
+          <h1 className="mt-2 text-2xl font-semibold text-gray-900">{taskNotFound ? 'Задача не найдена' : 'Не удалось открыть задачу'}</h1>
+          <p className="mt-3 text-sm text-gray-600">
+            {error || 'Задача не найдена. Возможно, она была удалена или ссылка устарела.'}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button type="button" onClick={() => router.push('/ai-marketer/tasks')} className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white">
+              К списку задач
+            </button>
+            <button type="button" onClick={() => router.push('/ai-marketer/boards/crm')} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700">
+              CRM Board
+            </button>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   async function deleteCurrentTask() {

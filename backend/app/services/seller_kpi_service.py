@@ -13,7 +13,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from app.services.sales_record_filters import ACCESSORY_PRODUCT_TERMS, ANALYTICS_ELIGIBLE_PRODUCT_SQL
+from app.services.sales_record_filters import (
+    ACCESSORY_PRODUCT_TERMS,
+    ANALYTICS_ELIGIBLE_PRODUCT_SQL,
+    ANALYTICS_REVENUE_ELIGIBLE_PRODUCT_SQL,
+)
+from app.services.store_aliases import effective_store_name_sql
 
 
 SELLER_KEY_EXPR = "COALESCE(raw_data->>'Продавец_Key', raw_data->>'Сотрудник_Key', raw_data->>'Кассир_Key', raw_data->>'Ответственный_Key', raw_data->>'Менеджер_Key', raw_data->>'Продавец')"
@@ -30,12 +35,32 @@ COALESCE(
         WHEN '4a1f26ca-a92d-11f0-9b8f-fa163e4cc04e' THEN 'Уразгильдеева Екатерина'
         WHEN '1d5f839e-ba5a-11f0-836e-fa163e4cc04e' THEN 'Рогалевич Ирина'
         WHEN 'eee9caf0-293b-11f1-83c6-fa163e4cc04e' THEN 'Бешлиева Аджере'
+        WHEN 'e0a1b36c-994e-11f1-863d-fa163e4cc04e' THEN 'Дьяченко Мария'
+        WHEN 'b3f6bc98-a13a-11f0-9cea-fa163e4cc04e' THEN 'Орешникова Елена'
         WHEN '4d189eb8-4ee8-11f1-9b97-fa163e4cc04e' THEN 'Орешников Анатолий'
     END
 )
 """
-STORE_EXPR = "COALESCE(s.name, sr.store_id)"
+STORE_NAME_ALIASES = {
+    "центрум, симферополь": "ТРК Центрум",
+    "ялта, набережная ленина, 18": "Ялта, Набережная 18",
+    "мрия": "Мрия",
+    "glame мрия": "Мрия",
+}
+STORE_EXPR = effective_store_name_sql("s.name", "sr.store_id", "sr.sale_date")
+STORE_VISIT_NAME_EXPR = """
+CASE
+    WHEN LOWER(COALESCE(s.name, s.external_id, '')) LIKE '%меганом%' THEN 'Мрия'
+    ELSE COALESCE(s.name, s.external_id)
+END
+"""
 KPI_ELIGIBLE_PRODUCT_SQL = ANALYTICS_ELIGIBLE_PRODUCT_SQL
+KPI_REVENUE_ELIGIBLE_PRODUCT_SQL = ANALYTICS_REVENUE_ELIGIBLE_PRODUCT_SQL
+KPI_SALE_CHECK_SQL = (
+    f"({KPI_REVENUE_ELIGIBLE_PRODUCT_SQL} "
+    "AND COALESCE(sr.raw_data->>'Recorder_Type', sr.raw_data->>'Документ_Type', '') NOT ILIKE '%ЧекККМВозврат%' "
+    "AND COALESCE(sr.revenue, 0) > 0)"
+)
 KPI_EXCLUDED_PRODUCT_TERMS = ACCESSORY_PRODUCT_TERMS
 KNOWN_SELLER_NAMES_BY_EXTERNAL_ID = {
     # 1C Catalog_Сотрудники Ref_Key -> short display name used in GLAME roster/KPI.
@@ -43,6 +68,8 @@ KNOWN_SELLER_NAMES_BY_EXTERNAL_ID = {
     "4a1f26ca-a92d-11f0-9b8f-fa163e4cc04e": "Уразгильдеева Екатерина",
     "1d5f839e-ba5a-11f0-836e-fa163e4cc04e": "Рогалевич Ирина",
     "eee9caf0-293b-11f1-83c6-fa163e4cc04e": "Бешлиева Аджере",
+    "e0a1b36c-994e-11f1-863d-fa163e4cc04e": "Дьяченко Мария",
+    "b3f6bc98-a13a-11f0-9cea-fa163e4cc04e": "Орешникова Елена",
     "4d189eb8-4ee8-11f1-9b97-fa163e4cc04e": "Орешников Анатолий",
 }
 KNOWN_SELLER_EXTERNAL_IDS_BY_NORMALIZED_NAME = {
@@ -50,6 +77,8 @@ KNOWN_SELLER_EXTERNAL_IDS_BY_NORMALIZED_NAME = {
     "уразгильдеева екатерина": "4a1f26ca-a92d-11f0-9b8f-fa163e4cc04e",
     "рогалевич ирина": "1d5f839e-ba5a-11f0-836e-fa163e4cc04e",
     "бешлиева аджере": "eee9caf0-293b-11f1-83c6-fa163e4cc04e",
+    "дьяченко мария": "e0a1b36c-994e-11f1-863d-fa163e4cc04e",
+    "орешникова елена": "b3f6bc98-a13a-11f0-9cea-fa163e4cc04e",
     "орешников анатолий": "4d189eb8-4ee8-11f1-9b97-fa163e4cc04e",
 }
 ZERO_GUID = "00000000-0000-0000-0000-000000000000"
@@ -181,11 +210,75 @@ class SellerKPIService:
         return month_date, datetime.combine(month_date, time.min), datetime.combine(next_month, time.min)
 
     @staticmethod
+    def _fact_period_end(month_date: date, month_end_dt: datetime) -> datetime:
+        """Cap current-month operational facts at today instead of the full month.
+
+        Plans are monthly, but fact revenue/checks/items/traffic on KPI dashboards
+        must be month-to-date: from the 1st through the current day. Historical
+        months keep the full calendar month; future months return an empty fact
+        range by using the month start as end.
+        """
+        today = date.today()
+        if today.year == month_date.year and today.month == month_date.month:
+            tomorrow = today + timedelta(days=1)
+            return min(month_end_dt, datetime.combine(tomorrow, time.min))
+        if today >= month_end_dt.date():
+            return month_end_dt
+        return datetime.combine(month_date, time.min)
+
+    @staticmethod
     def period_range(start_date: Optional[str], end_date: Optional[str]) -> tuple[date, date]:
         today = date.today()
         start = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else today.replace(day=1)
         end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else today
         return start, end
+
+    @staticmethod
+    def _normalize_store_name(value: Optional[str]) -> str:
+        return " ".join((value or "").strip().lower().replace("ё", "е").split())
+
+    @classmethod
+    def _canonical_store_name(cls, value: Optional[str]) -> Optional[str]:
+        text_value = (value or "").strip()
+        if not text_value:
+            return None
+        normalized = cls._normalize_store_name(text_value)
+        return STORE_NAME_ALIASES.get(normalized, text_value)
+
+    @classmethod
+    def _canonicalize_store_rows(cls, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        for row in rows:
+            canonical = cls._canonical_store_name(row.get("store_name"))
+            if canonical:
+                row["store_name"] = canonical
+        return rows
+
+    @staticmethod
+    def _store_name_where(column: str) -> str:
+        return f"""(
+            LOWER(COALESCE({column}, '')) = LOWER(:store_name)
+            OR (
+                LOWER(:store_name) = 'мрия'
+                AND LOWER(COALESCE({column}, '')) LIKE '%меганом%'
+            )
+        )"""
+
+    async def _active_store_names(self) -> List[str]:
+        result = await self.db.execute(text("""
+            SELECT name
+            FROM stores
+            WHERE is_active IS TRUE
+            ORDER BY name
+        """))
+        names: List[str] = []
+        seen: set[str] = set()
+        for row in result.fetchall():
+            name = self._canonical_store_name(row._mapping.get("name"))
+            key = self._normalize_store_name(name)
+            if name and key not in seen:
+                seen.add(key)
+                names.append(name)
+        return names
 
     async def sales_by_seller(self, start_dt: datetime, end_dt: datetime, seller_external_id: Optional[str] = None, seller_name: Optional[str] = None) -> List[Dict[str, Any]]:
         where = ["sr.sale_date >= :start_dt", "sr.sale_date < :end_dt"]
@@ -203,19 +296,20 @@ class SellerKPIService:
                 {SELLER_DISPLAY_NAME_EXPR} AS seller_name,
                 sr.store_id AS store_id,
                 {STORE_EXPR} AS store_name,
-                SUM(CASE WHEN {KPI_ELIGIBLE_PRODUCT_SQL} THEN sr.revenue ELSE 0 END) AS revenue,
-                COUNT(DISTINCT CASE WHEN {KPI_ELIGIBLE_PRODUCT_SQL} THEN sr.document_id ELSE NULL END) AS checks,
+                SUM(CASE WHEN {KPI_REVENUE_ELIGIBLE_PRODUCT_SQL} THEN sr.revenue ELSE 0 END) AS revenue,
+                SUM(CASE WHEN {KPI_ELIGIBLE_PRODUCT_SQL} THEN sr.revenue ELSE 0 END) AS product_revenue,
+                COUNT(DISTINCT CASE WHEN {KPI_SALE_CHECK_SQL} THEN sr.document_id ELSE NULL END) AS checks,
                 SUM(CASE WHEN {KPI_ELIGIBLE_PRODUCT_SQL} THEN sr.quantity ELSE 0 END) AS items_sold
             FROM sales_records sr
             LEFT JOIN stores s ON s.external_id = sr.store_id
             LEFT JOIN products p ON p.external_id = sr.product_id
             WHERE {' AND '.join(where)}
             GROUP BY 1, 2, 3, 4
-            HAVING SUM(CASE WHEN {KPI_ELIGIBLE_PRODUCT_SQL} THEN sr.revenue ELSE 0 END) <> 0
+            HAVING SUM(CASE WHEN {KPI_REVENUE_ELIGIBLE_PRODUCT_SQL} THEN sr.revenue ELSE 0 END) <> 0
                 OR SUM(CASE WHEN {KPI_ELIGIBLE_PRODUCT_SQL} THEN sr.quantity ELSE 0 END) <> 0
             ORDER BY revenue DESC NULLS LAST
         """), params)
-        return [dict(row._mapping) for row in result.fetchall()]
+        return self._canonicalize_store_rows([dict(row._mapping) for row in result.fetchall()])
 
     async def plans_for_month(self, month: date) -> List[Dict[str, Any]]:
         await self.ensure_tables()
@@ -226,7 +320,7 @@ class SellerKPIService:
             WHERE month = :month
             ORDER BY store_name NULLS LAST, seller_name
         """), {"month": month})
-        return [dict(row._mapping) for row in result.fetchall()]
+        return self._canonicalize_store_rows([dict(row._mapping) for row in result.fetchall()])
 
     @staticmethod
     def _normalize_seller_identity(value: Optional[str]) -> str:
@@ -266,13 +360,121 @@ class SellerKPIService:
             return False
         return any(row_name == candidate or row_name in candidate or candidate in row_name for candidate in candidates["names"])
 
+    @classmethod
+    def _preference_store_names(cls, current_user: User) -> List[str]:
+        preferences = getattr(current_user, "preferences", None) or {}
+        if not isinstance(preferences, dict):
+            preferences = {}
+        names: List[str] = []
+        managed_names = preferences.get("managed_store_names")
+        if isinstance(managed_names, list) and managed_names:
+            names.extend(str(item or "").strip() for item in managed_names)
+        else:
+            staff_store_names = preferences.get("staff_store_names")
+            if isinstance(staff_store_names, list):
+                names.extend(str(item or "").strip() for item in staff_store_names)
+            for key in ("staff_store_name", "staff_store"):
+                value = str(preferences.get(key) or "").strip()
+                if value:
+                    names.append(value)
+
+        result: List[str] = []
+        seen: set[str] = set()
+        for name in names:
+            canonical = cls._canonical_store_name(name)
+            normalized = cls._normalize_store_name(canonical)
+            if canonical and normalized not in seen:
+                seen.add(normalized)
+                result.append(canonical)
+        return result
+
+    async def _store_names_for_external_ids(self, external_ids: List[str]) -> List[str]:
+        ids = [str(item or "").strip() for item in external_ids if str(item or "").strip()]
+        if not ids:
+            return []
+        result = await self.db.execute(text("""
+            SELECT name
+            FROM stores
+            WHERE external_id = ANY(:external_ids)
+            ORDER BY name
+        """), {"external_ids": ids})
+        names: List[str] = []
+        seen: set[str] = set()
+        for row in result.fetchall():
+            canonical = self._canonical_store_name(row._mapping.get("name"))
+            normalized = self._normalize_store_name(canonical)
+            if canonical and normalized not in seen:
+                seen.add(normalized)
+                names.append(canonical)
+        return names
+
+    async def _managed_store_names(self, current_user: User) -> List[str]:
+        if (getattr(current_user, "role", None) or "").lower() != "manager":
+            return []
+        preferences = getattr(current_user, "preferences", None) or {}
+        if not isinstance(preferences, dict):
+            preferences = {}
+        external_ids = []
+        for key in ("managed_store_external_ids", "staff_store_external_ids"):
+            value = preferences.get(key)
+            if isinstance(value, list):
+                external_ids.extend(str(item or "").strip() for item in value)
+        if not external_ids:
+            value = str(preferences.get("staff_store_external_id") or "").strip()
+            if value:
+                external_ids.append(value)
+
+        names = [*await self._store_names_for_external_ids(external_ids), *self._preference_store_names(current_user)]
+        result: List[str] = []
+        seen: set[str] = set()
+        for name in names:
+            normalized = self._normalize_store_name(name)
+            if name and normalized not in seen:
+                seen.add(normalized)
+                result.append(name)
+        # The two current manager accounts are part of the approved retail
+        # roster. This also protects their scope while 1C assignment records
+        # are being corrected or an old account lacks preferences.
+        if not result:
+            manager_name = self._normalize_seller_identity(getattr(current_user, "full_name", None))
+            if "бешлиева" in manager_name:
+                result = ["ТРК Центрум"]
+            elif "рогалевич" in manager_name:
+                result = ["Мрия", "Ялта, Набережная 18"]
+        return result
+
+    def _filter_rows_by_store_scope(self, rows: List[Dict[str, Any]], store_names: List[str]) -> List[Dict[str, Any]]:
+        allowed = {self._normalize_store_name(name) for name in store_names if name}
+        if not allowed:
+            return []
+        return [row for row in rows if self._normalize_store_name(row.get("store_name")) in allowed]
+
+    async def _manager_requested_store_name(self, current_user: User, store_name: Optional[str]) -> Optional[str]:
+        role = (getattr(current_user, "role", None) or "").lower()
+        if role != "manager":
+            return self._canonical_store_name(store_name)
+        allowed = await self._managed_store_names(current_user)
+        if not allowed:
+            return "__no_access__"
+        requested = self._canonical_store_name(store_name)
+        if requested:
+            requested_key = self._normalize_store_name(requested)
+            if requested_key in {self._normalize_store_name(name) for name in allowed}:
+                return requested
+            return "__no_access__"
+        return allowed[0] if len(allowed) == 1 else None
+
     async def kpi_overview(self, current_user: User, month: Optional[str] = None, store_name: Optional[str] = None) -> Dict[str, Any]:
         month_date, start_dt, end_dt = self.month_range(month)
+        fact_end_dt = self._fact_period_end(month_date, end_dt)
         role = (getattr(current_user, "role", None) or "").lower()
         is_admin_view = role in {"admin", "manager"}
+        manager_store_names = await self._managed_store_names(current_user) if role == "manager" else []
 
-        sales = await self.sales_by_seller(start_dt, end_dt)
+        sales = await self.sales_by_seller(start_dt, fact_end_dt)
+        store_name = self._canonical_store_name(store_name)
         history_seller_sales = await self._history_seller_kpi_values(month_date, store_name=store_name if is_admin_view else None)
+        days_in_month = ((month_date.replace(year=month_date.year + 1, month=1) if month_date.month == 12 else month_date.replace(month=month_date.month + 1)) - month_date).days
         if history_seller_sales:
             current_store_keys = {(row.get("store_name") or row.get("store_id") or "").strip().lower() for row in sales}
             # 1C sales_records is the operational source of truth. Imported ЕО seller
@@ -298,14 +500,26 @@ class SellerKPIService:
             # roster/hour-share source, then apply the requested month store targets.
             shift_stats_for_plan = await self._latest_shift_stats_by_seller_before_month(month_date, store_name=store_name if is_admin_view else None)
 
+        if role == "manager":
+            if manager_store_names:
+                sales = self._filter_rows_by_store_scope(sales, manager_store_names)
+                plans = self._filter_rows_by_store_scope(plans, manager_store_names)
+                shift_stats = self._filter_rows_by_store_scope(shift_stats, manager_store_names)
+                shift_stats_for_plan = self._filter_rows_by_store_scope(shift_stats_for_plan, manager_store_names)
+            else:
+                sales = []
+                plans = []
+                shift_stats = []
+                shift_stats_for_plan = []
+
         if not is_admin_view:
             sales = [row for row in sales if self._matches_seller_identity(row, current_user)]
             plans = [row for row in plans if self._matches_seller_identity(row, current_user)]
             shift_stats = [row for row in shift_stats if self._matches_seller_identity(row, current_user)]
         elif store_name:
-            store_filter = store_name.strip().lower()
-            sales = [row for row in sales if (row.get("store_name") or "").strip().lower() == store_filter]
-            plans = [row for row in plans if (row.get("store_name") or "").strip().lower() == store_filter]
+            store_filter = self._normalize_store_name(store_name)
+            sales = [row for row in sales if self._normalize_store_name(row.get("store_name")) == store_filter]
+            plans = [row for row in plans if self._normalize_store_name(row.get("store_name")) == store_filter]
 
         plan_by_key: Dict[str, Dict[str, Any]] = {}
         for plan in await self._formula_seller_plans(month_date, shift_stats_for_plan):
@@ -322,6 +536,7 @@ class SellerKPIService:
             rows[key] = {
                 **sale,
                 "revenue": float(sale.get("revenue") or 0),
+                "product_revenue": float(sale.get("product_revenue") or sale.get("revenue") or 0),
                 "checks": int(sale.get("checks") or 0),
                 "items_sold": float(sale.get("items_sold") or 0),
                 "revenue_plan": 0.0,
@@ -375,6 +590,7 @@ class SellerKPIService:
                 "store_id": row.get("store_id"),
                 "store_name": display_store_name,
                 "revenue": 0.0,
+                "product_revenue": 0.0,
                 "revenue_plan": 0.0,
                 "checks": 0,
             })
@@ -383,26 +599,31 @@ class SellerKPIService:
             if store.get("store_name") == "Без магазина" and row.get("store_name"):
                 store["store_name"] = row.get("store_name")
             store["revenue"] += float(row.get("revenue") or 0)
+            store["product_revenue"] += float(row.get("product_revenue") or 0)
             store["revenue_plan"] += float(row.get("revenue_plan") or 0)
             store["checks"] += int(row.get("checks") or 0)
         for store in store_rows.values():
             store["revenue"] = round(store["revenue"], 2)
+            store["product_revenue"] = round(store["product_revenue"], 2)
             store["revenue_plan"] = round(store["revenue_plan"], 2)
             store["completion_percent"] = round(store["revenue"] / store["revenue_plan"] * 100, 1) if store["revenue_plan"] else None
 
-        return {
+        payload = {
             "month": month_date.isoformat(),
-            "scope": "all" if is_admin_view else "self",
+            "scope": "managed" if role == "manager" else "all" if is_admin_view else "self",
+            "managed_store_names": manager_store_names,
             "totals": totals,
             "sellers": seller_rows,
             "stores": sorted(store_rows.values(), key=lambda r: r.get("revenue", 0), reverse=True),
             "seller_field_status": "ok" if any(r.get("seller_name") or r.get("seller_external_id") for r in seller_rows) else "missing_in_sales_records",
         }
+        return payload
 
-    async def shifts(self, start_date: Optional[str], end_date: Optional[str], store_name: Optional[str] = None) -> Dict[str, Any]:
+    async def shifts(self, start_date: Optional[str], end_date: Optional[str], store_name: Optional[str] = None, current_user: Optional[User] = None) -> Dict[str, Any]:
         await self.ensure_tables()
         start, end = self.period_range(start_date, end_date)
-        where_store = "AND LOWER(COALESCE(store_name, '')) = LOWER(:store_name)" if store_name else ""
+        store_name = await self._manager_requested_store_name(current_user, store_name) if current_user is not None else self._canonical_store_name(store_name)
+        where_store = f"AND {self._store_name_where('store_name')}" if store_name else ""
         result = await self.db.execute(text(f"""
             SELECT id::text, shift_date, seller_external_id, seller_name, store_id, store_name,
                    starts_at, ends_at, note
@@ -411,7 +632,7 @@ class SellerKPIService:
             {where_store}
             ORDER BY shift_date, store_name NULLS LAST, starts_at NULLS LAST, seller_name
         """), {"start_date": start, "end_date": end, "store_name": store_name})
-        rows = [dict(row._mapping) for row in result.fetchall()]
+        rows = self._canonicalize_store_rows([dict(row._mapping) for row in result.fetchall()])
         for row in rows:
             for key in ("shift_date", "starts_at", "ends_at"):
                 if row.get(key) is not None:
@@ -467,7 +688,7 @@ class SellerKPIService:
             raise ValueError("shifts должен быть массивом")
         period_month = datetime.strptime(str(parsed.get("period_month"))[:7], "%Y-%m").date().replace(day=1)
         next_month = period_month.replace(year=period_month.year + 1, month=1) if period_month.month == 12 else period_month.replace(month=period_month.month + 1)
-        store_name = (parsed.get("store_name") or "").strip()
+        store_name = self._canonical_store_name(parsed.get("store_name")) or ""
         if not store_name:
             raise ValueError("Укажите магазин для импорта графика")
         preview = shifts[:20]
@@ -475,7 +696,7 @@ class SellerKPIService:
             return {"success": True, "dry_run": True, "parsed": len(shifts), "saved": 0, "period_month": period_month.isoformat()[:7], "store_name": store_name, "preview": preview, "stats": parsed.get("stats") or {}}
 
         await self.ensure_tables()
-        delete_where = "shift_date >= :start_date AND shift_date < :end_date AND LOWER(COALESCE(store_name, '')) = LOWER(:store_name)"
+        delete_where = f"shift_date >= :start_date AND shift_date < :end_date AND {self._store_name_where('store_name')}"
         params: Dict[str, Any] = {"start_date": period_month, "end_date": next_month, "store_name": store_name}
         if not replace_existing:
             delete_where += " AND COALESCE(note, '') LIKE 'Импорт из Excel %'"
@@ -518,11 +739,18 @@ class SellerKPIService:
     async def dashboard(self, current_user: User, month: Optional[str] = None) -> Dict[str, Any]:
         """All-store management KPI dashboard for admin/manager."""
         month_date, start_dt, end_dt = self.month_range(month)
+        fact_end_dt = self._fact_period_end(month_date, end_dt)
         overview = await self.kpi_overview(current_user=current_user, month=month, store_name=None)
         seller_rows = overview.get("sellers", [])
-        store_names = sorted({
-            row.get("store_name") for row in seller_rows if row.get("store_name")
-        } | {"ТРК Центрум", "Ялта, Набережная 18", "Меганом"})
+        role = (getattr(current_user, "role", None) or "").lower()
+        manager_store_names = await self._managed_store_names(current_user) if role == "manager" else []
+        active_store_names = manager_store_names if role == "manager" else await self._active_store_names()
+        if active_store_names:
+            store_names = active_store_names
+        else:
+            store_names = sorted({
+                row.get("store_name") for row in seller_rows if row.get("store_name")
+            })
 
         days_in_month = ((month_date.replace(year=month_date.year + 1, month=1) if month_date.month == 12 else month_date.replace(month=month_date.month + 1)) - month_date).days
         today = date.today()
@@ -537,15 +765,14 @@ class SellerKPIService:
         dashboard_stores: List[Dict[str, Any]] = []
         all_metric_totals: Dict[str, Dict[str, float]] = {}
         for store in store_names:
-            store_sellers = [row for row in seller_rows if (row.get("store_name") or "").strip().lower() == store.strip().lower()]
-            if not store_sellers and store == "Меганом":
-                # Keep a visible empty store only if it has plan/fact later; otherwise skip in MVP data.
-                continue
+            store_filter = self._normalize_store_name(store)
+            store_sellers = [row for row in seller_rows if self._normalize_store_name(row.get("store_name")) == store_filter]
             store_targets = await self._target_metric_plans(month_date, store_name=store)
             store_target_sources = await self._target_metric_plan_sources(month_date, store_name=store)
             revenue_plan_source_row = next((row for row in store_target_sources if row.get("metric_key") == "revenue"), None)
-            shifts_count = await self._shift_count(start_dt.date(), (end_dt - timedelta(days=1)).date(), store_name=store)
-            store_facts = await self._sales_fact_totals(start_dt, end_dt, store_name=store)
+            shifts_count = elapsed_days
+            store_facts = await self._sales_fact_totals(start_dt, fact_end_dt, store_name=store)
+            traffic = await self._traffic_fact_total(start_dt, fact_end_dt, store_name=store)
             revenue = float(store_facts["revenue"] or 0)
             seller_revenue_plan = sum(float(row.get("revenue_plan") or 0) for row in store_sellers)
             revenue_plan = float(store_targets.get("revenue") or 0) or seller_revenue_plan
@@ -553,6 +780,7 @@ class SellerKPIService:
             revenue_plan_matching_status = "matched_confirmed" if revenue_plan > 0 else "missing_or_unconfirmed"
             checks = int(store_facts["checks"] or 0)
             items = float(store_facts["items_sold"] or 0)
+            product_revenue = float(store_facts["product_revenue"] or 0)
             forecast_revenue = revenue / elapsed_days * days_in_month if elapsed_days else None
             completion_percent = revenue / revenue_plan * 100 if revenue_plan else None
             forecast_percent = forecast_revenue / revenue_plan * 100 if forecast_revenue is not None and revenue_plan else None
@@ -561,6 +789,7 @@ class SellerKPIService:
                 "store_name": store,
                 "store_id": next((row.get("store_id") for row in store_sellers if row.get("store_id")), None),
                 "revenue": round(revenue, 2),
+                "product_revenue": round(product_revenue, 2),
                 "revenue_plan": round(revenue_plan, 2),
                 "revenue_plan_source": revenue_plan_source,
                 "revenue_plan_period": month_date.isoformat()[:7],
@@ -574,9 +803,12 @@ class SellerKPIService:
                 "items_sold": round(items, 2),
                 "shifts_count": shifts_count,
                 "avg_check": round(revenue / checks, 2) if checks else None,
-                "avg_item_price": round(revenue / items, 2) if items else None,
+                "avg_item_price": round(product_revenue / items, 2) if items else None,
                 "items_per_check": round(items / checks, 2) if checks else None,
                 "avg_sales_per_shift": round(revenue / shifts_count, 2) if shifts_count else None,
+                "traffic": traffic,
+                "revenue_per_visitor": round(revenue / traffic, 2) if traffic else None,
+                "conversion": round(checks / traffic * 100, 2) if traffic else None,
                 "sellers_count": len([row for row in store_sellers if row.get("seller_name") or row.get("seller_external_id")]),
                 "risk_level": risk_level,
             }
@@ -592,11 +824,16 @@ class SellerKPIService:
                 "items_per_check": store_row["items_per_check"],
                 "shifts_count": shifts_count,
                 "avg_sales_per_shift": store_row["avg_sales_per_shift"],
+                "traffic": traffic,
+                "revenue_per_visitor": store_row["revenue_per_visitor"],
+                "conversion": store_row["conversion"],
             }
             for metric in self._target_metric_defs():
                 key = metric["key"]
                 fact = metric_facts.get(key)
                 plan = store_targets.get(key)
+                if metric.get("format") == "percent" and isinstance(plan, (int, float)) and abs(plan) <= 1:
+                    plan = plan * 100
                 percent = fact / plan * 100 if isinstance(fact, (int, float)) and plan else None
                 metrics[key] = {"fact": round(fact, 2) if isinstance(fact, (int, float)) else None, "plan": round(plan, 2) if isinstance(plan, (int, float)) else None, "percent": round(percent, 2) if percent is not None else None}
                 if isinstance(fact, (int, float)) or isinstance(plan, (int, float)):
@@ -608,18 +845,22 @@ class SellerKPIService:
         dashboard_stores.sort(key=lambda row: row.get("revenue") or 0, reverse=True)
         totals = {
             "revenue": round(sum(float(row.get("revenue") or 0) for row in dashboard_stores), 2),
+            "product_revenue": round(sum(float(row.get("product_revenue") or 0) for row in dashboard_stores), 2),
             "revenue_plan": round(sum(float(row.get("revenue_plan") or 0) for row in dashboard_stores), 2),
             "checks": sum(int(row.get("checks") or 0) for row in dashboard_stores),
             "items_sold": round(sum(float(row.get("items_sold") or 0) for row in dashboard_stores), 2),
             "shifts_count": sum(int(row.get("shifts_count") or 0) for row in dashboard_stores),
+            "traffic": sum(int(row.get("traffic") or 0) for row in dashboard_stores),
         }
         totals["completion_percent"] = round(totals["revenue"] / totals["revenue_plan"] * 100, 2) if totals["revenue_plan"] else None
         totals["forecast_revenue"] = round(totals["revenue"] / elapsed_days * days_in_month, 2) if elapsed_days else None
         totals["forecast_percent"] = round(totals["forecast_revenue"] / totals["revenue_plan"] * 100, 2) if totals.get("forecast_revenue") and totals["revenue_plan"] else None
         totals["avg_check"] = round(totals["revenue"] / totals["checks"], 2) if totals["checks"] else None
-        totals["avg_item_price"] = round(totals["revenue"] / totals["items_sold"], 2) if totals["items_sold"] else None
+        totals["avg_item_price"] = round(totals["product_revenue"] / totals["items_sold"], 2) if totals["items_sold"] else None
         totals["items_per_check"] = round(totals["items_sold"] / totals["checks"], 2) if totals["checks"] else None
         totals["avg_sales_per_shift"] = round(totals["revenue"] / totals["shifts_count"], 2) if totals["shifts_count"] else None
+        totals["revenue_per_visitor"] = round(totals["revenue"] / totals["traffic"], 2) if totals["traffic"] else None
+        totals["conversion"] = round(totals["checks"] / totals["traffic"] * 100, 2) if totals["traffic"] else None
 
         metric_totals = {}
         for key, values in all_metric_totals.items():
@@ -655,7 +896,7 @@ class SellerKPIService:
             for store in dashboard_stores
             if store.get("revenue_plan_matching_status") != "matched_confirmed"
         ]
-        return {
+        payload = {
             "month": month_date.isoformat(),
             "elapsed_days": elapsed_days,
             "days_in_month": days_in_month,
@@ -665,13 +906,16 @@ class SellerKPIService:
             "metric_totals": metric_totals,
             "metric_matrix": metric_matrix,
             "insights": insights[:10],
-            "data_quality": {
+            "managed_store_names": manager_store_names,
+        }
+        if role == "admin":
+            payload["data_quality"] = {
                 "unmatched_sellers": len(unmatched),
                 "duplicate_store_rows": max(0, duplicate_store_rows),
                 "seller_field_status": overview.get("seller_field_status"),
                 "plan_warnings": plan_warnings,
-            },
-        }
+            }
+        return payload
 
     async def _ensure_history_tables(self) -> None:
         """Historical ЕО plan/fact staging tables for archive analysis."""
@@ -793,7 +1037,7 @@ class SellerKPIService:
         stats = {"imports": 0, "metric_rows": 0, "daily_rows": 0, "summary_rows": 0, "schedule_rows": 0, "raw_rows": 0, "target_plans": 0}
         allowed = {metric["key"] for metric in self._target_metric_defs()}
         for item in imports:
-            store_name = (item.get("store_name") or "").strip()
+            store_name = self._canonical_store_name(item.get("store_name")) or ""
             store_slug = (item.get("store_slug") or "").strip()
             period_month = datetime.strptime(str(item.get("period_month"))[:7], "%Y-%m").date().replace(day=1)
             source_file = item.get("source_file") or "unknown.xlsx"
@@ -884,6 +1128,7 @@ class SellerKPIService:
         return {"success": True, "stats": stats}
 
     async def _history_metric_values(self, month: date, store_name: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+        store_name = self._canonical_store_name(store_name)
         if not store_name:
             return {}
         await self._ensure_history_tables()
@@ -902,7 +1147,7 @@ class SellerKPIService:
                 i.source_sheet
             FROM seller_kpi_store_plan_fact_rows r
             JOIN seller_kpi_store_plan_fact_imports i ON i.id = r.import_id
-            WHERE r.period_month = :month AND LOWER(r.store_name) = LOWER(:store_name)
+            WHERE r.period_month = :month AND """ + self._store_name_where("r.store_name") + """
             ORDER BY r.metric_key, i.updated_at DESC NULLS LAST, i.created_at DESC
         """), {"month": month, "store_name": store_name})
         return {row._mapping["metric_key"]: dict(row._mapping) for row in result.fetchall()}
@@ -959,10 +1204,11 @@ class SellerKPIService:
         method parses them read-time without requiring a re-import.
         """
         await self._ensure_history_tables()
+        store_name = self._canonical_store_name(store_name)
         where = ["i.period_month = :month"]
         params: Dict[str, Any] = {"month": month}
         if store_name:
-            where.append("LOWER(i.store_name) = LOWER(:store_name)")
+            where.append(self._store_name_where("i.store_name"))
             params["store_name"] = store_name
         result = await self.db.execute(text(f"""
             SELECT i.store_name, i.source_file, r.source_sheet, r.row_number, r.raw_row
@@ -976,6 +1222,7 @@ class SellerKPIService:
         grouped: Dict[tuple[str, str, str], List[Dict[str, Any]]] = {}
         for row in result.fetchall():
             item = dict(row._mapping)
+            item["store_name"] = self._canonical_store_name(item.get("store_name")) or item.get("store_name")
             grouped.setdefault((item["store_name"], item["source_file"], item["source_sheet"]), []).append(item)
 
         parsed_rows: List[Dict[str, Any]] = []
@@ -1051,6 +1298,7 @@ class SellerKPIService:
 
     async def _agent_store_plan_draft(self, month: date, store_name: Optional[str] = None) -> Dict[str, float]:
         """Initial store plan draft from archive history: previous-year same month + last 3 months."""
+        store_name = self._canonical_store_name(store_name)
         if not store_name:
             return {}
         await self._ensure_history_tables()
@@ -1066,7 +1314,7 @@ class SellerKPIService:
                    AVG(CASE WHEN period_month >= :start_month AND period_month < :month THEN fact_value END)::float AS recent_avg_fact,
                    MAX(CASE WHEN period_month = :previous_year_month THEN fact_value END)::float AS previous_year_fact
             FROM seller_kpi_store_plan_fact_rows
-            WHERE LOWER(store_name) = LOWER(:store_name)
+            WHERE """ + self._store_name_where("store_name") + """
               AND (period_month = :previous_year_month OR (period_month >= :start_month AND period_month < :month))
               AND fact_value IS NOT NULL
             GROUP BY metric_key
@@ -1094,6 +1342,8 @@ class SellerKPIService:
     async def target_indicators(self, current_user: User, month: Optional[str] = None, store_name: Optional[str] = None) -> Dict[str, Any]:
         """Monthly KPI target table: plan is manual/agent-editable, facts can come from 1C or imported ЕО history."""
         month_date, start_dt, end_dt = self.month_range(month)
+        fact_end_dt = self._fact_period_end(month_date, end_dt)
+        store_name = await self._manager_requested_store_name(current_user, store_name)
         overview = await self.kpi_overview(current_user=current_user, month=month, store_name=store_name)
         plans = await self._target_metric_plans(month_date, store_name=store_name)
         history = await self._history_metric_values(month_date, store_name=store_name)
@@ -1106,31 +1356,11 @@ class SellerKPIService:
         checks_plan_fallback = sum(float(row.get("checks_plan") or 0) for row in seller_rows if row.get("checks_plan") is not None)
         items_plan_fallback = sum(float(row.get("items_plan") or 0) for row in seller_rows if row.get("items_plan") is not None)
 
-        sales_facts = await self._sales_fact_totals(start_dt, end_dt, store_name=store_name)
+        sales_facts = await self._sales_fact_totals(start_dt, fact_end_dt, store_name=store_name)
         revenue = float(sales_facts["revenue"] or 0)
+        product_revenue = float(sales_facts.get("product_revenue") or 0)
         checks = int(sales_facts["checks"] or 0)
         items = float(sales_facts["items_sold"] or 0)
-        shifts_count = await self._shift_count(start_dt.date(), (end_dt - timedelta(days=1)).date(), store_name=store_name)
-        facts = {
-            "revenue": sales_facts["revenue"],
-            "items_count": items,
-            "avg_check": revenue / checks if checks else None,
-            "avg_item_price": revenue / items if items else None,
-            "items_per_check": items / checks if checks else None,
-            "checks_count": checks,
-            "shifts_count": shifts_count,
-            "avg_sales_per_shift": revenue / shifts_count if shifts_count else None,
-            "lag_lead": None,
-            "traffic": None,
-            "revenue_per_visitor": None,
-            "conversion": None,
-        }
-        fallback_plans = {
-            "revenue": revenue_plan_fallback,
-            "items_count": items_plan_fallback or None,
-            "checks_count": checks_plan_fallback or None,
-        }
-
         today = date.today()
         days_in_month = ((month_date.replace(year=month_date.year + 1, month=1) if month_date.month == 12 else month_date.replace(month=month_date.month + 1)) - month_date).days
         if today.year == month_date.year and today.month == month_date.month:
@@ -1139,6 +1369,27 @@ class SellerKPIService:
             elapsed_days = days_in_month
         else:
             elapsed_days = 1
+        shifts_count = elapsed_days
+        traffic = await self._traffic_fact_total(start_dt, fact_end_dt, store_name=store_name)
+        facts = {
+            "revenue": sales_facts["revenue"],
+            "items_count": items,
+            "avg_check": revenue / checks if checks else None,
+            "avg_item_price": product_revenue / items if items else None,
+            "items_per_check": items / checks if checks else None,
+            "checks_count": checks,
+            "shifts_count": shifts_count,
+            "avg_sales_per_shift": revenue / shifts_count if shifts_count else None,
+            "lag_lead": None,
+            "traffic": traffic,
+            "revenue_per_visitor": revenue / traffic if traffic else None,
+            "conversion": checks / traffic * 100 if traffic else None,
+        }
+        fallback_plans = {
+            "revenue": revenue_plan_fallback,
+            "items_count": items_plan_fallback or None,
+            "checks_count": checks_plan_fallback or None,
+        }
 
         rows = []
         for metric in self._target_metric_defs():
@@ -1148,11 +1399,21 @@ class SellerKPIService:
             plan = plans.get(key)
             if plan is None:
                 plan = history_row.get("plan_value") if history_row.get("plan_value") is not None else (agent_draft_plans.get(key) if use_agent_draft else fallback_plans.get(key))
-            forecast = history_row.get("forecast_value") if history_row.get("forecast_value") is not None else (fact / elapsed_days * days_in_month if isinstance(fact, (int, float)) else None)
+            if metric.get("format") == "percent" and isinstance(plan, (int, float)) and abs(plan) <= 1:
+                plan = plan * 100
+            if key in {"avg_check", "avg_item_price", "items_per_check", "avg_sales_per_shift", "revenue_per_visitor", "conversion"}:
+                forecast = fact
+            elif key == "shifts_count":
+                forecast = days_in_month
+            else:
+                forecast = history_row.get("forecast_value") if history_row.get("forecast_value") is not None else (fact / elapsed_days * days_in_month if isinstance(fact, (int, float)) else None)
             percent = (history_row.get("completion_percent") * 100) if isinstance(history_row.get("completion_percent"), (int, float)) and abs(history_row.get("completion_percent")) <= 10 else history_row.get("completion_percent")
             if percent is None:
                 percent = fact / plan * 100 if isinstance(fact, (int, float)) and plan else None
-            forecast_percent = (history_row.get("forecast_percent") * 100) if isinstance(history_row.get("forecast_percent"), (int, float)) and abs(history_row.get("forecast_percent")) <= 10 else history_row.get("forecast_percent")
+            if key in {"avg_check", "avg_item_price", "items_per_check", "avg_sales_per_shift", "revenue_per_visitor", "conversion"}:
+                forecast_percent = percent
+            else:
+                forecast_percent = (history_row.get("forecast_percent") * 100) if isinstance(history_row.get("forecast_percent"), (int, float)) and abs(history_row.get("forecast_percent")) <= 10 else history_row.get("forecast_percent")
             if forecast_percent is None:
                 forecast_percent = forecast / plan * 100 if isinstance(forecast, (int, float)) and plan else None
             deviation = history_row.get("deviation_value") if history_row.get("deviation_value") is not None else (fact - plan if isinstance(fact, (int, float)) and plan is not None else None)
@@ -1204,7 +1465,7 @@ class SellerKPIService:
         await self.ensure_tables()
         raw_month = payload.get("month")
         month_date = self.month_range(str(raw_month) if raw_month else None)[0]
-        store_name = (payload.get("store_name") or "").strip()
+        store_name = self._canonical_store_name(payload.get("store_name")) or ""
         scope_type = "store" if store_name else "global"
         scope_key = store_name or "all"
         metrics = payload.get("metrics") or {}
@@ -1228,21 +1489,23 @@ class SellerKPIService:
     async def _sales_fact_totals(self, start_dt: datetime, end_dt: datetime, store_name: Optional[str] = None) -> Dict[str, float]:
         """Store sales facts from synchronized 1C sales records.
 
-        Revenue, checks and item quantities all use the shared accessory exclusion
-        policy. Raw 1C rows still keep packaging/certificates, but KPI facts and
-        averages must not count supplementary products.
+        Revenue includes paid gift packaging, but item quantities and product
+        average price use only jewelry/product rows. Raw 1C rows still keep bags,
+        pouches, napkins and certificates for audit; they stay excluded from KPI.
         """
         where = ["sr.sale_date >= :start_dt", "sr.sale_date < :end_dt"]
         params: Dict[str, Any] = {"start_dt": start_dt, "end_dt": end_dt}
+        store_name = self._canonical_store_name(store_name)
         if store_name:
-            where.append("LOWER(COALESCE(s.name, sr.store_id)) = LOWER(:store_name)")
+            where.append(f"LOWER({STORE_EXPR}) = LOWER(:store_name)")
             params["store_name"] = store_name
 
         result = await self.db.execute(text(f"""
             SELECT
-                COALESCE(SUM(CASE WHEN {ANALYTICS_ELIGIBLE_PRODUCT_SQL} THEN sr.revenue ELSE 0 END), 0)::float AS revenue,
+                COALESCE(SUM(CASE WHEN {KPI_REVENUE_ELIGIBLE_PRODUCT_SQL} THEN sr.revenue ELSE 0 END), 0)::float AS revenue,
+                COALESCE(SUM(CASE WHEN {ANALYTICS_ELIGIBLE_PRODUCT_SQL} THEN sr.revenue ELSE 0 END), 0)::float AS product_revenue,
                 COALESCE(SUM(CASE WHEN {ANALYTICS_ELIGIBLE_PRODUCT_SQL} THEN sr.quantity ELSE 0 END), 0)::float AS items_sold,
-                COUNT(DISTINCT CASE WHEN {ANALYTICS_ELIGIBLE_PRODUCT_SQL} THEN sr.document_id ELSE NULL END)::int AS checks
+                COUNT(DISTINCT CASE WHEN {KPI_SALE_CHECK_SQL} THEN sr.document_id ELSE NULL END)::int AS checks
             FROM sales_records sr
             LEFT JOIN stores s ON s.external_id = sr.store_id
             LEFT JOIN products p ON p.external_id = sr.product_id
@@ -1250,13 +1513,47 @@ class SellerKPIService:
         """), params)
         row = result.first()
         if not row:
-            return {"revenue": 0.0, "items_sold": 0.0, "checks": 0}
+            return {"revenue": 0.0, "product_revenue": 0.0, "items_sold": 0.0, "checks": 0}
         data = dict(row._mapping)
         return {
             "revenue": float(data.get("revenue") or 0),
+            "product_revenue": float(data.get("product_revenue") or 0),
             "items_sold": float(data.get("items_sold") or 0),
             "checks": int(data.get("checks") or 0),
         }
+
+    def _store_visit_name_where(self, store_name: Optional[str]) -> tuple[str, Dict[str, Any]]:
+        store_name = self._canonical_store_name(store_name)
+        if not store_name:
+            return "", {}
+        normalized = self._normalize_store_name(store_name)
+        patterns = [f"%{normalized}%"]
+        if "центрум" in normalized or "centrum" in normalized:
+            patterns = ["%центрум%", "%centrum%"]
+        elif "ялта" in normalized or "yalta" in normalized:
+            patterns = ["%ялта%", "%yalta%"]
+        elif "мрия" in normalized or "mriya" in normalized or "меганом" in normalized:
+            patterns = ["%мрия%", "%mriya%", "%меганом%", "%meganom%"]
+        clauses = []
+        params: Dict[str, Any] = {}
+        for index, pattern in enumerate(patterns):
+            key = f"store_visit_pattern_{index}"
+            clauses.append(f"LOWER({STORE_VISIT_NAME_EXPR}) LIKE :{key}")
+            params[key] = pattern
+        return f" AND ({' OR '.join(clauses)})", params
+
+    async def _traffic_fact_total(self, start_dt: datetime, end_dt: datetime, store_name: Optional[str] = None) -> int:
+        """Offline store traffic from synchronized store_visits records."""
+        store_where, store_params = self._store_visit_name_where(store_name)
+        result = await self.db.execute(text(f"""
+            SELECT COALESCE(SUM(sv.visitor_count), 0)::int AS traffic
+            FROM store_visits sv
+            LEFT JOIN stores s ON s.id = sv.store_id
+            WHERE sv.date >= :start_dt
+              AND sv.date < :end_dt
+              {store_where}
+        """), {"start_dt": start_dt, "end_dt": end_dt, **store_params})
+        return int(result.scalar() or 0)
 
 
     async def _seed_default_assortment_guidance(self, month: date, store_name: Optional[str]) -> None:
@@ -1285,7 +1582,7 @@ class SellerKPIService:
     async def save_assortment_guidance(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         await self.ensure_tables()
         month_date = self.month_range(str(payload.get("month") or YALTA_ASSORTMENT_GUIDANCE_MONTH))[0]
-        store_name = (payload.get("store_name") or "").strip()
+        store_name = self._canonical_store_name(payload.get("store_name")) or ""
         if not store_name:
             raise ValueError("store_name обязателен для ассортиментного ориентира")
         rows = payload.get("rows") or []
@@ -1336,8 +1633,9 @@ class SellerKPIService:
     async def _assortment_sales_facts(self, start_dt: datetime, end_dt: datetime, store_name: Optional[str]) -> Dict[str, float]:
         where = ["sr.sale_date >= :start_dt", "sr.sale_date < :end_dt"]
         params: Dict[str, Any] = {"start_dt": start_dt, "end_dt": end_dt}
+        store_name = self._canonical_store_name(store_name)
         if store_name:
-            where.append("LOWER(COALESCE(s.name, sr.store_id)) = LOWER(:store_name)")
+            where.append(f"LOWER({STORE_EXPR}) = LOWER(:store_name)")
             params["store_name"] = store_name
         result = await self.db.execute(text(f"""
             SELECT
@@ -1363,6 +1661,7 @@ class SellerKPIService:
     async def assortment_guidance(self, current_user: User, month: Optional[str] = None, store_name: Optional[str] = None, seller_personal_plan: Optional[float] = None) -> Dict[str, Any]:
         await self.ensure_tables()
         month_date, start_dt, end_dt = self.month_range(month)
+        store_name = self._canonical_store_name(store_name)
         await self._seed_default_assortment_guidance(month_date, store_name)
         if not store_name and month_date.isoformat()[:7] == YALTA_ASSORTMENT_GUIDANCE_MONTH:
             store_name = YALTA_ASSORTMENT_GUIDANCE_STORE
@@ -1435,6 +1734,7 @@ class SellerKPIService:
         month_date, start_dt, end_dt = self.month_range(month)
         where = ["sr.sale_date >= :start_dt", "sr.sale_date < :end_dt"]
         params: Dict[str, Any] = {"start_dt": start_dt, "end_dt": end_dt}
+        store_name = self._canonical_store_name(store_name)
         if store_name:
             where.append(f"LOWER({STORE_EXPR}) = LOWER(:store_name)")
             params["store_name"] = store_name
@@ -1576,12 +1876,17 @@ class SellerKPIService:
 
     async def _target_metric_plans(self, month: date, store_name: Optional[str] = None) -> Dict[str, float]:
         await self.ensure_tables()
+        store_name = self._canonical_store_name(store_name)
         scope_type = "store" if store_name else "global"
         scope_key = store_name or "all"
+        scope_where = "scope_key=:scope_key"
+        if store_name == "Мрия":
+            scope_where = "(scope_key=:scope_key OR LOWER(scope_key) LIKE '%меганом%')"
         result = await self.db.execute(text("""
-            SELECT metric_key, plan_value::float AS plan_value
+            SELECT metric_key, SUM(plan_value)::float AS plan_value
             FROM seller_kpi_target_plans
-            WHERE month=:month AND scope_type=:scope_type AND scope_key=:scope_key
+            WHERE month=:month AND scope_type=:scope_type AND """ + scope_where + """
+            GROUP BY metric_key
         """), {"month": month, "scope_type": scope_type, "scope_key": scope_key})
         return {row._mapping["metric_key"]: float(row._mapping["plan_value"] or 0) for row in result.fetchall()}
 
@@ -1592,12 +1897,16 @@ class SellerKPIService:
         and ТРК Центрум plans cannot be confused in the management dashboard.
         """
         await self.ensure_tables()
+        store_name = self._canonical_store_name(store_name)
         scope_type = "store" if store_name else "global"
         scope_key = store_name or "all"
+        scope_where = "scope_key=:scope_key"
+        if store_name == "Мрия":
+            scope_where = "(scope_key=:scope_key OR LOWER(scope_key) LIKE '%меганом%')"
         result = await self.db.execute(text("""
-            SELECT metric_key, plan_value::float AS plan_value, updated_at, created_at
+            SELECT metric_key, plan_value::float AS plan_value, scope_key, updated_at, created_at
             FROM seller_kpi_target_plans
-            WHERE month=:month AND scope_type=:scope_type AND scope_key=:scope_key
+            WHERE month=:month AND scope_type=:scope_type AND """ + scope_where + """
         """), {"month": month, "scope_type": scope_type, "scope_key": scope_key})
         rows = []
         for row in result.fetchall():
@@ -1616,8 +1925,9 @@ class SellerKPIService:
         await self.ensure_tables()
         where = ["shift_date BETWEEN :start_date AND :end_date"]
         params: Dict[str, Any] = {"start_date": start, "end_date": end}
+        store_name = self._canonical_store_name(store_name)
         if store_name:
-            where.append("LOWER(COALESCE(store_name, '')) = LOWER(:store_name)")
+            where.append(self._store_name_where("store_name"))
             params["store_name"] = store_name
         result = await self.db.execute(text(f"""
             SELECT
@@ -1637,7 +1947,13 @@ class SellerKPIService:
             WHERE {' AND '.join(where)}
             GROUP BY seller_external_id, seller_name, store_id, store_name
         """), params)
-        return [dict(row._mapping) for row in result.fetchall()]
+        # The Excel roster can contain both the short name used in 1C sales and
+        # the employee's full name. They are the same person, so merging them
+        # here is essential: otherwise one formula-plan row overwrites the
+        # other and the displayed personal plan depends on database row order.
+        return self._merge_shift_stats_by_identity(
+            self._canonicalize_store_rows([dict(row._mapping) for row in result.fetchall()])
+        )
 
     async def _latest_shift_stats_by_seller_before_month(self, month: date, store_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """Use the latest previous schedule month as roster/hour-share fallback.
@@ -1650,8 +1966,9 @@ class SellerKPIService:
         await self.ensure_tables()
         where = ["shift_date < :month_start"]
         params: Dict[str, Any] = {"month_start": month}
+        store_name = self._canonical_store_name(store_name)
         if store_name:
-            where.append("LOWER(COALESCE(store_name, '')) = LOWER(:store_name)")
+            where.append(self._store_name_where("store_name"))
             params["store_name"] = store_name
         latest_result = await self.db.execute(text(f"""
             SELECT date_trunc('month', MAX(shift_date))::date AS fallback_month
@@ -1734,8 +2051,9 @@ class SellerKPIService:
         await self.ensure_tables()
         where = ["shift_date BETWEEN :start_date AND :end_date"]
         params: Dict[str, Any] = {"start_date": start, "end_date": end}
+        store_name = self._canonical_store_name(store_name)
         if store_name:
-            where.append("LOWER(COALESCE(store_name, '')) = LOWER(:store_name)")
+            where.append(self._store_name_where("store_name"))
             params["store_name"] = store_name
         result = await self.db.execute(text(f"""
             SELECT COUNT(*) AS count
@@ -1767,6 +2085,30 @@ class SellerKPIService:
         if len(parts) >= 2:
             return " ".join(parts[:2])
         return " ".join(parts)
+
+    @classmethod
+    def _merge_shift_stats_by_identity(cls, rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Merge roster aliases before calculating a seller's hour share."""
+        merged: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            normalized_name = cls._normalize_seller_name(row.get("seller_name"))
+            external_id = str(row.get("seller_external_id") or "").strip()
+            if not external_id or external_id == ZERO_GUID:
+                external_id = KNOWN_SELLER_EXTERNAL_IDS_BY_NORMALIZED_NAME.get(normalized_name, "")
+            canonical_name = KNOWN_SELLER_NAMES_BY_EXTERNAL_ID.get(external_id) or row.get("seller_name")
+            store_name = row.get("store_name") or row.get("store_id") or ""
+            identity = external_id or normalized_name
+            key = f"{identity}|{cls._normalize_store_name(store_name)}"
+            current = merged.setdefault(key, {
+                **row,
+                "seller_external_id": external_id or row.get("seller_external_id"),
+                "seller_name": canonical_name,
+                "shifts_count": 0,
+                "hours_count": 0.0,
+            })
+            current["shifts_count"] += int(row.get("shifts_count") or 0)
+            current["hours_count"] += float(row.get("hours_count") or 0)
+        return list(merged.values())
 
     @classmethod
     def _seller_key(cls, seller_external_id: Optional[str], seller_name: Optional[str], store_id: Optional[str], store_name: Optional[str]) -> str:

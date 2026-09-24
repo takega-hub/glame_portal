@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import importlib.util
 import shutil
 from dataclasses import dataclass
@@ -15,7 +16,9 @@ from pathlib import PurePosixPath
 import zipfile
 from typing import Any
 from uuid import uuid4
-from xml.etree import ElementTree
+from lxml import etree as ElementTree
+from app.services.trainee_attestation import trainee_blank_coverage_for_lesson
+from app.services.upload_security import validate_training_document
 
 ALLOWED_TOPIC_STATUSES = {
     "draft",
@@ -81,7 +84,7 @@ DEFAULT_TRAINING_MATERIAL_REFORMATTER_PROMPT = """Ты — AI-агент GLAME �
 - запрещены агрессивные продажи: “берите”, “дожимайте”, “закрывайте клиента”, “всем подходит”, “must-have”;
 - image_prompt и speaker_note — только для администратора/руководителя, не для продавца;
 - финальную обратную связь и публикацию подтверждает руководитель;
-- question_pool должен содержать 8–12 проверочных вопросов разного типа: короткий ответ, сценарий клиента, выбор формулировки, do/don't, применение в смене. Каждый вопрос должен иметь ожидаемый ответ/критерии и уровень сложности.
+- question_pool — это короткая проверка конкретного урока: 1 вопрос на каждый показанный слайд, максимум 5. Вопрос имеет право проверять только факт, правило или пример, уже показанный на этом слайде; нельзя спрашивать о следующих этапах, темах из исходника вне слайдов или вопросах итоговой аттестации, которые ещё не разобраны.
 
 Форматируй ответ строго как JSON по запрошенной схеме. Слайды и вопросы должны быть самостоятельными, понятными продавцу и готовыми к проверке руководителем."""
 
@@ -122,20 +125,76 @@ DEFAULT_TRAINING_STRUCTURE = {
     "trainee_base": [
         {
             "title": "Бренд и стандарты GLAME",
-            "description": "Миссия, роль консультанта, внешний вид и базовая культура сервиса.",
+            "description": "Роль консультанта, ценности бренда и стандарт первого впечатления.",
             "order_index": 10,
             "steps": [
-                {"title": "Миссия и ценности GLAME", "order_index": 10, "competencies": ["brand_standard", "service_contact"]},
-                {"title": "Первый контакт 30–60 секунд", "order_index": 20, "competencies": ["service_contact", "glame_language"]},
+                {
+                    "title": "Миссия и ценности GLAME", "order_index": 10, "competencies": ["brand_standard", "service_contact"],
+                    "lesson_text": "GLAME помогает человеку выбрать украшение, которое поддерживает его образ, повод и ощущение себя. Консультант не «продаёт любой ценой»: он задаёт вопросы, бережно показывает варианты и говорит только проверенную информацию.\n\nСтандарт бренда — эстетичность, точность, уважение к выбору покупателя и ответственность за изделие.",
+                    "practice_text": "Запомните три опоры GLAME: образ, бережная коммуникация, точная информация. В конце урока проверьте себя в коротком опроснике.",
+                    "answer_template": "Сначала понимаю повод и образ → затем показываю релевантный вариант → объясняю пользу спокойно и честно.",
+                    "assessment_rubric": {"criteria": ["Есть связь украшения с образом", "Фраза звучит без давления", "Указан конкретный стандарт работы"]},
+                },
+                {
+                    "title": "Первый контакт 30–60 секунд", "order_index": 20, "competencies": ["service_contact", "glame_language"],
+                    "lesson_text": "Первые 30–60 секунд создают доверие. Поздоровайтесь, дайте покупателю пространство и предложите помощь. Затем выясните повод, для кого выбирают украшение, предпочтения и комфортный диапазон.\n\nВместо «Что вам показать?» используйте: «Подбираете для себя или в подарок? Могу помочь найти вариант под повод».",
+                    "practice_text": "Запомните последовательность: приветствие → повод → адресат → предпочтение → следующий шаг.",
+                    "answer_template": "«Добрый день…» → «Подбираете для себя или в подарок?» → «Покажу несколько вариантов, чтобы сравнить».",
+                    "assessment_rubric": {"criteria": ["Есть открытый вопрос", "Нет давления", "Есть понятный следующий шаг"]},
+                },
             ],
         },
         {
             "title": "Продукт и операции",
-            "description": "Ассортимент, материалы, уход, касса и правила смены.",
+            "description": "Ювелирная база, ассортимент, уход, касса и правила работы в магазине.",
             "order_index": 20,
             "steps": [
-                {"title": "Материалы и уход за украшениями", "order_index": 10, "competencies": ["product_knowledge"]},
-                {"title": "Касса, сертификаты и возвраты", "order_index": 20, "competencies": ["operations"]},
+                {
+                    "title": "Ювелирная база: кольца, серьги и замки", "order_index": 10, "competencies": ["product_knowledge"],
+                    "lesson_text": "На этом этапе разбираются элементы кольца, корректное определение размера, замки серёг, замки и плетения цепей и браслетов. Используйте только подтверждённые карточки ассортимента и методические материалы GLAME.",
+                    "practice_text": "Подберите два изделия и объясните клиенту устройство, удобство и подходящий способ примерки.",
+                    "answer_template": "«У этого изделия …; для вас это удобно, потому что …»",
+                    "assessment_rubric": {"criteria": ["Корректно называет элементы и замки", "Не придумывает свойства", "Связывает факт с удобством клиента"]},
+                },
+                {
+                    "title": "Материалы, покрытия, сталь и уход", "order_index": 20, "competencies": ["product_knowledge"],
+                    "lesson_text": "Перед презентацией проверьте карточку товара: металл, вставки, покрытие, тип замка и рекомендации по уходу. Объясняйте свойства простым языком и не заменяйте точную информацию догадками.\n\nБазовый уход: беречь изделие от агрессивной химии, хранить отдельно и следовать инструкции для конкретного материала.",
+                    "practice_text": "Освойте правило: характеристика из карточки товара → польза для покупателя → правило ухода.",
+                    "answer_template": "«Здесь …, поэтому украшение …» → «Чтобы сохранить вид, рекомендую …».",
+                    "assessment_rubric": {"criteria": ["Названы проверяемые свойства изделия", "Выгода связана с образом или удобством", "Уход сформулирован корректно"]},
+                },
+                {
+                    "title": "Коллекции GLAME и подбор по образу", "order_index": 30, "competencies": ["product_knowledge", "styling_effect"],
+                    "lesson_text": "Ассортимент GLAME нужно знать не как перечень названий, а как решение для разных образов и поводов. Изучайте особенности коллекций, вставки, масштаб и характер изделия.\n\nПри подборе сначала сравните форму, металл и акцентность с запросом покупателя; затем предложите один релевантный вариант и объясните эффект в образе.",
+                    "practice_text": "Запомните формулу презентации коллекции: характер изделия → кому и для какого повода → какой эффект оно добавляет образу.",
+                    "answer_template": "«У этой коллекции …» → «Она подойдёт, если хочется …» → «В образе даст эффект …».",
+                    "assessment_rubric": {"criteria": ["Различает изделие и его эффект", "Связывает предложение с запросом", "Не навязывает комплект"]},
+                },
+                {
+                    "title": "Камни, огранки и закрепки", "order_index": 40, "competencies": ["product_knowledge"],
+                    "lesson_text": "Изучите виды огранки и закрепок, а также различия между цирконом, фианитом, цирконием и кубическим цирконием по утверждённой методичке. Формулировки для клиента должны быть точными и честными.",
+                    "practice_text": "Возьмите два изделия с вставками и подготовьте простое объяснение материала и закрепки.",
+                    "answer_template": "«В этом изделии …; это важно знать, потому что …»",
+                    "assessment_rubric": {"criteria": ["Не смешивает термины", "Опирается на методичку", "Объясняет понятным языком"]},
+                },
+                {"title": "Касса, сертификаты, возвраты и лояльность", "order_index": 50, "competencies": ["operations"], "lesson_text": "Оплата, сертификаты, обмен, возврат, программа лояльности и GLAME-бот выполняются только по действующему регламенту магазина. При нестандартной ситуации остановитесь, проверьте памятку и пригласите управляющего.", "practice_text": "Найдите в регламенте порядок для оплаты, возврата и одной задачи GLAME-бота.", "answer_template": "«Сначала сверяю актуальную памятку, затем оформляю операцию; при исключении зову управляющего».", "assessment_rubric": {"criteria": ["Опирается на регламент", "Знает границы самостоятельного решения", "Называет инструмент лояльности"]}},
+            ],
+        },
+        {
+            "title": "Сервис и продажа без давления",
+            "description": "Выявление потребности, презентация, работа с сомнениями и завершение продажи.",
+            "order_index": 30,
+            "steps": [
+                {"title": "Презентация: свойство → выгода", "order_index": 10, "competencies": ["sales_without_pressure", "styling_effect"], "lesson_text": "Презентация начинается после того, как понятна потребность. Покажите одно-два подходящих изделия, назовите проверяемое свойство и переведите его в выгоду для конкретного повода.\n\nНе перегружайте характеристиками: лучше один точный аргумент, чем длинный перечень.", "practice_text": "Запомните связку: потребность → свойство изделия → польза для образа или комфорта.", "answer_template": "«Вы говорили, что … Поэтому обратите внимание на …: благодаря … оно …»", "assessment_rubric": {"criteria": ["Есть связь с потребностью", "Свойство не выдумано", "Выгода понятна покупателю"]}},
+                {"title": "Сомнения и завершение продажи", "order_index": 20, "competencies": ["sales_without_pressure", "glame_language"], "lesson_text": "Фразы «Я просто смотрю» и «Мне надо подумать» — не повод давить. Примите право человека на выбор, задайте один уместный уточняющий вопрос и предложите удобный следующий шаг.\n\nПри завершении продажи подведите итог выбора, аккуратно оформите оплату и поблагодарите покупателя.", "practice_text": "Запомните: принять сомнение → уточнить без давления → предложить следующий шаг → сохранить доброжелательность.", "answer_template": "«Конечно, спокойно посмотрите. Если удобно, я могу …»", "assessment_rubric": {"criteria": ["Нет давления", "Есть уважение к решению", "Следующий шаг конкретен"]}},
+            ],
+        },
+        {
+            "title": "Смена, выкладка и показатели",
+            "description": "Открытие и закрытие магазина, передача смены, выкладка и рабочие показатели.",
+            "order_index": 40,
+            "steps": [
+                {"title": "Открытие, закрытие, выкладка и KPI", "order_index": 10, "competencies": ["operations", "brand_standard"], "lesson_text": "Передача смены, выкладка и чистота витрин влияют на доверие к магазину. Соблюдайте чек-лист открытия и закрытия, поддерживайте порядок и фиксируйте отклонения.\n\nПоказатели магазина помогают увидеть, где нужна работа: трафик, конверсия, средний чек и длина чека. При нехватке трафика команда улучшает качество контакта и предложения, а не давит на покупателя.", "practice_text": "Запомните: порядок смены → аккуратная выкладка → понятные показатели → действия без давления.", "answer_template": "«Проверяю …, передаю …, если трафика мало — работаю над …»", "assessment_rubric": {"criteria": ["Понимает стандарт смены", "Знает смысл показателей", "Предлагает этичные действия"]}},
             ],
         },
     ],
@@ -592,6 +651,136 @@ async def ensure_consultant_training_schema(db) -> None:
             program_id = program_row[0]
             existing_modules = (await db.execute(text("SELECT count(*) FROM consultant_training_modules WHERE program_id = :program_id"), {"program_id": program_id})).scalar() or 0
             if existing_modules:
+                if program["code"] == "trainee_base":
+                    # Rename the two early aggregate stages in place. Their
+                    # attached source materials remain attached, while the
+                    # title now states the complete blank section they cover.
+                    await db.execute(
+                        text(
+                            """
+                            UPDATE consultant_training_steps AS step
+                            SET title = CASE step.title
+                                WHEN 'Материалы и уход за украшениями' THEN 'Материалы, покрытия, сталь и уход'
+                                WHEN 'Касса, сертификаты и возвраты' THEN 'Касса, сертификаты, возвраты и лояльность'
+                                ELSE step.title
+                            END,
+                            updated_at = now()
+                            FROM consultant_training_modules AS module
+                            WHERE step.module_id = module.id
+                              AND module.program_id = :program_id
+                              AND step.title IN ('Материалы и уход за украшениями', 'Касса, сертификаты и возвраты')
+                            """
+                        ),
+                        {"program_id": program_id},
+                    )
+                    await db.execute(
+                        text(
+                            """
+                            UPDATE consultant_training_steps AS step
+                            SET order_index = CASE step.title
+                                WHEN 'Ювелирная база: кольца, серьги и замки' THEN 10
+                                WHEN 'Материалы, покрытия, сталь и уход' THEN 20
+                                WHEN 'Коллекции GLAME и подбор по образу' THEN 30
+                                WHEN 'Камни, огранки и закрепки' THEN 40
+                                WHEN 'Касса, сертификаты, возвраты и лояльность' THEN 50
+                                ELSE step.order_index
+                            END,
+                            updated_at = now()
+                            FROM consultant_training_modules AS module
+                            WHERE step.module_id = module.id
+                              AND module.program_id = :program_id
+                            """
+                        ),
+                        {"program_id": program_id},
+                    )
+                # Early installations had only four broad placeholders. Keep
+                # every existing lesson and its edits, but add the missing
+                # curriculum stages from the trainee blank. This is an
+                # additive migration: it never deletes source links, slides
+                # or learner history.
+                for module in DEFAULT_TRAINING_STRUCTURE.get(program["code"], []):
+                    module_row = (await db.execute(
+                        text(
+                            "SELECT id FROM consultant_training_modules "
+                            "WHERE program_id = :program_id AND title = :module_title"
+                        ),
+                        {"program_id": program_id, "module_title": module["title"]},
+                    )).first()
+                    if module_row:
+                        module_id = module_row[0]
+                    else:
+                        module_id = uuid4()
+                        await db.execute(
+                            text(
+                                """
+                                INSERT INTO consultant_training_modules (id, program_id, title, description, order_index, meta)
+                                VALUES (:id, :program_id, :title, :description, :order_index, :meta)
+                                """
+                            ),
+                            {
+                                "id": module_id, "program_id": program_id, "title": module["title"],
+                                "description": module.get("description"), "order_index": module.get("order_index", 100),
+                                "meta": json.dumps(module.get("meta") or {}),
+                            },
+                        )
+                    for step in module.get("steps", []):
+                        existing_step = (await db.execute(
+                            text(
+                                "SELECT id FROM consultant_training_steps "
+                                "WHERE module_id = :module_id AND title = :step_title"
+                            ),
+                            {"module_id": module_id, "step_title": step["title"]},
+                        )).first()
+                        if not existing_step:
+                            await db.execute(
+                                text(
+                                    """
+                                    INSERT INTO consultant_training_steps (
+                                        id, module_id, title, lesson_text, practice_text, answer_template,
+                                        assessment_rubric, competencies, unlock_rule, is_required, order_index, meta
+                                    ) VALUES (
+                                        :id, :module_id, :title, :lesson_text, :practice_text, :answer_template,
+                                        :assessment_rubric, :competencies, :unlock_rule, :is_required, :order_index, :meta
+                                    )
+                                    """
+                                ),
+                                {
+                                    "id": uuid4(), "module_id": module_id, "title": step["title"],
+                                    "lesson_text": step.get("lesson_text"), "practice_text": step.get("practice_text"),
+                                    "answer_template": step.get("answer_template"),
+                                    "assessment_rubric": json.dumps(step.get("assessment_rubric") or {}),
+                                    "competencies": json.dumps(step.get("competencies") or []),
+                                    "unlock_rule": json.dumps(step.get("unlock_rule") or {}),
+                                    "is_required": step.get("is_required", True), "order_index": step.get("order_index", 100),
+                                    "meta": json.dumps(step.get("meta") or {}),
+                                },
+                            )
+                            continue
+                        await db.execute(
+                            text(
+                                """
+                                UPDATE consultant_training_steps AS step
+                                SET lesson_text = :lesson_text,
+                                    practice_text = :practice_text,
+                                    answer_template = :answer_template,
+                                    assessment_rubric = :assessment_rubric,
+                                    order_index = :order_index,
+                                    updated_at = now()
+                                FROM consultant_training_modules AS module
+                                WHERE step.module_id = module.id
+                                  AND module.program_id = :program_id
+                                  AND module.title = :module_title
+                                  AND step.title = :step_title
+                                  AND (step.lesson_text IS NULL OR btrim(step.lesson_text) = '')
+                                """
+                            ),
+                            {
+                                "program_id": program_id, "module_title": module["title"], "step_title": step["title"],
+                                "lesson_text": step.get("lesson_text"), "practice_text": step.get("practice_text"),
+                                "answer_template": step.get("answer_template"), "assessment_rubric": json.dumps(step.get("assessment_rubric") or {}),
+                                "order_index": step.get("order_index", 100),
+                            },
+                        )
                 continue
             for module in DEFAULT_TRAINING_STRUCTURE.get(program["code"], []):
                 module_id = uuid4()
@@ -1459,7 +1648,10 @@ def _training_material_sections(markdown: str) -> list[dict[str, str]]:
 def _training_visual_assets_for_learning(material: Any) -> list[dict[str, Any]]:
     extraction = _material_extraction(material)
     assets = build_training_material_visual_assets_payload(extraction, include_content=True)
-    assets = [asset for asset in assets if asset.get("image_url")]
+    # PDF pages and embedded document graphics are source references for the
+    # methodist, not learner-facing illustrations.  They routinely contain
+    # tiny text and screenshots and must never be auto-inserted into slides.
+    assets = [asset for asset in assets if asset.get("image_url") and asset.get("source") == "ai_contentmaker"]
     assets.sort(key=lambda item: (int(item.get("page") or 9999), int(item.get("image_index") or 9999), str(item.get("asset_id") or "")))
     return assets
 
@@ -1479,41 +1671,31 @@ def _infer_training_quiz_question(slide_title: str, body: str, index: int) -> st
     return "Что главное нужно применить в работе после этого слайда?"
 
 
-def build_training_material_question_pool(*, title: str, topic: str, sentences: list[str], slide_questions: list[str] | None = None, target_count: int = 10) -> list[dict[str, Any]]:
-    """Build manager-reviewed draft questions for knowledge assessment from a training material."""
-    base_facts = [re.sub(r"\s+", " ", item).strip() for item in (sentences or []) if str(item).strip()]
-    if not base_facts:
-        base_facts = [title, topic]
-    slide_questions = [str(item).strip() for item in (slide_questions or []) if str(item).strip()]
-    templates = [
-        ("short_answer", "easy", "Назовите главную мысль урока «{topic}».", "Проверить, что продавец понял ключевой принцип материала и может сформулировать его своими словами."),
-        ("client_scenario", "medium", "Клиент сомневается. Как объяснить правило из материала спокойной GLAME-фразой без давления?", "В ответе есть ситуация клиента, мягкая формулировка, польза/эффект и отсутствие давления."),
-        ("do_dont", "medium", "Какие две формулировки из этой темы нельзя говорить клиенту и чем их заменить?", "Продавец различает внутреннюю подсказку и клиентский язык, не оценивает внешность и не дожимает."),
-        ("shift_application", "medium", "Что конкретно вы примените в ближайшей смене по теме «{topic}»?", "Есть действие в зале, пример изделия/сервиса и фраза для клиента."),
-        ("manager_check", "hard", "Разберите мини-кейс по материалу: что заметить, что предложить и как объяснить клиенту?", "Ответ структурирован: наблюдение → предложение → GLAME-фраза → следующий деликатный шаг."),
-    ]
+def build_training_material_question_pool(*, slides: list[dict[str, Any]] | None, target_count: int = 5) -> list[dict[str, Any]]:
+    """Build a lesson quiz strictly from the slides visible in that lesson."""
+    visible_slides = sorted(
+        [dict(slide) for slide in (slides or []) if isinstance(slide, dict) and str(slide.get("title") or "").strip()],
+        key=lambda slide: int(slide.get("order_index") or 100),
+    )[: max(1, min(int(target_count or 5), 5))]
     questions: list[dict[str, Any]] = []
-    for question in slide_questions:
+    for index, slide in enumerate(visible_slides, start=1):
+        title = str(slide.get("title") or f"Слайд {index}").strip()
+        body = re.sub(r"\s+", " ", str(slide.get("body") or "")).strip()
+        question = str(slide.get("quiz_question") or "").strip() or f"По слайду «{title}»: какую главную мысль нужно запомнить и как вы её примените?"
         questions.append({
             "question": question,
             "type": "slide_self_check",
-            "difficulty": "easy",
-            "expected_answer": "Ответ должен опираться на конкретный слайд и показывать, как продавец применит правило в работе.",
-            "criteria": ["понимание слайда", "конкретика", "язык GLAME без давления"],
-            "source": "slide_quiz_question",
+            "difficulty": "easy" if index <= 2 else "medium",
+            "expected_answer": f"Ответ опирается только на мысль слайда «{title}»{': ' + body[:240] if body else ''}",
+            "criteria": ["опора на показанный слайд", "точность формулировки", "без добавления тем следующих уроков"],
+            "source": "current_lesson_slide",
+            "source_slide_order_index": int(slide.get("order_index") or index * 10),
+            "source_slide_title": title,
+            "source_excerpt": body[:240],
+            "order_index": index * 10,
+            "review_required": True,
         })
-    for index in range(max(0, target_count - len(questions))):
-        q_type, difficulty, question_template, expected = templates[index % len(templates)]
-        fact = base_facts[min(index, len(base_facts) - 1)]
-        questions.append({
-            "question": question_template.format(topic=topic),
-            "type": q_type,
-            "difficulty": difficulty,
-            "expected_answer": expected,
-            "criteria": ["понимание материала", "конкретный пример", "корректная GLAME-формулировка"],
-            "source_excerpt": fact[:240],
-        })
-    return questions[: max(6, min(int(target_count or 10), 12))]
+    return questions
 
 
 def build_training_material_learning_pack_payload(*, material: Any, target_slide_count: int = 5) -> dict[str, Any]:
@@ -1597,13 +1779,7 @@ def build_training_material_learning_pack_payload(*, material: Any, target_slide
             }
         )
 
-    question_pool = build_training_material_question_pool(
-        title=str(title),
-        topic=str(topic),
-        sentences=sentences,
-        slide_questions=[slide.get("quiz_question") for slide in slides],
-        target_count=10,
-    )
+    question_pool = build_training_material_question_pool(slides=slides, target_count=5)
 
     return {
         "status": "draft_review_required",
@@ -1625,6 +1801,7 @@ def build_training_material_learning_pack_payload(*, material: Any, target_slide
             ],
             "manager_review_note": "AI формирует только draft learning pack. Руководитель проверяет слайды, практику, пул вопросов и критерии перед публикацией.",
             "question_pool": question_pool,
+            "scope": {"kind": "current_lesson_slides_only", "slide_orders": [slide["order_index"] for slide in slides]},
         },
     }
 
@@ -2031,7 +2208,13 @@ def _decode_import_file_content(file_item: dict[str, Any]) -> bytes:
         data = str(file_item.get("content_base64") or "")
         if "," in data and data.strip().lower().startswith("data:"):
             data = data.split(",", 1)[1]
-        return base64.b64decode(data)
+        try:
+            decoded = base64.b64decode(data, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("invalid_base64") from exc
+        if len(decoded) > 20 * 1024 * 1024:
+            raise ValueError("file_too_large")
+        return decoded
     content = file_item.get("content")
     if content is None:
         return b""
@@ -2050,7 +2233,10 @@ def _decode_text_bytes(data: bytes) -> str:
 def _extract_docx_text(data: bytes) -> str:
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         xml_data = archive.read("word/document.xml")
-    root = ElementTree.fromstring(xml_data)
+    root = ElementTree.fromstring(
+        xml_data,
+        parser=ElementTree.XMLParser(resolve_entities=False, no_network=True, huge_tree=False),
+    )
     paragraphs: list[str] = []
     namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
     for paragraph in root.iter(f"{namespace}p"):
@@ -2307,6 +2493,7 @@ def parse_training_material_document_import(
     suffix = PurePosixPath(filename_value).suffix.lower().lstrip(".")
     file_item = {"filename": filename_value, "content": content, "content_base64": content_base64}
     data = _decode_import_file_content(file_item)
+    validate_training_document(filename_value, data)
     visual_assets: list[dict[str, Any]] = []
     if suffix in {"md", "markdown"}:
         extracted = content or _decode_text_bytes(data)
@@ -2733,6 +2920,8 @@ def build_program_structure_payload(*, program: Any, modules: list[Any], steps: 
                     "practice_text": _dict_value(step, "practice_text"),
                     "answer_template": _dict_value(step, "answer_template"),
                     "assessment_rubric": _dict_value(step, "assessment_rubric", {}) or {},
+                    "trainee_blank_coverage": trainee_blank_coverage_for_lesson(_dict_value(step, "title")),
+                    "learning_flow": _dict_value(step, "learning_flow", None),
                     "competencies": _dict_value(step, "competencies", []) or [],
                     "unlock_rule": _dict_value(step, "unlock_rule", {}) or {},
                     "is_required": _program_bool(_dict_value(step, "is_required", True)),

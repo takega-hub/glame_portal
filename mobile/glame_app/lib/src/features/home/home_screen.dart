@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/formatters/rub.dart';
+import '../../core/layout/glame_layout.dart';
 import '../../core/network/asset_url.dart';
 import '../../core/theme/glame_theme.dart';
 import '../brands/brands_screen.dart';
@@ -90,14 +91,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final fallbackProductCards = _normalizeCatalogProducts(
       newProductsAsync.asData?.value,
     );
-    final productCards = (featuredLook?.products.isNotEmpty ?? false)
-        ? featuredLook!.products.toList(growable: false)
-        : fallbackProductCards;
     final effectiveDropData =
         dropData ??
         (fallbackProductCards.isNotEmpty
             ? _NewInDropData.fromProduct(fallbackProductCards.first)
             : null);
+    final newInEntries = shuffledLooks
+        .map(
+          (look) => _NewInLookEntry(
+            drop: _NewInDropData.fromLook(look),
+            products: look.products.isNotEmpty
+                ? look.products.toList(growable: false)
+                : fallbackProductCards,
+          ),
+        )
+        .toList(growable: false);
+    final effectiveNewInEntries = newInEntries.isNotEmpty
+        ? newInEntries
+        : [
+            _NewInLookEntry(
+              drop: effectiveDropData,
+              products: fallbackProductCards,
+            ),
+          ];
 
     final isPagedMobileHome = MediaQuery.of(context).size.width < 600;
     if (isPagedMobileHome) {
@@ -130,14 +146,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               _HomeFullScreenSection(
                 child: _HomeNewInBlock(
-                  drop: effectiveDropData,
-                  products: productCards,
+                  entries: effectiveNewInEntries,
                   loading:
                       newLooksAsync.isLoading || newProductsAsync.isLoading,
                   onOpenAllNew: _openAllNew,
-                  onOpenDrop: dropData == null
-                      ? null
-                      : () => _openNewInDrop(dropData),
+                  onOpenDrop: _openNewInDrop,
                   viewportHeight: viewportHeight,
                 ),
               ),
@@ -198,13 +211,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               _HomeNewInBlock(
-                drop: effectiveDropData,
-                products: productCards,
+                entries: effectiveNewInEntries,
                 loading: newLooksAsync.isLoading || newProductsAsync.isLoading,
                 onOpenAllNew: _openAllNew,
-                onOpenDrop: dropData == null
-                    ? null
-                    : () => _openNewInDrop(dropData),
+                onOpenDrop: _openNewInDrop,
               ),
               _HomePhotoSelectionBlock(
                 onOpenUpload: _openPhotoUpload,
@@ -835,7 +845,7 @@ class _HomeHeroBlock extends StatelessWidget {
     final effectiveSlides = slides.isEmpty ? _fallbackHeroSlides : slides;
     final safeCurrentPage = currentPage.clamp(0, effectiveSlides.length - 1);
     final currentSlide = effectiveSlides[safeCurrentPage];
-    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final isDesktop = GlameLayout.isDesktop(context);
     final content = Stack(
       children: [
         Positioned.fill(
@@ -909,37 +919,39 @@ class _HomeHeroBlock extends StatelessWidget {
                   )
                 : SafeArea(
                     bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 42),
-                      child: Column(
-                        children: [
-                          const Spacer(),
-                          SizedBox(
-                            height: 292,
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Expanded(
-                                  child: _HeroLeftColumn(
-                                    slide: currentSlide,
-                                    onOpenAction: onOpenAction,
-                                  ),
-                                ),
-                                const SizedBox(width: _heroIndicatorGap),
-                                SizedBox(
-                                  width: 148,
-                                  child: Align(
-                                    alignment: Alignment.bottomRight,
-                                    child: _SlideIndicator(
-                                      currentIndex: safeCurrentPage,
-                                      total: effectiveSlides.length,
+                    child: GlameContentWidth(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(28, 24, 28, 42),
+                        child: Column(
+                          children: [
+                            const Spacer(),
+                            SizedBox(
+                              height: 292,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Expanded(
+                                    child: _HeroLeftColumn(
+                                      slide: currentSlide,
+                                      onOpenAction: onOpenAction,
                                     ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: _heroIndicatorGap),
+                                  SizedBox(
+                                    width: 148,
+                                    child: Align(
+                                      alignment: Alignment.bottomRight,
+                                      child: _SlideIndicator(
+                                        currentIndex: safeCurrentPage,
+                                        total: effectiveSlides.length,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1056,21 +1068,29 @@ class _GlameHeroButton extends StatelessWidget {
   final bool filled;
   final VoidCallback onTap;
   final double? width;
+  final double? height;
+  final bool darkSurface;
 
   const _GlameHeroButton({
     required this.title,
     required this.filled,
     required this.onTap,
     this.width,
+    this.height,
+    this.darkSurface = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: _heroCtaHeight,
+      height: height ?? _heroCtaHeight,
       width: width ?? _heroCtaWidth,
       child: Material(
-        color: filled ? GlameColors.surface2 : Colors.transparent,
+        color: darkSurface
+            ? const Color(0xE3272A2B)
+            : filled
+            ? GlameColors.surface2
+            : Colors.transparent,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.zero,
           side: BorderSide(color: GlameColors.surface2, width: 1),
@@ -1081,11 +1101,15 @@ class _GlameHeroButton extends StatelessWidget {
             child: Text(
               title,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: darkSurface ? 15 : 20,
                 fontWeight: FontWeight.w400,
                 height: 1.05,
                 letterSpacing: 0.1,
-                color: filled ? GlameColors.textPrimary : GlameColors.surface2,
+                color: darkSurface
+                    ? GlameColors.surface2
+                    : filled
+                    ? GlameColors.textPrimary
+                    : GlameColors.surface2,
               ),
             ),
           ),
@@ -1194,10 +1218,9 @@ class _HeroFixedMobileOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final buttonWidth = (width - GlameUi.pagePadding * 2).clamp(
-      220.0,
-      _heroCtaWidth,
-    );
+    final buttonWidth = (width - GlameUi.pagePadding * 2).clamp(210.0, 260.0);
+    const buttonHeight = 46.0;
+    const buttonGap = 10.0;
     final topSafe = MediaQuery.of(context).padding.top;
     final textTop =
         topSafe + GlameUi.heroTopOffset + GlameUi.heroTopBarHeight + 42;
@@ -1226,25 +1249,29 @@ class _HeroFixedMobileOverlay extends StatelessWidget {
                 left: GlameUi.pagePadding,
                 top: GlameUi.heroPrimaryButtonY,
                 width: buttonWidth,
-                height: _heroCtaHeight,
+                height: buttonHeight,
                 child: _GlameHeroButton(
                   title: slide.primaryButtonText!,
                   filled: true,
                   onTap: () => onOpenAction(slide.primaryAction),
                   width: buttonWidth,
+                  height: buttonHeight,
+                  darkSurface: true,
                 ),
               ),
             if ((slide.secondaryButtonText ?? '').isNotEmpty)
               Positioned(
                 left: GlameUi.pagePadding,
-                top: GlameUi.heroSecondaryButtonY,
+                top: GlameUi.heroPrimaryButtonY + buttonHeight + buttonGap,
                 width: buttonWidth,
-                height: _heroCtaHeight,
+                height: buttonHeight,
                 child: _GlameHeroButton(
                   title: slide.secondaryButtonText!,
                   filled: false,
                   onTap: () => onOpenAction(slide.secondaryAction),
                   width: buttonWidth,
+                  height: buttonHeight,
+                  darkSurface: true,
                 ),
               ),
             Positioned(
@@ -1375,17 +1402,15 @@ class _HeroLeftColumn extends StatelessWidget {
   }
 }
 
-class _HomeNewInBlock extends ConsumerWidget {
-  final _NewInDropData? drop;
-  final List<_NewInProductData> products;
+class _HomeNewInBlock extends StatefulWidget {
+  final List<_NewInLookEntry> entries;
   final bool loading;
   final Future<void> Function() onOpenAllNew;
-  final Future<void> Function()? onOpenDrop;
+  final Future<void> Function(_NewInDropData drop)? onOpenDrop;
   final double? viewportHeight;
 
   const _HomeNewInBlock({
-    required this.drop,
-    required this.products,
+    required this.entries,
     required this.loading,
     required this.onOpenAllNew,
     required this.onOpenDrop,
@@ -1393,12 +1418,44 @@ class _HomeNewInBlock extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final items = products;
-    final isPagedLayout = viewportHeight != null;
+  State<_HomeNewInBlock> createState() => _HomeNewInBlockState();
+}
+
+class _HomeNewInBlockState extends State<_HomeNewInBlock> {
+  int _currentEntryIndex = 0;
+
+  @override
+  void didUpdateWidget(covariant _HomeNewInBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_currentEntryIndex >= widget.entries.length) {
+      _currentEntryIndex = 0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final entry = widget.entries[_currentEntryIndex];
+    final items = entry.products;
+    final isPagedLayout = widget.viewportHeight != null;
     final screenWidth = MediaQuery.of(context).size.width;
-    final blockHeight = viewportHeight ?? MediaQuery.of(context).size.height;
-    final compact = isPagedLayout || screenWidth < 600;
+    final desktopStackedLayout = !isPagedLayout && screenWidth >= 1024;
+    if (desktopStackedLayout) {
+      return _NewInDesktopLookComposition(
+        drop: entry.drop,
+        products: items,
+        loading: widget.loading,
+        onOpenAllNew: widget.onOpenAllNew,
+        onOpenDrop: entry.drop == null || widget.onOpenDrop == null
+            ? null
+            : () => widget.onOpenDrop!(entry.drop!),
+      );
+    }
+    final blockHeight =
+        widget.viewportHeight ?? MediaQuery.of(context).size.height;
+    // Tablets need the same bounded product-card geometry as phones. Without
+    // it, a 3:4 image can consume the whole card height and push its caption
+    // underneath the visible part of the block.
+    final compact = isPagedLayout || screenWidth < 1024;
     final topPadding = isPagedLayout ? 118.0 : (compact ? 54.0 : 64.0);
     final bottomPadding = isPagedLayout ? 18.0 : (compact ? 64.0 : 72.0);
     final titleSize = compact ? 24.0 : 42.0;
@@ -1424,109 +1481,129 @@ class _HomeNewInBlock extends ConsumerWidget {
         _homeBlockHorizontalPadding,
         bottomPadding,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          DecoratedBox(
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: GlameColors.borderGray)),
-            ),
-            child: Padding(
-              padding: EdgeInsets.only(bottom: compact ? 14 : 18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Новое в GLAME',
-                      style: TextStyle(
-                        fontSize: titleSize,
-                        fontWeight: FontWeight.w300,
-                        color: GlameColors.whiteGlame,
-                        height: 1.02,
-                      ),
-                    ),
+      child: GlameContentWidth(
+        maxWidth: 1180,
+        child: SizedBox(
+          width: double.infinity,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              DecoratedBox(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: GlameColors.borderGray),
                   ),
-                  const SizedBox(width: 12),
-                  InkWell(
-                    onTap: () => onOpenAllNew(),
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        'Все новинки',
-                        style: TextStyle(
-                          fontSize: linkSize,
-                          fontWeight: FontWeight.w300,
-                          color: GlameColors.steelGray,
-                          decoration: TextDecoration.underline,
-                          decorationColor: GlameColors.steelGray,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SizedBox(height: compact ? 18 : 28),
-          if (compact && isPagedLayout)
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final availableHeight = constraints.maxHeight;
-                  final verticalGap = 16.0;
-                  final preferredProductHeight = (availableHeight * 0.28).clamp(
-                    170.0,
-                    205.0,
-                  );
-                  final dynamicDropHeight =
-                      (availableHeight - preferredProductHeight - verticalGap)
-                          .clamp(340.0, 520.0);
-                  final dynamicProductHeight =
-                      (availableHeight - dynamicDropHeight - verticalGap).clamp(
-                        170.0,
-                        220.0,
-                      );
-
-                  return Column(
+                ),
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: compact ? 14 : 18),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _NewInDropCard(
-                        drop: drop,
-                        loading: loading,
-                        onOpen: onOpenDrop,
-                        height: dynamicDropHeight,
-                        compact: compact,
+                      Expanded(
+                        child: Text(
+                          'Новое в GLAME',
+                          style: TextStyle(
+                            fontSize: titleSize,
+                            fontWeight: FontWeight.w300,
+                            color: GlameColors.whiteGlame,
+                            height: 1.02,
+                          ),
+                        ),
                       ),
-                      SizedBox(height: verticalGap),
-                      _NewInProductCardsRow(
-                        items: items,
-                        height: dynamicProductHeight,
-                        compact: compact,
+                      const SizedBox(width: 12),
+                      InkWell(
+                        onTap: () => widget.onOpenAllNew(),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Все новинки',
+                            style: TextStyle(
+                              fontSize: linkSize,
+                              fontWeight: FontWeight.w300,
+                              color: GlameColors.steelGray,
+                              decoration: TextDecoration.underline,
+                              decorationColor: GlameColors.steelGray,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
-                  );
-                },
+                  ),
+                ),
               ),
-            )
-          else ...[
-            _NewInDropCard(
-              drop: drop,
-              loading: loading,
-              onOpen: onOpenDrop,
-              height: dropHeight,
-              compact: compact,
-            ),
-            SizedBox(height: compact ? 14 : 26),
-            _NewInProductCardsRow(
-              items: items,
-              height: productCardHeight,
-              compact: compact,
-            ),
-          ],
-        ],
+              SizedBox(height: compact ? 18 : 28),
+              if (compact && isPagedLayout)
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final availableHeight = constraints.maxHeight;
+                      final verticalGap = 16.0;
+                      final twoColumnCardHeight =
+                          ((constraints.maxWidth - _newInProductGap) / 2) *
+                          (4 / 3);
+                      final preferredProductHeight = items.length <= 2
+                          ? twoColumnCardHeight
+                          : (availableHeight * 0.36).clamp(210.0, 270.0);
+                      final dynamicDropHeight =
+                          (availableHeight -
+                                  preferredProductHeight -
+                                  verticalGap)
+                              .clamp(280.0, 520.0);
+                      final dynamicProductHeight = items.length <= 2
+                          ? twoColumnCardHeight
+                          : (availableHeight - dynamicDropHeight - verticalGap)
+                                .clamp(170.0, 220.0);
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _NewInDropPager(
+                            entries: widget.entries,
+                            currentIndex: _currentEntryIndex,
+                            loading: widget.loading,
+                            onOpenDrop: widget.onOpenDrop,
+                            onChanged: _selectEntry,
+                            height: dynamicDropHeight,
+                            compact: compact,
+                          ),
+                          SizedBox(height: verticalGap),
+                          _NewInProductCardsRow(
+                            items: items,
+                            height: dynamicProductHeight,
+                            compact: compact,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                )
+              else ...[
+                _NewInDropPager(
+                  entries: widget.entries,
+                  currentIndex: _currentEntryIndex,
+                  loading: widget.loading,
+                  onOpenDrop: widget.onOpenDrop,
+                  onChanged: _selectEntry,
+                  height: dropHeight,
+                  compact: compact,
+                ),
+                SizedBox(height: compact ? 14 : 26),
+                _NewInProductCardsRow(
+                  items: items,
+                  height: productCardHeight,
+                  compact: compact,
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
+  }
+
+  void _selectEntry(int index) {
+    if (!mounted || index == _currentEntryIndex) return;
+    setState(() => _currentEntryIndex = index);
   }
 }
 
@@ -1553,6 +1630,29 @@ class _NewInProductCardsRow extends StatelessWidget {
               190.0,
             );
         if (compact) {
+          if (items.length <= 2) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var index = 0; index < items.length; index++) ...[
+                  Expanded(
+                    child: _NewInProductCard(
+                      product: items[index],
+                      height: height,
+                      compact: true,
+                    ),
+                  ),
+                  if (index != items.length - 1)
+                    const SizedBox(width: _newInProductGap),
+                ],
+              ],
+            );
+          }
+          final compactContentWidth =
+              (items.length * compactCardWidth) +
+              ((items.length - 1).clamp(0, items.length) * _newInProductGap);
+          final hasHorizontalOverflow =
+              compactContentWidth > constraints.maxWidth + 0.5;
           return Stack(
             children: [
               SingleChildScrollView(
@@ -1576,26 +1676,27 @@ class _NewInProductCardsRow extends StatelessWidget {
                   ],
                 ),
               ),
-              Positioned(
-                top: 0,
-                right: 0,
-                bottom: 0,
-                child: IgnorePointer(
-                  child: Container(
-                    width: 28,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [
-                          GlameColors.nearBlack.withValues(alpha: 0),
-                          GlameColors.nearBlack,
-                        ],
+              if (hasHorizontalOverflow)
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    child: Container(
+                      width: 28,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            GlameColors.nearBlack.withValues(alpha: 0),
+                            GlameColors.nearBlack,
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
             ],
           );
         }
@@ -1669,6 +1770,139 @@ class _NewInProductCardsRow extends StatelessWidget {
   }
 }
 
+class _NewInDesktopLookComposition extends StatelessWidget {
+  final _NewInDropData? drop;
+  final List<_NewInProductData> products;
+  final bool loading;
+  final Future<void> Function() onOpenAllNew;
+  final Future<void> Function()? onOpenDrop;
+
+  const _NewInDesktopLookComposition({
+    required this.drop,
+    required this.products,
+    required this.loading,
+    required this.onOpenAllNew,
+    required this.onOpenDrop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: GlameColors.nearBlack,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 64, 0, 28),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: GlameColors.borderGray),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 0, 28, 18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Новое в GLAME',
+                        style: TextStyle(
+                          fontSize: 42,
+                          fontWeight: FontWeight.w300,
+                          color: GlameColors.whiteGlame,
+                          height: 1.02,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => onOpenAllNew(),
+                      child: const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Все новинки',
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w300,
+                            color: GlameColors.steelGray,
+                            decoration: TextDecoration.underline,
+                            decorationColor: GlameColors.steelGray,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 72),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                const gap = 28.0;
+                // The large image owns two thirds of the available desktop
+                // canvas. The remaining third is a dedicated product rail.
+                final usableWidth = constraints.maxWidth - gap;
+                final mainWidth = usableWidth * (2 / 3);
+                final sideWidth = usableWidth - mainWidth;
+                final mainHeight = mainWidth / _glameMediaAspectRatio;
+                final sideCardHeight = sideWidth / _glameMediaAspectRatio + 54;
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: mainWidth,
+                      child: _NewInDropCard(
+                        drop: drop,
+                        loading: loading,
+                        onOpen: onOpenDrop,
+                        height: mainHeight,
+                        compact: false,
+                      ),
+                    ),
+                    const SizedBox(width: gap),
+                    SizedBox(
+                      width: sideWidth,
+                      height: mainHeight,
+                      child: Scrollbar(
+                        thumbVisibility: products.length > 1,
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (
+                                var index = 0;
+                                index < products.length;
+                                index++
+                              ) ...[
+                                _NewInProductCard(
+                                  product: products[index],
+                                  height: sideCardHeight,
+                                  compact: true,
+                                ),
+                                if (index != products.length - 1)
+                                  const SizedBox(height: gap),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HomePhotoSelectionBlock extends ConsumerWidget {
   final Future<void> Function() onOpenUpload;
   final Future<void> Function() onOpenGuide;
@@ -1694,12 +1928,16 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
         : 'Загрузите фото, и мы поможем подобрать украшения, которые звучат с Вашей внешностью естественно, точно и без случайных решений.';
     const fallbackPhotoAsset =
         'assets/images/home/home_block_3_photo_selection.png';
+    final backgroundSource =
+        resolveAssetUrl(photoSelectionBlock?['image_url']) ??
+        fallbackPhotoAsset;
     final compact =
         viewportHeight != null || MediaQuery.of(context).size.width < 600;
     final bottomPadding = compact ? 18.0 : 36.0;
     final bodySize = compact ? 15.0 : 18.0;
-    if (compact && viewportHeight != null) {
-      const backgroundSource = fallbackPhotoAsset;
+    // Full-screen section paging is the mobile presentation. On desktop it
+    // must not bypass the dedicated 2:3 image layout below.
+    if (compact && viewportHeight != null && !GlameLayout.isDesktop(context)) {
       final topBarBottom =
           MediaQuery.of(context).padding.top +
           GlameUi.heroTopOffset +
@@ -1718,7 +1956,7 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
                     color: GlameColors.borderGray.withValues(alpha: 0.9),
                   ),
                 ),
-                child: const ClipRect(
+                child: ClipRect(
                   child: _HomePhotoSelectionBackground(
                     source: backgroundSource,
                     alignment: Alignment.topLeft,
@@ -1754,14 +1992,74 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
     final isDesktop = blockWidth >= 1024;
     final horizontalPadding = isTablet ? 32.0 : 28.0;
     final verticalPadding = isTablet ? 72.0 : 88.0;
-    final minHeight = isTablet
-        ? (blockWidth * 0.72).clamp(520.0, 640.0).toDouble()
-        : isDesktop
-        ? 640.0
-        : 0.0;
+    final minHeight = blockWidth * 4 / 3;
     final contentWidth = isTablet ? blockWidth * 0.48 : 360.0;
-    final backgroundLeft = isTablet ? blockWidth * 0.38 : 0.0;
-    final backgroundRight = isTablet ? -32.0 : -40.0;
+
+    if (isDesktop) {
+      // Keep the same 3:4 editorial frame at every desktop width.
+      return AspectRatio(
+        aspectRatio: 3 / 4,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _HomePhotoSelectionBackground(
+              source: backgroundSource,
+              alignment: Alignment.topCenter,
+            ),
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 420,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Color(0xCE101113)],
+                    stops: [0, 1],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 48,
+              right: 48,
+              bottom: 72,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: SizedBox(
+                  width: 560,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _HomePhotoSelectionNote(),
+                      const SizedBox(height: 16),
+                      _HomePhotoActionButton(
+                        title: 'Загрузить фото',
+                        icon: Icons.photo_camera_outlined,
+                        filled: true,
+                        onTap: onOpenUpload,
+                        compact: false,
+                      ),
+                      const SizedBox(height: 12),
+                      _HomePhotoActionButton(
+                        title: 'Какое фото подойдет',
+                        icon: Icons.image_outlined,
+                        filled: false,
+                        onTap: onOpenGuide,
+                        compact: false,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
       constraints: BoxConstraints(minHeight: minHeight),
@@ -1775,13 +2073,11 @@ class _HomePhotoSelectionBlock extends ConsumerWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            left: backgroundLeft,
-            right: backgroundRight,
             child: IgnorePointer(
               child: Opacity(
                 opacity: isTablet ? 0.58 : 0.42,
-                child: const _HomePhotoSelectionBackground(
-                  source: fallbackPhotoAsset,
+                child: _HomePhotoSelectionBackground(
+                  source: backgroundSource,
                   alignment: Alignment.centerRight,
                 ),
               ),
@@ -1952,13 +2248,13 @@ class _HomePhotoSelectionBackground extends StatelessWidget {
     if (source.startsWith('http://') || source.startsWith('https://')) {
       return CachedNetworkImage(
         imageUrl: source,
-        fit: BoxFit.cover,
+        fit: BoxFit.fill,
         alignment: alignment,
         placeholder: (_, _) => Container(color: const Color(0xFF111214)),
         errorWidget: (_, _, _) => Container(color: const Color(0xFF111214)),
       );
     }
-    return Image.asset(source, fit: BoxFit.cover, alignment: alignment);
+    return Image.asset(source, fit: BoxFit.fill, alignment: alignment);
   }
 }
 
@@ -2016,6 +2312,89 @@ class _HomePhotoActionButton extends StatelessWidget {
               ),
               child: child,
             ),
+    );
+  }
+}
+
+class _NewInDropPager extends StatelessWidget {
+  final List<_NewInLookEntry> entries;
+  final int currentIndex;
+  final bool loading;
+  final Future<void> Function(_NewInDropData drop)? onOpenDrop;
+  final ValueChanged<int> onChanged;
+  final double height;
+  final bool compact;
+
+  const _NewInDropPager({
+    required this.entries,
+    required this.currentIndex,
+    required this.loading,
+    required this.onOpenDrop,
+    required this.onChanged,
+    required this.height,
+    required this.compact,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.length <= 1) {
+      final entry = entries.first;
+      return _NewInDropCard(
+        drop: entry.drop,
+        loading: loading,
+        onOpen: entry.drop == null || onOpenDrop == null
+            ? null
+            : () => onOpenDrop!(entry.drop!),
+        height: height,
+        compact: compact,
+      );
+    }
+
+    return SizedBox(
+      height: height,
+      child: Stack(
+        children: [
+          PageView.builder(
+            key: ValueKey('new-in-drop-${entries.length}'),
+            controller: PageController(initialPage: currentIndex),
+            itemCount: entries.length,
+            onPageChanged: onChanged,
+            itemBuilder: (context, index) {
+              final entry = entries[index];
+              return _NewInDropCard(
+                drop: entry.drop,
+                loading: loading,
+                onOpen: entry.drop == null || onOpenDrop == null
+                    ? null
+                    : () => onOpenDrop!(entry.drop!),
+                height: height,
+                compact: compact,
+              );
+            },
+          ),
+          Positioned(
+            right: compact ? 16 : 22,
+            top: compact ? 16 : 22,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.38),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                child: Text(
+                  '${(currentIndex + 1).toString().padLeft(2, '0')} / ${entries.length.toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    fontSize: compact ? 11 : 12,
+                    letterSpacing: 0.8,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2078,7 +2457,7 @@ class _NewInDropCard extends StatelessWidget {
               left: compact ? 18 : 30,
               bottom: compact ? 20 : 32,
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: compact ? 210 : 230),
+                constraints: BoxConstraints(maxWidth: compact ? 210 : 360),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2092,26 +2471,26 @@ class _NewInDropCard extends StatelessWidget {
                       ),
                     ),
                     SizedBox(height: compact ? 8 : 14),
-                    Text(
-                      (drop?.title ?? 'Новый дроп').toUpperCase(),
-                      style: TextStyle(
-                        fontSize: compact ? 28 : 40,
-                        height: 0.96,
-                        fontWeight: FontWeight.w300,
-                        color: GlameColors.surface2,
-                      ),
-                    ),
-                    SizedBox(height: compact ? 8 : 14),
-                    Text(
-                      drop?.description ??
-                          'Кураторская подборка образов GLAME.',
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: compact ? 13 : 17,
-                        height: 1.38,
-                        color: GlameColors.surface2,
-                      ),
+                    Wrap(
+                      spacing: compact ? 6 : 9,
+                      runSpacing: 0,
+                      children: (drop?.title ?? 'Новый дроп')
+                          .toUpperCase()
+                          .split(RegExp(r'\s+'))
+                          .where((word) => word.isNotEmpty)
+                          .map(
+                            (word) => Text(
+                              word,
+                              softWrap: false,
+                              style: TextStyle(
+                                fontSize: compact ? 28 : 40,
+                                height: 0.96,
+                                fontWeight: FontWeight.w300,
+                                color: GlameColors.surface2,
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
                     ),
                     SizedBox(height: compact ? 14 : 26),
                     SizedBox(
@@ -2273,17 +2652,6 @@ class _NewInProductInfo extends StatelessWidget {
               color: GlameColors.whiteGlame,
             ),
           ),
-          SizedBox(height: compact ? 1 : 6),
-          Text(
-            product.availability,
-            maxLines: compact ? 1 : 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: compact ? 9 : 13,
-              height: compact ? 1.05 : 1.15,
-              color: GlameColors.steelGray,
-            ),
-          ),
         ],
       ),
     );
@@ -2393,6 +2761,13 @@ class _NewInLookData {
     required this.imageUrl,
     required this.products,
   });
+}
+
+class _NewInLookEntry {
+  final _NewInDropData? drop;
+  final List<_NewInProductData> products;
+
+  const _NewInLookEntry({required this.drop, required this.products});
 }
 
 class _NewInProductData {

@@ -9,9 +9,10 @@ business rule documented for GLAME.
 from __future__ import annotations
 
 import base64
+import binascii
 import re
 import zipfile
-import xml.etree.ElementTree as ET
+from lxml import etree as ET
 from datetime import date
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -49,6 +50,15 @@ RUSSIAN_MONTHS = {
 }
 
 
+def _default_working_hours_for_store(store_name: Optional[str]) -> Tuple[str, str]:
+    normalized = (store_name or "").strip().lower()
+    if "центрум" in normalized or "centrum" in normalized:
+        return "10:00", "21:00"
+    if "мрия" in normalized or "mriya" in normalized:
+        return "10:00", "20:00"
+    return "10:00", "22:00"
+
+
 def _column_number(cell_ref: str) -> int:
     letters = re.match(r"([A-Z]+)", cell_ref or "")
     if not letters:
@@ -79,14 +89,20 @@ class SellerShiftExcelParser:
             return self.parse_file(tmp.name, store_name=store_name, source_filename=source_filename)
 
     def parse_base64(self, content_base64: str, store_name: Optional[str] = None, source_filename: str = "schedule.xlsx") -> Dict[str, Any]:
-        return self.parse_bytes(base64.b64decode(content_base64), store_name=store_name, source_filename=source_filename)
+        try:
+            content = base64.b64decode(content_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("Некорректный base64 Excel-файла") from exc
+        if not content.startswith(b"PK\x03\x04") or len(content) > 20 * 1024 * 1024:
+            raise ValueError("Excel-файл должен быть корректным XLSX и не превышать 20 МБ")
+        return self.parse_bytes(content, store_name=store_name, source_filename=source_filename)
 
     def parse_workbook_rows(self, workbook: Dict[str, List[Tuple[int, Dict[int, Any]]]], store_name: Optional[str], source_filename: str) -> Dict[str, Any]:
         sheet_name = self._find_schedule_sheet(workbook)
         rows = workbook[sheet_name]
         row_map = {row_number: cells for row_number, cells in rows}
         period = self._parse_period(row_map)
-        starts_at, ends_at = self._parse_working_hours(row_map)
+        starts_at, ends_at = self._parse_working_hours(row_map, store_name=store_name)
         header_row_number, day_columns = self._find_day_columns(rows)
         shifts: List[Dict[str, Any]] = []
         skipped_rows: List[Dict[str, Any]] = []
@@ -208,14 +224,14 @@ class SellerShiftExcelParser:
                     return date(int(match.group(2)), RUSSIAN_MONTHS[match.group(1)], 1)
         raise ValueError("Не удалось определить месяц графика из Excel")
 
-    def _parse_working_hours(self, row_map: Dict[int, Dict[int, Any]]) -> Tuple[str, str]:
+    def _parse_working_hours(self, row_map: Dict[int, Dict[int, Any]], store_name: Optional[str] = None) -> Tuple[str, str]:
         for cells in row_map.values():
             for value in cells.values():
                 text_value = _cell_text(value)
                 match = re.search(r"(\d{1,2})[.:](\d{2})\s*[-–—]\s*(\d{1,2})[.:](\d{2})", text_value)
                 if match:
                     return f"{int(match.group(1)):02d}:{match.group(2)}", f"{int(match.group(3)):02d}:{match.group(4)}"
-        return "10:00", "22:00"
+        return _default_working_hours_for_store(store_name)
 
     def _find_day_columns(self, rows: Iterable[Tuple[int, Dict[int, Any]]]) -> Tuple[int, Dict[int, int]]:
         for row_number, cells in rows:

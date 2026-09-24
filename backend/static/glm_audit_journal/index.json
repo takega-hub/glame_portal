@@ -18,10 +18,29 @@
       "token_code": "GLM",
       "transaction_hashes_count": 0,
       "transactions_count": 0
+    },
+    {
+      "account_hash": "626be0335ab04bf70ef47b9c276a3f8a6aafd623e12baaf8efcdd8bcdbd47c5e",
+      "accounts_count": 1,
+      "audit_date": "2026-07-17",
+      "balance_total": 0,
+      "generated_at": "2026-07-17T10:36:29.573561+00:00",
+      "hold_total": 785,
+      "lifetime_burned_total": 850,
+      "lifetime_earned_total": 785,
+      "previous_root_hash": "85f40c0a37fb2b66b871921979a713ffcd7dd45469eeaeed6b64b2f3f4a788a5",
+      "public_reference": "/static/glm_audit_journal/2026-07-17.json",
+      "public_status": "published",
+      "published_at": "2026-07-17T10:36:34.006143+00:00",
+      "root_hash": "557a7da21fa8f07bcca0ec9c71665e31498d70e50d323c40aa19ad10861d32e3",
+      "schema": "glame_token_public_audit_hash_v1",
+      "token_code": "GLM",
+      "transaction_hashes_count": 4,
+      "transactions_count": 4
     }
   ],
-  "hashes_count": 1,
+  "hashes_count": 2,
   "schema": "glame_token_public_audit_journal_v1",
   "token_code": "GLM",
-  "updated_at": "2026-07-02T07:44:22.427058+00:00"
+  "updated_at": "2026-07-17T10:36:34.014140+00:00"
 }

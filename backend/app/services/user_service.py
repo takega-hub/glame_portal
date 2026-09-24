@@ -4,7 +4,9 @@ from jose import JWTError, jwt
 from datetime import datetime, timedelta
 import os
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
+SECRET_KEY = (os.getenv("JWT_SECRET_KEY") or "").strip()
+if not SECRET_KEY or SECRET_KEY in {"your-secret-key-here", "your-secret-key-change-in-production", "your_jwt_secret_key_change_in_production"}:
+    raise RuntimeError("JWT_SECRET_KEY must be configured with a unique production secret")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

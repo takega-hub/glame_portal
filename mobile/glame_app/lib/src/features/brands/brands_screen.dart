@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/asset_url.dart';
+import '../../core/layout/glame_layout.dart';
+import '../../core/formatters/rub.dart';
 import '../../core/theme/glame_theme.dart';
 import '../../core/widgets/glame_bottom_bar.dart';
 import '../auth/auth_controller.dart';
@@ -239,6 +241,33 @@ final brandFeaturedLooksProvider =
       return candidates.take(6).toList(growable: false);
     });
 
+final brandFeaturedProductsProvider =
+    FutureProvider.family<List<_BrandProductCardData>, String>((
+      ref,
+      brandId,
+    ) async {
+      final brand = _brandById(brandId);
+      if (brand == null) return const <_BrandProductCardData>[];
+
+      final api = ref.watch(_brandsApiProvider);
+      final raw = await api.getProductsPaged(
+        skip: 0,
+        limit: 6,
+        brand: brand.searchQuery,
+        hasImages: true,
+      );
+      final items = raw['items'];
+      if (items is! List) return const <_BrandProductCardData>[];
+      return items
+          .whereType<Map>()
+          .map(
+            (item) =>
+                _BrandProductCardData.fromMap(Map<String, dynamic>.from(item)),
+          )
+          .where((item) => item.id.isNotEmpty && item.imageUrl != null)
+          .toList(growable: false);
+    });
+
 final brandsShowcaseProvider = StreamProvider<List<_BrandShowcaseCardData>>((
   ref,
 ) async* {
@@ -246,6 +275,50 @@ final brandsShowcaseProvider = StreamProvider<List<_BrandShowcaseCardData>>((
   await for (final cards in _watchBrandShowcaseCards(api)) {
     yield cards;
   }
+});
+
+final allBrandsShowcaseProvider = FutureProvider<List<_BrandShowcaseCardData>>((
+  ref,
+) async {
+  final api = ref.watch(_brandsApiProvider);
+  final cards = await Future.wait(
+    _allBrands.indexed.map((entry) async {
+      final (index, brand) = entry;
+      final cacheKey =
+          '$_brandSlidesCachePrefix${_brandDetailBlockKey(brand.id)}';
+      final cached = await _readBrandSlidesCache(cacheKey);
+      if (cached.isNotEmpty && cached.first is Map) {
+        return _BrandShowcaseCardData.fromBrandDetail(
+          brand,
+          Map<String, dynamic>.from(cached.first as Map),
+        );
+      }
+      try {
+        final slides = await api.getHomeSlides(
+          blockKey: _brandDetailBlockKey(brand.id),
+        );
+        if (slides.isNotEmpty && slides.first is Map) {
+          await _saveBrandSlidesCache(cacheKey, slides);
+          return _BrandShowcaseCardData.fromBrandDetail(
+            brand,
+            Map<String, dynamic>.from(slides.first as Map),
+          );
+        }
+      } catch (_) {
+        // A brand without an admin slide still receives a usable card.
+      }
+      return _BrandShowcaseCardData(
+        brandId: brand.id,
+        title: brand.name,
+        subtitle: brand.signature,
+        imageUrl: _block4BackgroundAsset,
+        imageCacheVersion: 'brand-fallback-${brand.id}',
+        sortOrder: index,
+      );
+    }),
+  );
+  cards.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+  return cards;
 });
 
 Stream<List<_BrandShowcaseCardData>> _watchBrandShowcaseCards(
@@ -614,7 +687,8 @@ class BrandsPageScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final heroAsync = ref.watch(brandsPageHeroProvider);
+    final showcaseAsync = ref.watch(allBrandsShowcaseProvider);
+    final isDesktop = GlameLayout.isDesktop(context);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _trackEvent('brands_page_view');
@@ -627,75 +701,69 @@ class BrandsPageScreen extends ConsumerWidget {
           if (context.canPop()) {
             context.pop();
           } else {
-            context.go('/brands');
+            context.go('/home');
           }
         },
       ),
-      bottomNavigationBar: const GlameBottomBar(selectedIndex: 1),
+      bottomNavigationBar: isDesktop
+          ? null
+          : const GlameBottomBar(selectedIndex: 1),
       body: SafeArea(
         top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            _brandsPagePadding,
-            24,
-            _brandsPagePadding,
-            32,
-          ),
-          children: [
-            heroAsync.when(
-              data: (hero) {
-                if (hero == null) {
-                  return const _AllBrandsHeader();
-                }
-                return _BrandsPageHeroCard(
-                  imageSource: hero.imageSource,
-                  title: hero.title,
-                  subtitle: hero.subtitle,
-                );
-              },
-              loading: () => const _CollectedGlameSkeletonBox(height: 220),
-              error: (_, _) => const _AllBrandsHeader(),
+        child: GlameContentWidth(
+          maxWidth: 960,
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(
+              isDesktop ? 32 : _brandsPagePadding,
+              isDesktop ? 36 : 24,
+              isDesktop ? 32 : _brandsPagePadding,
+              isDesktop ? 52 : 32,
             ),
-            const SizedBox(height: 24),
-            for (var i = 0; i < _allBrands.length; i++) ...[
-              _BrandListRow(brand: _allBrands[i]),
-              if (i != _allBrands.length - 1)
-                Container(height: 1, color: GlameColors.coldLightGrey),
+            children: [
+              const Text(
+                'Бренды',
+                style: TextStyle(
+                  fontSize: 40,
+                  height: 0.98,
+                  fontWeight: FontWeight.w300,
+                  color: GlameColors.graphite,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Выбирайте бренд по характеру, стилю и настроению.',
+                style: TextStyle(
+                  fontSize: 16,
+                  height: 1.35,
+                  color: GlameColors.steelGrey,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+              const SizedBox(height: 24),
+              showcaseAsync.when(
+                data: (cards) =>
+                    _BrandsShowcaseGrid(cards: cards, maxItems: null),
+                loading: () => const _CollectedGlameSkeletonBox(height: 720),
+                error: (_, _) => _BrandsShowcaseGrid(
+                  cards: _allBrands
+                      .map(
+                        (brand) => _BrandShowcaseCardData(
+                          brandId: brand.id,
+                          title: brand.name,
+                          subtitle: brand.signature,
+                          imageUrl: _block4BackgroundAsset,
+                          imageCacheVersion: 'brand-fallback-${brand.id}',
+                          sortOrder: 0,
+                        ),
+                      )
+                      .toList(growable: false),
+                  maxItems: null,
+                ),
+              ),
             ],
-          ],
+          ),
         ),
       ),
-    );
-  }
-}
-
-class _AllBrandsHeader extends StatelessWidget {
-  const _AllBrandsHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Смотреть бренды',
-          style: TextStyle(
-            fontSize: 40,
-            height: 0.98,
-            fontWeight: FontWeight.w400,
-            color: GlameColors.graphite,
-          ),
-        ),
-        SizedBox(height: 14),
-        Text(
-          'Собрано GLAME',
-          style: TextStyle(
-            fontSize: 18,
-            height: 1.42,
-            color: GlameColors.steelGrey,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -703,14 +771,22 @@ class _AllBrandsHeader extends StatelessWidget {
 class _BrandsShowcaseGrid extends StatelessWidget {
   final List<_BrandShowcaseCardData> cards;
   final bool compact;
+  final int? maxItems;
 
-  const _BrandsShowcaseGrid({required this.cards, this.compact = false});
+  const _BrandsShowcaseGrid({
+    required this.cards,
+    this.compact = false,
+    this.maxItems = 4,
+  });
 
   @override
   Widget build(BuildContext context) {
     final effectiveCards = cards.isEmpty ? _fallbackBrandShowcaseCards : cards;
+    final visibleCards = maxItems == null
+        ? effectiveCards
+        : effectiveCards.take(maxItems!).toList(growable: false);
     return GridView.builder(
-      itemCount: effectiveCards.take(4).length,
+      itemCount: visibleCards.length,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -720,7 +796,7 @@ class _BrandsShowcaseGrid extends StatelessWidget {
         childAspectRatio: compact ? 0.84 : 3 / 4,
       ),
       itemBuilder: (context, index) {
-        return _BrandShowcaseCard(card: effectiveCards[index]);
+        return _BrandShowcaseCard(card: visibleCards[index]);
       },
     );
   }
@@ -863,93 +939,6 @@ class _BrandsShowAllButton extends StatelessWidget {
   }
 }
 
-class _BrandsPageHeroCard extends StatelessWidget {
-  final String imageSource;
-  final String title;
-  final String subtitle;
-
-  const _BrandsPageHeroCard({
-    required this.imageSource,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: GlameColors.coldLightGrey,
-          width: GlameUi.borderWidth,
-        ),
-      ),
-      child: AspectRatio(
-        aspectRatio: 327 / 182,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _Block4ImageLayer(
-              source: imageSource,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-            ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.0),
-                      Colors.white.withValues(alpha: 0.18),
-                      GlameColors.coldLightGrey.withValues(alpha: 0.88),
-                      GlameColors.coldLightGrey,
-                    ],
-                    stops: const [0.0, 0.46, 0.8, 1.0],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 22,
-              right: 22,
-              bottom: 20,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 32,
-                      height: 1.06,
-                      letterSpacing: -0.4,
-                      color: GlameColors.graphite,
-                      fontWeight: FontWeight.w300,
-                    ),
-                  ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.2,
-                        letterSpacing: 0.0,
-                        color: GlameColors.steelGrey,
-                        fontWeight: FontWeight.w300,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class BrandDetailScreen extends ConsumerWidget {
   final String brandId;
 
@@ -981,6 +970,8 @@ class BrandDetailScreen extends ConsumerWidget {
 
     final heroAsync = ref.watch(brandDetailHeroProvider(brand.id));
     final featuredAsync = ref.watch(brandFeaturedLooksProvider(brand.id));
+    final productsAsync = ref.watch(brandFeaturedProductsProvider(brand.id));
+    final isDesktop = GlameLayout.isDesktop(context);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _trackEvent('brand_page_view', {'brand_id': brand.id});
     });
@@ -997,7 +988,9 @@ class BrandDetailScreen extends ConsumerWidget {
           }
         },
       ),
-      bottomNavigationBar: const GlameBottomBar(selectedIndex: 1),
+      bottomNavigationBar: isDesktop
+          ? null
+          : const GlameBottomBar(selectedIndex: 1),
       body: SafeArea(
         top: false,
         child: LayoutBuilder(
@@ -1016,7 +1009,11 @@ class BrandDetailScreen extends ConsumerWidget {
                     heroSubtitle: heroAsync.valueOrNull?.subtitle,
                   ),
                 ),
-                _BrandDetailBody(brand: brand, featuredAsync: featuredAsync),
+                _BrandDetailBody(
+                  brand: brand,
+                  featuredAsync: featuredAsync,
+                  productsAsync: productsAsync,
+                ),
               ],
             );
           },
@@ -1152,8 +1149,13 @@ class _BrandFullScreenHero extends StatelessWidget {
 class _BrandDetailBody extends StatelessWidget {
   final _BrandDetailData brand;
   final AsyncValue<List<_BrandLookCardData>> featuredAsync;
+  final AsyncValue<List<_BrandProductCardData>> productsAsync;
 
-  const _BrandDetailBody({required this.brand, required this.featuredAsync});
+  const _BrandDetailBody({
+    required this.brand,
+    required this.featuredAsync,
+    required this.productsAsync,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1171,8 +1173,10 @@ class _BrandDetailBody extends StatelessWidget {
           children: [
             _BrandDnaStrip(markers: brand.dnaMarkers),
             const SizedBox(height: 28),
+            _BrandUseCasesInfo(items: brand.useCases),
+            const SizedBox(height: 28),
             Text(
-              'ВЫБОР GLAME В ${brand.name.toUpperCase()}',
+              'ОБРАЗЫ ОТ СТИЛИСТОВ GLAME',
               style: const TextStyle(
                 fontSize: 13,
                 letterSpacing: 2.4,
@@ -1182,68 +1186,19 @@ class _BrandDetailBody extends StatelessWidget {
             const SizedBox(height: 14),
             featuredAsync.when(
               data: (looks) {
-                if (looks.isEmpty) {
-                  return _BrandEmptyState(brand: brand);
+                if (looks.isNotEmpty) {
+                  return _BrandFeaturedLooksGrid(looks: looks);
                 }
-                return _BrandFeaturedLooksGrid(looks: looks);
+                return productsAsync.when(
+                  data: (products) => products.isEmpty
+                      ? _BrandEmptyState(brand: brand)
+                      : _BrandFeaturedProductsGrid(products: products),
+                  loading: () => const _BrandFeaturedProductsSkeleton(),
+                  error: (_, _) => _BrandEmptyState(brand: brand),
+                );
               },
               loading: () => const _BrandDetailLoadingState(),
               error: (_, _) => _BrandErrorState(brand: brand),
-            ),
-            const SizedBox(height: 28),
-            _BrandUseCasesInfo(items: brand.useCases),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BrandListRow extends StatelessWidget {
-  final _BrandDetailData brand;
-
-  const _BrandListRow({required this.brand});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        _trackEvent('brand_row_click', {'brand_id': brand.id});
-        context.push('/brand/${brand.id}');
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    brand.name,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      height: 1.04,
-                      color: GlameColors.graphite,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    brand.signature,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      height: 1.4,
-                      color: GlameColors.steelGrey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Icon(
-              Icons.arrow_forward_rounded,
-              size: 20,
-              color: GlameColors.graphite,
             ),
           ],
         ),
@@ -1273,12 +1228,17 @@ class _BrandDnaStrip extends StatelessWidget {
                   width: GlameUi.borderWidth,
                 ),
               ),
-              child: Text(
-                markers[index],
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1.35,
-                  color: GlameColors.graphite,
+              child: FittedBox(
+                alignment: Alignment.centerLeft,
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  markers[index],
+                  softWrap: false,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    height: 1.35,
+                    color: GlameColors.graphite,
+                  ),
                 ),
               ),
             ),
@@ -1310,6 +1270,95 @@ class _BrandFeaturedLooksGrid extends StatelessWidget {
       itemBuilder: (context, index) {
         return _BrandFeaturedLookCard(look: looks[index]);
       },
+    );
+  }
+}
+
+class _BrandFeaturedProductsGrid extends StatelessWidget {
+  final List<_BrandProductCardData> products;
+
+  const _BrandFeaturedProductsGrid({required this.products});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: products.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.57,
+      ),
+      itemBuilder: (context, index) {
+        return _BrandFeaturedProductCard(product: products[index]);
+      },
+    );
+  }
+}
+
+class _BrandFeaturedProductCard extends StatelessWidget {
+  final _BrandProductCardData product;
+
+  const _BrandFeaturedProductCard({required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        _trackEvent('brand_featured_product_click', {
+          'brand_id': product.brandId,
+          'product_id': product.id,
+        });
+        context.push('/product/${product.id}');
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 3 / 4,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: GlameColors.coldLightGrey,
+                  width: GlameUi.borderWidth,
+                ),
+              ),
+              child: CachedNetworkImage(
+                imageUrl: product.imageUrl!,
+                fit: BoxFit.cover,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: GlameColors.coldLightGrey),
+                errorWidget: (_, _, _) =>
+                    const ColoredBox(color: GlameColors.coldLightGrey),
+              ),
+            ),
+          ),
+          const SizedBox(height: 9),
+          Text(
+            product.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.28,
+              letterSpacing: 0.3,
+              color: GlameColors.graphite,
+            ),
+          ),
+          if (product.priceLabel.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              product.priceLabel,
+              style: const TextStyle(
+                fontSize: 13,
+                color: GlameColors.steelGrey,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1354,20 +1403,6 @@ class _BrandFeaturedLookCard extends StatelessWidget {
                 errorWidget: (context, _, _) =>
                     const ColoredBox(color: GlameColors.coldLightGrey),
               ),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Color.fromRGBO(238, 239, 237, 0.28),
-                    Color.fromRGBO(238, 239, 237, 0.92),
-                  ],
-                  stops: [0.48, 0.72, 1.0],
-                ),
-              ),
-            ),
             Positioned(
               left: 0,
               right: 0,
@@ -1379,53 +1414,44 @@ class _BrandFeaturedLookCard extends StatelessWidget {
                     top: BorderSide(color: Color.fromRGBO(255, 255, 255, 0.48)),
                   ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        look.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          height: 1.05,
-                          color: GlameColors.textPrimary,
-                          fontWeight: FontWeight.w500,
+                child: SizedBox(
+                  height: 92,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: 34,
+                          child: Text(
+                            look.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              height: 1.05,
+                              color: GlameColors.textPrimary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
-                      ),
-                      if (look.productsLabel.isNotEmpty) ...[
-                        const SizedBox(height: 6),
+                        const Spacer(),
                         Text(
-                          look.productsLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            height: 1.2,
-                            letterSpacing: 0.8,
-                            color: GlameColors.textSecondary,
+                          'Смотреть образ',
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.1,
+                            color: GlameColors.textPrimary.withValues(
+                              alpha: 0.82,
+                            ),
+                            decoration: TextDecoration.underline,
+                            decorationColor: GlameColors.textPrimary.withValues(
+                              alpha: 0.44,
+                            ),
                           ),
                         ),
                       ],
-                      const SizedBox(height: 8),
-                      Text(
-                        'Смотреть образ',
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.1,
-                          color: GlameColors.textPrimary.withValues(
-                            alpha: 0.82,
-                          ),
-                          decoration: TextDecoration.underline,
-                          decorationColor: GlameColors.textPrimary.withValues(
-                            alpha: 0.44,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1798,6 +1824,38 @@ class _BrandLookCardData {
           ? '${products.length} изделий в образе'
           : productNames.join(' + '),
       imageUrl: _lookImageUrl(item),
+    );
+  }
+}
+
+class _BrandProductCardData {
+  final String id;
+  final String brandId;
+  final String name;
+  final String? imageUrl;
+  final String priceLabel;
+
+  const _BrandProductCardData({
+    required this.id,
+    required this.brandId,
+    required this.name,
+    required this.imageUrl,
+    required this.priceLabel,
+  });
+
+  factory _BrandProductCardData.fromMap(Map<String, dynamic> item) {
+    final images = item['images'];
+    String? imageUrl;
+    if (images is List && images.isNotEmpty) {
+      imageUrl = resolveAssetUrl(images.first);
+    }
+    imageUrl ??= resolveAssetUrl(item['image_url']);
+    return _BrandProductCardData(
+      id: '${item['id'] ?? ''}'.trim(),
+      brandId: '${item['brand'] ?? ''}'.trim(),
+      name: '${item['name'] ?? ''}'.trim(),
+      imageUrl: imageUrl,
+      priceLabel: formatRubFromKopeks(item['price']),
     );
   }
 }

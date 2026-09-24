@@ -63,22 +63,37 @@ class CustomerProductRecommendationAgent:
             score = 0.0
             reasons: list[str] = []
 
-            token_score = self._token_similarity(current_tokens, self._product_tokens(candidate))
+            token_score = self._token_similarity(
+                current_tokens,
+                self._product_tokens(candidate),
+            )
             if token_score:
-                score += token_score * 46
+                score += token_score * 18
                 reasons.append("похожее настроение")
 
-            if current.category and candidate.category == current.category:
-                score += 22
-                reasons.append("та же категория")
+            if self._same_value(current.category, candidate.category):
+                score += 72
+                reasons.append("тот же тип украшения")
 
             candidate_specs = candidate.specifications if isinstance(candidate.specifications, dict) else {}
             current_specs = current.specifications if isinstance(current.specifications, dict) else {}
-            for key in ("Металл", "Материал", "Цвет", "Покрытие", "Вставка"):
-                if current_specs.get(key) and current_specs.get(key) == candidate_specs.get(key):
-                    score += 8
-                    reasons.append(str(key).lower())
-                    break
+            for key, weight, reason in (
+                ("Коллекция", 58, "та же коллекция"),
+                ("Серия", 50, "та же коллекция"),
+                ("Цвет", 42, "похожий цвет"),
+                ("Покрытие", 30, "похожее покрытие"),
+                ("Металл", 26, "тот же металл"),
+                ("Материал", 26, "тот же материал"),
+                ("Вставка", 22, "похожая вставка"),
+                ("Тип замка", 8, "похожая конструкция"),
+            ):
+                if self._same_value(current_specs.get(key), candidate_specs.get(key)):
+                    score += weight
+                    reasons.append(reason)
+
+            if self._same_value(current.brand, candidate.brand):
+                score += 16
+                reasons.append("тот же бренд")
 
             if current_price > 0 and candidate.price:
                 price_distance = abs(int(candidate.price) - current_price) / max(current_price, 1)
@@ -101,7 +116,7 @@ class CustomerProductRecommendationAgent:
                 score -= 14
 
             if self._has_images(candidate):
-                score += 7
+                score += 10
             if bool(candidate.is_core_assortment):
                 score += 4
             if bool(candidate.supports_brand_concept):
@@ -133,7 +148,8 @@ class CustomerProductRecommendationAgent:
                 Product.price > 0,
                 Product.id != current.id,
             )
-            .limit(240)
+            .order_by(Product.updated_at.desc(), Product.id.asc())
+            .limit(1200)
         )
         result = await self.db.execute(query)
         products = list(result.scalars().all())
@@ -233,6 +249,14 @@ class CustomerProductRecommendationAgent:
         if not left or not right:
             return 0.0
         return len(left & right) / len(left | right)
+
+    @staticmethod
+    def _same_value(left: object, right: object) -> bool:
+        if left is None or right is None:
+            return False
+        normalized_left = " ".join(str(left).casefold().split())
+        normalized_right = " ".join(str(right).casefold().split())
+        return bool(normalized_left and normalized_left == normalized_right)
 
     @staticmethod
     def _has_images(product: Product) -> bool:

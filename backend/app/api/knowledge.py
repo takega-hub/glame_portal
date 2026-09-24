@@ -14,6 +14,7 @@ from app.models.knowledge_document import KnowledgeDocument
 from app.models.product import Product
 from app.models.user import User
 from app.api.auth import get_current_user
+from app.services.upload_security import validate_knowledge_upload
 from app.services.admin_access import ROLE_ADMIN, get_allowed_sections, normalize_role
 
 # Настройка логирования
@@ -363,6 +364,7 @@ async def upload_knowledge_from_file(
         logger.info("Reading file content...")
         content = await file.read()
         filename = file.filename or "unknown"
+        file_type = validate_knowledge_upload(filename, content, file.content_type)
         file_size = len(content)
         logger.info(f"File read: {filename}, size: {file_size} bytes")
         
@@ -371,7 +373,7 @@ async def upload_knowledge_from_file(
         await db.commit()
         
         # Определяем тип файла
-        is_pdf = filename.lower().endswith('.pdf') or file.content_type == 'application/pdf'
+        is_pdf = file_type == "pdf"
         logger.info(f"File type detected: {'PDF' if is_pdf else 'JSON'}")
         
         if is_pdf:
@@ -601,10 +603,11 @@ async def upload_knowledge_batch(
         await db.refresh(doc_record)
         try:
             content = await upload_file.read()
+            file_type = validate_knowledge_upload(filename, content, upload_file.content_type)
             file_size = len(content)
             doc_record.file_size = file_size
             await db.commit()
-            is_pdf = filename.lower().endswith(".pdf") or (upload_file.content_type or "").startswith("application/pdf")
+            is_pdf = file_type == "pdf"
             if is_pdf:
                 knowledge_items = await pdf_processor.process_pdf(content, filename=filename)
                 if not knowledge_items:

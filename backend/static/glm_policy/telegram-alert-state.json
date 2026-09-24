@@ -13,17 +13,50 @@
       "message": "hot_wallet: GLM 100.00000001 / need 250.0; TON 1.087287159 / need 0.25; status=critical."
     },
     "hot_wallet_refill_glm_low": {
-      "fingerprint": "hot_wallet_refill_glm_low:4670.0:1.989881082:5000.0:0.5:warning",
-      "last_sent_at": "2026-07-04T20:21:08.553878+00:00",
-      "severity": "warning",
-      "message": "hot_wallet: GLM 4670.0 / need 5000.0; TON 1.989881082 / need 0.5; safe GLM capacity=4570.0; target GLM=5000.0; reason=refill_threshold; status=warning."
+      "fingerprint": "hot_wallet_refill_glm_low:0.0:0.0:5000.0:0.5:critical",
+      "last_sent_at": "2026-07-05T19:50:03.947348+00:00",
+      "severity": "critical",
+      "message": "hot_wallet: GLM 0.0 / need 5000.0; TON 0.0 / need 0.5; safe GLM capacity=0.0; target GLM=5000.0; reason=refill_threshold; status=critical."
     },
     "loyalty_reconciliation_platform_working_mismatch": {
-      "fingerprint": "platform_working:1:a769275f-8287-4518-8a37-224a1aa66d55:270:0",
-      "last_sent_at": "2026-07-05T08:57:35.271509+00:00",
+      "fingerprint": "platform_working:1:dac187bb-59a6-468f-aa80-5c5271f57121:0:1364",
+      "first_seen_at": "2026-07-08T16:41:45.710695+00:00",
+      "last_sent_at": "2026-07-13T09:07:37.934595+00:00",
       "severity": "critical",
-      "message": "1C bonus reconciliation: 1 партнеров имеют расхождение платформа vs 1C К списанию. Примеры: Орешников Анатолий: платформа 270 / 1C 0"
+      "message": "1C bonus reconciliation: 1 партнеров имеют расхождение платформа vs 1C К списанию. Примеры: Орешникова Елена: платформа 0 / 1C 1364"
+    },
+    "hot_wallet_balance_error": {
+      "fingerprint": "hot_wallet_balance_error:0.0:0.0:5000.0:0.5:error",
+      "first_seen_at": "2026-09-22T21:00:30.217972+00:00",
+      "last_sent_at": "2026-09-22T21:00:30.217972+00:00",
+      "severity": "critical",
+      "message": "hot_wallet: GLM 0.0 / need 5000.0; TON 0.0 / need 0.5; safe GLM capacity=0.0; GLM refill batch=5000.0; reason=balance_error; status=error."
+    },
+    "treasury_balance_error": {
+      "fingerprint": "treasury_balance_error:0.0:0.0:100.0:0.2:error",
+      "first_seen_at": "2026-08-04T06:34:30.683018+00:00",
+      "last_sent_at": "2026-09-22T21:00:30.217972+00:00",
+      "severity": "critical",
+      "message": "treasury: GLM 0.0 / need 100.0; TON 0.0 / need 0.2; safe GLM capacity=0.0; GLM refill batch=None; reason=balance_error; status=error."
+    },
+    "hot_wallet_refill_glm_overdue": {
+      "fingerprint": "hot_wallet_refill_glm_overdue:2026-07-04T20:21:08.553878+00:00:0.0:5000.0:5000.0:none",
+      "last_sent_at": "2026-07-05T19:50:03.947348+00:00",
+      "severity": "critical",
+      "message": "Hot-wallet все еще ниже refill-лимита по GLM: баланс 0.0, лимит 5000.0, цель 5000.0. Первый warning был 1408 мин назад, но в журнале нет manual_refill или успешной проверки восстановления."
+    },
+    "loyalty_reconciliation_check_error": {
+      "fingerprint": "check_error:3:Бандура Диана: [Errno -3] Temporary failure in name resolution:Орешникова Елена: [Errno -3] Temporary failure in name resolution:Орешников Анатолий: ",
+      "first_seen_at": "2026-07-15T21:43:07.537040+00:00",
+      "last_sent_at": "2026-09-22T21:00:30.217972+00:00",
+      "severity": "warning",
+      "message": "1C bonus reconciliation не смогла проверить 3 партнеров. Примеры: Бандура Диана: [Errno -3] Temporary failure in name resolution; Орешникова Елена: [Errno -3] Temporary failure in name resolution; Орешников Анатолий: "
     }
   },
-  "updated_at": "2026-07-05T08:57:35.271509+00:00"
+  "updated_at": "2026-09-22T21:00:30.217972+00:00",
+  "warning_digest": {
+    "fingerprint": "loyalty_reconciliation_check_error:check_error:3:Бандура Диана: [Errno -3] Temporary failure in name resolution:Орешникова Елена: [Errno -3] Temporary failure in name resolution:Орешников Анатолий: ",
+    "last_sent_at": "2026-09-22T21:00:30.217972+00:00",
+    "alerts_count": 1
+  }
 }

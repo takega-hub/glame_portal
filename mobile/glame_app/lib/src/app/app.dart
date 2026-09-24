@@ -26,6 +26,7 @@ import '../features/looks/user_created_looks_controller.dart';
 import '../features/service/how_to_buy_screen.dart';
 import '../features/stores/stores_screen.dart';
 import '../core/analytics/analytics_service.dart';
+import '../core/layout/glame_layout.dart';
 import '../core/theme/glame_theme.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -363,6 +364,47 @@ class GlameApp extends ConsumerWidget {
       title: 'GLAME.JEWELRY',
       theme: buildGlameTheme(),
       routerConfig: router,
+      builder: (context, child) {
+        if (child == null || !GlameLayout.usesDesktopWebCanvas(context)) {
+          return child ?? const SizedBox.shrink();
+        }
+
+        final mediaQuery = MediaQuery.of(context);
+        final canvasSize = Size(
+          GlameLayout.desktopWebCanvasWidth,
+          mediaQuery.size.height,
+        );
+        return ColoredBox(
+          color: GlameColors.nearBlack,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              IgnorePointer(
+                child: Opacity(
+                  opacity: 0.075,
+                  child: Image.asset(
+                    'assets/images/stores/glame_pattern_01.png',
+                    fit: BoxFit.cover,
+                    repeat: ImageRepeat.repeat,
+                  ),
+                ),
+              ),
+              Center(
+                child: SizedBox(
+                  width: GlameLayout.desktopWebCanvasWidth,
+                  height: double.infinity,
+                  child: ClipRect(
+                    child: MediaQuery(
+                      data: mediaQuery.copyWith(size: canvasSize),
+                      child: child,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

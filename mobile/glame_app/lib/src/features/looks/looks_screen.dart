@@ -1751,7 +1751,7 @@ class _LookEditorialCardState extends ConsumerState<_LookEditorialCard> {
             textColor: GlameColors.gold,
             onPressed: () {
               messenger.removeCurrentSnackBar();
-              context.go('/home?tab=3');
+              context.go('/home?tab=11');
             },
           ),
         ),
@@ -4063,12 +4063,27 @@ List<String> _lookLabels(Map<String, dynamic> post) {
   add(post['mood_values']);
   add(post['style_dna']);
   add(post['style_dna_values']);
-  add(post['radical']);
-  add(post['radical_values']);
   if (post['is_new'] == true) {
     add('Новинка');
   }
-  return result;
+  return result.where(_isCustomerFacingLookLabel).toList(growable: false);
+}
+
+bool _isCustomerFacingLookLabel(String label) {
+  final normalized = label.trim().toLowerCase();
+  if (normalized.isEmpty) return false;
+  const technicalTerms = [
+    'натуралистическ',
+    'истероид',
+    'шизоид',
+    'эпилептоид',
+    'гипертим',
+    'психотип',
+    'архетип',
+    'радикал',
+    'типаж',
+  ];
+  return !technicalTerms.any(normalized.contains);
 }
 
 bool _matchesFilter(Map<String, dynamic> post, String filter) {
@@ -4269,7 +4284,7 @@ String _availabilityLabel(Map<String, dynamic> product) {
   final stock = product['stock'];
   if (stock is num) {
     if (stock > 0) return 'В наличии';
-    return 'Под заказ';
+    return 'Скоро в наличии';
   }
   return 'В наличии';
 }

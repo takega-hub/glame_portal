@@ -1,0 +1,39 @@
+{
+  "configured": true,
+  "mode": "external_signer",
+  "endpoint_configured": true,
+  "health_endpoint_configured": true,
+  "auth_configured": true,
+  "checked_at": "2026-07-16T09:11:41.135922+00:00",
+  "status": "ok",
+  "errors": [],
+  "http_status": 200,
+  "response": {
+    "status": "ok",
+    "mode": "external_signer",
+    "network": "mainnet",
+    "wallet_address": "UQA5EmFpVIEJea3jgPdErJyH19lJHs9HUuarIvXbQpBz2Mok",
+    "jetton_master_address_configured": true,
+    "limits_loaded": true,
+    "limits": {
+      "max_amount_glm": 1000,
+      "daily_limit_glm": 5000,
+      "hourly_limit_glm": 2000,
+      "min_seconds_between_transfers": 2,
+      "daily_used_glm": "0",
+      "hourly_used_glm": "0",
+      "last_transfer_at_unix": null
+    },
+    "emergency_paused": false,
+    "emergency_pause_source": "kv",
+    "emergency_pause_reason": null,
+    "emergency_pause_updated_at": null,
+    "emergency_pause_updated_by": null,
+    "policy_version": "2026-07-05"
+  },
+  "emergency_paused": false,
+  "emergency_pause_source": "kv",
+  "emergency_pause_reason": null,
+  "emergency_pause_updated_at": null,
+  "emergency_pause_updated_by": null
+}

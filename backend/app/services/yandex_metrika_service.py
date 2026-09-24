@@ -15,6 +15,7 @@ class YandexMetrikaService:
     """Сервис для работы с Яндекс.Метрикой API"""
     
     BASE_URL = "https://api-metrika.yandex.net/stat/v1/data"
+    MANAGEMENT_BASE_URL = "https://api-metrika.yandex.net/management/v1"
     
     def __init__(
         self,
@@ -96,6 +97,69 @@ class YandexMetrikaService:
         except Exception as e:
             logger.error(f"Ошибка при запросе к Яндекс.Метрике: {e}")
             raise
+
+    async def get_goals(self) -> List[Dict[str, Any]]:
+        """Return the goals configured on a counter, including automatic Business goals."""
+        response = await self.client.get(
+            f"{self.MANAGEMENT_BASE_URL}/counter/{self.counter_id}/goals",
+            params={"per_page": 1000},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        goals = payload.get("goals") or []
+        return [goal for goal in goals if isinstance(goal, dict) and goal.get("id")]
+
+    @staticmethod
+    def _organization_goal_category(goal: Dict[str, Any]) -> Optional[str]:
+        """Map automatic Yandex Business goal names/types to one stable funnel field."""
+        value = " ".join(str(goal.get(key) or "") for key in ("name", "type", "goal_source")).lower()
+        if "make-call" in value or "клик на позвон" in value or "показать телефон" in value:
+            return "calls"
+        if "make-route" in value or "построить маршрут" in value:
+            return "routes"
+        if "start-route" in value or "движение по маршруту" in value or "поехали" in value:
+            return "route_starts"
+        if "open chat" in value or "открыть чат" in value or "сообщени" in value:
+            return "messages"
+        if "website" in value or "переход на сайт" in value or "клик на сайт" in value:
+            return "website_clicks"
+        return None
+
+    async def get_organization_actions(
+        self,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        """Fetch automatic Yandex Business/Maps goals without mixing them with ad-only facts."""
+        goals = await self.get_goals()
+        selected = []
+        for goal in goals:
+            category = self._organization_goal_category(goal)
+            if category:
+                selected.append((str(goal["id"]), category, str(goal.get("name") or goal["id"])))
+        result: Dict[str, Any] = {
+            "is_organization_counter": bool(selected),
+            "card_opens": 0,
+            "calls": 0,
+            "routes": 0,
+            "route_starts": 0,
+            "messages": 0,
+            "website_clicks": 0,
+            "recognized_goals": [{"id": goal_id, "category": category, "name": name} for goal_id, category, name in selected],
+        }
+        metrics = ["ym:s:visits"] + [f"ym:s:goal{goal_id}reaches" for goal_id, _, _ in selected]
+        data = await self._make_request(
+            metrics=",".join(metrics),
+            start_date=start_date,
+            end_date=end_date,
+        )
+        values = (data.get("data") or [{}])[0].get("metrics") or []
+        if result["is_organization_counter"] and values:
+            result["card_opens"] = int(values[0] or 0)
+        for index, (_, category, _) in enumerate(selected, start=1):
+            if index < len(values):
+                result[category] += int(values[index] or 0)
+        return result
     
     async def get_visits_metrics(
         self,

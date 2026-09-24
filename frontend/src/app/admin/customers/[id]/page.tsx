@@ -6,7 +6,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { apiClient } from '@/lib/api';
 import Link from 'next/link';
 import { communication, type CustomerMessageItem } from '@/lib/api';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 
 interface CustomerDetail {
   id: string;
@@ -25,6 +25,17 @@ interface CustomerDetail {
   last_purchase_date: string | null;
   rfm_score: any;
   purchase_preferences: any;
+  buyer_questionnaire?: {
+    contact_channels?: string[];
+    do_not_contact?: boolean;
+    marketing_consent?: boolean;
+    recommended_contact_channel?: string | null;
+    purchase_for?: string[];
+    discovery_channels?: string[];
+    discovery_other?: string | null;
+    glame_values?: string[];
+    submitted_at?: string | null;
+  } | null;
   segments: Array<{ id: string; name: string }>;
   created_at: string;
   preferred_store_name?: string | null;
@@ -175,6 +186,122 @@ function formatRub(value?: number | null) {
   }).format(Number(value || 0));
 }
 
+function formatKopecks(value?: number | null) {
+  return formatRub(Number(value || 0) / 100);
+}
+
+function QuestionnaireAnswers({ values, empty = 'Не указано' }: { values?: string[]; empty?: string }) {
+  if (!values?.length) return <p className="mt-2 text-sm text-gray-500">{empty}</p>;
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {values.map((value) => (
+        <span key={value} className="rounded-full bg-pink-50 px-3 py-1.5 text-sm text-pink-800">
+          {value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function isCrmCallMessage(msg: CustomerMessageItem) {
+  return msg.event_type === 'crm_call' || msg.message_kind === 'crm_call' || msg.payload?.source === 'google_sheet_calls';
+}
+
+function crmCallLabel(msg: CustomerMessageItem) {
+  const payload = msg.payload || {};
+  return payload.interaction_reason || payload.work_status || msg.event_type || 'CRM звонок';
+}
+
+function crmCallDetails(msg: CustomerMessageItem) {
+  const payload = msg.payload || {};
+  return [
+    payload.interacted_by && `Кто: ${payload.interacted_by}`,
+    payload.seller_outcome && `Итог: ${payload.seller_outcome}`,
+    payload.next_action_date && `Следующее действие: ${payload.next_action_date}`,
+  ].filter(Boolean).join(' · ');
+}
+
+function crmCallModalRows(msg: CustomerMessageItem) {
+  const payload = msg.payload || {};
+  const conversion = payload.conversion_result || {};
+  return [
+    ['Дата', payload.interaction_date || payload.worked_at || msg.created_at],
+    ['Повод', payload.interaction_reason || payload.segment_reason || msg.event_type],
+    ['Кто взаимодействовал', payload.interacted_by || payload.responsible || payload.customer_created_by],
+    ['Комментарий', payload.comment || payload.seller_comment],
+    ['Результат взаимодействия', conversion.converted ? 'Положительный: была покупка в течение 14 дней' : conversion.status === 'pending' ? 'Окно 14 дней еще открыто' : conversion.status === 'no_purchase_14d' ? 'Покупки в течение 14 дней нет' : null],
+    ['Покупок после контакта', conversion.purchase_count],
+    ['Сумма покупок после контакта', conversion.revenue_rub ? `${conversion.revenue_rub.toLocaleString('ru-RU')} ₽` : null],
+    ['Первая покупка после контакта', conversion.first_purchase_at],
+    ['Статус работы', payload.work_status],
+    ['Итог продавца', payload.seller_outcome],
+    ['Следующее действие', payload.next_action_date],
+    ['CRM группа', payload.crm_group || msg.segment],
+    ['Приоритет', payload.priority],
+    ['Магазин', payload.preferred_store || msg.event_store],
+    ['Ключ скрипта', payload.script_key || msg.event_brand],
+    ['Что сделать продавцу', payload.seller_task || msg.cta],
+  ].filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '');
+}
+
+function interactionResultBadge(msg: CustomerMessageItem) {
+  const conversion = msg.payload?.conversion_result || {};
+  if (!conversion || !conversion.status) {
+    return { label: 'Не рассчитано', detail: 'Результат 14 дней пока не зафиксирован', className: 'bg-gray-100 text-gray-700' };
+  }
+  if (conversion.status === 'not_interacted') {
+    return { label: 'Не было касания', detail: 'Сообщение не отправлено / взаимодействие не состоялось', className: 'bg-gray-100 text-gray-700' };
+  }
+  if (conversion.status === 'pending') {
+    return { label: 'Окно открыто', detail: '14 дней после взаимодействия еще не прошли', className: 'bg-amber-100 text-amber-800' };
+  }
+  if (conversion.converted || conversion.status === 'positive') {
+      const purchaseCount = Number(conversion.purchase_count || 0);
+      const revenue = Number(conversion.revenue_kopecks || 0);
+      return {
+        label: `Покупка · ${purchaseCount}`,
+      detail: `${formatKopecks(revenue)} за 14 дней`,
+      className: 'bg-green-100 text-green-800',
+    };
+  }
+  if (conversion.status === 'no_purchase_14d') {
+    return { label: 'Без покупки', detail: 'Покупок в течение 14 дней нет', className: 'bg-red-50 text-red-700' };
+  }
+  return { label: String(conversion.status), detail: 'Результат взаимодействия', className: 'bg-gray-100 text-gray-700' };
+}
+
+function messageStatusBadge(msg: CustomerMessageItem) {
+  const delivery = msg.payload?.sms_delivery || {};
+  const providerLabel = delivery.status_label || delivery.extend_status;
+  if (isCrmCallMessage(msg)) {
+    return { label: 'Зафиксировано', className: 'bg-violet-100 text-violet-800' };
+  }
+  if (msg.status === 'delivered') {
+    return { label: providerLabel ? `Доставлено · ${providerLabel}` : 'Доставлено', className: 'bg-green-100 text-green-800' };
+  }
+  if (msg.status === 'failed') {
+    return { label: providerLabel ? `Ошибка · ${providerLabel}` : 'Ошибка отправки', className: 'bg-red-100 text-red-800' };
+  }
+  if (msg.status === 'queued') {
+    return { label: providerLabel ? `В очереди · ${providerLabel}` : 'В очереди', className: 'bg-amber-100 text-amber-800' };
+  }
+  if (msg.status === 'moderation') {
+    return { label: providerLabel ? `На модерации · ${providerLabel}` : 'На модерации', className: 'bg-amber-100 text-amber-800' };
+  }
+  if (msg.status === 'sent') {
+    const date = msg.sent_at ? new Date(msg.sent_at).toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }) : null;
+    const base = providerLabel ? `Передано · ${providerLabel}` : 'Передано в SMS';
+    return { label: date ? `${base} ${date}` : base, className: 'bg-blue-100 text-blue-800' };
+  }
+  return { label: 'Сгенерировано', className: 'bg-blue-100 text-blue-800' };
+}
+
 export default function CustomerDetailPage() {
   const { loading } = useAuth();
   const router = useRouter();
@@ -186,7 +313,7 @@ export default function CustomerDetailPage() {
   const [syncing, setSyncing] = useState(false);
   const [forceSyncing, setForceSyncing] = useState(false);
   const [forceSyncMessage, setForceSyncMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'purchases' | 'loyalty' | 'looks' | 'messages'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'questionnaire' | 'purchases' | 'loyalty' | 'looks' | 'messages'>('overview');
   const [isEditingGender, setIsEditingGender] = useState(false);
   const [editGender, setEditGender] = useState<string | null>(null);
   const [savingGender, setSavingGender] = useState(false);
@@ -205,6 +332,7 @@ export default function CustomerDetailPage() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesOffset, setMessagesOffset] = useState(0);
   const [messagesActionId, setMessagesActionId] = useState<string | null>(null);
+  const [selectedMessage, setSelectedMessage] = useState<CustomerMessageItem | null>(null);
   const [stylistDialogs, setStylistDialogs] = useState<StylistDialogItem[]>([]);
   const [stylistDialogsTotal, setStylistDialogsTotal] = useState(0);
   const [stylistDialogsLoading, setStylistDialogsLoading] = useState(false);
@@ -212,7 +340,7 @@ export default function CustomerDetailPage() {
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab');
-    if (requestedTab === 'overview' || requestedTab === 'purchases' || requestedTab === 'loyalty' || requestedTab === 'looks' || requestedTab === 'messages') {
+    if (requestedTab === 'overview' || requestedTab === 'questionnaire' || requestedTab === 'purchases' || requestedTab === 'loyalty' || requestedTab === 'looks' || requestedTab === 'messages') {
       setActiveTab(requestedTab);
     }
   }, [searchParams]);
@@ -499,9 +627,10 @@ export default function CustomerDetailPage() {
         {/* Вкладки */}
         <div className="bg-white rounded-lg shadow mb-6">
           <div className="border-b border-gray-200">
-            <nav className="flex -mb-px">
+            <nav className="flex -mb-px overflow-x-auto">
               {[
                 { id: 'overview', label: 'Обзор' },
+                { id: 'questionnaire', label: 'Анкета покупателя' },
                 { id: 'purchases', label: 'История покупок' },
                 { id: 'loyalty', label: 'Программа лояльности' },
                 { id: 'looks', label: 'Сохраненные образы' },
@@ -737,6 +866,43 @@ export default function CustomerDetailPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'questionnaire' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            {customer.buyer_questionnaire ? (
+              <div className="space-y-7">
+                <section className="border-b border-gray-200 pb-6">
+                  <h2 className="text-lg font-bold text-gray-900">1. Как Вы узнали о GLAME?</h2>
+                  <QuestionnaireAnswers values={[
+                    ...(customer.buyer_questionnaire.discovery_channels || []),
+                    ...(customer.buyer_questionnaire.discovery_other ? [customer.buyer_questionnaire.discovery_other] : []),
+                  ]} />
+                </section>
+                <section className="border-b border-gray-200 pb-6">
+                  <h2 className="text-lg font-bold text-gray-900">2. Для кого чаще выбираете украшения?</h2>
+                  <QuestionnaireAnswers values={customer.buyer_questionnaire.purchase_for} />
+                </section>
+                <section className="border-b border-gray-200 pb-6">
+                  <h2 className="text-lg font-bold text-gray-900">3. Где Вам удобно получать новости GLAME?</h2>
+                  {customer.buyer_questionnaire.do_not_contact ? (
+                    <p className="mt-2 text-sm font-medium text-red-700">Не хочу получать сообщения</p>
+                  ) : (
+                    <QuestionnaireAnswers values={customer.buyer_questionnaire.contact_channels} />
+                  )}
+                </section>
+                <section>
+                  <h2 className="text-lg font-bold text-gray-900">4. Что для Вас важно в GLAME?</h2>
+                  <QuestionnaireAnswers values={customer.buyer_questionnaire.glame_values} />
+                </section>
+              </div>
+            ) : (
+              <div className="py-10 text-center">
+                <h2 className="text-xl font-bold text-gray-900">Анкета не заполнена</h2>
+                <p className="mt-2 text-gray-500">Ответы появятся здесь после заполнения анкеты покупателя.</p>
               </div>
             )}
           </div>
@@ -1086,9 +1252,9 @@ export default function CustomerDetailPage() {
               <div>
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900">Рассылки и сообщения платформы</h2>
+                    <h2 className="text-xl font-bold text-gray-900">Рассылки, сообщения и CRM-звонки</h2>
                     <p className="mt-1 text-sm text-gray-500">
-                      История сгенерированных и отправленных сообщений покупателю.
+                      История сгенерированных сообщений и ручных взаимодействий с покупателем.
                     </p>
                   </div>
                   <div className="text-sm text-gray-500">
@@ -1112,6 +1278,7 @@ export default function CustomerDetailPage() {
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Событие / бренд</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Текст</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Результат 14 дней</th>
                             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
                           </tr>
                         </thead>
@@ -1128,8 +1295,15 @@ export default function CustomerDetailPage() {
                                 })}
                               </td>
                               <td className="px-4 py-3 text-sm text-gray-700">
-                                <span className="font-medium">{msg.event_type || '—'}</span>
-                                {(msg.event_brand || msg.event_store) && (
+                                <span className="font-medium">
+                                  {isCrmCallMessage(msg) ? 'CRM звонок' : (msg.event_type || '—')}
+                                </span>
+                                {isCrmCallMessage(msg) && (
+                                  <span className="block text-gray-500 text-xs">
+                                    {[crmCallLabel(msg), msg.payload?.crm_group, msg.event_store].filter(Boolean).join(' · ')}
+                                  </span>
+                                )}
+                                {!isCrmCallMessage(msg) && (msg.event_brand || msg.event_store) && (
                                   <span className="block text-gray-500 text-xs">
                                     {[msg.event_brand, msg.event_store].filter(Boolean).join(' · ')}
                                   </span>
@@ -1139,31 +1313,55 @@ export default function CustomerDetailPage() {
                                 <p className="line-clamp-2" title={msg.message}>
                                   {msg.message}
                                 </p>
+                                {isCrmCallMessage(msg) && (
+                                  <div className="mt-1 space-y-1 text-xs text-gray-500">
+                                    {crmCallDetails(msg) && <div>{crmCallDetails(msg)}</div>}
+                                    {(msg.payload?.comment || msg.payload?.seller_comment) && (
+                                      <div className="line-clamp-2" title={msg.payload.comment || msg.payload.seller_comment}>
+                                        Комментарий: {msg.payload.comment || msg.payload.seller_comment}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap">
-                                {msg.status === 'sent' ? (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Отправлено{' '}
-                                    {msg.sent_at && new Date(msg.sent_at).toLocaleDateString('ru-RU', {
-                                      day: '2-digit',
-                                      month: '2-digit',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })}
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    Сгенерировано
-                                  </span>
-                                )}
+                                {(() => {
+                                  const badge = messageStatusBadge(msg);
+                                  return (
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.className}`}>
+                                      {badge.label}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {(() => {
+                                  const badge = interactionResultBadge(msg);
+                                  return (
+                                    <div>
+                                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.className}`}>
+                                        {badge.label}
+                                      </span>
+                                      <div className="mt-1 max-w-[180px] text-xs text-gray-500">{badge.detail}</div>
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
                                 {messagesActionId === msg.id ? (
                                   <span className="text-gray-400">…</span>
                                 ) : (
                                   <>
-                                    {msg.status === 'new' && (
+                                    {(isCrmCallMessage(msg) || msg.payload?.sms_delivery || msg.payload?.conversion_result) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedMessage(msg)}
+                                        className="text-gray-700 hover:text-gray-900 font-medium mr-3"
+                                      >
+                                        Подробнее
+                                      </button>
+                                    )}
+                                    {msg.status === 'new' && !isCrmCallMessage(msg) && (
                                       <button
                                         type="button"
                                         onClick={() => handleMarkSentMessage(msg)}
@@ -1312,6 +1510,89 @@ export default function CustomerDetailPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedMessage && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow-xl">
+              <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-4">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {isCrmCallMessage(selectedMessage) ? 'CRM взаимодействие' : 'Сообщение'}
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {new Date(selectedMessage.created_at).toLocaleString('ru-RU')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMessage(null)}
+                  className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="Закрыть"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="max-h-[calc(90vh-82px)] overflow-y-auto px-6 py-5">
+                {isCrmCallMessage(selectedMessage) ? (
+                  <div className="space-y-5">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {crmCallModalRows(selectedMessage).map(([label, value]) => (
+                        <div key={label} className="rounded-md border border-gray-200 bg-gray-50 p-3">
+                          <div className="text-xs font-medium uppercase text-gray-500">{label}</div>
+                          <div className="mt-1 whitespace-pre-wrap text-sm text-gray-900">{String(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {selectedMessage.payload?.script_text && (
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">Скрипт</div>
+                        <div className="mt-2 rounded-md border border-gray-200 bg-white p-3 text-sm leading-6 text-gray-800">
+                          {selectedMessage.payload.script_text}
+                        </div>
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-sm font-semibold text-gray-900">Текст записи</div>
+                      <div className="mt-2 rounded-md border border-gray-200 bg-white p-3 text-sm leading-6 text-gray-800">
+                        {selectedMessage.message}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {selectedMessage.payload?.sms_delivery && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {[
+                          ['Статус SMS', messageStatusBadge(selectedMessage).label],
+                          ['SMS ID', selectedMessage.payload.sms_delivery.sms_id || selectedMessage.payload.sms_id],
+                          ['Провайдер', selectedMessage.payload.sms_delivery.provider],
+                          ['Последняя проверка', selectedMessage.payload.sms_delivery.last_checked_at],
+                        ].filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '').map(([label, value]) => (
+                          <div key={label} className="rounded-md border border-gray-200 bg-gray-50 p-3">
+                            <div className="text-xs font-medium uppercase text-gray-500">{label}</div>
+                            <div className="mt-1 whitespace-pre-wrap text-sm text-gray-900">{String(value)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="rounded-md border border-gray-200 bg-white p-3 text-sm leading-6 text-gray-800">
+                      {selectedMessage.message}
+                    </div>
+                    {selectedMessage.cta && (
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">CTA</div>
+                        <div className="mt-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-800">
+                          {selectedMessage.cta}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

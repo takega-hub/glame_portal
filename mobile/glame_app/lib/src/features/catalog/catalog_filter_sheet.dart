@@ -56,13 +56,13 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
   late final TextEditingController priceMin;
   late final TextEditingController priceMax;
 
-  String? brand;
-  String? material;
-  String? vstavka;
-  String? pokrytie;
-  String? razmer;
-  String? tipZamka;
-  String? color;
+  Set<String> brand = <String>{};
+  Set<String> material = <String>{};
+  Set<String> vstavka = <String>{};
+  Set<String> pokrytie = <String>{};
+  Set<String> razmer = <String>{};
+  Set<String> tipZamka = <String>{};
+  Set<String> color = <String>{};
   String? sort;
   bool inStockOnly = false;
   Timer? _countDebounce;
@@ -84,13 +84,13 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
           ? _rub(widget.initial.priceMax!)
           : '',
     );
-    brand = widget.initial.brand;
-    material = widget.initial.material;
-    vstavka = widget.initial.vstavka;
-    pokrytie = widget.initial.pokrytie;
-    razmer = widget.initial.razmer;
-    tipZamka = widget.initial.tipZamka;
-    color = widget.initial.color;
+    brand = _splitSelections(widget.initial.brand);
+    material = _splitSelections(widget.initial.material);
+    vstavka = _splitSelections(widget.initial.vstavka);
+    pokrytie = _splitSelections(widget.initial.pokrytie);
+    razmer = _splitSelections(widget.initial.razmer);
+    tipZamka = _splitSelections(widget.initial.tipZamka);
+    color = _splitSelections(widget.initial.color);
     sort = widget.initial.sort;
     inStockOnly = widget.initial.inStockOnly;
     priceMin.addListener(_scheduleCountRefresh);
@@ -168,7 +168,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                         brandValues,
                         selected: brand,
                         onSelect: (value) {
-                          setState(() => brand = value);
+                          setState(() => _toggleSelection(brand, value));
                           _scheduleCountRefresh();
                         },
                         light: true,
@@ -183,7 +183,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                         colorValues,
                         selected: color,
                         onSelect: (value) {
-                          setState(() => color = value);
+                          setState(() => _toggleSelection(color, value));
                           _scheduleCountRefresh();
                         },
                         light: true,
@@ -198,7 +198,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                         sizeValues,
                         selected: razmer,
                         onSelect: (value) {
-                          setState(() => razmer = value);
+                          setState(() => _toggleSelection(razmer, value));
                           _scheduleCountRefresh();
                         },
                         light: true,
@@ -213,7 +213,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                         materialValues,
                         selected: material,
                         onSelect: (value) {
-                          setState(() => material = value);
+                          setState(() => _toggleSelection(material, value));
                           _scheduleCountRefresh();
                         },
                         light: true,
@@ -228,7 +228,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                         insertValues,
                         selected: vstavka,
                         onSelect: (value) {
-                          setState(() => vstavka = value);
+                          setState(() => _toggleSelection(vstavka, value));
                           _scheduleCountRefresh();
                         },
                         light: true,
@@ -243,7 +243,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                         pokrytieValues,
                         selected: pokrytie,
                         onSelect: (value) {
-                          setState(() => pokrytie = value);
+                          setState(() => _toggleSelection(pokrytie, value));
                           _scheduleCountRefresh();
                         },
                         light: true,
@@ -258,7 +258,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                         tipZamkaValues,
                         selected: tipZamka,
                         onSelect: (value) {
-                          setState(() => tipZamka = value);
+                          setState(() => _toggleSelection(tipZamka, value));
                           _scheduleCountRefresh();
                         },
                         light: true,
@@ -343,7 +343,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                           brandValues,
                           selected: brand,
                           onSelect: (value) {
-                            setState(() => brand = value);
+                            setState(() => _toggleSelection(brand, value));
                             _scheduleCountRefresh();
                           },
                         ),
@@ -354,7 +354,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                           colorValues,
                           selected: color,
                           onSelect: (value) {
-                            setState(() => color = value);
+                            setState(() => _toggleSelection(color, value));
                             _scheduleCountRefresh();
                           },
                         ),
@@ -365,7 +365,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                           sizeValues,
                           selected: razmer,
                           onSelect: (value) {
-                            setState(() => razmer = value);
+                            setState(() => _toggleSelection(razmer, value));
                             _scheduleCountRefresh();
                           },
                         ),
@@ -376,7 +376,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                           insertValues,
                           selected: vstavka,
                           onSelect: (value) {
-                            setState(() => vstavka = value);
+                            setState(() => _toggleSelection(vstavka, value));
                             _scheduleCountRefresh();
                           },
                         ),
@@ -387,7 +387,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                           materialValues,
                           selected: material,
                           onSelect: (value) {
-                            setState(() => material = value);
+                            setState(() => _toggleSelection(material, value));
                             _scheduleCountRefresh();
                           },
                         ),
@@ -398,7 +398,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                           pokrytieValues,
                           selected: pokrytie,
                           onSelect: (value) {
-                            setState(() => pokrytie = value);
+                            setState(() => _toggleSelection(pokrytie, value));
                             _scheduleCountRefresh();
                           },
                         ),
@@ -409,7 +409,7 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
                           tipZamkaValues,
                           selected: tipZamka,
                           onSelect: (value) {
-                            setState(() => tipZamka = value);
+                            setState(() => _toggleSelection(tipZamka, value));
                             _scheduleCountRefresh();
                           },
                         ),
@@ -438,8 +438,8 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
 
   List<Widget> _choiceRows(
     List<String> values, {
-    required String? selected,
-    required ValueChanged<String?> onSelect,
+    required Set<String> selected,
+    required ValueChanged<String> onSelect,
     bool light = false,
   }) {
     if (values.isEmpty) {
@@ -462,8 +462,8 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
         .map(
           (value) => _ChoiceRow(
             label: value,
-            selected: selected == value,
-            onTap: () => onSelect(selected == value ? null : value),
+            selected: selected.contains(value),
+            onTap: () => onSelect(value),
             light: light,
           ),
         )
@@ -474,6 +474,10 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
     setState(() {
       _expandedSection = _expandedSection == id ? null : id;
     });
+  }
+
+  void _toggleSelection(Set<String> selected, String value) {
+    if (!selected.add(value)) selected.remove(value);
   }
 
   void _toggleSort(String value) {
@@ -487,13 +491,13 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
     setState(() {
       priceMin.text = '';
       priceMax.text = '';
-      brand = null;
-      material = null;
-      vstavka = null;
-      pokrytie = null;
-      razmer = null;
-      tipZamka = null;
-      color = null;
+      brand.clear();
+      material.clear();
+      vstavka.clear();
+      pokrytie.clear();
+      razmer.clear();
+      tipZamka.clear();
+      color.clear();
       sort = null;
       inStockOnly = false;
     });
@@ -508,13 +512,13 @@ class _CatalogFilterSheetState extends State<CatalogFilterSheet> {
     return CatalogFiltersDraft(
       priceMin: _toKopeks(priceMin.text),
       priceMax: _toKopeks(priceMax.text),
-      brand: _norm(brand),
-      material: _norm(material),
-      vstavka: _norm(vstavka),
-      pokrytie: _norm(pokrytie),
-      razmer: _norm(razmer),
-      tipZamka: _norm(tipZamka),
-      color: _norm(color),
+      brand: _joinSelections(brand),
+      material: _joinSelections(material),
+      vstavka: _joinSelections(vstavka),
+      pokrytie: _joinSelections(pokrytie),
+      razmer: _joinSelections(razmer),
+      tipZamka: _joinSelections(tipZamka),
+      color: _joinSelections(color),
       sort: _norm(sort),
       inStockOnly: inStockOnly,
     );
@@ -904,7 +908,7 @@ class _LightPriceInput extends StatelessWidget {
 
 class _ExpandableFilterSection extends StatelessWidget {
   final String title;
-  final String? selected;
+  final Set<String> selected;
   final bool expanded;
   final VoidCallback onTap;
   final List<Widget> children;
@@ -919,7 +923,7 @@ class _ExpandableFilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasSelected = (selected ?? '').trim().isNotEmpty;
+    final selectedCount = selected.length;
     return Column(
       children: [
         InkWell(
@@ -937,7 +941,7 @@ class _ExpandableFilterSection extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (hasSelected)
+                if (selectedCount > 0)
                   Container(
                     width: 20,
                     height: 20,
@@ -947,8 +951,8 @@ class _ExpandableFilterSection extends StatelessWidget {
                       color: GlameColors.nearBlack,
                       shape: BoxShape.circle,
                     ),
-                    child: const Text(
-                      '1',
+                    child: Text(
+                      '$selectedCount',
                       style: TextStyle(
                         fontSize: 11,
                         color: GlameColors.whiteGlame,
@@ -1143,6 +1147,25 @@ List<String> _list(dynamic v) {
     return values;
   }
   return const [];
+}
+
+Set<String> _splitSelections(String? value) {
+  return (value ?? '')
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toSet();
+}
+
+String? _joinSelections(Set<String> values) {
+  if (values.isEmpty) return null;
+  final normalized =
+      values
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty)
+          .toList()
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  return normalized.isEmpty ? null : normalized.join(',');
 }
 
 List<String> _characteristicValues(

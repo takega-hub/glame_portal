@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, desc, func, literal_column, text, update
 from pydantic import BaseModel
 from typing import Optional, List
+from collections import Counter
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -24,18 +25,21 @@ from app.models.user_segment import UserSegment
 from app.models.store import Store
 from app.models.live_stylist_conversation import LiveStylistConversation
 from app.models.stylist_chat_message import StylistChatMessage
-from app.api.dependencies import require_admin
+from app.api.dependencies import require_admin, require_any_role
 from app.services.loyalty_service import LoyaltyService
 from app.services.customer_analytics_service import CustomerAnalyticsService
 from app.services.purchase_product_fields import derive_purchase_brand, derive_purchase_category
 from app.services.sales_record_filters import is_analytics_eligible_product
+from app.services.store_aliases import effective_store_id, effective_store_name
 try:
     from app.services.customer_sync_service import CustomerSyncService  # type: ignore
 except Exception:
     CustomerSyncService = None  # type: ignore
+from app.services.crm_interaction_attribution_service import CrmInteractionAttributionService
 from typing import Dict, Any, Tuple
 from app.services.customer_city_refresh_service import CustomerCityRefreshService
 from app.services.birthday_crm_service import BirthdayCrmService
+from app.services.customer_questionnaire_service import questionnaire_from_preferences
 from fastapi.responses import StreamingResponse
 import io
 import pandas as pd
@@ -120,6 +124,18 @@ async def force_sync_customer(
         link_service = SalesProductLinkService(db)
         link_stats = await link_service.backfill_missing_purchase_product_links(user_id=uid)
         normalized_fields = await link_service.normalize_purchase_product_fields(user_id=uid)
+        try:
+            attribution_stats = await CrmInteractionAttributionService(db).update_purchase_conversions(
+                user_ids=[uid],
+                commit=False,
+            )
+        except Exception as attribution_error:
+            logger.warning(
+                "Не удалось обновить результат CRM-взаимодействий для %s: %s",
+                uid,
+                attribution_error,
+            )
+            attribution_stats = {"error": str(attribution_error)}
         user.synced_at = datetime.now(timezone.utc)
         await db.commit()
 
@@ -135,6 +151,7 @@ async def force_sync_customer(
                 "total_amount": total_amount,
                 "linked_products": link_stats,
                 "normalized_product_fields": normalized_fields,
+                "crm_interaction_attribution": attribution_stats,
                 "loyalty_balance": loyalty.get("balance"),
                 "loyalty_updated": loyalty.get("updated", False),
             },
@@ -225,6 +242,7 @@ class CustomerDetailResponse(BaseModel):
     last_purchase_date: Optional[str] = None
     rfm_score: Optional[dict] = None
     purchase_preferences: Optional[dict] = None
+    buyer_questionnaire: Optional[dict] = None
     segments: List[dict]
     created_at: str
     preferred_store_name: Optional[str] = None
@@ -670,8 +688,9 @@ async def get_birthday_crm_cards(
 ):
     """Карточки CRM для клиентов с ДР в ближайшие дни.
 
-    Возвращает только черновики поздравлений и рекомендации по бонусу: автоотправка
-    клиентам намеренно отключена (`auto_send=false`, `status=draft`).
+    Возвращает карточки предпросмотра поздравлений и автоматически рассчитанный
+    подарок по правилам ДР-программы. Отправка клиентам выполняется отдельным
+    CRM-процессом, а не этим endpoint'ом.
     """
     try:
         return await BirthdayCrmService(db).get_upcoming_cards(days_ahead=days_ahead, limit=limit)
@@ -750,8 +769,9 @@ async def get_customer_detail(
         store_counts = {}
         total_with_store = 0
         for p, sname in dedup_map.values():
-            if sname:
-                store_counts[sname] = store_counts.get(sname, 0) + 1
+            display_store_name = effective_store_name(sname, p.purchase_date, p.store_id_1c)
+            if display_store_name:
+                store_counts[display_store_name] = store_counts.get(display_store_name, 0) + 1
                 total_with_store += 1
 
         preferred_store_name = None
@@ -813,6 +833,7 @@ async def get_customer_detail(
         last_purchase_date=getattr(user, "last_purchase_date", None).isoformat() if getattr(user, "last_purchase_date", None) else None,
         rfm_score=getattr(user, "rfm_score", None),
         purchase_preferences=getattr(user, "purchase_preferences", None),
+        buyer_questionnaire=questionnaire_from_preferences(getattr(user, "preferences", None)),
         segments=[{"id": str(s.id), "name": s.name} for s in segments],
         created_at=getattr(user, "created_at", None).isoformat() if getattr(user, "created_at", None) else None,
         preferred_store_name=preferred_store_name,
@@ -1217,6 +1238,7 @@ async def get_customer_purchases(
     for p, store_name, prod_name, prod_article, prod_brand, prod_category in page:
         is_refund = (p.total_amount or 0) < 0
         display_name = p.product_name or prod_name
+        display_store_name = effective_store_name(store_name, p.purchase_date, p.store_id_1c)
         items.append(PurchaseHistoryItem(
             id=str(p.id),
             purchase_date=p.purchase_date.isoformat() if p.purchase_date else "",
@@ -1229,7 +1251,7 @@ async def get_customer_purchases(
             brand=derive_purchase_brand(display_name, p.brand or prod_brand, prod_category or p.category),
             document_id_1c=p.document_id_1c,
             store_id_1c=p.store_id_1c,
-            store_name=store_name,
+            store_name=display_store_name,
             is_refund=is_refund
         ))
 
@@ -1567,16 +1589,25 @@ async def get_segment_users_admin(
     if users:
         uids = [u.id for u in users]
         counts_stmt = (
-            select(PurchaseHistory.user_id, PurchaseHistory.store_id_1c, func.count().label("cnt"))
+            select(PurchaseHistory.user_id, PurchaseHistory.store_id_1c, PurchaseHistory.purchase_date)
             .where(PurchaseHistory.user_id.in_(uids))
-            .group_by(PurchaseHistory.user_id, PurchaseHistory.store_id_1c)
         )
         rows = (await db.execute(counts_stmt)).all()
-        for uid, store_id_1c, cnt in rows:
+        store_counts_by_user: dict = {}
+        last_purchase_by_user_store: dict = {}
+        for uid, store_id_1c, purchase_date in rows:
             if not store_id_1c:
                 continue
+            mapped_store_id = effective_store_id(store_id_1c, purchase_date) or store_id_1c
+            key = (uid, mapped_store_id)
+            store_counts_by_user[key] = store_counts_by_user.get(key, 0) + 1
+            if purchase_date and (last_purchase_by_user_store.get(key) is None or purchase_date > last_purchase_by_user_store[key]):
+                last_purchase_by_user_store[key] = purchase_date
+        for (uid, store_id_1c), cnt in store_counts_by_user.items():
             prev = preferred_store_by_user.get(uid)
-            if not prev or cnt > prev[1]:
+            prev_last = last_purchase_by_user_store.get((uid, prev[0])) if prev else None
+            current_last = last_purchase_by_user_store.get((uid, store_id_1c))
+            if not prev or cnt > prev[1] or (cnt == prev[1] and current_last and (prev_last is None or current_last > prev_last)):
                 preferred_store_by_user[uid] = (store_id_1c, cnt)
         store_ids = {sid for (sid, _cnt) in preferred_store_by_user.values()}
         name_by_ext = {}
@@ -1685,6 +1716,95 @@ async def get_customers_analytics(
             "ltv_metrics": {},
             "segments_stats": {}
         }
+
+
+@router.get("/analytics/questionnaire")
+async def get_questionnaire_analytics(
+    current_user: User = Depends(require_any_role(["seller", "manager", "admin"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aggregated, non-identifying insight from customer questionnaires."""
+    result = await db.execute(
+        select(User.preferences, User.city, User.total_purchases, User.total_spent).where(User.is_customer.is_(True))
+    )
+    total_customers = 0
+    questionnaires = 0
+    marketing_consent = 0
+    do_not_contact = 0
+    contactable = 0
+    counters = {
+        "contact_channels": Counter(),
+        "recommended_contact_channels": Counter(),
+        "discovery_channels": Counter(),
+        "purchase_for": Counter(),
+        "glame_values": Counter(),
+        "cities": Counter(),
+    }
+    performance: dict[str, dict[str, dict[str, float]]] = {
+        "discovery_channels": {},
+        "purchase_for": {},
+        "glame_values": {},
+    }
+    for preferences, city, total_purchases, total_spent in result.all():
+        total_customers += 1
+        profile = questionnaire_from_preferences(preferences)
+        if not profile:
+            continue
+        questionnaires += 1
+        if profile.get("marketing_consent"):
+            marketing_consent += 1
+        if profile.get("do_not_contact"):
+            do_not_contact += 1
+        elif profile.get("contact_channels"):
+            contactable += 1
+        for key in ("contact_channels", "discovery_channels", "purchase_for", "glame_values"):
+            counters[key].update(profile.get(key) or [])
+        is_buyer = int(total_purchases or 0) > 0
+        revenue_rub = int(total_spent or 0) / 100
+        for key in performance:
+            for value in profile.get(key) or []:
+                item = performance[key].setdefault(value, {"respondents": 0, "buyers": 0, "revenue_rub": 0.0})
+                item["respondents"] += 1
+                item["buyers"] += int(is_buyer)
+                item["revenue_rub"] += revenue_rub
+        if profile.get("recommended_contact_channel"):
+            counters["recommended_contact_channels"].update([profile["recommended_contact_channel"]])
+        counters["cities"].update([profile.get("city") or city or "Не указан"])
+
+    def ranked(counter: Counter) -> list[dict[str, Any]]:
+        denominator = questionnaires or 1
+        return [
+            {"value": value, "count": count, "share_pct": round(count * 100 / denominator, 1)}
+            for value, count in counter.most_common()
+        ]
+
+    def ranked_performance(items: dict[str, dict[str, float]]) -> list[dict[str, Any]]:
+        return sorted(
+            [
+                {
+                    "value": value,
+                    "respondents": int(item["respondents"]),
+                    "buyers": int(item["buyers"]),
+                    "buyer_rate_pct": round(item["buyers"] * 100 / item["respondents"], 1) if item["respondents"] else 0,
+                    "revenue_rub": round(item["revenue_rub"], 2),
+                    "revenue_per_respondent_rub": round(item["revenue_rub"] / item["respondents"], 2) if item["respondents"] else 0,
+                }
+                for value, item in items.items()
+            ],
+            key=lambda item: (item["revenue_per_respondent_rub"], item["respondents"]),
+            reverse=True,
+        )
+
+    return {
+        "total_customers": total_customers,
+        "questionnaires": questionnaires,
+        "coverage_pct": round(questionnaires * 100 / total_customers, 1) if total_customers else 0,
+        "marketing_consent": marketing_consent,
+        "do_not_contact": do_not_contact,
+        "contactable": contactable,
+        "breakdowns": {key: ranked(counter) for key, counter in counters.items()},
+        "performance": {key: ranked_performance(items) for key, items in performance.items()},
+    }
 
 
 @router.get("/export")

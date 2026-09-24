@@ -93,6 +93,37 @@ class GenerationHistory:
         async with self._lock:
             self._records.pop(rec_id, None)
 
+    async def upsert_completed(
+        self,
+        rec_id: str,
+        *,
+        event_type: str,
+        segment: Optional[str],
+        started_at: str,
+        completed_at: str,
+        total: int,
+        success: int,
+        errors: int,
+        params: Dict[str, Any],
+        saved_file: Optional[str] = None,
+    ) -> None:
+        """Добавить или обновить внешнюю кампанию в общей истории без дублей."""
+        rec = GenerationRecord(
+            id=rec_id,
+            status="completed",
+            event_type=event_type,
+            segment=segment,
+            started_at=started_at,
+            completed_at=completed_at,
+            total=total,
+            processed=total,
+            success=success,
+            errors=errors,
+            params=params or {},
+            saved_file=saved_file,
+        )
+        await self._append_to_index(rec)
+
     async def fail(self, rec_id: str, error_message: str):
         async with self._lock:
             rec = self._records.get(rec_id)

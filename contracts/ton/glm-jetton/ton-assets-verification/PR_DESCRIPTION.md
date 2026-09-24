@@ -13,7 +13,7 @@
 - Website: https://glamejewelry.ru
 - GLM landing: https://partner.glamejewelry.ru/glm
 - Partner site: https://partner.glamejewelry.ru/referral
-- Metadata: https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata.json
+- Metadata: https://partner.glamejewelry.ru/static/glm_policy/jetton-metadata-mainnet-v2.json
 - Icon: https://partner.glamejewelry.ru/static/glm_policy/glm-token-icon-v3.png
 
 ## Description
@@ -27,3 +27,5 @@ GLM is not positioned as an investment product, stablecoin, deposit, or guarante
 - The token metadata is hosted on the official GLAME partner domain.
 - The icon is a 1024x1024 PNG with the GLAME brand sign.
 - The initial mainnet bank mint of `10,000,000 GLM` was completed to the GLAME treasury/bank wallet.
+- The Jetton master content URI was updated on-chain to the production metadata URL.
+- Metadata update tx: `/BG9GiyynGQOQNqZx48Fx9YKoBPdzoIULZYGGF7JV4c=`.

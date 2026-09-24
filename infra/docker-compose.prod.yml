@@ -4,9 +4,9 @@ services:
     container_name: glame_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-glame_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-glame_password}
-      POSTGRES_DB: ${POSTGRES_DB:-glame_db}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -54,7 +54,7 @@ services:
     env_file:
       - ./.env
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-glame_user}:${POSTGRES_PASSWORD:-glame_password}@postgres:5432/${POSTGRES_DB:-glame_db}
+      DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER must be set}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB must be set}
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379
       ML_INFERENCE_URL: http://ml_inference:8010

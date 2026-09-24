@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import { AppHomeSlide } from '@/types';
+import { AppHomeSlide, AppNews } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -70,7 +70,7 @@ const homeBlockOptions = [
     key: 'service_how_to_buy',
     label: 'Главная / Блок 6 / Как купить в GLAME',
     helper:
-      'Для финального Block 6 загрузите графитовую подложку блока в `background_image_url`. `image_url` можно не использовать: тексты, action-panels, сервисная зона и логика CTA теперь полностью системные и рендерятся приложением на Главной.',
+      'Для финального Block 6 выберите фотографию или однотонный фон. Для фона и текста доступны HEX, а для фона также код RAL. Заголовок, описание и три сценария покупки рендерятся приложением на Главной.',
   },
   {
     key: 'collected_glame_brands',
@@ -81,7 +81,7 @@ const homeBlockOptions = [
   ...brandHeroBlockOptions.map((item) => ({
     ...item,
     helper:
-      'Для страницы выбранного бренда загрузите уникальную hero-картинку. Приложение использует `image_url` как верхнее изображение карточки бренда; если запись не создана, останется fallback.',
+      'Загруженная `image_url` используется в блоке 4 главной страницы и как верхнее изображение страницы бренда. Чтобы бренд попал в четверку главной, оставьте запись активной и задайте порядок сортировки.',
   })),
 ] as const;
 
@@ -96,7 +96,8 @@ type ActionType =
   | 'selection'
   | 'stylist'
   | 'url'
-  | 'home_block';
+  | 'home_block'
+  | 'news';
 
 type ActionFormState = {
   text: string;
@@ -112,7 +113,17 @@ type ActionFormState = {
   selectionMode: string;
   externalUrl: string;
   homeBlock: string;
+  newsId: string;
 };
+
+type Block6BackgroundMode = 'image' | 'color';
+
+const block6RalPalette = [
+  { ral: 'RAL 9005', hex: '#0A0A0A', label: 'Чёрный' },
+  { ral: 'RAL 7016', hex: '#383E42', label: 'Антрацит' },
+  { ral: 'RAL 7043', hex: '#4E5452', label: 'Серый' },
+  { ral: 'RAL 1019', hex: '#A28F7A', label: 'Серо-бежевый' },
+] as const;
 
 const actionOptions: { value: ActionType; label: string }[] = [
   { value: 'none', label: 'Без действия' },
@@ -122,6 +133,7 @@ const actionOptions: { value: ActionType; label: string }[] = [
   { value: 'stylist', label: 'Подбор / Стилист' },
   { value: 'url', label: 'Внешняя ссылка' },
   { value: 'home_block', label: 'Блок главной' },
+  { value: 'news', label: 'Новость' },
 ];
 
 const defaultCatalogCategoryOptions = [
@@ -163,6 +175,7 @@ function createEmptyActionState(text: string = ''): ActionFormState {
     selectionMode: '',
     externalUrl: '',
     homeBlock: '2',
+    newsId: '',
   };
 }
 
@@ -193,6 +206,10 @@ function fromSlideAction(args: {
       readPayloadString(payload, 'block_number') ||
       readPayloadString(payload, 'target') ||
       '2',
+    newsId:
+      readPayloadString(payload, 'news_id') ||
+      readPayloadString(payload, 'newsId') ||
+      readPayloadString(payload, 'id'),
   };
 }
 
@@ -234,6 +251,11 @@ function buildActionPayload(state: ActionFormState): Record<string, string> | nu
     return { block: state.homeBlock.trim() || '2' };
   }
 
+  if (state.type === 'news') {
+    const newsId = state.newsId.trim();
+    return newsId ? { news_id: newsId } : null;
+  }
+
   return null;
 }
 
@@ -266,6 +288,7 @@ function actionSummary(state: ActionFormState): string {
   if (state.type === 'stylist') return 'Переход в стилист-чат';
   if (state.type === 'url') return state.externalUrl.trim() || 'Внешняя ссылка';
   if (state.type === 'home_block') return `Прокрутка к блоку ${state.homeBlock.trim() || '2'}`;
+  if (state.type === 'news') return state.newsId.trim() ? `Новость: ${state.newsId.trim()}` : 'Новость не выбрана';
   return 'Действие не задано';
 }
 
@@ -281,6 +304,7 @@ export default function HomeSlidesPanel() {
   );
   const [lookOptions, setLookOptions] =
     useState<ManualLookOptionsResponse>(emptyLookOptions);
+  const [newsItems, setNewsItems] = useState<AppNews[]>([]);
 
   const selected = useMemo(() => items.find((x) => x.id === selectedId) || null, [items, selectedId]);
   const lookFilterOptions = useMemo(() => {
@@ -319,6 +343,10 @@ export default function HomeSlidesPanel() {
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState('');
+  const [backgroundMode, setBackgroundMode] = useState<Block6BackgroundMode>('image');
+  const [backgroundColorHex, setBackgroundColorHex] = useState('#222426');
+  const [backgroundColorRal, setBackgroundColorRal] = useState('');
+  const [textColorHex, setTextColorHex] = useState('#242628');
   const [imageUrl, setImageUrl] = useState('');
   const [imageAction, setImageAction] = useState<ActionFormState>(createEmptyActionState());
   const [primaryAction, setPrimaryAction] = useState<ActionFormState>(createEmptyActionState());
@@ -331,6 +359,10 @@ export default function HomeSlidesPanel() {
     setTitle('');
     setSubtitle('');
     setBackgroundImageUrl('');
+    setBackgroundMode('image');
+    setBackgroundColorHex('#222426');
+    setBackgroundColorRal('');
+    setTextColorHex('#242628');
     setImageUrl('');
     setImageAction(createEmptyActionState());
     setPrimaryAction(createEmptyActionState());
@@ -354,9 +386,10 @@ export default function HomeSlidesPanel() {
 
   const loadActionOptions = async () => {
     try {
-      const [sections, manualLookOptions] = await Promise.all([
+      const [sections, manualLookOptions, news] = await Promise.all([
         api.getCatalogSections(),
         api.getManualLookOptions(),
+        api.listAppNews('published'),
       ]);
       const nextCategories = Array.from(
         new Set(
@@ -367,9 +400,11 @@ export default function HomeSlidesPanel() {
       );
       setCatalogCategories(nextCategories);
       setLookOptions(manualLookOptions);
+      setNewsItems(news as AppNews[]);
     } catch {
       setCatalogCategories(defaultCatalogCategoryOptions);
       setLookOptions(emptyLookOptions);
+      setNewsItems([]);
     }
   };
 
@@ -388,7 +423,14 @@ export default function HomeSlidesPanel() {
     if (!selected) return;
     setTitle(selected.title || '');
     setSubtitle(selected.subtitle || '');
-    setBackgroundImageUrl(selected.background_image_url || '');
+    setBackgroundImageUrl(
+      selected.background_image_url ||
+        (selected.block_key === 'service_how_to_buy' ? selected.image_url || '' : '')
+    );
+    setBackgroundMode(selected.background_mode === 'color' ? 'color' : 'image');
+    setBackgroundColorHex(selected.background_color_hex || '#222426');
+    setBackgroundColorRal(selected.background_color_ral || '');
+    setTextColorHex(selected.text_color_hex || '#242628');
     setImageUrl(selected.image_url || '');
     setImageAction(
       fromSlideAction({
@@ -444,9 +486,15 @@ export default function HomeSlidesPanel() {
         block_key: selectedBlockKey,
         title: title.trim(),
         subtitle: subtitle.trim() ? subtitle.trim() : null,
-        background_image_url: isCollectedGlameHomeBlock
+        background_image_url: isCollectedGlameHomeBlock || (isHowToBuyBlock && backgroundMode === 'color')
           ? null
           : backgroundImageUrl.trim() || null,
+        background_mode: isHowToBuyBlock ? backgroundMode : 'image',
+        background_color_hex:
+          isHowToBuyBlock && backgroundMode === 'color' ? backgroundColorHex.trim() : null,
+        background_color_ral:
+          isHowToBuyBlock && backgroundMode === 'color' ? backgroundColorRal.trim() || null : null,
+        text_color_hex: isHowToBuyBlock ? textColorHex.trim() || null : null,
         image_url: imageUrl.trim(),
         image_action_type: imageAction.type === 'none' ? null : imageAction.type,
         image_action_payload: buildActionPayload(imageAction),
@@ -501,6 +549,7 @@ export default function HomeSlidesPanel() {
   const blockMeta = getBlockMeta(selectedBlockKey);
   const isCollectedGlameHomeBlock = selectedBlockKey === 'collected_glame';
   const isPhotoSelectionBlock = selectedBlockKey === 'photo_selection';
+  const isHowToBuyBlock = selectedBlockKey === 'service_how_to_buy';
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -604,6 +653,11 @@ export default function HomeSlidesPanel() {
                       Есть подложка
                     </div>
                   ) : null}
+                  {slide.background_mode === 'color' ? (
+                    <div className="mt-2 ml-2 inline-flex rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-black dark:border-gray-700 dark:bg-white dark:text-black">
+                      Цвет: {slide.background_color_ral || slide.background_color_hex || 'не задан'}
+                    </div>
+                  ) : null}
                 </button>
                 <Button variant="destructive" onClick={() => onDelete(slide.id)} disabled={saving}>Удалить</Button>
               </div>
@@ -636,8 +690,130 @@ export default function HomeSlidesPanel() {
             {!isCollectedGlameHomeBlock ? (
               <div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {isPhotoSelectionBlock ? 'Изображение экрана загрузки фото' : 'Подложка'}
+                  {isHowToBuyBlock
+                    ? 'Фон блока'
+                    : isPhotoSelectionBlock
+                    ? 'Изображение экрана загрузки фото'
+                    : 'Подложка'}
                 </div>
+                {isHowToBuyBlock ? (
+                  <div className="mt-2 space-y-3 rounded-md border border-gray-200 p-3 dark:border-gray-800">
+                    <Select value={backgroundMode} onValueChange={(value) => setBackgroundMode(value as Block6BackgroundMode)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="image">Фотография</SelectItem>
+                        <SelectItem value="color">Однотонный цвет</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {backgroundMode === 'color' ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-[56px_1fr] gap-3">
+                          <input
+                            type="color"
+                            value={backgroundColorHex}
+                            onChange={(e) => setBackgroundColorHex(e.target.value.toUpperCase())}
+                            className="h-10 w-14 cursor-pointer rounded border border-gray-300 bg-white p-1 dark:border-gray-700 dark:bg-gray-950"
+                            aria-label="Выбор цвета фона"
+                          />
+                          <Input
+                            value={backgroundColorHex}
+                            onChange={(e) => setBackgroundColorHex(e.target.value)}
+                            placeholder="#222426"
+                          />
+                        </div>
+                        <Input
+                          value={backgroundColorRal}
+                          onChange={(e) => setBackgroundColorRal(e.target.value)}
+                          placeholder="RAL 7016"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {block6RalPalette.map((option) => (
+                            <button
+                              key={option.ral}
+                              type="button"
+                              onClick={() => {
+                                setBackgroundColorHex(option.hex);
+                                setBackgroundColorRal(option.ral);
+                              }}
+                              className="inline-flex items-center gap-2 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                            >
+                              <span className="h-4 w-4 rounded-sm border border-black/20" style={{ backgroundColor: option.hex }} />
+                              {option.ral} · {option.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          Цвет отображается по HEX; RAL сохраняется как код оттенка для команды.
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) onUpload(f, 'background');
+                            }}
+                            disabled={saving}
+                          />
+                          <Input
+                            value={backgroundImageUrl}
+                            onChange={(e) => setBackgroundImageUrl(e.target.value)}
+                            placeholder="/static/..."
+                          />
+                        </div>
+                        {backgroundImageUrl ? (
+                          <div className="mt-3 overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
+                            <img src={backgroundImageUrl} alt="background" className="h-48 w-full object-cover" />
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                    <div className="space-y-2 border-t border-gray-200 pt-3 dark:border-gray-800">
+                      <div className="text-sm font-medium">Цвет текста на фоне</div>
+                      <div className="grid grid-cols-[56px_1fr] gap-3">
+                        <input
+                          type="color"
+                          value={textColorHex}
+                          onChange={(e) => setTextColorHex(e.target.value.toUpperCase())}
+                          className="h-10 w-14 cursor-pointer rounded border border-gray-300 bg-white p-1 dark:border-gray-700 dark:bg-gray-950"
+                          aria-label="Выбор цвета текста"
+                        />
+                        <Input
+                          value={textColorHex}
+                          onChange={(e) => setTextColorHex(e.target.value)}
+                          placeholder="#242628"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { hex: '#242628', label: 'Тёмный графит' },
+                          { hex: '#FFFFFF', label: 'Белый' },
+                          { hex: '#C7CBCF', label: 'Светло-серый' },
+                        ].map((option) => (
+                          <button
+                            key={option.hex}
+                            type="button"
+                            onClick={() => setTextColorHex(option.hex)}
+                            className="inline-flex items-center gap-2 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-900"
+                          >
+                            <span className="h-4 w-4 rounded-sm border border-black/20" style={{ backgroundColor: option.hex }} />
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Используется для заголовка и описания на фоне. Текст в тёмных карточках остаётся светлым для контраста.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <input
                     type="file"
@@ -663,9 +839,12 @@ export default function HomeSlidesPanel() {
                     <img src={backgroundImageUrl} alt="background" className="h-48 w-full object-cover" />
                   </div>
                 ) : null}
+                  </>
+                )}
               </div>
             ) : null}
 
+            {!isHowToBuyBlock ? (
             <div>
               <div className="text-xs text-gray-500 dark:text-gray-400">
                 {isCollectedGlameHomeBlock
@@ -702,6 +881,7 @@ export default function HomeSlidesPanel() {
                 </div>
               ) : null}
             </div>
+            ) : null}
 
             <ActionEditor
               title="Клик по изображению"
@@ -711,6 +891,7 @@ export default function HomeSlidesPanel() {
               lookFilterOptions={lookFilterOptions}
               lookCollectionOptions={lookCollectionOptions}
               lookOptions={lookOptions}
+              newsItems={newsItems}
               showTextField={false}
             />
 
@@ -722,6 +903,7 @@ export default function HomeSlidesPanel() {
               lookFilterOptions={lookFilterOptions}
               lookCollectionOptions={lookCollectionOptions}
               lookOptions={lookOptions}
+              newsItems={newsItems}
             />
 
             <ActionEditor
@@ -732,6 +914,7 @@ export default function HomeSlidesPanel() {
               lookFilterOptions={lookFilterOptions}
               lookCollectionOptions={lookCollectionOptions}
               lookOptions={lookOptions}
+              newsItems={newsItems}
             />
 
             <div className="rounded-md border border-gray-200 p-3 dark:border-gray-800">
@@ -760,7 +943,16 @@ export default function HomeSlidesPanel() {
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={onSave} disabled={saving || !imageUrl.trim()}>Сохранить</Button>
+              <Button
+                onClick={onSave}
+                disabled={
+                  saving ||
+                  (!isHowToBuyBlock && !imageUrl.trim()) ||
+                  (isHowToBuyBlock && backgroundMode === 'image' && !backgroundImageUrl.trim())
+                }
+              >
+                Сохранить
+              </Button>
               <Button variant="outline" onClick={resetForm} disabled={saving}>Отменить</Button>
             </div>
           </div>
@@ -778,6 +970,7 @@ function ActionEditor({
   lookFilterOptions,
   lookCollectionOptions,
   lookOptions,
+  newsItems,
   showTextField = true,
 }: {
   title: string;
@@ -787,11 +980,16 @@ function ActionEditor({
   lookFilterOptions: string[];
   lookCollectionOptions: string[];
   lookOptions: ManualLookOptionsResponse;
+  newsItems: AppNews[];
   showTextField?: boolean;
 }) {
   const setField = <K extends keyof ActionFormState>(key: K, value: ActionFormState[K]) => {
     onChange({ ...state, [key]: value });
   };
+  const selectedNewsTitle =
+    state.type === 'news'
+      ? newsItems.find((item) => item.id === state.newsId)?.title
+      : null;
 
   return (
     <div className="rounded-md border border-gray-200 p-3 dark:border-gray-800">
@@ -983,6 +1181,33 @@ function ActionEditor({
         </div>
       ) : null}
 
+      {state.type === 'news' ? (
+        <div className="mt-3">
+          <div className="text-xs text-gray-500 dark:text-gray-400">Новость</div>
+          <Select
+            value={state.newsId || '__empty__'}
+            onValueChange={(v) => setField('newsId', v === '__empty__' ? '' : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Выберите новость" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__empty__">Не выбрана</SelectItem>
+              {newsItems.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.title || item.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!newsItems.length ? (
+            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Нет опубликованных новостей. Сначала опубликуйте новость во вкладке «Новости».
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {state.type === 'stylist' ? (
         <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200">
           Кнопка откроет сценарий подбора в стилист-чате.
@@ -1009,7 +1234,7 @@ function ActionEditor({
           ? 'Кнопка будет скрыта, пока текст не заполнен.'
           : null}
         {showTextField && !state.text.trim() ? ' ' : null}
-        {actionSummary(state)}
+        {selectedNewsTitle ? `Новость: ${selectedNewsTitle}` : actionSummary(state)}
       </div>
     </div>
   );

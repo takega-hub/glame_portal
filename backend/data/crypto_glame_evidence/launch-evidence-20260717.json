@@ -1,0 +1,26 @@
+{
+  "schema": "glame_crypto_admin_launch_evidence_snapshot_v1",
+  "created_at": "2026-07-17T00:00:00Z",
+  "status": "ok",
+  "checks": "ok",
+  "signer": "ok",
+  "replay": "ok",
+  "policy_documents": "13/13",
+  "evidence_checklist": {
+    "launch_evidence_snapshot": "ok",
+    "replay_idempotency_audit": "ok",
+    "bridge_reconciliation": "ok",
+    "treasury_turnover": "ok",
+    "published_audit_hash": "ok",
+    "points_to_glm_e2e": "ok",
+    "glm_to_points_e2e": "ok",
+    "buy_glm_with_ton_e2e": "ok",
+    "glm_store_checkout_e2e": "ok",
+    "tonkeeper_verification": "ok"
+  },
+  "notes": [
+    "Admin Launch evidence panel returned OK on 2026-07-17.",
+    "Replay/idempotency audit returned OK with zero issues.",
+    "All mainnet E2E pilot evidence files are present in backend/data/crypto_glame_evidence."
+  ]
+}

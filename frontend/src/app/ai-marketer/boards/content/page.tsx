@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import AgentBoardChat from '@/components/agents/AgentBoardChat';
 import BoardHeader from '@/components/boards/BoardHeader';
 import { Card } from '@/components/ui/card';
@@ -10,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { agentInteractions, aiMarketer, api, type AgentInteractionTask } from '@/lib/api';
+import { agentInteractions, aiMarketer, api, type AgentInteractionTask, type ContentProjectTopic, type CampaignMediaAsset, type CampaignMediaResponse } from '@/lib/api';
 
 const PRODUCTION_STAGES = ['Idea', 'Briefed', 'Planned', 'In Production', 'Editing', 'Needs Approval', 'Approved', 'Scheduled', 'Published', 'Measured', 'Done'];
 const MEDIA_LAYERS = [
@@ -81,31 +80,59 @@ function isContentTask(task: AgentInteractionTask) {
 }
 
 export default function ContentBoard() {
-  const router = useRouter();
   const [viewMode, setViewMode] = useState<'calendar' | 'pipeline'>('calendar');
   const [mediaFilter, setMediaFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [dnaFilter, setDnaFilter] = useState('all');
   const [tasks, setTasks] = useState<AgentInteractionTask[]>([]);
+  const [projectTopics, setProjectTopics] = useState<ContentProjectTopic[]>([]);
+  const [selectedProjectTaskId, setSelectedProjectTaskId] = useState('');
+  const [campaignMedia, setCampaignMedia] = useState<CampaignMediaResponse | null>(null);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [platformQuery, setPlatformQuery] = useState('');
+  const [platformCategory, setPlatformCategory] = useState('all');
+  const [platformAssets, setPlatformAssets] = useState<CampaignMediaAsset[]>([]);
+  const [platformSearchPerformed, setPlatformSearchPerformed] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [runningTaskId, setRunningTaskId] = useState('');
+  const [deletingProjectId, setDeletingProjectId] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (!selectedProjectTaskId) {
+      setCampaignMedia(null);
+      return;
+    }
+    setMediaLoading(true);
+    agentInteractions.getContentProjectCampaignMedia(selectedProjectTaskId)
+      .then(setCampaignMedia)
+      .catch(() => setCampaignMedia(null))
+      .finally(() => setMediaLoading(false));
+  }, [selectedProjectTaskId]);
+
   async function loadData() {
     setLoading(true);
     setError(null);
-    const [loadedTasks, loadedPlans] = await Promise.all([
+    const [loadedTasks, loadedPlans, loadedProjects] = await Promise.all([
       agentInteractions.listTasks({ limit: 200 }).then((items) => items.filter(isContentTask)).catch(() => []),
       api.listContentPlans({ limit: 30 }).catch(() => []),
+      agentInteractions.listContentProjects(50).catch(() => []),
     ]);
     setTasks(loadedTasks);
     setPlans(Array.isArray(loadedPlans) ? loadedPlans : []);
+    setProjectTopics(loadedProjects);
+    if (!selectedProjectTaskId && loadedProjects[0]?.task_id) {
+      setSelectedProjectTaskId(loadedProjects[0].task_id);
+    } else if (selectedProjectTaskId && !loadedProjects.some((project) => project.task_id === selectedProjectTaskId)) {
+      setSelectedProjectTaskId(loadedProjects[0]?.task_id || '');
+    }
     setLoading(false);
   }
 
@@ -135,11 +162,108 @@ export default function ContentBoard() {
           filters: { mediaFilter, typeFilter, cityFilter, dnaFilter },
         },
       });
-      router.push(`/ai-marketer/tasks/${created.id}`);
+      setSelectedProjectTaskId(created.id);
+      await loadData();
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Не удалось создать задачу контента');
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function deleteProject(taskId: string, title: string) {
+    if (deletingProjectId || !window.confirm(`Удалить проект «${title}» из списка? История сообщений и аудит сохранятся.`)) return;
+    setDeletingProjectId(taskId);
+    setError(null);
+    try {
+      await agentInteractions.deleteContentProject(taskId);
+      const remaining = projectTopics.filter((project) => project.task_id !== taskId);
+      setProjectTopics(remaining);
+      if (selectedProjectTaskId === taskId) setSelectedProjectTaskId(remaining[0]?.task_id || '');
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Не удалось удалить контент-проект');
+    } finally {
+      setDeletingProjectId('');
+    }
+  }
+
+  async function approveAndRunProject(taskId: string) {
+    if (runningTaskId) return;
+    setRunningTaskId(taskId);
+    setError(null);
+    try {
+      const task = await agentInteractions.getTask(taskId);
+      if (task.status === 'pending_approval' || task.status === 'draft' || task.status === 'pending') {
+        await agentInteractions.approveTask(taskId, 'Согласовано для подготовки внутреннего пакета креативов. Публикация наружу запрещена.');
+      }
+      await agentInteractions.processTask(taskId);
+      await loadData();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Не удалось запустить задачу AI Brand Media');
+      await loadData();
+    } finally {
+      setRunningTaskId('');
+    }
+  }
+
+  async function uploadCampaignMedia(files: FileList | null) {
+    if (!selectedProjectTaskId || !files?.length) return;
+    setMediaLoading(true);
+    setError(null);
+    try {
+      let media = campaignMedia;
+      for (const file of Array.from(files)) {
+        const uploaded = await api.uploadAppAdminMedia('store', file);
+        media = await agentInteractions.addContentProjectCampaignMediaUpload(selectedProjectTaskId, {
+          url: uploaded.url,
+          title: file.name.replace(/\.[^.]+$/, '') || 'Пользовательское фото',
+          kind: 'custom',
+        });
+      }
+      setCampaignMedia(media || null);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Не удалось загрузить изображение в медиатеку кампании');
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
+  async function addMediaFromLibrary(asset: CampaignMediaAsset) {
+    if (!selectedProjectTaskId || !campaignMedia) return;
+    setMediaLoading(true);
+    try {
+      const ids = Array.from(new Set([...campaignMedia.assets.map((item) => item.id), asset.id]));
+      setCampaignMedia(await agentInteractions.saveContentProjectCampaignMediaSelection(selectedProjectTaskId, ids, [asset]));
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Не удалось добавить изображение в кампанию');
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
+  async function searchPlatformMedia() {
+    if (!selectedProjectTaskId) return;
+    setMediaLoading(true);
+    try {
+      const media = await agentInteractions.getContentProjectCampaignMedia(selectedProjectTaskId, { query: platformQuery.trim() || undefined, category: platformCategory });
+      setPlatformAssets(media.available_assets);
+      setPlatformSearchPerformed(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Не удалось найти изображения');
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
+  async function removeCampaignMedia(assetId: string) {
+    if (!selectedProjectTaskId || !campaignMedia) return;
+    setMediaLoading(true);
+    try {
+      setCampaignMedia(await agentInteractions.removeContentProjectCampaignMediaAsset(selectedProjectTaskId, assetId));
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Не удалось удалить изображение из кампании');
+    } finally {
+      setMediaLoading(false);
     }
   }
 
@@ -193,12 +317,55 @@ export default function ContentBoard() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {error && <Card className="p-3 text-sm text-red-700 border-red-200 bg-red-50">{error}</Card>}
-        <AgentBoardChat
-          agentId="brand-media-agent"
-          agentName="AI Brand Media"
-          boardId="content"
-          aliases={['content-agent', 'brand-media', 'content-board']}
-        />
+        <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <Card className="p-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900">Контент-проекты</h2>
+                <p className="text-xs text-gray-500">Каждая задача — отдельная тема и история AI Brand Media.</p>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button variant="default" size="sm" onClick={() => createContentTask()} disabled={creating} className="h-8 w-8 p-0 text-lg" aria-label="Добавить контент-проект" title="Добавить контент-проект">+</Button>
+                <Button variant="outline" size="sm" onClick={loadData} disabled={loading} aria-label="Обновить контент-проекты">↻</Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {projectTopics.map((project) => (
+                <div key={project.task_id} role="button" tabIndex={0} onClick={() => setSelectedProjectTaskId(project.task_id)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setSelectedProjectTaskId(project.task_id); } }} className={`w-full rounded-lg border p-3 text-left transition ${selectedProjectTaskId === project.task_id ? 'border-gold-400 bg-amber-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
+                  <div className="mb-2 flex items-center justify-between gap-2"><Badge variant="outline">{project.content_type || 'content'}</Badge><span className="text-[11px] text-gray-400">{project.history_count} сообщ.</span></div>
+                  <div className="text-sm font-medium text-gray-900">{project.title}</div>
+                  <div className="mt-1 text-xs text-gray-500">Статус: {project.status}</div>
+                  {project.discussion_result ? <div className="mt-2 line-clamp-3 text-xs text-gray-600">Результат: {project.discussion_result}</div> : <div className="mt-2 text-xs text-gray-400">Результат пока не зафиксирован.</div>}
+                  <span role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); deleteProject(project.task_id, project.title); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); deleteProject(project.task_id, project.title); } }} className={`mt-3 inline-block text-xs text-red-600 hover:text-red-800 ${deletingProjectId === project.task_id ? 'pointer-events-none opacity-50' : ''}`}>{deletingProjectId === project.task_id ? 'Удаление...' : 'Удалить проект'}</span>
+                </div>
+              ))}
+              {!loading && projectTopics.length === 0 && <div className="rounded-lg border border-dashed border-gray-300 p-3 text-xs text-gray-500">Создайте первый контент-проект — он появится здесь.</div>}
+            </div>
+          </Card>
+          <div className="space-y-3">
+            {selectedProjectTaskId && (() => {
+              const selected = projectTopics.find((project) => project.task_id === selectedProjectTaskId);
+              const actionable = selected && ['pending_approval', 'pending', 'draft', 'approved', 'queued'].includes(selected.status);
+              return actionable ? <Card className="flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50 p-3"><div><div className="text-sm font-medium text-gray-900">Пакет готовится только после согласования</div><div className="text-xs text-gray-600">Агент создаст внутренние тексты и ТЗ; объявления и медиафайлы не публикуются автоматически.</div></div><Button size="sm" onClick={() => approveAndRunProject(selectedProjectTaskId)} disabled={runningTaskId === selectedProjectTaskId}>{runningTaskId === selectedProjectTaskId ? 'Подготовка...' : selected?.status === 'pending_approval' ? 'Согласовать и подготовить' : 'Подготовить пакет'}</Button></Card> : null;
+            })()}
+            {selectedProjectTaskId && (
+              <Card className="p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Медиатека кампании</h3>
+                    <p className="text-xs text-gray-500">Агент получает эту подборку при подготовке креативов.</p>
+                  </div>
+                  <div className="flex gap-2"><label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-gray-300 bg-white px-3 text-xs font-medium hover:bg-gray-50"><input type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={(event) => { uploadCampaignMedia(event.target.files); event.currentTarget.value = ''; }} />Загрузить фото</label><Button size="sm" variant="outline" onClick={() => { setMediaLoading(true); agentInteractions.getContentProjectCampaignMedia(selectedProjectTaskId).then(setCampaignMedia).catch(() => setCampaignMedia(null)).finally(() => setMediaLoading(false)); }} disabled={mediaLoading}>{mediaLoading ? 'Загрузка...' : 'Обновить'}</Button></div>
+                </div>
+                {campaignMedia?.assets?.length ? <><p className="mb-2 text-xs font-medium text-gray-700">Выбрано для этой кампании ({campaignMedia.assets.length})</p><div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{campaignMedia.assets.map((asset) => <div key={asset.id} className="group relative overflow-hidden rounded border border-amber-300 bg-amber-50"><a href={asset.url} target="_blank" rel="noreferrer" title={`${asset.title} · ${asset.usage}`}><img src={asset.url} alt={asset.title} className="aspect-square w-full object-cover" /></a><button type="button" onClick={() => removeCampaignMedia(asset.id)} className="absolute right-1 top-1 rounded bg-white/90 px-1.5 py-0.5 text-xs text-red-700 shadow" title="Удалить из кампании">×</button><div className="truncate p-1 text-[10px] text-gray-600">{asset.title}</div></div>)}</div></> : <p className="text-xs text-gray-500">{mediaLoading ? 'Собираем фото GLAME…' : 'Выберите медиа ниже или загрузите свои файлы.'}</p>}
+                <div className="mt-4 border-t border-gray-200 pt-3"><div className="mb-3 flex flex-wrap items-center gap-2"><input value={platformQuery} onChange={(event) => { setPlatformQuery(event.target.value); setPlatformSearchPerformed(false); }} onKeyDown={(event) => { if (event.key === 'Enter') searchPlatformMedia(); }} placeholder="Поиск изделия: название, артикул или код" className="h-9 min-w-64 flex-1 rounded border border-gray-300 px-2 text-sm" /><select value={platformCategory} onChange={(event) => { setPlatformCategory(event.target.value); setPlatformSearchPerformed(false); }} className="h-9 rounded border border-gray-300 bg-white px-2 text-xs"><option value="all">Все категории</option><option value="store">Пространства</option><option value="product">Изделия</option><option value="look">Образы</option><option value="generation">Генерации</option></select><Button size="sm" onClick={searchPlatformMedia} disabled={mediaLoading}>{platformQuery.trim() ? 'Найти' : 'Показать все'}</Button></div><div className="grid max-h-96 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-5">{(platformSearchPerformed ? platformAssets : (campaignMedia?.available_assets || [])).filter((asset) => !campaignMedia?.assets.some((item) => item.id === asset.id)).map((asset) => <button key={asset.id} type="button" onClick={() => addMediaFromLibrary(asset)} disabled={mediaLoading} className="overflow-hidden rounded border border-gray-200 bg-white text-left hover:border-amber-400"><img src={asset.url} alt={asset.title} className="aspect-square w-full object-cover" /><div className="truncate p-1 text-[10px] text-gray-600">+ {asset.title}</div></button>)}</div>{platformSearchPerformed && platformAssets.length === 0 ? <p className="mt-2 text-xs text-gray-500">В этой категории пока нет доступных изображений.</p> : null}</div>
+                {campaignMedia?.maps_card_url ? <a className="mt-3 inline-block text-xs text-blue-700 underline" href={campaignMedia.maps_card_url} target="_blank" rel="noreferrer">Открыть карточку GLAME в Яндекс Картах для ручной проверки фото</a> : null}
+                {campaignMedia?.note ? <p className="mt-2 text-[11px] text-gray-500">{campaignMedia.note}</p> : null}
+              </Card>
+            )}
+            <AgentBoardChat agentId="brand-media-agent" agentName="AI Brand Media" boardId="content" aliases={['content-agent', 'brand-media', 'content-board']} hiddenTaskContextKey="content_project_hidden" selectedTaskIdOverride={selectedProjectTaskId} onSelectedTaskChange={setSelectedProjectTaskId} />
+          </div>
+        </div>
 
         <section className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center justify-between gap-3 mb-4">

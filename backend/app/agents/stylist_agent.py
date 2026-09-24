@@ -1508,6 +1508,7 @@ GLAME - это место, где стиль становится отражен
             user = result.scalar_one_or_none()
             
             if user and user.is_customer:
+                from app.services.customer_questionnaire_service import questionnaire_from_preferences
                 # Загружаем историю покупок
                 result = await self.db.execute(
                     select(PurchaseHistory)
@@ -1527,6 +1528,14 @@ GLAME - это место, где стиль становится отражен
                         known_customer_signals["preferences"] = True
                 if (user.average_check or 0) > 0:
                     known_customer_signals["budget"] = True
+                questionnaire = questionnaire_from_preferences(user.preferences)
+                questionnaire_context = ""
+                if questionnaire:
+                    questionnaire_context = (
+                        f"\nАнкета клиента:\n"
+                        f"- Покупает: {', '.join(questionnaire.get('purchase_for') or []) or 'не указано'}\n"
+                        f"- Важно в GLAME: {', '.join(questionnaire.get('glame_values') or []) or 'не указано'}\n"
+                    )
 
                 recent_purchase_lines = []
                 for purchase in list(purchases)[:5]:
@@ -1543,6 +1552,7 @@ GLAME - это место, где стиль становится отражен
 - Всего покупок: {user.total_purchases}
 - Последняя покупка: {user.last_purchase_date.strftime('%d.%m.%Y') if user.last_purchase_date else 'нет данных'}
 {chr(10).join(recent_purchase_lines) if recent_purchase_lines else '- Последние товары: нет данных'}
+{questionnaire_context}
 
 Учитывай предпочтения покупателя при рекомендациях. Рекомендуй товары в диапазоне среднего чека ±30%.
 """

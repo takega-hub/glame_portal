@@ -1,0 +1,34 @@
+{
+  "schema": "glame_crypto_bridge_reconciliation_evidence_v1",
+  "created_at": "2026-07-17T00:00:00Z",
+  "network": "mainnet",
+  "source": "admin_glm_bridge_reconciliation",
+  "status": "ok",
+  "issues_count": 0,
+  "summary": {
+    "processed_points_to_glm": {
+      "count": 9,
+      "glm": 1850
+    },
+    "processed_glm_to_points": {
+      "count": 3,
+      "glm": 850
+    },
+    "processed_buy_glm_with_ton": {
+      "count": 1,
+      "glm": 150
+    },
+    "canceled_points_to_glm": {
+      "count": 2,
+      "glm": 200
+    },
+    "canceled_glm_to_points": {
+      "count": 2,
+      "glm": 670
+    }
+  },
+  "notes": [
+    "Replay/idempotency audit returned OK with zero issues before launch evidence capture.",
+    "Processed bridge/store/refund operations have TON tx hashes where required."
+  ]
+}

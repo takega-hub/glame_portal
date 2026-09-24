@@ -18,6 +18,11 @@
       "url": "/static/glm_policy/bridge-rules.md"
     },
     {
+      "code": "emission_policy",
+      "title": "GLM Emission and Anti-Farm Policy",
+      "url": "/static/glm_policy/emission-policy.md"
+    },
+    {
       "code": "faq",
       "title": "CryptoGLAME FAQ",
       "url": "/static/glm_policy/faq.md"
@@ -38,6 +43,31 @@
       "url": "/static/glm_policy/production-signer-contract.md"
     },
     {
+      "code": "legal_accounting_approval",
+      "title": "CryptoGLAME Legal and Accounting Approval",
+      "url": "/static/glm_policy/legal-accounting-approval.md"
+    },
+    {
+      "code": "treasury_approval",
+      "title": "CryptoGLAME Treasury Approval",
+      "url": "/static/glm_policy/treasury-approval.md"
+    },
+    {
+      "code": "launch_approval_packet",
+      "title": "CryptoGLAME Launch Approval Packet",
+      "url": "/static/glm_policy/launch-approval-packet.md"
+    },
+    {
+      "code": "p2p_marketplace_approval_packet",
+      "title": "CryptoGLAME P2P Marketplace Approval Packet",
+      "url": "/static/glm_policy/p2p-marketplace-approval-packet.md"
+    },
+    {
+      "code": "exchange_desk_policy",
+      "title": "CryptoGLAME Exchange Desk Policy",
+      "url": "/static/glm_policy/exchange-desk-policy.md"
+    },
+    {
       "code": "security_review_checklist",
       "title": "CryptoGLAME Security Review Checklist",
       "url": "/static/glm_policy/security-review-checklist.md"
@@ -45,7 +75,7 @@
     {
       "code": "jetton_metadata",
       "title": "GLM Jetton Metadata",
-      "url": "/static/glm_policy/jetton-metadata.json"
+      "url": "/static/glm_policy/jetton-metadata-mainnet-v2.json"
     }
   ]
 }

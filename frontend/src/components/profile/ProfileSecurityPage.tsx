@@ -5,6 +5,13 @@ import { useRouter } from 'next/navigation';
 import { adminAccess, adminSystem, api, RoleAccess, StaffUser } from '@/lib/api';
 import { useAuth } from '@/components/auth/AuthProvider';
 
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Админ',
+  marketer: 'Маркетолог',
+  manager: 'Управляющий',
+  seller: 'Продавец',
+};
+
 export default function ProfileSecurityPage() {
   const router = useRouter();
   const { user, logout, rolePreview, accountPreview, setRolePreview } = useAuth();
@@ -56,6 +63,28 @@ export default function ProfileSecurityPage() {
     setSelectedAccountId(accountPreview?.id || '');
   }, [rolePreview?.role_key, accountPreview?.id]);
 
+  const previewAccountCandidates = (roleKey: string) => {
+    if (roleKey === 'seller') {
+      return staff.filter((person) => person.role === 'seller' || person.role === 'manager');
+    }
+    return staff.filter((person) => person.role === roleKey);
+  };
+
+  const previewAccountForRole = (person: StaffUser, roleKey: string): StaffUser => {
+    if (roleKey === 'seller' && person.role === 'manager') {
+      return { ...person, role: roleKey, role_label: 'Продавец' };
+    }
+    return person;
+  };
+
+  const previewAccountLabel = (person: StaffUser) => {
+    const contacts = [person.staff_login ? `логин: ${person.staff_login}` : null, person.email || null]
+      .filter(Boolean)
+      .join(' · ');
+    const roleLabel = person.role_label || ROLE_LABELS[person.role || ''] || person.role;
+    return `${person.full_name || person.email || person.id}${roleLabel ? ` · ${roleLabel}` : ''}${contacts ? ` · ${contacts}` : ''}`;
+  };
+
   const onChangeRolePreview = (roleKey: string, accountId = '') => {
     if (!roleKey) {
       setRolePreview(null);
@@ -67,8 +96,9 @@ export default function ProfileSecurityPage() {
 
     const selectedRole = roles.find((role) => role.role_key === roleKey);
     if (!selectedRole) return;
-    const matchingStaff = staff.filter((person) => person.role === roleKey);
-    const selectedAccount = accountId ? matchingStaff.find((person) => person.id === accountId) || null : null;
+    const matchingStaff = previewAccountCandidates(roleKey);
+    const selectedAccountRaw = accountId ? matchingStaff.find((person) => person.id === accountId) || null : null;
+    const selectedAccount = selectedAccountRaw ? previewAccountForRole(selectedAccountRaw, roleKey) : null;
 
     setSelectedRoleKey(roleKey);
     setSelectedAccountId(selectedAccount?.id || '');
@@ -87,7 +117,7 @@ export default function ProfileSecurityPage() {
     );
   };
 
-  const selectedRoleStaff = staff.filter((person) => person.role === selectedRoleKey);
+  const selectedRoleStaff = previewAccountCandidates(selectedRoleKey);
 
   const onRestartPlatform = async () => {
     const confirmed = window.confirm(
@@ -251,7 +281,7 @@ export default function ProfileSecurityPage() {
                         <option value="">Выберите аккаунт</option>
                         {selectedRoleStaff.map((person) => (
                           <option key={person.id} value={person.id}>
-                            {person.full_name || person.email || person.id}
+                            {previewAccountLabel(person)}
                           </option>
                         ))}
                       </select>

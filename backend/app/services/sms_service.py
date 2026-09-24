@@ -106,6 +106,15 @@ class SMSAeroService:
         """
         return await self._request("GET", "sms/status", params={"id": sms_id})
 
+    async def list_sms(self, page: int = 1, number: Optional[str] = None) -> Dict[str, Any]:
+        """
+        List SMS history from SMS Aero.
+        """
+        params: Dict[str, Any] = {"page": page}
+        if number:
+            params["number"] = number
+        return await self._request("GET", "sms/list", params=params)
+
 # Singleton instance
 # Initialize with environment variables or config
 sms_service = None

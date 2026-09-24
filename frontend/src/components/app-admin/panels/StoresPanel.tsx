@@ -8,6 +8,19 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
+type StockStoreOption = {
+  external_id: string;
+  store_id?: string | null;
+  name?: string | null;
+  city?: string | null;
+  is_active?: boolean | null;
+  app_store_id?: string | null;
+  app_store_title?: string | null;
+  stock_rows?: number;
+  products_count?: number;
+  available_quantity?: number;
+};
+
 function toInt(value: string) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
@@ -41,6 +54,7 @@ export default function StoresPanel() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<AppStore[]>([]);
+  const [stockStores, setStockStores] = useState<StockStoreOption[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = useMemo(() => items.find((x) => x.id === selectedId) || null, [items, selectedId]);
@@ -56,6 +70,7 @@ export default function StoresPanel() {
   const [draggedImageUrl, setDraggedImageUrl] = useState<string | null>(null);
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
+  const [stockStoreExternalId, setStockStoreExternalId] = useState('');
   const [sortOrder, setSortOrder] = useState('0');
   const [isActive, setIsActive] = useState(true);
 
@@ -71,6 +86,7 @@ export default function StoresPanel() {
     setImageUrls('');
     setLatitude('');
     setLongitude('');
+    setStockStoreExternalId('');
     setSortOrder('0');
     setIsActive(true);
   };
@@ -79,8 +95,12 @@ export default function StoresPanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.listAppStores(true);
-      setItems(res);
+      const [storesRes, stockStoresRes] = await Promise.all([
+        api.listAppStores(true),
+        api.listAppStockStores(),
+      ]);
+      setItems(storesRes);
+      setStockStores(stockStoresRes);
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || 'Ошибка загрузки магазинов');
     } finally {
@@ -104,6 +124,7 @@ export default function StoresPanel() {
     setImageUrls((selected.image_urls || []).join('\n'));
     setLatitude(selected.latitude == null ? '' : String(selected.latitude));
     setLongitude(selected.longitude == null ? '' : String(selected.longitude));
+    setStockStoreExternalId(selected.stock_store_external_id || '');
     setSortOrder(String(selected.sort_order ?? 0));
     setIsActive(!!selected.is_active);
   }, [selected]);
@@ -125,6 +146,10 @@ export default function StoresPanel() {
   };
 
   const galleryUrls = parseImageUrls(imageUrls);
+  const stockStoreByExternalId = useMemo(
+    () => new Map(stockStores.map((item) => [item.external_id, item])),
+    [stockStores]
+  );
   const requiresBlock5Photos = isBlock5Space(city, title);
   const missingBlock5Photos = requiresBlock5Photos ? Math.max(0, 5 - galleryUrls.length) : 0;
   const block5ValidationMessage =
@@ -196,6 +221,7 @@ export default function StoresPanel() {
         image_urls: normalizedImageUrls,
         latitude: latitude.trim() ? Number(latitude) : null,
         longitude: longitude.trim() ? Number(longitude) : null,
+        stock_store_external_id: stockStoreExternalId.trim() ? stockStoreExternalId.trim() : null,
         sort_order: toInt(sortOrder),
         is_active: isActive,
       };
@@ -275,6 +301,12 @@ export default function StoresPanel() {
                   <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">{store.address}</div>
                   <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Фото: {store.image_urls?.length || (store.image_url ? 1 : 0)}
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Склад 1С:{' '}
+                    {store.stock_store_external_id
+                      ? stockStoreByExternalId.get(store.stock_store_external_id)?.name || store.stock_store_external_id
+                      : 'не привязан'}
                   </div>
                   <div className="mt-2 inline-flex rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-black dark:border-gray-700 dark:bg-white dark:text-black">
                     {store.is_active ? 'Активен' : 'Выключен'}
@@ -364,6 +396,35 @@ export default function StoresPanel() {
               <div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">Долгота</div>
                 <Input value={longitude} onChange={(e) => setLongitude(e.target.value)} placeholder="34.1663" />
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">Склад 1С для наличия и аналитики</div>
+              <select
+                value={stockStoreExternalId}
+                onChange={(e) => setStockStoreExternalId(e.target.value)}
+                className="mt-1 h-10 w-full rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
+              >
+                <option value="">Не привязан</option>
+                {stockStoreExternalId && !stockStoreByExternalId.has(stockStoreExternalId) ? (
+                  <option value={stockStoreExternalId}>{stockStoreExternalId}</option>
+                ) : null}
+                {stockStores.map((store) => {
+                  const label = store.name || store.external_id;
+                  const linkedToOther = store.app_store_id && store.app_store_id !== selectedId;
+                  return (
+                    <option key={store.external_id} value={store.external_id}>
+                      {label}
+                      {store.city ? ` · ${store.city}` : ''}
+                      {` · остаток ${Number(store.available_quantity || 0).toLocaleString('ru-RU')}`}
+                      {linkedToOther ? ` · уже привязан: ${store.app_store_title}` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Этот склад используется кнопкой «Смотреть украшения в магазине» и фильтрами аналитики.
               </div>
             </div>
 

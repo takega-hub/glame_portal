@@ -19,11 +19,3 @@ Current MVP reference rate: 1 GLM -> 1 loyalty point.
 GLM is confirmed by TON treasury/escrow transaction or reserved in the controlled pilot ledger. Points are issued after GLAME processing and 1C sync or manual document.
 
 Failed or canceled operation refunds reserved GLM.
-
-## Buy Loyalty Points
-
-Current MVP spread: 10%.
-
-Example: 1,000 points require 1,100 GLM.
-
-Issued points follow active loyalty rules at the moment of issuance.

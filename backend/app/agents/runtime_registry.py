@@ -50,6 +50,7 @@ PROCESS_HANDLER_BY_EXECUTION_AGENT_ID: Dict[str, str] = {
     "content-agent": "content",
     "communication-agent": "communication",
     "analytics-agent": "analytics",
+    "traffic-growth-agent": "traffic",
     "marketing-inventory-agent": "assortment_matrix",
 }
 

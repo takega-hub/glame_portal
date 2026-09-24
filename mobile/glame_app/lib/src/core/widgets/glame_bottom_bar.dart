@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../layout/glame_layout.dart';
 import '../theme/glame_theme.dart';
 
 class GlameBottomBar extends StatelessWidget {
@@ -12,6 +13,9 @@ class GlameBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (GlameLayout.hidesBottomNavInCompactWeb(context)) {
+      return const SizedBox.shrink();
+    }
     final hasBottomInset = MediaQuery.of(context).padding.bottom > 0;
     final bottomAir = hasBottomInset ? 4.0 : 0.0;
 

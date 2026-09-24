@@ -977,7 +977,6 @@ class PhotoSelectionResultScreen extends StatelessWidget {
     final humanSummary = _stringValue(humanReadable['summary']);
     final humanAppearance = _stringValue(humanReadable['appearance']);
     final humanFace = _stringValue(humanReadable['face']);
-    final humanStyleType = _stringValue(humanReadable['style_type']);
     final humanColorType = _stringValue(humanReadable['color_type']);
     final humanBullets = _stringList(humanReadable['bullets']);
     final analysisSummary = _stringValue(userFacing['summary']);
@@ -1107,21 +1106,15 @@ class PhotoSelectionResultScreen extends StatelessWidget {
                                 ),
                               ),
                             ],
-                            if (humanStyleType != null ||
-                                humanColorType != null) ...[
+                            if (humanColorType != null) ...[
                               const SizedBox(height: 14),
                               Wrap(
                                 spacing: 10,
                                 runSpacing: 10,
                                 children: [
-                                  if (humanStyleType != null)
-                                    _PhotoResultChip(
-                                      label: 'Типаж: $humanStyleType',
-                                    ),
-                                  if (humanColorType != null)
-                                    _PhotoResultChip(
-                                      label: 'Цветотип: $humanColorType',
-                                    ),
+                                  _PhotoResultChip(
+                                    label: 'Цветотип: $humanColorType',
+                                  ),
                                 ],
                               ),
                             ],

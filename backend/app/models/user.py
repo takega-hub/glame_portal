@@ -26,7 +26,7 @@ class User(Base):
     
     # Поля для покупателей (синхронизация с 1С)
     phone = Column(String(20), unique=True, nullable=True, index=True)  # номер телефона = логин
-    sms_otp_code = Column(String(4), nullable=True)
+    sms_otp_code = Column(String(128), nullable=True)  # HMAC hash; never store the code itself
     sms_otp_expires_at = Column(DateTime(timezone=True), nullable=True)
     sms_otp_attempts = Column(Integer, default=0, nullable=False)
     sms_otp_last_sent_at = Column(DateTime(timezone=True), nullable=True)

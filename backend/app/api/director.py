@@ -36,6 +36,7 @@ from app.models.agent_interaction import AgentInteractionTask, AgentInteractionL
 from app.agents.director_agent import DirectorAgent
 from app.services.vector_service import vector_service
 from app.services.pdf_processor import pdf_processor
+from app.services.upload_security import validate_director_upload
 from app.api.knowledge import _delete_document_by_id
 
 router = APIRouter(prefix="/api/director", tags=["director"])
@@ -216,6 +217,7 @@ async def upload_file_to_director_chat(
         raise HTTPException(status_code=413, detail="Файл слишком большой. Максимум 30 МБ.")
     if not content:
         raise HTTPException(status_code=400, detail="Файл пустой.")
+    validate_director_upload(filename, content, file.content_type)
 
     user_folder = DIRECTOR_UPLOAD_ROOT / str(current_user.id)
     user_folder.mkdir(parents=True, exist_ok=True)

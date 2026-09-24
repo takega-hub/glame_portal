@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 from app.database.connection import AsyncSessionLocal
 from app.services.customer_sync_service import CustomerSyncService
+from app.services.customer_sync_status_service import mark_successful_full_customer_sync
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,15 @@ async def run_customer_sync_once() -> None:
             logger.info("Starting 1C loyalty sync")
             await sync_service.sync_loyalty_points()
 
+        try:
+            await mark_successful_full_customer_sync(
+                session,
+                source="scheduled_customer_sync",
+                commit=True,
+            )
+        except Exception as exc:
+            await session.rollback()
+            logger.warning("Could not persist scheduled customer sync status: %s", exc, exc_info=True)
         logger.info("1C customer sync finished")
 
 
@@ -64,6 +74,15 @@ async def run_nightly_customer_sync() -> None:
         if _env_bool("ONEC_LOYALTY_ENABLED", "true"):
             await sync_service.sync_loyalty_points()
 
+        try:
+            await mark_successful_full_customer_sync(
+                session,
+                source="nightly_customer_sync",
+                commit=True,
+            )
+        except Exception as exc:
+            await session.rollback()
+            logger.warning("Could not persist nightly customer sync status: %s", exc, exc_info=True)
         logger.info("Nightly 1C customer sync finished")
 
 

@@ -20,5 +20,8 @@ class MarketingCampaign(Base):
     channels = Column(JSON, nullable=True)  # ["instagram", "telegram", etc.]
     content_plan_id = Column(UUID(as_uuid=True), ForeignKey("content_plans.id"), nullable=True, index=True)
     metrics = Column(JSON, nullable=True, default=dict)  # {impressions, clicks, conversions, revenue, etc.}
+    external_source = Column(String(64), nullable=True, index=True)  # e.g. yandex_direct
+    external_id = Column(String(128), nullable=True)
+    advertising_connection_id = Column(UUID(as_uuid=True), ForeignKey("advertising_connections.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

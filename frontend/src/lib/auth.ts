@@ -1,7 +1,5 @@
 import { apiClient } from './api';
 
-const TOKEN_KEY = 'glame_access_token';
-const REFRESH_TOKEN_KEY = 'glame_refresh_token';
 const USER_KEY = 'glame_user';
 
 export interface User {
@@ -40,9 +38,7 @@ export const auth = {
       },
     });
     
-    const tokens = response.data;
-    this.setTokens(tokens);
-    return tokens;
+    return response.data;
   },
 
   /**
@@ -60,9 +56,8 @@ export const auth = {
   /**
    * Выход из системы
    */
-  logout(): void {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  async logout(): Promise<void> {
+    await apiClient.post('/api/auth/logout');
     localStorage.removeItem(USER_KEY);
   },
 
@@ -70,41 +65,28 @@ export const auth = {
    * Получение текущего токена
    */
   getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
+    return null;
   },
 
   /**
    * Получение refresh token
    */
   getRefreshToken(): string | null {
-    return localStorage.getItem(REFRESH_TOKEN_KEY);
+    return null;
   },
 
   /**
    * Сохранение токенов
    */
-  setTokens(tokens: AuthTokens): void {
-    localStorage.setItem(TOKEN_KEY, tokens.access_token);
-    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
-  },
+  setTokens(_tokens: AuthTokens): void {},
 
   /**
    * Обновление access token
    */
   async refreshToken(): Promise<AuthTokens | null> {
-    const refreshToken = this.getRefreshToken();
-    if (!refreshToken) {
-      return null;
-    }
-
     try {
-      const response = await apiClient.post<AuthTokens>('/api/auth/refresh', null, {
-        params: { refresh_token: refreshToken },
-      });
-      
-      const tokens = response.data;
-      this.setTokens(tokens);
-      return tokens;
+      const response = await apiClient.post<AuthTokens>('/api/auth/refresh');
+      return response.data;
     } catch (error) {
       console.error('Error refreshing token:', error);
       this.logout();
@@ -144,9 +126,7 @@ export const auth = {
       code: code,
     });
     
-    const tokens = response.data;
-    this.setTokens(tokens);
-    return tokens;
+    return response.data;
   },
 
   /**
@@ -173,6 +153,6 @@ export const auth = {
    * Проверка, авторизован ли пользователь
    */
   isAuthenticated(): boolean {
-    return !!this.getToken();
+    return typeof document !== 'undefined' && document.cookie.includes('__Host-glame_csrf=');
   },
 };

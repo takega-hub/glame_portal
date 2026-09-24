@@ -125,9 +125,17 @@ class OneCSalesService:
         try:
             logger.info(f"Запрос к 1С OData API: {url}")
             check_orders = await self._fetch_check_orders_from_documents(start_date, end_date, customer_key)
+            return_orders = await self._fetch_return_orders_from_documents(start_date, end_date, customer_key)
             if check_orders:
-                logger.info("Получено чеков/строк из Document_ЧекККМ: %s", len(check_orders))
-                return {"orders": check_orders, "source": "Document_ЧекККМ"}
+                logger.info(
+                    "Получено чеков/строк из Document_ЧекККМ: %s, возвратов/строк из Document_ЧекККМВозврат: %s",
+                    len(check_orders),
+                    len(return_orders),
+                )
+                return {"orders": [*check_orders, *return_orders], "source": "Document_ЧекККМ"}
+            if return_orders:
+                logger.info("Получено возвратов/строк из Document_ЧекККМВозврат: %s", len(return_orders))
+                return {"orders": return_orders, "source": "Document_ЧекККМ"}
 
             records = await self._fetch_recent_register_records(url, start_date, end_date, filters)
             
@@ -328,6 +336,124 @@ class OneCSalesService:
                             "СуммаДокумента": document_total,
                             "Продавец_Key": seller_id,
                             "Продавец": seller_name,
+                        },
+                    })
+
+        return orders
+
+    async def _fetch_return_orders_from_documents(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        customer_key: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        documents = await self._fetch_recent_documents(
+            endpoint="Document_ЧекККМВозврат",
+            start_date=start_date,
+            end_date=end_date,
+        )
+        orders: List[Dict[str, Any]] = []
+
+        for document in documents:
+            if not document.get("Posted") or document.get("DeletionMark"):
+                continue
+            if customer_key and document.get("Контрагент_Key") != customer_key:
+                continue
+
+            document_id = document.get("Ref_Key")
+            document_date = document.get("Date")
+            store_id = document.get("СтруктурнаяЕдиница_Key") or document.get("Склад_Key")
+            discount_card_id = document.get("ДисконтнаяКарта_Key")
+            seller_id = (
+                document.get("Продавец_Key")
+                or document.get("Сотрудник_Key")
+                or document.get("Кассир_Key")
+                or document.get("Ответственный_Key")
+                or document.get("Менеджер_Key")
+            )
+            seller_name = (
+                document.get("Продавец")
+                or document.get("Сотрудник")
+                or document.get("Кассир")
+                or document.get("Ответственный")
+                or document.get("Менеджер")
+            )
+            if not seller_name and seller_id in KNOWN_SELLER_NAMES_BY_EXTERNAL_ID:
+                seller_name = KNOWN_SELLER_NAMES_BY_EXTERNAL_ID[seller_id]
+            stocks = document.get("Запасы") or []
+            if not document_id or not document_date or not isinstance(stocks, list):
+                continue
+
+            line_sum = 0.0
+            for line in stocks:
+                if not isinstance(line, dict):
+                    continue
+                line_number = line.get("LineNumber") or len(orders) + 1
+                amount = line.get("Сумма")
+                if amount is None:
+                    amount = line.get("Всего")
+                quantity = line.get("Количество") or 0
+                positive_amount = float(amount or 0.0)
+                positive_quantity = float(quantity or 0.0)
+                line_sum += positive_amount
+                raw_line = {
+                    **line,
+                    "Recorder": document_id,
+                    "Recorder_Type": "StandardODATA.Document_ЧекККМВозврат",
+                    "Period": document_date,
+                    "DocumentDate": document_date,
+                    "СуммаДокумента": document.get("СуммаДокумента"),
+                    "СтруктурнаяЕдиница_Key": store_id,
+                    "ДисконтнаяКарта_Key": discount_card_id,
+                    "Продавец_Key": seller_id,
+                    "Продавец": seller_name,
+                    "Контрагент_Key": document.get("Контрагент_Key"),
+                    "Организация_Key": document.get("Организация_Key"),
+                    "ЭтоВозврат": True,
+                }
+                orders.append({
+                    "id": f"{document_id}_{line_number}",
+                    "date": document_date,
+                    "revenue": -positive_amount,
+                    "items_count": -positive_quantity,
+                    "customer_id": document.get("Контрагент_Key"),
+                    "product_id": line.get("Номенклатура_Key"),
+                    "store_id": store_id,
+                    "organization_id": document.get("Организация_Key"),
+                    "document_id": document_id,
+                    "channel": "offline",
+                    "revenue_without_discount": -float((line.get("Цена") or 0.0) * positive_quantity),
+                    "raw_1c_data": raw_line,
+                })
+
+            document_total = document.get("СуммаДокумента")
+            if document_total is not None and stocks:
+                diff = round(float(document_total) - line_sum, 2)
+                if abs(diff) >= 0.01:
+                    orders.append({
+                        "id": f"{document_id}_total_adjustment",
+                        "date": document_date,
+                        "revenue": -diff,
+                        "items_count": 0.0,
+                        "customer_id": document.get("Контрагент_Key"),
+                        "product_id": None,
+                        "store_id": store_id,
+                        "organization_id": document.get("Организация_Key"),
+                        "document_id": document_id,
+                        "channel": "offline",
+                        "product_name": "Корректировка суммы возвратного чека",
+                        "raw_1c_data": {
+                            "Recorder": document_id,
+                            "Recorder_Type": "StandardODATA.Document_ЧекККМВозврат",
+                            "LineNumber": "total_adjustment",
+                            "Period": document_date,
+                            "Сумма": -diff,
+                            "Количество": 0,
+                            "СтруктурнаяЕдиница_Key": store_id,
+                            "СуммаДокумента": document_total,
+                            "Продавец_Key": seller_id,
+                            "Продавец": seller_name,
+                            "ЭтоВозврат": True,
                         },
                     })
 

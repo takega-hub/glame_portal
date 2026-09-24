@@ -33,11 +33,12 @@ class UniversalImageGenerationTests(unittest.TestCase):
         async def fake_model():
             return "google/gemini-3.1-flash-image-preview"
 
-        async def fake_openrouter(prompt, model=None, product_images=None, reference_images=None):
+        async def fake_openrouter(prompt, model=None, product_images=None, reference_images=None, aspect_ratio="1:1"):
             self.assertIn("СТРОГО: не добавляй текст", prompt)
             self.assertEqual(model, "google/gemini-3.1-flash-image-preview")
             self.assertEqual(product_images, ["/static/ref/product.png"])
             self.assertEqual(reference_images, ["/static/models/elena/ref.png"])
+            self.assertEqual(aspect_ratio, "1:1")
             return b"image-bytes"
 
         async def fake_replicate(prompt, model=None):
@@ -72,6 +73,32 @@ class UniversalImageGenerationTests(unittest.TestCase):
         self.assertEqual(result["model_reference_images_count"], 1)
         self.assertEqual(result["url"].startswith("/static/hermes_generated/elena_concept_"), True)
         self.assertIn("prompt_used", result)
+
+    def test_hermes_provider_is_available_for_text_to_image_assets(self):
+        service = ImageGenerationService()
+
+        async def fake_hermes(prompt, *, aspect_ratio="1:1"):
+            self.assertIn("GLAME", prompt)
+            self.assertEqual(aspect_ratio, "16:9")
+            return b"hermes-image"
+
+        async def fake_upload(image_data, filename, content_type="image/png", storage_subdir="look_images"):
+            self.assertEqual(image_data, b"hermes-image")
+            self.assertEqual(storage_subdir, "training_slide_visuals")
+            return f"/static/{storage_subdir}/{filename}"
+
+        service._generate_with_hermes_gpt_image = fake_hermes
+        service._upload_image_to_storage = fake_upload
+
+        result = asyncio.run(service.generate_custom_image(
+            prompt="GLAME branded training visual",
+            provider="hermes",
+            aspect_ratio="16:9",
+            asset_group="training_slide_visuals",
+        ))
+
+        self.assertEqual(result["provider"], "hermes")
+        self.assertEqual(result["model"], "gpt-image-2")
 
 
 if __name__ == "__main__":

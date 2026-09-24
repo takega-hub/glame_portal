@@ -46,6 +46,7 @@ from app.models.saved_look import SavedLook
 from app.models.look import Look
 from app.models.stylist_chat_message import StylistChatMessage
 from app.models.live_stylist_conversation import LiveStylistConversation
+from app.services.customer_questionnaire_service import questionnaire_from_preferences
 
 logger = logging.getLogger(__name__)
 
@@ -547,6 +548,7 @@ class DirectorDataService:
                 "discount_card_id_1c": user.discount_card_id_1c,
                 "persona": user.persona,
                 "preferences": user.preferences or {},
+                "buyer_questionnaire": questionnaire_from_preferences(user.preferences) or {},
                 "customer_segment": user.customer_segment,
                 "segments": [{"id": str(s.id), "name": s.name} for s in segments],
                 "rfm_score": user.rfm_score or {},

@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 import traceback
 import sys
 import os
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -23,7 +24,7 @@ from app.api.auth import get_current_user
 from app.api import onec_sync, knowledge, catalog_sections
 from app.api import settings, look_tryon, customer_cabinet, ai_marketer, communication
 from app.api import app_public
-from app.api import agent_system_prompts, agent_interactions, customer_segmentation, director, consultant_training
+from app.api import agent_system_prompts, agent_interactions, customer_segmentation, director, consultant_training, telegram_agent_bridge
 from app.api import cart_checkout
 from app.api import yookassa_webhook
 from app.api import orders_payments
@@ -31,8 +32,10 @@ from app.api import onec_orders_exchange
 from app.api import shipping_cdek
 from app.api import gift_certificates
 from app.api import referrals
+from app.api import seller_crm, customer_requests, seller_customer_questionnaire
 from app.api.admin import customers as admin_customers, onec_customers, app_admin, live_stylist
 from app.api.admin import shipping_admin, access as admin_access, cron as admin_cron, system as admin_system
+from app.api.admin import crm_tasks as admin_crm_tasks
 from app.services.customer_sync_scheduler import (
     start_customer_sync_scheduler,
     stop_customer_sync_scheduler,
@@ -63,12 +66,18 @@ from app.services.onec_sales_sync_scheduler import (
     start_onec_sales_sync_scheduler,
     stop_onec_sales_sync_scheduler,
 )
+from app.services.crm_touchpoint_scheduler import (
+    start_crm_touchpoint_scheduler,
+    stop_crm_touchpoint_scheduler,
+)
 from app.services.glame_token_scheduler import (
+    start_glm_audit_hash_publish_scheduler,
     start_glm_hold_release_scheduler,
     start_glm_onec_bridge_retry_scheduler,
     start_glm_telegram_alert_scheduler,
     start_glm_ton_auto_transfer_scheduler,
     start_glm_ton_settlement_scheduler,
+    stop_glm_audit_hash_publish_scheduler,
     stop_glm_hold_release_scheduler,
     stop_glm_onec_bridge_retry_scheduler,
     stop_glm_telegram_alert_scheduler,
@@ -141,49 +150,73 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 app.add_middleware(TimeoutMiddleware)
 
 
+class CookieCSRFMiddleware(BaseHTTPMiddleware):
+    """Require a double-submit CSRF token for mutating cookie-authenticated requests."""
+    async def dispatch(self, request: Request, call_next):
+        if (
+            request.method in {"POST", "PUT", "PATCH", "DELETE"}
+            and request.cookies.get(auth.ACCESS_COOKIE_NAME)
+            and not request.headers.get("authorization")
+        ):
+            csrf_cookie = request.cookies.get(auth.CSRF_COOKIE_NAME)
+            csrf_header = request.headers.get("x-csrf-token")
+            origin = request.headers.get("origin")
+            forwarded_proto = request.headers.get("x-forwarded-proto", "https").split(",")[0].strip()
+            expected_origin = f"{forwarded_proto}://{request.headers.get('host', '')}"
+            if not csrf_cookie or not secrets.compare_digest(csrf_cookie, csrf_header or ""):
+                return JSONResponse(status_code=403, content={"detail": "CSRF validation failed"})
+            if origin and origin != expected_origin:
+                return JSONResponse(status_code=403, content={"detail": "CSRF origin validation failed"})
+        return await call_next(request)
+
+
+app.add_middleware(CookieCSRFMiddleware)
+
+
 @app.on_event("startup")
 async def startup_event():
     # Очистка старых задач синхронизации
     from app.services.sync_task_manager import task_manager
     task_manager.cleanup_old_tasks(max_age_hours=24)
     
-    # Отключена автоматическая синхронизация покупателей по расписанию
-    # Синхронизация остается только по запросу (API) и при заходе в карточку покупателя
-    # await start_customer_sync_scheduler(app)
-    # Отключено ночное обновление всех покупателей - теперь обновление происходит при заходе на страницу конкретного покупателя
-    # await start_nightly_customer_sync_scheduler(app)
+    # Ночное обновление каталога покупателей из 1С.
+    await start_nightly_customer_sync_scheduler(app)
     await start_nightly_stock_sync_scheduler(app)
     await start_nightly_store_visits_sync_scheduler(app)
     await start_inventory_recalc_scheduler(app)
     await start_receipt_bundle_recalc_scheduler(app)
     await start_onec_user_sync_scheduler(app)
     await start_onec_sales_sync_scheduler(app)
+    await start_crm_touchpoint_scheduler(app)
     await start_glm_hold_release_scheduler(app)
     await start_glm_ton_settlement_scheduler(app)
     await start_glm_ton_auto_transfer_scheduler(app)
     await start_glm_onec_bridge_retry_scheduler(app)
     await start_glm_telegram_alert_scheduler(app)
+    await start_glm_audit_hash_publish_scheduler(app)
     await start_admin_cron_scheduler(app)
-    from app.api.communication import start_generated_messages_sync
+    from app.api.communication import start_generated_messages_sync, start_sms_status_sync
     # await start_generated_messages_sync(app)
+    await start_sms_status_sync(app)
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    # Отключена автоматическая синхронизация покупателей по расписанию
-    # await stop_customer_sync_scheduler(app)
-    # Отключено ночное обновление всех покупателей
-    # await stop_nightly_customer_sync_scheduler(app)
+    await stop_nightly_customer_sync_scheduler(app)
     await stop_nightly_stock_sync_scheduler(app)
     await stop_nightly_store_visits_sync_scheduler(app)
     await stop_inventory_recalc_scheduler(app)
     await stop_receipt_bundle_recalc_scheduler(app)
     await stop_onec_user_sync_scheduler(app)
     await stop_onec_sales_sync_scheduler(app)
+    await stop_crm_touchpoint_scheduler(app)
+    await stop_glm_audit_hash_publish_scheduler(app)
     await stop_glm_telegram_alert_scheduler(app)
     await stop_glm_onec_bridge_retry_scheduler(app)
     await stop_glm_ton_auto_transfer_scheduler(app)
     await stop_glm_ton_settlement_scheduler(app)
+    from app.api.communication import stop_sms_status_sync
+    await stop_sms_status_sync(app)
     await stop_glm_hold_release_scheduler(app)
     await stop_admin_cron_scheduler(app)
     from app.api.communication import stop_generated_messages_sync
@@ -261,6 +294,10 @@ app.include_router(admin_access.router, prefix="/api/admin/access", tags=["admin
 app.include_router(live_stylist.router, prefix="/api/admin/live-stylist", tags=["admin-live-stylist"])
 app.include_router(admin_cron.router, prefix="/api/admin/cron", tags=["admin-cron"])
 app.include_router(admin_system.router, prefix="/api/admin/system", tags=["admin-system"])
+app.include_router(admin_crm_tasks.router, prefix="/api/admin/crm/tasks", tags=["admin-crm-tasks"])
+app.include_router(seller_crm.router, prefix="/api/seller/crm", tags=["seller-crm"])
+app.include_router(seller_customer_questionnaire.router, prefix="/api/seller/customer-questionnaire", tags=["seller-customer-questionnaire"])
+app.include_router(customer_requests.router, prefix="/api/customer-requests", tags=["customer-requests"])
 app.include_router(app_public.router, prefix="/api/app", tags=["app"])
 # Compatibility for older mobile/proxy builds that call public app endpoints
 # without the /api prefix.
@@ -269,6 +306,7 @@ app.include_router(ai_marketer.router, prefix="/api/ai-marketer", tags=["ai-mark
 app.include_router(communication.router, prefix="/api/communication", tags=["communication"])
 app.include_router(agent_system_prompts.router, prefix="/api/agent-system-prompts", tags=["agent-system-prompts"])
 app.include_router(agent_interactions.router, prefix="/api/agent-interactions", tags=["agent-interactions"])
+app.include_router(telegram_agent_bridge.router, prefix="/api", tags=["telegram-agent-bridge"])
 app.include_router(customer_segmentation.router, prefix="/api/customer-segmentation", tags=["customer-segmentation"])
 app.include_router(consultant_training.router, prefix="/api", tags=["consultant-training"])
 app.include_router(cart_checkout.router, prefix="/api", tags=["ecommerce"])

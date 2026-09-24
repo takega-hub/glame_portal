@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
@@ -175,6 +176,65 @@ class OneCSellersService:
             "discovered_endpoints": discovered,
             "errors": errors[-8:],
         }
+
+    async def fetch_staff_store_assignments(self, limit: int = 1000) -> Dict[str, Any]:
+        """Fetch current 1C employee -> structural unit/store assignments.
+
+        Catalog_Сотрудники does not expose the store in this 1C publication. The
+        reliable source is InformationRegister_Сотрудники_RecordType, where
+        СтруктурнаяЕдиница_Key matches stores.external_id for GLAME shops.
+        """
+        endpoint = "/InformationRegister_Сотрудники_RecordType"
+        rows = await self.fetch_from_endpoint(endpoint, limit=limit)
+        latest_by_employee: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            if row.get("Active") is False:
+                continue
+            employee_id = str(row.get("Сотрудник_Key") or "").strip()
+            store_id = str(row.get("СтруктурнаяЕдиница_Key") or "").strip()
+            if not employee_id:
+                continue
+            try:
+                period = datetime.fromisoformat(str(row.get("Period") or row.get("Период") or "").replace("Z", "+00:00"))
+            except Exception:
+                period = datetime.min
+            current = latest_by_employee.get(employee_id)
+            if current is None or period >= current["period"]:
+                latest_by_employee[employee_id] = {
+                    "employee_external_id": employee_id,
+                    "store_external_id": store_id,
+                    "position_external_id": str(row.get("Должность_Key") or "").strip() or None,
+                    "period": period,
+                    "raw": row,
+                }
+        assignments = []
+        for item in latest_by_employee.values():
+            if not item["store_external_id"] or item["store_external_id"] == "00000000-0000-0000-0000-000000000000":
+                continue
+            assignments.append({
+                "employee_external_id": item["employee_external_id"],
+                "store_external_id": item["store_external_id"],
+                "position_external_id": item.get("position_external_id"),
+                "period": item["period"].isoformat() if item.get("period") else None,
+            })
+        assignments.sort(key=lambda item: item["employee_external_id"])
+        return {
+            "endpoint": endpoint,
+            "total_loaded": len(rows),
+            "count": len(assignments),
+            "assignments": assignments,
+        }
+
+    async def fetch_staff_positions(self, limit: int = 1000) -> Dict[str, str]:
+        """Return 1C position labels keyed by Catalog_Должности Ref_Key."""
+        rows = await self.fetch_from_endpoint("/Catalog_Должности", limit=limit)
+        result: Dict[str, str] = {}
+        for row in rows:
+            key = str(row.get("Ref_Key") or "").strip()
+            label = str(row.get("Description") or row.get("Наименование") or "").strip()
+            if key and label:
+                result[key] = label
+        return result
 
     @staticmethod
     def filter_active_seller_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

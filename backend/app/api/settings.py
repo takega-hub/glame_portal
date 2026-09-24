@@ -16,6 +16,13 @@ from app.services.gift_certificate_email_service import (
 from app.services.image_optimization import run_image_optimization
 from app.services.ai_core_runtime import SUPPORTED_AI_CORE_RUNTIMES, ai_core_runtime_from_env, get_ai_core_runtime
 from app.services.hermes_agent_runtime import HermesAgentRuntime, hermes_runtime_config_from_env
+from app.services.yookassa_service import (
+    YOOKASSA_SETTINGS_KEY,
+    YOOKASSA_MODES,
+    get_yookassa_mode,
+    yookassa_env_status,
+    yookassa_public_config,
+)
 import os
 import time
 import httpx
@@ -105,6 +112,22 @@ class EmailServerTestRequest(BaseModel):
 class EmailServerTestResponse(BaseModel):
     ok: bool
     message: str
+
+
+class YooKassaSettingsResponse(BaseModel):
+    mode: str
+    source: str  # db | env | default
+    test_configured: bool
+    live_configured: bool
+    active_configured: bool
+    active_shop_id: Optional[str] = None
+    test_shop_id: Optional[str] = None
+    live_shop_id: Optional[str] = None
+    options: List[str]
+
+
+class YooKassaSettingsUpdateRequest(BaseModel):
+    mode: str
 
 
 class ImageOptimizationStatusResponse(BaseModel):
@@ -591,6 +614,56 @@ async def set_ai_stylist_settings(
         db.add(AppSetting(key="ai_stylist_enabled", value=value))
     await db.commit()
     return AiStylistSettingsResponse(enabled=request.enabled, source="db")
+
+
+def _public_yookassa_settings(mode: str, source: str) -> YooKassaSettingsResponse:
+    status = yookassa_env_status()
+    public_config = yookassa_public_config()
+    active_configured = bool(status["live_configured"] if mode == "live" else status["test_configured"])
+    active_shop_id = public_config["live_shop_id"] if mode == "live" else public_config["test_shop_id"]
+    return YooKassaSettingsResponse(
+        mode=mode,
+        source=source,
+        test_configured=bool(status["test_configured"]),
+        live_configured=bool(status["live_configured"]),
+        active_configured=active_configured,
+        active_shop_id=active_shop_id,
+        test_shop_id=public_config["test_shop_id"],
+        live_shop_id=public_config["live_shop_id"],
+        options=sorted(YOOKASSA_MODES),
+    )
+
+
+@router.get("/yookassa", response_model=YooKassaSettingsResponse)
+async def get_yookassa_settings(
+    _current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    await _ensure_app_settings_table(db)
+    mode, source = await get_yookassa_mode(db)
+    return _public_yookassa_settings(mode, source)
+
+
+@router.put("/yookassa", response_model=YooKassaSettingsResponse)
+async def set_yookassa_settings(
+    request: YooKassaSettingsUpdateRequest,
+    _current_user: User = Depends(require_admin()),
+    db: AsyncSession = Depends(get_db),
+):
+    mode = str(request.mode or "").strip().lower()
+    if mode not in YOOKASSA_MODES:
+        raise HTTPException(status_code=400, detail="mode должен быть test или live")
+    env_status = yookassa_env_status()
+    configured = bool(env_status["live_configured"] if mode == "live" else env_status["test_configured"])
+    if not configured:
+        env_names = (
+            "YOOKASSA_LIVE_SHOP_ID и YOOKASSA_LIVE_SECRET_KEY"
+            if mode == "live"
+            else "YOOKASSA_TEST_SHOP_ID/YOOKASSA_SHOP_ID и YOOKASSA_TEST_SECRET_KEY/YOOKASSA_SECRET_KEY"
+        )
+        raise HTTPException(status_code=400, detail=f"Нельзя включить режим {mode}: не настроены {env_names}")
+    await _set_app_setting_json(db, YOOKASSA_SETTINGS_KEY, {"mode": mode})
+    return _public_yookassa_settings(mode, "db")
 
 
 @router.get("/email-server", response_model=EmailServerSettingsResponse)

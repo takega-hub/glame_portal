@@ -30,6 +30,8 @@ from app.services.telegram_notification_service import TelegramNotificationServi
 
 logger = logging.getLogger(__name__)
 
+_TON_RUB_RATE_CACHE: dict[str, Any] = {}
+
 
 GLAME_TOKEN_CODE = "GLM"
 GLAME_TOKEN_NAME = "GLAME Coin"
@@ -38,6 +40,8 @@ GLAME_TOKEN_MAX_SUPPLY = 10_000_000
 GLAME_TOKEN_MONTHLY_REFERRAL_EMISSION_LIMIT = 250_000
 GLAME_BONUS_CONVERSION_MIN = 100
 GLAME_BONUS_CONVERSION_MAX = 10_000
+GLM_AUDIT_JOURNAL_PUBLIC_PATH = "/static/glm_audit_journal"
+GLM_AUDIT_JOURNAL_DIR = Path(__file__).resolve().parents[2] / "static" / "glm_audit_journal"
 GLAME_BONUS_CONVERSION_MONTHLY_LIMIT = 50_000
 GLAME_LOYALTY_POINTS_PURCHASE_SPREAD_PERCENT = 10
 GLAME_LOYALTY_POINTS_PURCHASE_MIN = 100
@@ -45,6 +49,9 @@ GLAME_LOYALTY_POINTS_PURCHASE_MAX = 10_000
 GLAME_LOYALTY_POINTS_FROM_GLM_EXPIRES_DAYS = 365
 GLAME_STORE_CHECKOUT_MODE = os.getenv("GLM_STORE_CHECKOUT_MODE", "ton_deposit_required").strip() or "ton_deposit_required"
 GLAME_GLM_TO_POINTS_BRIDGE_REASONS = {"glm_to_points_bridge", "buy_loyalty_points"}
+GLAME_BUY_GLM_WITH_TON_REASON = "buy_glm_with_ton"
+GLAME_SELL_GLM_FOR_TON_REASON = "sell_glm_for_ton"
+GLAME_GLM_TREASURY_DEPOSIT_REASONS = GLAME_GLM_TO_POINTS_BRIDGE_REASONS | {GLAME_SELL_GLM_FOR_TON_REASON}
 JETTON_TRANSFER_OP = 0x0F8A7EA5
 JETTON_TRANSFER_NOTIFICATION_OP = 0x7362D09C
 
@@ -363,6 +370,7 @@ class GlameTokenService:
                 partner_title="GLM начислен за реферальную покупку",
                 lines=lines,
                 severity="success",
+                partner_category="crypto",
             )
         except Exception as error:  # noqa: BLE001
             logger.warning("Failed to send Telegram GLM hold notification: %s", error)
@@ -603,8 +611,8 @@ class GlameTokenService:
         bridge: GlameTokenTransaction,
         sender_wallet_address: str | None,
     ) -> dict[str, Any]:
-        if bridge.transaction_type != "bridge" or bridge.reason not in GLAME_GLM_TO_POINTS_BRIDGE_REASONS:
-            raise ValueError("Это не GLM -> баллы bridge")
+        if bridge.transaction_type != "bridge" or bridge.reason not in GLAME_GLM_TREASURY_DEPOSIT_REASONS:
+            raise ValueError("Это не GLM treasury deposit bridge")
         if bridge.status != "pending":
             raise ValueError("TON transaction можно подготовить только для pending bridge")
         meta = bridge.meta if isinstance(bridge.meta, dict) else {}
@@ -636,7 +644,8 @@ class GlameTokenService:
 
         forward_payload = Cell()
         forward_payload.bits.write_uint(0, 32)
-        forward_payload.bits.write_string(f"GLAME glm_to_points bridge {bridge.id}")
+        transfer_reason = "sell_glm_for_ton" if bridge.reason == GLAME_SELL_GLM_FOR_TON_REASON else "glm_to_points"
+        forward_payload.bits.write_string(f"GLAME {transfer_reason} bridge {bridge.id}")
 
         body = Cell()
         body.bits.write_uint(JETTON_TRANSFER_OP, 32)
@@ -704,8 +713,11 @@ class GlameTokenService:
             )
         ).scalar_one_or_none()
         if account is None:
+            policy = self.empty_summary()
+            policy["primary_sale_policy"] = await self.primary_sale_policy_payload()
+            policy["exchange_desk_policy"] = await self.exchange_desk_policy_payload()
             return {
-                **self.empty_summary(),
+                **policy,
                 "onchain_balance": onchain_balance,
             }
 
@@ -744,6 +756,8 @@ class GlameTokenService:
         privilege_score = onchain_privilege_score if onchain_balance.get("status") == "ok" else ledger_privilege_score
         tier_payload = self.tier_payload(privilege_score)
         policy = self.policy_payload()
+        policy["primary_sale_policy"] = await self.primary_sale_policy_payload()
+        policy["exchange_desk_policy"] = await self.exchange_desk_policy_payload()
         policy["store_items"] = await self.reward_store_items(only_active=True)
         pending_store_redemption = (
             await self.db.execute(
@@ -921,27 +935,45 @@ class GlameTokenService:
             direction = "glm_to_points"
         elif tx.transaction_type in {"claim", "conversion"} and tx.reason in {"points_to_ton_bridge", "points_to_glm_bridge"}:
             direction = "points_to_glm"
+        elif tx.transaction_type == "claim" and tx.reason == GLAME_BUY_GLM_WITH_TON_REASON:
+            direction = "buy_glm_with_ton"
+        elif tx.transaction_type == "bridge" and tx.reason == GLAME_SELL_GLM_FOR_TON_REASON:
+            direction = "sell_glm_for_ton"
         else:
             return None
 
         meta = tx.meta if isinstance(tx.meta, dict) else {}
         auto_transfer = meta.get("ton_auto_transfer") if isinstance(meta.get("ton_auto_transfer"), dict) else {}
-        ton_tx_hash = (
-            meta.get("deposit_tx_hash")
-            or meta.get("tx_hash")
-            or auto_transfer.get("tx_hash")
-        )
-        ton_status = (
-            meta.get("ton_deposit_status")
-            or auto_transfer.get("status")
-            or ("tx_hash_present" if ton_tx_hash else None)
-        )
+        if tx.reason == GLAME_SELL_GLM_FOR_TON_REASON:
+            ton_tx_hash = (
+                meta.get("gram_payout_tx_hash")
+                or meta.get("deposit_tx_hash")
+                or meta.get("tx_hash")
+                or auto_transfer.get("tx_hash")
+            )
+            ton_status = (
+                meta.get("gram_payout_status")
+                or meta.get("ton_deposit_status")
+                or auto_transfer.get("status")
+                or ("tx_hash_present" if ton_tx_hash else None)
+            )
+        else:
+            ton_tx_hash = (
+                meta.get("deposit_tx_hash")
+                or meta.get("tx_hash")
+                or auto_transfer.get("tx_hash")
+            )
+            ton_status = (
+                meta.get("ton_deposit_status")
+                or auto_transfer.get("status")
+                or ("tx_hash_present" if ton_tx_hash else None)
+            )
         onec_document_id = meta.get("onec_document_id") or meta.get("onec_spend_document_id")
         onec_status = meta.get("onec_sync_status") or meta.get("onec_spend_sync_status")
         onec_error = meta.get("onec_sync_error") or meta.get("onec_spend_sync_error")
         requested_at = _parse_datetime(meta.get("requested_at")) or tx.created_at
         processed_at = _parse_datetime(meta.get("processed_at"))
-        points_amount = int(meta.get("target_points") or meta.get("points_converted") or abs(int(tx.amount or 0)) or 0)
+        points_amount = 0 if tx.reason in {GLAME_BUY_GLM_WITH_TON_REASON, GLAME_SELL_GLM_FOR_TON_REASON} else int(meta.get("target_points") or meta.get("points_converted") or abs(int(tx.amount or 0)) or 0)
         glm_amount = int(meta.get("glm_amount") or abs(int(tx.amount or 0)) or points_amount)
 
         existing = (
@@ -1763,6 +1795,420 @@ class GlameTokenService:
             policy=f"buy loyalty points product, {GLAME_LOYALTY_POINTS_PURCHASE_SPREAD_PERCENT}% GLAME spread, pending admin/1C confirmation",
         )
 
+    @staticmethod
+    async def current_ton_rub_rate() -> dict[str, Any]:
+        ttl_seconds = int(os.getenv("GLM_PRIMARY_SALE_TON_RUB_CACHE_SECONDS", "300") or 300)
+        now = datetime.now(timezone.utc)
+        cached_at = _TON_RUB_RATE_CACHE.get("checked_at")
+        if isinstance(cached_at, datetime) and (now - cached_at).total_seconds() < ttl_seconds:
+            return dict(_TON_RUB_RATE_CACHE)
+
+        endpoint = (
+            os.getenv("GLM_PRIMARY_SALE_TON_RUB_ENDPOINT")
+            or "https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=rub"
+        ).strip()
+        timeout_seconds = float(os.getenv("GLM_PRIMARY_SALE_TON_RUB_TIMEOUT_SECONDS", "5") or 5)
+        fallback_raw = (os.getenv("GLM_PRIMARY_SALE_TON_RUB_RATE") or "").strip()
+        fallback_rate = Decimal(fallback_raw) if fallback_raw else Decimal("0")
+        payload: dict[str, Any] = {
+            "rate": Decimal("0"),
+            "source": "unavailable",
+            "checked_at": now,
+            "error": None,
+        }
+        try:
+            headers = {"accept": "application/json", "user-agent": "glame-platform/cryptoglame"}
+            api_key = (os.getenv("COINGECKO_API_KEY") or "").strip()
+            if api_key:
+                headers["x-cg-demo-api-key"] = api_key
+            async with httpx.AsyncClient(timeout=timeout_seconds, headers=headers) as client:
+                response = await client.get(endpoint)
+                response.raise_for_status()
+                data = response.json()
+            raw_rate = None
+            if isinstance(data, dict):
+                raw_rate = (
+                    data.get("the-open-network", {}).get("rub")
+                    if isinstance(data.get("the-open-network"), dict)
+                    else None
+                )
+            rate = Decimal(str(raw_rate or "0"))
+            if rate > 0:
+                payload.update({"rate": rate, "source": "coingecko"})
+            else:
+                raise ValueError("TON/RUB response does not contain a positive rate")
+        except Exception as error:
+            if fallback_rate > 0:
+                payload.update({"rate": fallback_rate, "source": "env_fallback", "error": str(error)})
+            else:
+                payload.update({"error": str(error)})
+            logger.warning("Unable to fetch TON/RUB rate for GLM primary sale: %s", error)
+
+        _TON_RUB_RATE_CACHE.clear()
+        _TON_RUB_RATE_CACHE.update(payload)
+        return dict(payload)
+
+    @staticmethod
+    def primary_sale_policy(
+        ton_rub_rate: Decimal | None = None,
+        *,
+        pricing_source: str | None = None,
+        pricing_error: str | None = None,
+        checked_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        rub_per_glm = Decimal(os.getenv("GLM_PRIMARY_SALE_RUB_PER_GLM", "1") or "1")
+        if ton_rub_rate is None:
+            ton_rub_rate_raw = (os.getenv("GLM_PRIMARY_SALE_TON_RUB_RATE") or "").strip()
+            ton_rub_rate = Decimal(ton_rub_rate_raw) if ton_rub_rate_raw else Decimal("0")
+            pricing_source = "env_fallback" if ton_rub_rate > 0 else None
+        legacy_ton_per_glm = Decimal(os.getenv("GLM_PRIMARY_SALE_TON_PER_GLM", "0") or "0")
+        pricing_source = pricing_source or "missing_ton_rub_rate"
+        if rub_per_glm <= 0:
+            rub_per_glm = Decimal("1")
+        if ton_rub_rate > 0:
+            ton_per_glm = (rub_per_glm / ton_rub_rate).quantize(Decimal("0.000000001"), rounding=ROUND_CEILING)
+            if pricing_source == "missing_ton_rub_rate":
+                pricing_source = "rub_per_glm_and_ton_rub_rate"
+        elif legacy_ton_per_glm > 0:
+            ton_per_glm = legacy_ton_per_glm
+            pricing_source = "legacy_ton_per_glm"
+        else:
+            ton_per_glm = Decimal("0")
+        min_glm = int(os.getenv("GLM_PRIMARY_SALE_MIN_GLM", "10") or 10)
+        max_glm = int(os.getenv("GLM_PRIMARY_SALE_MAX_GLM", "1000") or 1000)
+        return {
+            "enabled": _env_bool("GLM_PRIMARY_SALE_ENABLED", "false") and ton_per_glm > 0,
+            "currency": "TON",
+            "display_currency": "RUB",
+            "rub_per_glm": str(rub_per_glm),
+            "ton_rub_rate": str(ton_rub_rate) if ton_rub_rate > 0 else None,
+            "ton_per_glm": str(ton_per_glm),
+            "pricing_source": pricing_source,
+            "pricing_error": pricing_error,
+            "pricing_checked_at": checked_at.isoformat() if checked_at else None,
+            "min_glm": min_glm,
+            "max_glm": max_glm,
+            "description": "Primary controlled sale: GLAME distributes GLM at the configured RUB price, currently 1 GLM = 1 RUB. Partner pays TON to GLAME treasury by the configured TON/RUB operational rate, then GLM is transferred from GLAME hot-wallet to the verified TON wallet. No price growth, buyback or liquidity promise.",
+        }
+
+    async def primary_sale_policy_payload(self) -> dict[str, Any]:
+        rate_payload = await self.current_ton_rub_rate()
+        return self.primary_sale_policy(
+            Decimal(str(rate_payload.get("rate") or "0")),
+            pricing_source=str(rate_payload.get("source") or "unavailable"),
+            pricing_error=str(rate_payload.get("error")) if rate_payload.get("error") else None,
+            checked_at=rate_payload.get("checked_at") if isinstance(rate_payload.get("checked_at"), datetime) else None,
+        )
+
+    @staticmethod
+    def exchange_desk_policy(
+        ton_rub_rate: Decimal | None = None,
+        *,
+        pricing_source: str | None = None,
+        pricing_error: str | None = None,
+        checked_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        rub_per_glm = Decimal(os.getenv("GLM_EXCHANGE_DESK_RUB_PER_GLM", os.getenv("GLM_PRIMARY_SALE_RUB_PER_GLM", "1")) or "1")
+        if rub_per_glm <= 0:
+            rub_per_glm = Decimal("1")
+        if ton_rub_rate is None:
+            ton_rub_rate_raw = (os.getenv("GLM_PRIMARY_SALE_TON_RUB_RATE") or "").strip()
+            ton_rub_rate = Decimal(ton_rub_rate_raw) if ton_rub_rate_raw else Decimal("0")
+            pricing_source = "env_fallback" if ton_rub_rate > 0 else None
+        spread_percent = Decimal(os.getenv("GLM_EXCHANGE_DESK_SELL_SPREAD_PERCENT", "15") or "15")
+        if spread_percent < 0:
+            spread_percent = Decimal("0")
+        payout_rub_per_glm = (rub_per_glm * (Decimal("100") - spread_percent) / Decimal("100")).quantize(Decimal("0.01"))
+        if payout_rub_per_glm <= 0:
+            payout_rub_per_glm = rub_per_glm
+        pricing_source = pricing_source or "missing_ton_rub_rate"
+        ton_per_glm = Decimal("0")
+        if ton_rub_rate and ton_rub_rate > 0:
+            ton_per_glm = (payout_rub_per_glm / ton_rub_rate).quantize(Decimal("0.000000001"), rounding=ROUND_CEILING)
+            if pricing_source == "missing_ton_rub_rate":
+                pricing_source = "rub_per_glm_and_ton_rub_rate"
+        min_glm = int(os.getenv("GLM_EXCHANGE_DESK_MIN_GLM", "100") or 100)
+        max_glm = int(os.getenv("GLM_EXCHANGE_DESK_MAX_GLM", "1000") or 1000)
+        daily_limit = int(os.getenv("GLM_EXCHANGE_DESK_DAILY_LIMIT_GLM", "5000") or 5000)
+        return {
+            "enabled": _env_bool("GLM_EXCHANGE_DESK_SELL_ENABLED", "false") and ton_per_glm > 0,
+            "currency": "GRAM",
+            "network": "TON",
+            "display_currency": "RUB",
+            "rub_per_glm": str(rub_per_glm),
+            "payout_rub_per_glm": str(payout_rub_per_glm),
+            "sell_spread_percent": str(spread_percent),
+            "ton_rub_rate": str(ton_rub_rate) if ton_rub_rate and ton_rub_rate > 0 else None,
+            "ton_per_glm": str(ton_per_glm),
+            "pricing_source": pricing_source,
+            "pricing_error": pricing_error,
+            "pricing_checked_at": checked_at.isoformat() if checked_at else None,
+            "min_glm": min_glm,
+            "max_glm": max_glm,
+            "daily_limit_glm": daily_limit,
+            "description": "Controlled GLAME exchange desk pilot: partner may request to sell GLM to GLAME for GRAM after transferring GLM to treasury. The rate and limits are set by GLAME and can change. No guaranteed buyback, liquidity, fixed market price or investment return.",
+        }
+
+    async def exchange_desk_policy_payload(self) -> dict[str, Any]:
+        rate_payload = await self.current_ton_rub_rate()
+        return self.exchange_desk_policy(
+            Decimal(str(rate_payload.get("rate") or "0")),
+            pricing_source=str(rate_payload.get("source") or "unavailable"),
+            pricing_error=str(rate_payload.get("error")) if rate_payload.get("error") else None,
+            checked_at=rate_payload.get("checked_at") if isinstance(rate_payload.get("checked_at"), datetime) else None,
+        )
+
+    async def request_buy_glm_with_ton(
+        self,
+        *,
+        member: ReferralProgramMember,
+        amount_glm: int,
+        wallet: dict[str, Any] | None = None,
+        note: str | None = None,
+    ) -> GlameTokenTransaction:
+        policy = await self.primary_sale_policy_payload()
+        if not policy["enabled"]:
+            if policy.get("pricing_source") == "missing_ton_rub_rate":
+                raise ValueError("Покупка GLM за TON отключена: не удалось получить TON/RUB курс. Проверьте price API или задайте GLM_PRIMARY_SALE_TON_RUB_RATE как fallback.")
+            raise ValueError("Покупка GLM за TON пока отключена")
+        amount = int(amount_glm or 0)
+        if amount < int(policy["min_glm"]):
+            raise ValueError(f"Минимальная покупка — {policy['min_glm']} GLM")
+        if amount > int(policy["max_glm"]):
+            raise ValueError(f"Максимальная покупка за операцию — {policy['max_glm']} GLM")
+
+        account = await self.get_or_create_account(user_id=member.user_id, referral_member_id=member.id)
+        account = await self._locked_account(account.id)
+        existing_pending = (
+            await self.db.execute(
+                select(GlameTokenTransaction).where(
+                    GlameTokenTransaction.account_id == account.id,
+                    GlameTokenTransaction.token_code == GLAME_TOKEN_CODE,
+                    GlameTokenTransaction.transaction_type == "claim",
+                    GlameTokenTransaction.status.in_(("pending_payment", "pending")),
+                    GlameTokenTransaction.reason == GLAME_BUY_GLM_WITH_TON_REASON,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_pending is not None:
+            raise ValueError("У вас уже есть pending покупка GLM за TON")
+
+        treasury_address = (os.getenv("TON_GLM_TREASURY_ADDRESS") or "").strip()
+        if not treasury_address:
+            raise ValueError("TON treasury не настроен")
+        wallet = wallet or {}
+        wallet_address = str(wallet.get("address") or "").strip()
+        if not wallet_address:
+            raise ValueError("Сначала подтвердите TON-кошелек через TON Connect")
+
+        rub_amount = (Decimal(amount) * Decimal(str(policy["rub_per_glm"]))).quantize(Decimal("0.01"))
+        ton_amount = (Decimal(amount) * Decimal(str(policy["ton_per_glm"]))).quantize(Decimal("0.000000001"), rounding=ROUND_CEILING)
+        nanoton_amount = int((ton_amount * Decimal("1000000000")).to_integral_value(rounding=ROUND_CEILING))
+        if nanoton_amount <= 0:
+            raise ValueError("TON amount должен быть больше нуля")
+
+        now = datetime.now(timezone.utc)
+        tx = GlameTokenTransaction(
+            account_id=account.id,
+            user_id=member.user_id,
+            referral_member_id=member.id,
+            token_code=GLAME_TOKEN_CODE,
+            transaction_type="claim",
+            status="pending_payment",
+            amount=amount,
+            balance_after=int(account.balance or 0),
+            hold_balance_after=int(account.hold_balance or 0),
+            reason=GLAME_BUY_GLM_WITH_TON_REASON,
+            description="Primary sale: ожидается GRAM-оплата в treasury, затем GLM будет отправлен из hot-wallet в подтвержденный TON-кошелек.",
+            source="primary_sale",
+            source_id=f"buy_glm_with_ton:{account.id}:{uuid4()}",
+            meta={
+                "bridge_type": GLAME_BUY_GLM_WITH_TON_REASON,
+                "glm_amount": amount,
+                "rub_amount": str(rub_amount),
+                "rub_per_glm": str(policy["rub_per_glm"]),
+                "ton_rub_rate": policy.get("ton_rub_rate"),
+                "ton_amount": str(ton_amount),
+                "ton_amount_nanoton": str(nanoton_amount),
+                "ton_currency": "GRAM",
+                "pricing_source": policy.get("pricing_source"),
+                "pricing_checked_at": policy.get("pricing_checked_at"),
+                "pricing_error": policy.get("pricing_error"),
+                "rate": f"1 GLM = {policy['rub_per_glm']} RUB; GRAM/RUB = {policy.get('ton_rub_rate') or 'legacy/manual'}",
+                "requested_at": now.isoformat(),
+                "note": (note or "").strip() or None,
+                "wallet_address": wallet_address,
+                "expected_ton_sender_address": wallet_address,
+                "wallet_app": wallet.get("wallet_app") or wallet.get("label"),
+                "treasury_address": treasury_address,
+                "ton_payment_status": "waiting_for_payment",
+                "policy": "controlled primary GLM sale for GRAM; no price growth, buyback, guaranteed liquidity or investment return promise",
+            },
+        )
+        self.db.add(tx)
+        await self.db.flush()
+        await self.sync_bridge_operation(tx)
+        return tx
+
+    async def request_sell_glm_for_ton(
+        self,
+        *,
+        member: ReferralProgramMember,
+        amount_glm: int,
+        wallet: dict[str, Any] | None = None,
+        note: str | None = None,
+    ) -> GlameTokenTransaction:
+        policy = await self.exchange_desk_policy_payload()
+        if not policy["enabled"]:
+            if policy.get("pricing_source") == "missing_ton_rub_rate":
+                raise ValueError("Обмен GLM в GRAM отключен: не удалось получить GRAM/RUB курс.")
+            raise ValueError("Обмен GLM в GRAM пока отключен")
+        amount = int(amount_glm or 0)
+        if amount < int(policy["min_glm"]):
+            raise ValueError(f"Минимальная заявка — {policy['min_glm']} GLM")
+        if amount > int(policy["max_glm"]):
+            raise ValueError(f"Максимальная заявка за операцию — {policy['max_glm']} GLM")
+
+        account = await self.get_or_create_account(user_id=member.user_id, referral_member_id=member.id)
+        account = await self._locked_account(account.id)
+        existing_pending = (
+            await self.db.execute(
+                select(GlameTokenTransaction).where(
+                    GlameTokenTransaction.account_id == account.id,
+                    GlameTokenTransaction.token_code == GLAME_TOKEN_CODE,
+                    GlameTokenTransaction.transaction_type == "bridge",
+                    GlameTokenTransaction.status == "pending",
+                    GlameTokenTransaction.reason == GLAME_SELL_GLM_FOR_TON_REASON,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_pending is not None:
+            raise ValueError("У вас уже есть pending заявка GLM -> GRAM")
+
+        treasury_address = (os.getenv("TON_GLM_TREASURY_ADDRESS") or "").strip()
+        if not treasury_address:
+            raise ValueError("TON treasury не настроен")
+        wallet = wallet or {}
+        wallet_address = str(wallet.get("address") or "").strip()
+        if not wallet_address:
+            raise ValueError("Сначала подтвердите TON-кошелек через TON Connect")
+
+        rub_amount = (Decimal(amount) * Decimal(str(policy["payout_rub_per_glm"]))).quantize(Decimal("0.01"))
+        ton_amount = (Decimal(amount) * Decimal(str(policy["ton_per_glm"]))).quantize(Decimal("0.000000001"), rounding=ROUND_CEILING)
+        nanoton_amount = int((ton_amount * Decimal("1000000000")).to_integral_value(rounding=ROUND_CEILING))
+        if nanoton_amount <= 0:
+            raise ValueError("GRAM amount должен быть больше нуля")
+
+        now = datetime.now(timezone.utc)
+        tx = GlameTokenTransaction(
+            account_id=account.id,
+            user_id=member.user_id,
+            referral_member_id=member.id,
+            token_code=GLAME_TOKEN_CODE,
+            transaction_type="bridge",
+            status="pending",
+            amount=-amount,
+            balance_after=int(account.balance or 0),
+            hold_balance_after=int(account.hold_balance or 0),
+            reason=GLAME_SELL_GLM_FOR_TON_REASON,
+            description="Exchange desk pilot: ожидается GLM-перевод в treasury, затем операторская GRAM-выплата по лимитам GLAME.",
+            source="exchange_desk",
+            source_id=f"sell_glm_for_ton:{account.id}:{uuid4()}",
+            meta={
+                "bridge_type": GLAME_SELL_GLM_FOR_TON_REASON,
+                "glm_amount": amount,
+                "rub_amount": str(rub_amount),
+                "rub_per_glm": policy.get("payout_rub_per_glm"),
+                "base_rub_per_glm": policy.get("rub_per_glm"),
+                "sell_spread_percent": policy.get("sell_spread_percent"),
+                "ton_rub_rate": policy.get("ton_rub_rate"),
+                "ton_amount": str(ton_amount),
+                "ton_amount_nanoton": str(nanoton_amount),
+                "ton_currency": "GRAM",
+                "pricing_source": policy.get("pricing_source"),
+                "pricing_checked_at": policy.get("pricing_checked_at"),
+                "pricing_error": policy.get("pricing_error"),
+                "rate": f"exchange desk: 1 GLM = {policy['payout_rub_per_glm']} RUB payout; GRAM/RUB = {policy.get('ton_rub_rate') or 'manual'}",
+                "requested_at": now.isoformat(),
+                "note": (note or "").strip() or None,
+                "wallet_address": wallet_address,
+                "expected_ton_sender_address": wallet_address,
+                "ton_recipient_address": wallet_address,
+                "wallet_app": wallet.get("wallet_app") or wallet.get("label"),
+                "treasury_address": treasury_address,
+                "ton_deposit_status": "waiting_for_deposit",
+                "gram_payout_status": "pending_operator_payout",
+                "policy": "controlled GLM to GRAM exchange desk pilot; payout is limited and operator-verified; no guaranteed buyback, fixed market price, liquidity or investment return promise",
+            },
+        )
+        self.db.add(tx)
+        await self.db.flush()
+        await self.sync_bridge_operation(tx)
+        return tx
+
+    async def prepare_buy_glm_with_ton_transaction(
+        self,
+        *,
+        sale: GlameTokenTransaction,
+        sender_wallet_address: str | None,
+    ) -> dict[str, Any]:
+        if sale.transaction_type != "claim" or sale.reason != GLAME_BUY_GLM_WITH_TON_REASON:
+            raise ValueError("Это не покупка GLM за TON")
+        if sale.status != "pending_payment":
+            raise ValueError("TON transaction можно подготовить только для pending оплаты")
+        meta = sale.meta if isinstance(sale.meta, dict) else {}
+        treasury_address = str(meta.get("treasury_address") or os.getenv("TON_GLM_TREASURY_ADDRESS") or "").strip()
+        if not treasury_address:
+            raise ValueError("TON treasury не настроен")
+        sender_wallet_address = (sender_wallet_address or meta.get("expected_ton_sender_address") or "").strip()
+        if not sender_wallet_address:
+            raise ValueError("TON-кошелек отправителя не привязан")
+        amount_nanoton = int(str(meta.get("ton_amount_nanoton") or "0"))
+        if amount_nanoton <= 0:
+            raise ValueError("TON amount не рассчитан")
+
+        query_id = int(datetime.now(timezone.utc).timestamp())
+        comment = f"GLAME buy_glm_with_ton {sale.id}"
+        payload_cell = Cell()
+        payload_cell.bits.write_uint(0, 32)
+        payload_cell.bits.write_string(comment)
+        payload = base64.b64encode(payload_cell.to_boc(False)).decode("ascii")
+        valid_until = int(datetime.now(timezone.utc).timestamp()) + int(os.getenv("TON_GLM_CONNECT_TX_TTL_SECONDS", "600") or 600)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        sale.meta = {
+            **meta,
+            "ton_payment_status": "wallet_request_prepared",
+            "ton_payment_requested_at": now_iso,
+            "ton_payment_query_id": str(query_id),
+            "ton_payment_valid_until": valid_until,
+        }
+        flag_modified(sale, "meta")
+        await self.db.flush()
+        await self.sync_bridge_operation(sale)
+        return {
+            "sale_id": str(sale.id),
+            "network": os.getenv("TON_NETWORK", "testnet").strip() or "testnet",
+            "amount_glm": int(sale.amount or 0),
+            "amount_ton": str(meta.get("ton_amount") or ""),
+            "amount_nanoton": str(amount_nanoton),
+            "sender_wallet_address": sender_wallet_address,
+            "treasury_address": treasury_address,
+            "query_id": str(query_id),
+            "transaction": {
+                "validUntil": valid_until,
+                "network": "-3" if (os.getenv("TON_NETWORK", "testnet").strip() or "testnet") == "testnet" else "-239",
+                "from": sender_wallet_address,
+                "messages": [
+                    {
+                        "address": treasury_address,
+                        "amount": str(amount_nanoton),
+                        "payload": payload,
+                    }
+                ],
+            },
+            "note": "Проверьте в кошельке, что отправляете TON в treasury GLAME за покупку GLM.",
+        }
+
     async def _sync_glm_bridge_points_to_onec(
         self,
         *,
@@ -2060,11 +2506,12 @@ class GlameTokenService:
                     "message": f"Bridge operation pending старше {stale_hours} часов",
                 })
 
-            expected_direction = (
-                "glm_to_points"
-                if tx.transaction_type == "bridge" and tx.reason in GLAME_GLM_TO_POINTS_BRIDGE_REASONS
-                else "points_to_glm"
-            )
+            if tx.transaction_type == "bridge" and tx.reason in GLAME_GLM_TO_POINTS_BRIDGE_REASONS:
+                expected_direction = "glm_to_points"
+            elif tx.transaction_type == "claim" and tx.reason == GLAME_BUY_GLM_WITH_TON_REASON:
+                expected_direction = "buy_glm_with_ton"
+            else:
+                expected_direction = "points_to_glm"
             expected_glm_amount = abs(int(tx.amount or 0))
             if operation.direction != expected_direction:
                 bridge_operation_consistency_issue_count += 1
@@ -2525,6 +2972,111 @@ class GlameTokenService:
         flag_modified(existing, "payload")
         await self.db.flush()
         return existing
+
+    @staticmethod
+    def public_daily_audit_hash_payload(row: GlameTokenDailyAuditHash) -> dict[str, Any]:
+        payload = row.payload if isinstance(row.payload, dict) else {}
+        public_reference = row.public_reference or (
+            f"{GLM_AUDIT_JOURNAL_PUBLIC_PATH}/{row.audit_date.isoformat()}.json" if row.audit_date else None
+        )
+        return {
+            "schema": "glame_token_public_audit_hash_v1",
+            "audit_date": row.audit_date.isoformat() if row.audit_date else None,
+            "token_code": row.token_code,
+            "root_hash": row.root_hash,
+            "previous_root_hash": row.previous_root_hash,
+            "transactions_count": int(row.transactions_count or 0),
+            "accounts_count": int(row.accounts_count or 0),
+            "balance_total": int(row.balance_total or 0),
+            "hold_total": int(row.hold_total or 0),
+            "lifetime_earned_total": int(row.lifetime_earned_total or 0),
+            "lifetime_burned_total": int(row.lifetime_burned_total or 0),
+            "account_hash": payload.get("account_hash"),
+            "transaction_hashes_count": len(payload.get("transaction_hashes") or []),
+            "public_status": row.public_status,
+            "public_reference": public_reference,
+            "generated_at": row.generated_at.isoformat() if row.generated_at else None,
+            "published_at": payload.get("published_at"),
+        }
+
+    @classmethod
+    def write_public_audit_journal(cls, rows: list[GlameTokenDailyAuditHash]) -> None:
+        GLM_AUDIT_JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
+        public_rows = [cls.public_daily_audit_hash_payload(row) for row in rows]
+        updated_at = datetime.now(timezone.utc).isoformat()
+        index_payload = {
+            "schema": "glame_token_public_audit_journal_v1",
+            "token_code": GLAME_TOKEN_CODE,
+            "updated_at": updated_at,
+            "hashes_count": len(public_rows),
+            "hashes": public_rows,
+        }
+        (GLM_AUDIT_JOURNAL_DIR / "index.json").write_text(
+            json.dumps(index_payload, ensure_ascii=False, sort_keys=True, indent=2),
+            encoding="utf-8",
+        )
+        (GLM_AUDIT_JOURNAL_DIR / "glame-audit-hashes.jsonl").write_text(
+            "\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in public_rows) + ("\n" if public_rows else ""),
+            encoding="utf-8",
+        )
+        for item in public_rows:
+            audit_date = item.get("audit_date")
+            if audit_date:
+                (GLM_AUDIT_JOURNAL_DIR / f"{audit_date}.json").write_text(
+                    json.dumps(item, ensure_ascii=False, sort_keys=True, indent=2),
+                    encoding="utf-8",
+                )
+
+    async def publish_daily_audit_hash(
+        self,
+        *,
+        audit_date: date | None = None,
+        admin_user_id: UUID | None = None,
+        publisher: str = "admin",
+    ) -> GlameTokenDailyAuditHash:
+        target_date = audit_date or datetime.now(timezone.utc).date()
+        row = (
+            await self.db.execute(
+                select(GlameTokenDailyAuditHash).where(
+                    GlameTokenDailyAuditHash.token_code == GLAME_TOKEN_CODE,
+                    GlameTokenDailyAuditHash.audit_date == target_date,
+                )
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = await self.generate_daily_audit_hash(
+                audit_date=target_date,
+                admin_user_id=admin_user_id,
+            )
+
+        now = datetime.now(timezone.utc)
+        row.public_status = "published"
+        row.public_reference = f"{GLM_AUDIT_JOURNAL_PUBLIC_PATH}/{target_date.isoformat()}.json"
+        row.updated_at = now
+        row.payload = {
+            **(row.payload or {}),
+            "published_at": now.isoformat(),
+            "published_by": str(admin_user_id) if admin_user_id else publisher,
+            "publisher": publisher,
+            "public_reference": row.public_reference,
+            "journal_url": f"{GLM_AUDIT_JOURNAL_PUBLIC_PATH}/index.json",
+            "jsonl_url": f"{GLM_AUDIT_JOURNAL_PUBLIC_PATH}/glame-audit-hashes.jsonl",
+        }
+        flag_modified(row, "payload")
+        await self.db.flush()
+
+        published_rows = (
+            await self.db.execute(
+                select(GlameTokenDailyAuditHash)
+                .where(
+                    GlameTokenDailyAuditHash.token_code == GLAME_TOKEN_CODE,
+                    GlameTokenDailyAuditHash.public_status == "published",
+                )
+                .order_by(GlameTokenDailyAuditHash.audit_date.asc())
+            )
+        ).scalars().all()
+        self.write_public_audit_journal(list(published_rows))
+        return row
 
     async def repair_glm_bridge_onec_sync(
         self,
@@ -2993,8 +3545,17 @@ class GlameTokenService:
                     GlameTokenTransaction.token_code == GLAME_TOKEN_CODE,
                     GlameTokenTransaction.transaction_type == "earn",
                     GlameTokenTransaction.status == "hold",
-                    GlameTokenTransaction.available_at.is_not(None),
-                    GlameTokenTransaction.available_at <= now,
+                    or_(
+                        and_(
+                            GlameTokenTransaction.available_at.is_not(None),
+                            GlameTokenTransaction.available_at <= now,
+                        ),
+                        and_(
+                            ReferralCommission.id.is_not(None),
+                            ReferralCommission.hold_until.is_not(None),
+                            ReferralCommission.hold_until <= now,
+                        ),
+                    ),
                 )
                 .order_by(GlameTokenTransaction.available_at.asc(), GlameTokenTransaction.created_at.asc())
                 .limit(limit)
@@ -3064,12 +3625,162 @@ class GlameTokenService:
             released_amount += amount
             release_ids.append(str(release_tx.id))
 
+        point_release_result = await self.release_due_referral_point_commissions(
+            limit=max(1, limit - released_count),
+            admin_user_id=admin_user_id,
+        )
+
         return {
             "released_count": released_count,
             "released_amount": released_amount,
             "skipped_count": len(skipped),
             "skipped_transaction_ids": skipped,
             "release_transaction_ids": release_ids,
+            "point_commissions": point_release_result,
+        }
+
+    async def release_due_referral_point_commissions(
+        self,
+        *,
+        limit: int = 500,
+        admin_user_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        rows = (
+            await self.db.execute(
+                select(ReferralCommission, ReferralProgramMember, User)
+                .join(ReferralProgramMember, ReferralProgramMember.id == ReferralCommission.referrer_member_id)
+                .join(User, User.id == ReferralProgramMember.user_id)
+                .where(
+                    ReferralCommission.reward_mode == "points",
+                    ReferralCommission.status.in_(["hold", "approved"]),
+                    ReferralCommission.points > 0,
+                    ReferralCommission.hold_until.is_not(None),
+                    ReferralCommission.hold_until <= now,
+                    ReferralCommission.loyalty_transaction_id.is_(None),
+                )
+                .order_by(ReferralCommission.hold_until.asc(), ReferralCommission.created_at.asc())
+                .limit(limit)
+            )
+        ).all()
+
+        bonus_program_key = (
+            os.getenv("ONEC_REFERRAL_PARTNER_BONUS_PROGRAM_KEY")
+            or os.getenv("ONEC_REFERRAL_PARTNER_LOYALTY_PROGRAM_KEY")
+            or os.getenv("ONEC_GLM_BRIDGE_BONUS_PROGRAM_KEY")
+            or os.getenv("ONEC_GLM_BRIDGE_SPEND_BONUS_PROGRAM_KEY")
+            or os.getenv("ONEC_BONUS_PROGRAM_KEY")
+            or os.getenv("ONEC_WELCOME_BONUS_PROGRAM_KEY")
+        )
+        analytics_key = os.getenv("ONEC_REFERRAL_PARTNER_BONUS_ANALYTICS_KEY") or os.getenv(
+            "ONEC_WELCOME_BONUS_ANALYTICS_KEY",
+            "da8395fd-82b8-11f0-90e8-fa163e4cc04e",
+        )
+        expires_days = int(os.getenv("ONEC_REFERRAL_PARTNER_BONUS_EXPIRES_DAYS") or os.getenv("ONEC_WELCOME_BONUS_EXPIRES_DAYS", "365"))
+        expires_at = (now + timedelta(days=max(expires_days, 1))).replace(microsecond=0).isoformat()
+
+        released_count = 0
+        released_points = 0
+        skipped: list[dict[str, Any]] = []
+        released_commission_ids: list[str] = []
+
+        async with OneCOutboundService() as onec:
+            for commission, member, user in rows:
+                points = int(commission.points or 0)
+                card_ref_key = str(getattr(user, "discount_card_id_1c", None) or "").strip()
+                if points <= 0:
+                    skipped.append({"commission_id": str(commission.id), "reason": "zero_points"})
+                    continue
+                if not card_ref_key:
+                    commission.onec_sync_status = "missing_discount_card"
+                    commission.onec_last_error = "У партнера нет discount_card_id_1c для начисления бонусов в 1С"
+                    skipped.append({"commission_id": str(commission.id), "reason": "missing_discount_card"})
+                    continue
+                if not bonus_program_key:
+                    commission.onec_sync_status = "missing_bonus_program"
+                    commission.onec_last_error = "Не задан ключ бонусной программы 1С"
+                    skipped.append({"commission_id": str(commission.id), "reason": "missing_bonus_program"})
+                    continue
+
+                comment = f"referral_partner_bonus:{commission.id}"
+                try:
+                    existing = await onec.find_welcome_bonus_doc(comment)
+                    if existing and existing.get("Ref_Key"):
+                        doc_ref_key = str(existing.get("Ref_Key"))
+                        if existing.get("Posted"):
+                            await onec.unpost_welcome_bonus_doc(doc_ref_key)
+                        await onec.update_welcome_bonus_doc(
+                            doc_ref_key=doc_ref_key,
+                            bonus_program_key=bonus_program_key,
+                            card_ref_key=card_ref_key,
+                            points=points,
+                            comment=comment,
+                            analytics_key=analytics_key,
+                            expires_at=expires_at,
+                        )
+                        await onec.post_welcome_bonus_doc(doc_ref_key)
+                        onec_payload = existing
+                    else:
+                        onec_payload = await onec.create_welcome_bonus_doc(
+                            bonus_program_key=bonus_program_key,
+                            card_ref_key=card_ref_key,
+                            points=points,
+                            comment=comment,
+                            analytics_key=analytics_key,
+                            expires_at=expires_at,
+                        )
+                        doc_ref_key = str(onec_payload.get("Ref_Key") or "")
+                        if doc_ref_key:
+                            await onec.post_welcome_bonus_doc(doc_ref_key)
+                except Exception as error:
+                    commission.onec_sync_status = "failed"
+                    commission.onec_last_error = str(error)[:2000]
+                    skipped.append({"commission_id": str(commission.id), "reason": "onec_failed", "error": str(error)[:500]})
+                    continue
+
+                current_balance = int(getattr(user, "loyalty_points", 0) or 0)
+                next_balance = current_balance + points
+                user.loyalty_points = next_balance
+                user.synced_at = now
+                tx = LoyaltyTransaction(
+                    user_id=user.id,
+                    transaction_type="earn",
+                    points=points,
+                    balance_after=next_balance,
+                    reason="referral_commission_release",
+                    description=f"Зачисление баллов партнеру после холда по комиссии {commission.id}",
+                    source="referral",
+                    source_id=comment,
+                    created_by=admin_user_id,
+                )
+                self.db.add(tx)
+                await self.db.flush()
+
+                commission.status = "approved"
+                commission.approved_at = now
+                commission.loyalty_transaction_id = tx.id
+                commission.onec_document_id = str(onec_payload.get("Ref_Key") or doc_ref_key or "")
+                commission.onec_sync_status = "success" if commission.onec_document_id else "posted_without_ref_key"
+                commission.onec_last_error = None
+                commission.meta = {
+                    **(commission.meta or {}),
+                    "points_released_at": now.isoformat(),
+                    "points_released_by": str(admin_user_id) if admin_user_id else None,
+                    "onec_bonus_document": onec_payload,
+                    "policy": "release referral partner bonus points after hold and mirror to 1C",
+                }
+                flag_modified(commission, "meta")
+
+                released_count += 1
+                released_points += points
+                released_commission_ids.append(str(commission.id))
+
+        return {
+            "released_count": released_count,
+            "released_points": released_points,
+            "skipped_count": len(skipped),
+            "skipped": skipped,
+            "released_commission_ids": released_commission_ids,
         }
 
     async def adjust_available_balance(
@@ -3973,6 +4684,7 @@ class GlameTokenService:
                 "points_expires_days": GLAME_LOYALTY_POINTS_FROM_GLM_EXPIRES_DAYS,
                 "description": "Покупка баллов лояльности за GLM с product spread GLAME. Баллы начисляются после обработки bridge в 1С и живут по сроку действия баллов.",
             },
+            "primary_sale_policy": GlameTokenService.primary_sale_policy(),
             "network": "off_chain_glame_ledger",
             "onchain_policy": {
                 "network": ton_network,

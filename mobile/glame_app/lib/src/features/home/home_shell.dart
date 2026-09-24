@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/formatters/rub.dart';
+import '../../core/layout/glame_layout.dart';
 import '../../core/theme/glame_theme.dart';
 import '../../core/widgets/glame_auth_gate.dart';
 import '../auth/auth_controller.dart';
@@ -113,8 +114,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final auth = ref.watch(authControllerProvider);
     final controller = ref.read(authControllerProvider.notifier);
     final isLoggedIn = auth.user != null;
-    final width = MediaQuery.of(context).size.width;
-    final isDesktop = width >= 900;
+    final isDesktop = GlameLayout.isDesktop(context);
+    final showBottomNav =
+        !isDesktop && !GlameLayout.hidesBottomNavInCompactWeb(context);
     final isHeroHome = index == 0;
     final darkHeader = _usesDarkHeader(index);
     final headerHeight = isDesktop ? 96.0 : (darkHeader ? 88.0 : 74.0);
@@ -144,6 +146,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             onLogout: logoutAndRefresh,
           );
 
+    void openCatalogSearch() {
+      if (index != 1) {
+        setState(() {
+          index = 1;
+          catalogCategory = null;
+          catalogSearch = null;
+          catalogStoreId = null;
+          catalogStoreTitle = null;
+          catalogStoreSlug = null;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) showCatalogSearchDialog(context);
+        });
+        return;
+      }
+      showCatalogSearchDialog(context);
+    }
+
     final body = isHeroHome
         ? Stack(
             children: [
@@ -160,15 +180,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   catalogStoreSlug = null;
                   lookFilter = null;
                 }),
-                onSearchTap: () => setState(() {
-                  index = 1;
-                  catalogCategory = null;
-                  catalogSearch = null;
-                  catalogStoreId = null;
-                  catalogStoreTitle = null;
-                  catalogStoreSlug = null;
-                  lookFilter = null;
-                }),
+                onSearchTap: openCatalogSearch,
               ),
             ],
           )
@@ -182,6 +194,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                       isDesktop: isDesktop,
                       dark: darkHeader,
                       onSelected: _selectTab,
+                      onSearchPressed: openCatalogSearch,
                     ),
                     Expanded(
                       child: ColoredBox(
@@ -221,9 +234,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         },
       ),
       body: body,
-      bottomNavigationBar: isDesktop
-          ? null
-          : _GlameBottomBar(selectedIndex: index, onSelected: _selectTab),
+      bottomNavigationBar: showBottomNav
+          ? _GlameBottomBar(selectedIndex: index, onSelected: _selectTab)
+          : null,
     );
   }
 
@@ -331,45 +344,52 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   Widget _buildSelectionTabPage(BuildContext context) {
     final stylistStatus = ref.watch(stylistChatStatusProvider).asData?.value;
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: const Color(0xFF111111),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 22, 28, 32),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _SelectionTabHeader(),
-                const SizedBox(height: 20),
-                _SelectionTabAction(
-                  number: '01',
-                  title: 'Через AI-подбор',
-                  description: 'По фото, форме и масштабу',
-                  onTap: () => showPhotoUploadSheet(context),
+    return SizedBox.expand(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            'assets/images/service/selection_studio_background.webp',
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(28, 22, 28, 32),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const _SelectionTabHeader(),
+                    const SizedBox(height: 20),
+                    _SelectionTabAction(
+                      number: '01',
+                      title: 'Через AI-подбор',
+                      description: 'По фото, форме и масштабу',
+                      onTap: () => showPhotoUploadSheet(context),
+                    ),
+                    const SizedBox(height: 14),
+                    _SelectionTabAction(
+                      number: '02',
+                      title: 'С живым стилистом',
+                      description: 'Онлайн или в пространстве',
+                      onTap: () => showStylistContactSheet(
+                        context,
+                        source: 'selection_screen',
+                        scenario: 'live_stylist',
+                        statusPayload: stylistStatus,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    const Expanded(child: _SelectionTabProcessPanel()),
+                  ],
                 ),
-                const SizedBox(height: 14),
-                _SelectionTabAction(
-                  number: '02',
-                  title: 'С живым стилистом',
-                  description: 'Онлайн или в пространстве',
-                  onTap: () => showStylistContactSheet(
-                    context,
-                    source: 'selection_screen',
-                    scenario: 'live_stylist',
-                    statusPayload: stylistStatus,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                const Expanded(child: _SelectionTabProcessPanel()),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -398,12 +418,14 @@ class _GlameHeader extends StatelessWidget {
   final bool isDesktop;
   final bool dark;
   final ValueChanged<int> onSelected;
+  final VoidCallback onSearchPressed;
 
   const _GlameHeader({
     required this.selectedIndex,
     required this.isDesktop,
     this.dark = false,
     required this.onSelected,
+    required this.onSearchPressed,
   });
 
   @override
@@ -416,7 +438,7 @@ class _GlameHeader extends StatelessWidget {
         onMenuPressed: () => Scaffold.of(context).openDrawer(),
         onLogoPressed: () => onSelected(0),
         onCartPressed: () => onSelected(11),
-        onSearchPressed: () => onSelected(1),
+        onSearchPressed: onSearchPressed,
       ),
     );
   }
@@ -439,54 +461,62 @@ class _HeroTransparentTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final topOffset =
         MediaQuery.of(context).padding.top + GlameUi.heroTopOffset;
+    final heroGutter = GlameLayout.isTablet(context)
+        ? GlameLayout.horizontalGutter(context)
+        : GlameUi.pagePadding;
 
     return Positioned(
       top: topOffset,
-      left: GlameUi.pagePadding,
-      right: GlameUi.pagePadding,
-      child: SizedBox(
-        height: GlameUi.heroTopBarHeight,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Positioned(
-              left: 0,
-              child: _HeroTopBarIconButton(
-                tooltip: 'Меню',
-                icon: Icons.menu,
-                onPressed: onMenuTap,
-              ),
-            ),
-            Center(
-              child: InkWell(
-                onTap: onHomeTap,
-                child: Container(
-                  width: 154,
-                  height: 38,
-                  alignment: Alignment.center,
-                  child: const GlameHeaderLogo(height: 24, silver: true),
+      left: 0,
+      right: 0,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: heroGutter),
+        child: GlameContentWidth(
+          child: SizedBox(
+            height: GlameUi.heroTopBarHeight,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  left: 0,
+                  child: _HeroTopBarIconButton(
+                    tooltip: 'Меню',
+                    icon: Icons.menu,
+                    onPressed: onMenuTap,
+                  ),
                 ),
-              ),
-            ),
-            Positioned(
-              right: 0,
-              child: Row(
-                children: [
-                  _HeroTopBarIconButton(
-                    tooltip: 'Корзина',
-                    icon: Icons.shopping_bag_outlined,
-                    onPressed: onCartTap,
+                Center(
+                  child: InkWell(
+                    onTap: onHomeTap,
+                    child: Container(
+                      width: 154,
+                      height: 38,
+                      alignment: Alignment.center,
+                      child: const GlameHeaderLogo(height: 24, silver: true),
+                    ),
                   ),
-                  const SizedBox(width: 4),
-                  _HeroTopBarIconButton(
-                    tooltip: 'Поиск',
-                    icon: Icons.search,
-                    onPressed: onSearchTap,
+                ),
+                Positioned(
+                  right: 0,
+                  child: Row(
+                    children: [
+                      _HeroTopBarIconButton(
+                        tooltip: 'Корзина',
+                        icon: Icons.shopping_bag_outlined,
+                        onPressed: onCartTap,
+                      ),
+                      const SizedBox(width: 4),
+                      _HeroTopBarIconButton(
+                        tooltip: 'Поиск',
+                        icon: Icons.search,
+                        onPressed: onSearchTap,
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -643,7 +673,7 @@ class _SelectionTabAction extends StatelessWidget {
           child: Container(
             height: 88,
             decoration: BoxDecoration(
-              color: const Color(0xFF18191A),
+              color: const Color(0xB818191A),
               border: Border.all(color: const Color(0xFF55585C)),
             ),
             child: Row(
@@ -723,54 +753,47 @@ class _SelectionTabProcessPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFF151617),
+        color: const Color(0xB8151617),
         border: Border.all(color: GlameColors.borderGray),
       ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(painter: _SelectionTabProcessPainter()),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 22, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Как работает подбор',
-                  style: TextStyle(
-                    fontSize: 18,
-                    height: 1.15,
-                    color: GlameColors.whiteGlame,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                SizedBox(height: 18),
-                _SelectionTabProcessStep(
-                  number: '01',
-                  title: 'Вы загружаете фото или задачу',
-                ),
-                _SelectionTabProcessStep(
-                  number: '02',
-                  title: 'Мы считываем форму, масштаб и стиль',
-                ),
-                _SelectionTabProcessStep(
-                  number: '03',
-                  title: 'Показываем украшения, которые подходят образу',
-                ),
-                Spacer(),
-                Text(
-                  'Можно начать с AI-подбора или сразу передать задачу стилисту.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.35,
-                    color: GlameColors.steelGray,
-                  ),
-                ),
-              ],
+      child: const Padding(
+        padding: EdgeInsets.fromLTRB(20, 22, 20, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Как работает подбор',
+              style: TextStyle(
+                fontSize: 18,
+                height: 1.15,
+                color: GlameColors.whiteGlame,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+            SizedBox(height: 18),
+            _SelectionTabProcessStep(
+              number: '01',
+              title: 'Вы загружаете фото или задачу',
+            ),
+            _SelectionTabProcessStep(
+              number: '02',
+              title: 'Мы считываем форму, масштаб и стиль',
+            ),
+            _SelectionTabProcessStep(
+              number: '03',
+              title: 'Показываем украшения, которые подходят образу',
+            ),
+            Spacer(),
+            Text(
+              'Можно начать с AI-подбора или сразу передать задачу стилисту.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                color: GlameColors.steelGray,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -814,55 +837,6 @@ class _SelectionTabProcessStep extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _SelectionTabProcessPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final linePaint = Paint()
-      ..color = GlameColors.borderGray.withValues(alpha: 0.22)
-      ..strokeWidth = 1;
-    final accentPaint = Paint()
-      ..color = GlameColors.gold.withValues(alpha: 0.28)
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke;
-
-    for (var y = 34.0; y < size.height; y += 42) {
-      canvas.drawLine(
-        Offset(size.width * 0.58, y),
-        Offset(size.width, y),
-        linePaint,
-      );
-    }
-
-    final path = ui.Path()
-      ..moveTo(size.width * 0.58, size.height * 0.28)
-      ..quadraticBezierTo(
-        size.width * 0.78,
-        size.height * 0.14,
-        size.width * 0.96,
-        size.height * 0.32,
-      )
-      ..quadraticBezierTo(
-        size.width * 0.76,
-        size.height * 0.52,
-        size.width * 0.92,
-        size.height * 0.74,
-      );
-    canvas.drawPath(path, accentPaint);
-    canvas.drawCircle(
-      Offset(size.width * 0.84, size.height * 0.42),
-      42,
-      Paint()
-        ..color = GlameColors.whiteGlame.withValues(alpha: 0.025)
-        ..style = PaintingStyle.fill,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _SelectionTabProcessPainter oldDelegate) {
-    return false;
   }
 }
 

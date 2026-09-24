@@ -5,6 +5,7 @@ import logging
 import asyncio
 import re
 import io
+import subprocess
 from typing import Optional, List, Dict, Any
 from uuid import UUID, uuid4
 from pathlib import Path
@@ -12,6 +13,7 @@ import json
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.llm_service import llm_service
+from app.services.jewelry_photo_service import HERMES_CODEX_IMAGE_SCRIPT
 
 logger = logging.getLogger(__name__)
 
@@ -270,8 +272,9 @@ class ImageGenerationService:
         model: Optional[str] = None,
         product_images: Optional[List[str]] = None,
         reference_images: Optional[List[str]] = None,
+        aspect_ratio: str = "1:1",
     ) -> Optional[bytes]:
-        """Генерация изображения через OpenRouter API с использованием chat/completions и modalities"""
+        """Генерация изображения через OpenRouter Image API с legacy fallback."""
         if not self.api_key:
             logger.warning("No image generation API key set")
             return None
@@ -281,6 +284,44 @@ class ImageGenerationService:
             model = await self._get_model_from_settings()
         if not model:
             model = self.model
+
+        # OpenRouter moved direct image generation to /images.  The former
+        # chat/modalities route is retained below only as a compatibility
+        # fallback for older providers and reference-image workflows.
+        if not product_images and not reference_images:
+            try:
+                async with httpx.AsyncClient(timeout=600.0) as client:
+                    response = await client.post(
+                        f"{self.api_url}/images",
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://glame.ai",
+                            "X-Title": "GLAME AI Platform",
+                        },
+                        json={
+                            "model": model,
+                            "prompt": prompt,
+                            "n": 1,
+                            "aspect_ratio": aspect_ratio or "1:1",
+                            "resolution": "1K",
+                        },
+                    )
+                    response.raise_for_status()
+                    item = ((response.json() or {}).get("data") or [{}])[0]
+                    image_base64 = item.get("b64_json") if isinstance(item, dict) else None
+                    if image_base64:
+                        return base64.b64decode(image_base64)
+                    image_url = item.get("url") if isinstance(item, dict) else None
+                    if image_url:
+                        downloaded = await client.get(image_url, timeout=120.0)
+                        downloaded.raise_for_status()
+                        return downloaded.content
+                    logger.warning("OpenRouter Image API returned no image data for model %s", model)
+            except httpx.HTTPStatusError as error:
+                logger.error("OpenRouter Image API error %s: %s", error.response.status_code, error.response.text[:300])
+            except Exception as error:
+                logger.error("OpenRouter Image API generation failed: %s", error)
         
         try:
             # Увеличиваем таймаут до 10 минут для генерации изображений через OpenRouter
@@ -482,6 +523,40 @@ class ImageGenerationService:
             logger.error(f"Error generating image with OpenRouter: {e}")
         
         return None
+
+    async def _generate_with_hermes_gpt_image(self, prompt: str, *, aspect_ratio: str = "1:1") -> Optional[bytes]:
+        """Generate a new GLAME visual through the platform Hermes GPT Image agent."""
+        hermes_home = Path(os.getenv("HERMES_AGENT_HOME", "/home/glameAI/hermes-agent"))
+        hermes_python = Path(os.getenv("HERMES_PYTHON", str(hermes_home / "venv" / "bin" / "python")))
+        if not hermes_home.is_dir() or not hermes_python.is_file():
+            logger.warning("Hermes GPT Image runtime is unavailable (home=%s, python=%s)", hermes_home, hermes_python)
+            return None
+        ratio = (aspect_ratio or "1:1").strip()
+        size = "1536x1024" if ratio in {"16:9", "landscape", "banner"} else "1024x1536" if ratio in {"9:16", "portrait", "story", "reels"} else "1024x1024"
+        env = os.environ.copy()
+        env.setdefault("HERMES_HOME", str(Path.home() / ".hermes"))
+        env["PYTHONPATH"] = str(hermes_home)
+        payload = {
+            "prompt": prompt,
+            "quality": os.getenv("HERMES_GPT_IMAGE_QUALITY", "medium"),
+            "size": size,
+        }
+        try:
+            process = await asyncio.create_subprocess_exec(
+                str(hermes_python), "-c", HERMES_CODEX_IMAGE_SCRIPT,
+                cwd=str(hermes_home), env=env, stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(json.dumps(payload).encode("utf-8")), timeout=330.0)
+            if process.returncode != 0:
+                logger.error("Hermes GPT Image failed: %s", (stderr.decode("utf-8", errors="replace") or stdout.decode("utf-8", errors="replace"))[:800])
+                return None
+            result = json.loads(stdout.decode("utf-8"))
+            image_b64 = result.get("image_b64") if isinstance(result, dict) else None
+            return base64.b64decode(image_b64) if image_b64 else None
+        except Exception as error:
+            logger.error("Hermes GPT Image generation failed: %s", error)
+            return None
     
     async def _generate_with_replicate(
         self,
@@ -678,7 +753,7 @@ class ImageGenerationService:
     ) -> Dict[str, Any]:
         """Универсальная генерация изображения для Hermes/Elena.
 
-        provider: auto | openrouter/platform | comfyui. Возвращает URL и полную
+        provider: hermes | auto | openrouter/platform | comfyui. Возвращает URL и полную
         metadata, чтобы агент мог сравнивать варианты и переиспользовать prompts.
         """
         clean_prompt = (prompt or "").strip()
@@ -690,9 +765,9 @@ class ImageGenerationService:
         provider_norm = (provider or "auto").strip().lower()
         if provider_norm == "platform":
             provider_norm = "openrouter"
-        providers = ["openrouter", "comfyui"] if provider_norm == "auto" else [provider_norm]
-        if provider_norm not in {"auto", "openrouter", "comfyui"}:
-            raise ValueError("provider must be one of: auto, openrouter, platform, comfyui")
+        providers = ["hermes", "openrouter", "comfyui"] if provider_norm == "auto" else [provider_norm]
+        if provider_norm not in {"auto", "hermes", "openrouter", "comfyui"}:
+            raise ValueError("provider must be one of: hermes, auto, openrouter, platform, comfyui")
 
         product_refs = [u for u in (reference_image_urls or []) if isinstance(u, str) and u.strip()]
         model_refs = self._discover_model_reference_images(model_profile=model_profile, limit=4) if model_profile else []
@@ -702,6 +777,13 @@ class ImageGenerationService:
         used_provider: Optional[str] = None
 
         for candidate in providers:
+            if candidate == "hermes":
+                image_data = await self._generate_with_hermes_gpt_image(clean_prompt, aspect_ratio=aspect_ratio)
+                attempts.append({"provider": candidate, "status": "success" if image_data else "failed"})
+                if image_data:
+                    used_provider = candidate
+                    break
+                continue
             if candidate == "comfyui" and product_refs:
                 attempts.append({"provider": candidate, "status": "skipped", "reason": "reference images require OpenRouter/platform path"})
                 continue
@@ -711,6 +793,7 @@ class ImageGenerationService:
                     selected_model,
                     product_images=product_refs,
                     reference_images=model_refs,
+                    aspect_ratio=aspect_ratio,
                 )
             elif candidate == "comfyui":
                 image_data = await self._generate_with_comfyui(
@@ -742,7 +825,7 @@ class ImageGenerationService:
             "url": image_url,
             "prompt_used": clean_prompt,
             "provider": used_provider,
-            "model": selected_model if used_provider in {"openrouter", "replicate"} else None,
+            "model": selected_model if used_provider in {"openrouter", "replicate"} else "gpt-image-2" if used_provider == "hermes" else None,
             "reference_images_count": len(product_refs),
             "model_reference_images_count": len(model_refs),
             "reference_image_urls": product_refs,

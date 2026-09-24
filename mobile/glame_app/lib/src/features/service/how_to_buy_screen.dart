@@ -22,10 +22,18 @@ class HomeHowToBuyBlock extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final block = ref.watch(homeHowToBuyBlockProvider).asData?.value;
     final stylistStatus = ref.watch(stylistChatStatusProvider).asData?.value;
-    final backgroundSource =
-        resolveAssetUrl(block?['background_image_url']) ??
-        resolveAssetUrl(block?['image_url']) ??
-        _block6FallbackBackgroundAsset;
+    final backgroundMode = block?['background_mode'] as String?;
+    final backgroundColorHex = block?['background_color_hex'];
+    final backgroundColor = _block6BackgroundColor(
+      backgroundMode == 'color' ? backgroundColorHex : null,
+    );
+    final textColor =
+        _block6TextColor(block?['text_color_hex']) ?? _Block6Palette.darkText;
+    final backgroundSource = backgroundColor == null
+        ? resolveAssetUrl(block?['background_image_url']) ??
+              resolveAssetUrl(block?['image_url']) ??
+              _block6FallbackBackgroundAsset
+        : null;
     final isStylistOnline = stylistStatus?['is_open'] == true;
     final statusText =
         (stylistStatus?['status_text'] as String?)?.trim().isNotEmpty == true
@@ -41,43 +49,44 @@ class HomeHowToBuyBlock extends ConsumerWidget {
         GlameUi.heroTopBarHeight;
     final topPadding = compact ? topBarBottom + 18.0 : 68.0;
     final bottomPadding = compact ? 10.0 : 44.0;
-    final actionGap = compact ? 5.0 : 14.0;
-    final serviceGap = compact ? 8.0 : 48.0;
+    final actionGap = compact ? 8.0 : 16.0;
 
     return Container(
       height: targetHeight,
       width: double.infinity,
-      color: _Block6Palette.graphite,
+      color: backgroundColor ?? _Block6Palette.graphite,
       constraints: BoxConstraints(
         minHeight: compact ? (targetHeight ?? 0) : 1010,
       ),
       child: Stack(
         children: [
-          Positioned.fill(
-            child: _ServiceImageLayer(
-              source: backgroundSource,
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
+          if (backgroundSource != null)
+            Positioned.fill(
+              child: _ServiceImageLayer(
+                source: backgroundSource,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+              ),
             ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.2),
-                      const Color(0xFF101214).withValues(alpha: 0.05),
-                      Colors.black.withValues(alpha: 0.36),
-                    ],
-                    stops: const [0.0, 0.46, 1.0],
+          if (backgroundSource != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.2),
+                        const Color(0xFF101214).withValues(alpha: 0.05),
+                        Colors.black.withValues(alpha: 0.36),
+                      ],
+                      stops: const [0.0, 0.46, 1.0],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
           Padding(
             padding: EdgeInsets.fromLTRB(28, topPadding, 28, bottomPadding),
             child: Align(
@@ -87,8 +96,9 @@ class HomeHowToBuyBlock extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Block6Header(compact: compact),
-                    SizedBox(height: compact ? 8 : 44),
+                    _Block6Header(compact: compact, color: textColor),
+                    if (compact) const Spacer(),
+                    if (!compact) const SizedBox(height: 44),
                     _Block6ActionPanel(
                       number: '01',
                       title: 'Самостоятельно',
@@ -118,8 +128,7 @@ class HomeHowToBuyBlock extends ConsumerWidget {
                       onTap: () => showPhotoUploadSheet(context),
                       compact: compact,
                     ),
-                    SizedBox(height: serviceGap),
-                    _Block6ServiceZone(compact: compact),
+                    if (compact) const Spacer(flex: 2),
                   ],
                 ),
               ),
@@ -133,8 +142,9 @@ class HomeHowToBuyBlock extends ConsumerWidget {
 
 class _Block6Header extends StatelessWidget {
   final bool compact;
+  final Color color;
 
-  const _Block6Header({this.compact = false});
+  const _Block6Header({this.compact = false, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +159,7 @@ class _Block6Header extends StatelessWidget {
               fontSize: compact ? 34 : 44,
               height: 1.04,
               letterSpacing: 0,
-              color: _Block6Palette.white,
+              color: color,
               fontWeight: FontWeight.w300,
             ),
           ),
@@ -159,7 +169,7 @@ class _Block6Header extends StatelessWidget {
             child: Divider(
               height: 1,
               thickness: 1,
-              color: _Block6Palette.white,
+              color: color,
             ),
           ),
           SizedBox(height: compact ? 14 : 28),
@@ -168,7 +178,7 @@ class _Block6Header extends StatelessWidget {
             style: TextStyle(
               fontSize: compact ? 13.5 : 17,
               height: compact ? 1.32 : 1.38,
-              color: _Block6Palette.lightText,
+              color: color.withValues(alpha: 0.76),
               fontWeight: FontWeight.w300,
             ),
           ),
@@ -207,12 +217,12 @@ class _Block6ActionPanel extends StatelessWidget {
           splashColor: _Block6Palette.white.withValues(alpha: 0.05),
           highlightColor: _Block6Palette.white.withValues(alpha: 0.03),
           child: Container(
-            constraints: BoxConstraints(minHeight: compact ? 60 : 104),
+            constraints: BoxConstraints(minHeight: compact ? 76 : 112),
             padding: EdgeInsets.fromLTRB(
+              compact ? 14 : 22,
               compact ? 12 : 22,
-              compact ? 9 : 22,
+              compact ? 14 : 20,
               compact ? 12 : 20,
-              compact ? 9 : 20,
             ),
             decoration: BoxDecoration(
               color: _Block6Palette.panelBackground,
@@ -222,7 +232,7 @@ class _Block6ActionPanel extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 SizedBox(
-                  width: compact ? 36 : 56,
+                  width: compact ? 42 : 56,
                   child: Center(
                     child: Text(
                       number,
@@ -235,13 +245,13 @@ class _Block6ActionPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(width: compact ? 12 : 22),
+                SizedBox(width: compact ? 14 : 22),
                 Container(
                   width: 1,
-                  height: compact ? 38 : 58,
+                  height: compact ? 48 : 58,
                   color: _Block6Palette.line,
                 ),
-                SizedBox(width: compact ? 14 : 22),
+                SizedBox(width: compact ? 16 : 22),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,7 +259,7 @@ class _Block6ActionPanel extends StatelessWidget {
                       Text(
                         title.toUpperCase(),
                         style: TextStyle(
-                          fontSize: compact ? 14.5 : 20,
+                          fontSize: compact ? 15 : 20,
                           height: 1.08,
                           letterSpacing: compact ? 0.5 : 0.4,
                           color: _Block6Palette.white,
@@ -260,7 +270,7 @@ class _Block6ActionPanel extends StatelessWidget {
                       Text(
                         text,
                         style: TextStyle(
-                          fontSize: compact ? 11.5 : 14,
+                          fontSize: compact ? 12 : 14,
                           height: compact ? 1.15 : 1.28,
                           color: _Block6Palette.lightText,
                           fontWeight: FontWeight.w300,
@@ -271,7 +281,7 @@ class _Block6ActionPanel extends StatelessWidget {
                         Text(
                           status!,
                           style: TextStyle(
-                            fontSize: compact ? 9.5 : 12,
+                            fontSize: compact ? 10 : 12,
                             height: 1.15,
                             color: _Block6Palette.steel,
                             fontWeight: FontWeight.w300,
@@ -299,197 +309,28 @@ class _Block6ActionPanel extends StatelessWidget {
   }
 }
 
-class _Block6ServiceZone extends StatelessWidget {
-  final bool compact;
-
-  const _Block6ServiceZone({this.compact = false});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Text(
-                'Чтобы онлайн-покупка\nбыла спокойной',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: compact ? 16 : 22,
-                  height: compact ? 1.08 : 1.12,
-                  letterSpacing: 0,
-                  color: _Block6Palette.white,
-                  fontWeight: FontWeight.w300,
-                ),
-              ),
-            ),
-            SizedBox(width: compact ? 8 : 14),
-            Expanded(
-              flex: 2,
-              child: Container(height: 1, color: _Block6Palette.line),
-            ),
-          ],
-        ),
-        SizedBox(height: compact ? 6 : 18),
-        Container(
-          decoration: BoxDecoration(
-            color: _Block6Palette.panelBackground,
-            border: Border.all(color: _Block6Palette.line, width: 1),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _Block6ServiceTile(
-                      number: '01',
-                      title: 'ПРИМЕРКА\nПЕРЕД ПОКУПКОЙ',
-                      text:
-                          'Курьер привозит изделия для примерки: вы выбираете и оплачиваете только то, что подошло, остальное возвращается с курьером.',
-                      compact: compact,
-                    ),
-                  ),
-                  _Block6GridDivider.vertical(compact: compact),
-                  Expanded(
-                    child: _Block6ServiceTile(
-                      number: '02',
-                      title: 'ДЕТАЛИ\nДО ЗАКАЗА',
-                      text:
-                          'Уточним размер, длину, застёжку, цвет, фактуру, вес и масштаб изделия.',
-                      compact: compact,
-                    ),
-                  ),
-                ],
-              ),
-              const _Block6GridDivider.horizontal(),
-              Row(
-                children: [
-                  Expanded(
-                    child: _Block6ServiceTile(
-                      number: '03',
-                      title: 'ГАРАНТИЯ\nИ УХОД',
-                      text:
-                          'Расскажем условия по конкретному изделию и подскажем, как за ним ухаживать.',
-                      compact: compact,
-                    ),
-                  ),
-                  _Block6GridDivider.vertical(compact: compact),
-                  Expanded(
-                    child: _Block6ServiceTile(
-                      number: '04',
-                      title: 'ПОДДЕРЖКА\nИ КЛУБ СТИЛЬНЫХ',
-                      text:
-                          'Можно обратиться в GLAME после покупки. Покупки участвуют в программе лояльности.',
-                      compact: compact,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Block6ServiceTile extends StatelessWidget {
-  const _Block6ServiceTile({
-    required this.number,
-    required this.title,
-    required this.text,
-    this.compact = false,
-  });
-
-  final String number;
-  final String title;
-  final String text;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: compact ? 108 : 190,
-      padding: EdgeInsets.fromLTRB(
-        compact ? 10 : 22,
-        compact ? 8 : 22,
-        compact ? 8 : 18,
-        compact ? 8 : 18,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            number,
-            style: TextStyle(
-              fontSize: compact ? 11 : 30,
-              height: 1.0,
-              color: _Block6Palette.steel,
-              fontWeight: FontWeight.w300,
-            ),
-          ),
-          SizedBox(height: compact ? 5 : 18),
-          Text(
-            title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: compact ? 10.5 : 16,
-              height: compact ? 1.08 : 1.15,
-              letterSpacing: compact ? 0.2 : 0.3,
-              color: _Block6Palette.white,
-              fontWeight: FontWeight.w300,
-            ),
-          ),
-          SizedBox(height: compact ? 3 : 14),
-          Text(
-            text,
-            maxLines: compact ? 3 : 6,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: compact ? 8.6 : 14,
-              height: compact ? 1.1 : 1.28,
-              color: _Block6Palette.lightText,
-              fontWeight: FontWeight.w300,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Block6GridDivider extends StatelessWidget {
-  const _Block6GridDivider.horizontal()
-    : axis = Axis.horizontal,
-      compact = false;
-  const _Block6GridDivider.vertical({this.compact = false})
-    : axis = Axis.vertical;
-
-  final Axis axis;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: axis == Axis.vertical ? 1 : double.infinity,
-      height: axis == Axis.horizontal ? 1 : (compact ? 108 : 190),
-      color: _Block6Palette.line,
-    );
-  }
-}
-
 class _Block6Palette {
   static const Color graphite = Color(0xFF222426);
+  static const Color darkText = Color(0xFF242628);
   static const Color panelBackground = Color(0x96292C2F);
   static const Color white = Color(0xFFEFF1F2);
   static const Color lightText = Color(0xFFC7CBCF);
   static const Color steel = Color(0xFF8E9397);
   static const Color line = Color(0xFF5C6064);
+}
+
+Color? _block6BackgroundColor(dynamic rawValue) {
+  final value = rawValue is String ? rawValue.trim() : '';
+  final match = RegExp(r'^#?([0-9A-Fa-f]{6})$').firstMatch(value);
+  if (match == null) return null;
+  return Color(int.parse('FF${match.group(1)!}', radix: 16));
+}
+
+Color? _block6TextColor(dynamic rawValue) {
+  final value = rawValue is String ? rawValue.trim() : '';
+  final match = RegExp(r'^#?([0-9A-Fa-f]{6})$').firstMatch(value);
+  if (match == null) return null;
+  return Color(int.parse('FF${match.group(1)!}', radix: 16));
 }
 
 class SelectionMethodScreen extends ConsumerWidget {

@@ -13,6 +13,8 @@ from app.models.content_publication import ContentPublication
 from app.models.product import Product
 from app.models.user import User
 from app.api.auth import get_current_user, get_current_user_optional
+from app.api.dependencies import require_any_role
+from app.services.upload_security import validate_image_upload
 from uuid import UUID, uuid4
 from pathlib import Path
 import json
@@ -2086,6 +2088,7 @@ async def upload_item_media(
     file: UploadFile = File(...),
     note: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_any_role(["admin", "manager", "marketer"])),
 ):
     result = await db.execute(select(ContentItem).where(ContentItem.id == item_id))
     item = result.scalar_one_or_none()
@@ -2097,10 +2100,7 @@ async def upload_item_media(
         raise HTTPException(status_code=400, detail="Допускаются только изображения: JPEG, PNG, WEBP.")
 
     file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="Файл пустой.")
-    if len(file_bytes) > CONTENT_MEDIA_MAX_BYTES:
-        raise HTTPException(status_code=400, detail="Файл превышает лимит 15 MB.")
+    validate_image_upload(file_bytes, content_type, max_bytes=CONTENT_MEDIA_MAX_BYTES)
 
     ext = CONTENT_MEDIA_ALLOWED_TYPES.get(content_type, ".png")
     filename = f"{item_id}_{uuid4().hex}{ext}"
@@ -2923,11 +2923,7 @@ async def process_jewelry_photos(
                 detail=f"Файл {u.filename}: допускаются только image/jpeg, image/png.",
             )
         data = await u.read()
-        if len(data) > JEWELRY_PHOTO_MAX_BYTES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Файл {u.filename} превышает лимит 10 MB.",
-            )
+        validate_image_upload(data, ct, max_bytes=JEWELRY_PHOTO_MAX_BYTES)
         image_bytes_list.append(data)
 
     revision = (revision_description or "").strip() or None

@@ -202,9 +202,11 @@ async def _update_db_references(url_map: dict[str, str], root: Path) -> int:
     from sqlalchemy import select
     from app.database.connection import AsyncSessionLocal
     from app.models.app_banner import AppBanner
+    from app.models.app_home_slide import AppHomeSlide
     from app.models.app_lookbook import AppLookbook
     from app.models.app_news import AppNews
     from app.models.app_promotion import AppPromotion
+    from app.models.app_store import AppStore
     from app.models.content_item import ContentItem
     from app.models.look import Look
     from app.models.product import Product
@@ -234,7 +236,17 @@ async def _update_db_references(url_map: dict[str, str], root: Path) -> int:
     async with AsyncSessionLocal() as db:
         updated = 0
 
-        for model in [Look, ContentItem, AppBanner, AppLookbook, AppNews, AppPromotion, Product]:
+        for model in [
+            Look,
+            ContentItem,
+            AppBanner,
+            AppHomeSlide,
+            AppLookbook,
+            AppNews,
+            AppPromotion,
+            AppStore,
+            Product,
+        ]:
             result = await db.execute(select(model))
             rows = list(result.scalars().all())
             for row in rows:

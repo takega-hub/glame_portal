@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { communication, GenerationHistoryRecord, GenerateMessageRequest } from '@/lib/api';
-import * as XLSX from 'xlsx';
+import { downloadCsv, objectRowsToCsvRows } from '@/lib/csv-export';
 
 type SortBy = 'started_at' | 'completed_at' | 'status' | 'event_type';
 
@@ -32,6 +32,13 @@ export default function GenerationHistoryPanel() {
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendDate, setSendDate] = useState('');
   const [sendBusy, setSendBusy] = useState(false);
+
+  const [showSmsAeroImportModal, setShowSmsAeroImportModal] = useState(false);
+  const [smsAeroFile, setSmsAeroFile] = useState<File | null>(null);
+  const [smsAeroCampaignName, setSmsAeroCampaignName] = useState('');
+  const [smsAeroEventStore, setSmsAeroEventStore] = useState('');
+  const [smsAeroImportBusy, setSmsAeroImportBusy] = useState(false);
+  const [smsAeroImportResult, setSmsAeroImportResult] = useState<any | null>(null);
 
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editMsgText, setEditMsgText] = useState('');
@@ -242,12 +249,8 @@ export default function GenerationHistoryPanel() {
       'CTA': m.cta || '',
       'Статус': m.status === 'sent' ? 'Отправлено' : 'Сгенерировано',
     }));
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{ wch: 20 }, { wch: 20 }, { wch: 10 }, { wch: 12 }, { wch: 60 }, { wch: 40 }, { wch: 15 }];
-    XLSX.utils.book_append_sheet(wb, ws, 'Сообщения');
-    const fileName = `messages_${viewId || 'result'}.xlsx`;
-    XLSX.writeFile(wb, fileName);
+    const fileName = `messages_${viewId || 'result'}.csv`;
+    downloadCsv(fileName, objectRowsToCsvRows(data));
   };
 
   const openSendModal = () => {
@@ -278,6 +281,37 @@ export default function GenerationHistoryPanel() {
     }
   };
 
+  const openSmsAeroImportModal = () => {
+    setSmsAeroFile(null);
+    setSmsAeroCampaignName('');
+    setSmsAeroEventStore('');
+    setSmsAeroImportResult(null);
+    setShowSmsAeroImportModal(true);
+  };
+
+  const confirmSmsAeroImport = async () => {
+    if (!smsAeroFile) {
+      alert('Выберите файл экспорта SMS Aero (.xlsx или .csv)');
+      return;
+    }
+    setSmsAeroImportBusy(true);
+    setSmsAeroImportResult(null);
+    try {
+      const res = await communication.importSmsAeroBroadcast({
+        file: smsAeroFile,
+        campaign_name: smsAeroCampaignName || undefined,
+        event_store: smsAeroEventStore || undefined,
+      });
+      setSmsAeroImportResult(res);
+      await load();
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || 'Ошибка импорта файла SMS Aero';
+      alert(msg);
+    } finally {
+      setSmsAeroImportBusy(false);
+    }
+  };
+
   const pageCount = Math.ceil(Math.max(total, 1) / Math.max(limit, 1));
   const page = Math.floor(offset / Math.max(limit, 1)) + 1;
 
@@ -287,6 +321,7 @@ export default function GenerationHistoryPanel() {
         <h3 className="text-lg font-semibold text-gray-900">История генераций</h3>
         <div className="flex items-center gap-2">
           <button onClick={() => load()} className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">Обновить</button>
+          <button onClick={openSmsAeroImportModal} className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700">Импорт рассылки SMS Aero</button>
           <button onClick={exportSelected} disabled={selectedIds.length === 0} className="px-3 py-1.5 bg-green-600 text-white rounded disabled:opacity-50">Экспорт</button>
           <button onClick={openDeleteModal} disabled={selectedIds.length === 0} className="px-3 py-1.5 bg-red-600 text-white rounded disabled:opacity-50">Удалить</button>
         </div>
@@ -381,6 +416,66 @@ export default function GenerationHistoryPanel() {
           <button disabled={page >= pageCount} onClick={() => setOffset(offset + limit)} className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded disabled:opacity-50">Вперед</button>
         </div>
       </div>
+
+      {showSmsAeroImportModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded shadow-lg p-6 w-full max-w-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-lg font-semibold">Импорт рассылки SMS Aero</h4>
+              <button onClick={() => setShowSmsAeroImportModal(false)} className="text-gray-500 hover:text-gray-700">✕</button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Загрузите XLSX/CSV экспорт из кабинета SMS Aero. Платформа сопоставит телефоны с покупателями и добавит реальные SMS-статусы в историю взаимодействий.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Файл экспорта</label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xlsm,.csv,.txt"
+                  onChange={(e) => setSmsAeroFile(e.target.files?.[0] || null)}
+                  className="block w-full text-sm text-gray-700"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Название рассылки</label>
+                <input
+                  value={smsAeroCampaignName}
+                  onChange={(e) => setSmsAeroCampaignName(e.target.value)}
+                  placeholder="например: смс 3=2 07.2026 Симф"
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Магазин / контекст</label>
+                <input
+                  value={smsAeroEventStore}
+                  onChange={(e) => setSmsAeroEventStore(e.target.value)}
+                  placeholder="например: ТРК Центрум"
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+            </div>
+
+            {smsAeroImportResult && (
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 text-sm text-green-800 rounded">
+                <div className="font-medium mb-1">Импорт завершен</div>
+                <div>Строк распознано: {smsAeroImportResult.parsed}</div>
+                <div>Добавлено/обновлено в истории: {smsAeroImportResult.imported}</div>
+                <div>Не сопоставлено с покупателями: {smsAeroImportResult.unmatched}</div>
+                <div>Исключено технических SMS: {smsAeroImportResult.technical_excluded}</div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 mt-5">
+              <button onClick={() => setShowSmsAeroImportModal(false)} className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded">Закрыть</button>
+              <button onClick={confirmSmsAeroImport} disabled={smsAeroImportBusy || !smsAeroFile} className="px-3 py-1.5 bg-blue-600 text-white rounded disabled:opacity-50">
+                {smsAeroImportBusy ? 'Импорт…' : 'Импортировать'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">

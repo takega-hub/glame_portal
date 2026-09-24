@@ -6,6 +6,8 @@ from typing import Dict, Any, Optional, List
 from uuid import UUID
 from datetime import datetime, timedelta
 from app.database.connection import get_db
+from app.api.dependencies import require_admin
+from app.models.user import User
 from app.models.store import Store
 from app.models.app_setting import AppSetting
 from app.models.store_visit import StoreVisit
@@ -118,7 +120,8 @@ async def sync_ftp(
     background_tasks: BackgroundTasks,
     filename: Optional[str] = None,
     pattern: Optional[str] = "*.csv",
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_admin()),
 ):
     """Ручная синхронизация статистики с FTP"""
     ftp_host = os.getenv("FTP_HOST")

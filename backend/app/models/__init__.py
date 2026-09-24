@@ -13,6 +13,8 @@ from app.models.content_item import ContentItem
 from app.models.content_publication import ContentPublication
 from app.models.app_setting import AppSetting
 from app.models.marketing_campaign import MarketingCampaign
+from app.models.advertising_connection import AdvertisingConnection
+from app.models.advertising_daily_metric import AdvertisingDailyMetric
 from app.models.purchase_history import PurchaseHistory
 from app.models.loyalty_transaction import LoyaltyTransaction
 from app.models.saved_look import SavedLook
@@ -23,7 +25,12 @@ from app.models.product_catalog_section import ProductCatalogSection
 from app.models.inventory_target_category import InventoryTargetCategory
 from app.models.inventory_snapshot import InventorySnapshot
 from app.models.customer_message import CustomerMessage
+from app.models.crm_task import CrmTask, CrmTaskEvent
+from app.models.crm_service_case import CrmServiceCase
+from app.models.customer_request import CustomerRequest, CustomerRequestAudit
 from app.models.customer_favorite_product import CustomerFavoriteProduct
+from app.models.product_arrival_subscription import ProductArrivalSubscription
+from app.models.product_stock_arrival_event import ProductStockArrivalEvent
 from app.models.stylist_chat_message import StylistChatMessage
 from app.models.live_stylist_conversation import LiveStylistConversation
 from app.models.live_stylist_conversation_event import LiveStylistConversationEvent
@@ -79,6 +86,8 @@ __all__ = [
     "ContentPublication",
     "AppSetting",
     "MarketingCampaign",
+    "AdvertisingConnection",
+    "AdvertisingDailyMetric",
     "PurchaseHistory",
     "LoyaltyTransaction",
     "SavedLook",
@@ -89,7 +98,14 @@ __all__ = [
     "InventoryTargetCategory",
     "InventorySnapshot",
     "CustomerMessage",
+    "CrmTask",
+    "CrmTaskEvent",
+    "CrmServiceCase",
+    "CustomerRequest",
+    "CustomerRequestAudit",
     "CustomerFavoriteProduct",
+    "ProductArrivalSubscription",
+    "ProductStockArrivalEvent",
     "StylistChatMessage",
     "LiveStylistConversation",
     "LiveStylistConversationEvent",

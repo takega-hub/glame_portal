@@ -35,7 +35,13 @@ type TrainingStepSubmission = TrainingSubmission & {
   step_id: string;
   step_title?: string | null;
   status: string;
+  lesson_report?: { passed: boolean; correct_answers?: number | null; total_questions?: number | null; duration_seconds?: number | null };
 };
+
+function lessonDurationLabel(value?: number | null) {
+  const seconds = Math.max(0, Number(value || 0));
+  return seconds < 60 ? `${seconds} сек` : `${Math.floor(seconds / 60)} мин ${seconds % 60} сек`;
+}
 
 type TeamCompetencyResponse = {
   team_competencies: Array<{ code: string; label: string; accepted_steps: number; total_steps: number; percent: number }>;
@@ -69,7 +75,7 @@ type Attestation = {
   recommended_level?: string | null;
   certified_level?: string | null;
   manager_feedback?: string | null;
-  ai_evaluation?: { review_comment?: string; recommendation?: string };
+  ai_evaluation?: { review_comment?: string; recommendation?: string; assessment_duration_seconds?: number; time_limit_minutes?: number; time_limit_exceeded?: boolean };
   seller?: { full_name?: string | null; email?: string | null } | null;
 };
 
@@ -151,7 +157,13 @@ type TrainingProgramDetail = {
     id: string;
     title: string;
     description?: string | null;
-    steps: Array<{ id: string; title: string; status: string; competencies?: string[] }>;
+    steps: Array<{
+      id: string;
+      title: string;
+      status: string;
+      competencies?: string[];
+      trainee_blank_coverage?: Array<{ id: string; section: string; question: string }>;
+    }>;
   }>;
 };
 
@@ -215,6 +227,8 @@ type TrainingAssessmentQuestion = {
   expected_answer?: string;
   criteria?: string[];
   source_excerpt?: string;
+  source_slide_order_index?: number;
+  source_slide_title?: string;
   order_index?: number;
 };
 
@@ -265,6 +279,16 @@ type TrainingMaterialVisualAsset = {
   attached_slide_id?: string | null;
 };
 
+type TrainingMediaLibraryAsset = {
+  id: string;
+  source: string;
+  folder: string;
+  filename: string;
+  path: string;
+  size_bytes?: number;
+  url: string;
+};
+
 type TrainingMaterialFolder = {
   program?: TrainingProgram | null;
   program_code?: string | null;
@@ -293,6 +317,19 @@ type TrainingMaterial = {
   order_index?: number;
 };
 
+type TrainingStepMaterialLink = {
+  id: string;
+  program_id?: string | null;
+  module_id?: string | null;
+  step_id?: string | null;
+  role: string;
+  required_to_complete: boolean;
+  order_index: number;
+  program_title?: string | null;
+  module_title?: string | null;
+  step_title?: string | null;
+};
+
 type TrainingMaterialSlide = {
   id: string;
   material_id: string;
@@ -304,6 +341,7 @@ type TrainingMaterialSlide = {
   quiz_question?: string | null;
   status: string;
   order_index: number;
+  meta?: Record<string, unknown>;
 };
 
 type TrainingMaterialHistoryEvent = {
@@ -434,6 +472,7 @@ const activeAssignmentStatuses = new Set(['available', 'in_progress', 'waiting_r
 
 export default function ConsultantTrainingAdminPage() {
   const [month, setMonth] = useState(defaultMonth);
+  const [workspace, setWorkspace] = useState<'program' | 'sources' | 'assignments' | 'results'>('program');
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [programDetail, setProgramDetail] = useState<TrainingProgramDetail | null>(null);
   const [topics, setTopics] = useState<TrainingTopic[]>([]);
@@ -452,7 +491,7 @@ export default function ConsultantTrainingAdminPage() {
   const [programAssignmentUsers, setProgramAssignmentUsers] = useState<TrainingProgramAssignmentUser[]>([]);
   const [selectedProgramSubscribersId, setSelectedProgramSubscribersId] = useState<string | null>(null);
   const [excludingEnrollmentId, setExcludingEnrollmentId] = useState<string | null>(null);
-  const [activeMaterialProgramCode, setActiveMaterialProgramCode] = useState<string>('');
+  const [activeMaterialProgramCode, setActiveMaterialProgramCode] = useState<string>('trainee_base');
   const [assignmentForm, setAssignmentForm] = useState({ seller_user_id: '', program_id: '', note: '' });
   const [assigningProgram, setAssigningProgram] = useState(false);
   const [showNewProgramForm, setShowNewProgramForm] = useState(false);
@@ -466,12 +505,22 @@ export default function ConsultantTrainingAdminPage() {
   const [materialVisualAssets, setMaterialVisualAssets] = useState<TrainingMaterialVisualAsset[]>([]);
   const [reviewingVisualAssetId, setReviewingVisualAssetId] = useState<string | null>(null);
   const [selectedSlideId, setSelectedSlideId] = useState<string | null>(null);
+  const [showLearnerSlidePreview, setShowLearnerSlidePreview] = useState(false);
+  const [learnerPreviewStage, setLearnerPreviewStage] = useState<'slides' | 'quiz' | 'completed'>('slides');
+  const [learnerPreviewSlideIndex, setLearnerPreviewSlideIndex] = useState(0);
+  const [learnerPreviewAnswers, setLearnerPreviewAnswers] = useState<Record<string, string>>({});
   const [editingSlideId, setEditingSlideId] = useState<string | null>(null);
   const [learningPackPreview, setLearningPackPreview] = useState<TrainingMaterialLearningPack | null>(null);
   const [extractionReviewNote, setExtractionReviewNote] = useState('');
   const [retryExtractionFile, setRetryExtractionFile] = useState<{ filename: string; content?: string; content_base64?: string; mime_type?: string } | null>(null);
   const [retryingExtraction, setRetryingExtraction] = useState(false);
   const [generatingLearningPack, setGeneratingLearningPack] = useState(false);
+  const [generatingSlideVisual, setGeneratingSlideVisual] = useState(false);
+  const [uploadingSlideImage, setUploadingSlideImage] = useState(false);
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [mediaLibraryAssets, setMediaLibraryAssets] = useState<TrainingMediaLibraryAsset[]>([]);
+  const [mediaLibraryLoading, setMediaLibraryLoading] = useState(false);
+  const [mediaLibrarySearch, setMediaLibrarySearch] = useState('');
   const [savingMaterial, setSavingMaterial] = useState(false);
   const [deletingMaterialId, setDeletingMaterialId] = useState<string | null>(null);
   const [materialSearch, setMaterialSearch] = useState('');
@@ -480,6 +529,9 @@ export default function ConsultantTrainingAdminPage() {
   const [materialStatusFilter, setMaterialStatusFilter] = useState('');
   const [importFiles, setImportFiles] = useState<Array<{ filename: string; content?: string; content_base64?: string; mime_type?: string }>>([]);
   const [importingMaterials, setImportingMaterials] = useState(false);
+  const [importOperation, setImportOperation] = useState<'preview' | 'import' | null>(null);
+  const [importStartedAt, setImportStartedAt] = useState<number | null>(null);
+  const [importElapsedSeconds, setImportElapsedSeconds] = useState(0);
   const [importSummary, setImportSummary] = useState<{ ready_to_import?: number; skipped?: number; total_files?: number; warnings?: number } | null>(null);
   const [materialForm, setMaterialForm] = useState({
     title: 'Первый контакт 30–60 секунд',
@@ -506,6 +558,7 @@ export default function ConsultantTrainingAdminPage() {
     status_note: '',
   });
   const [stepMaterialForm, setStepMaterialForm] = useState({ program_id: '', step_id: '', role: 'primary_lesson', required_to_complete: true, order_index: '100' });
+  const [materialStepLinks, setMaterialStepLinks] = useState<TrainingStepMaterialLink[]>([]);
   const [slideForm, setSlideForm] = useState({ title: 'Слайд 1: идея урока', body: 'Коротко объясните учебную мысль и действие продавца.', image_url: '', image_prompt: '', speaker_note: '', quiz_question: '', status: 'draft', order_index: '100' });
   const [linkSelections, setLinkSelections] = useState<Record<string, string>>({});
   const [linkingKey, setLinkingKey] = useState<string | null>(null);
@@ -526,6 +579,12 @@ export default function ConsultantTrainingAdminPage() {
   const tomorrowTopic = useMemo(() => topics.find((topic) => topic.lesson_date === tomorrow), [topics]);
   const programSteps = useMemo(() => (programDetail?.modules || []).flatMap((module) => module.steps.map((step) => ({ ...step, module_id: module.id, module_title: module.title }))), [programDetail]);
   const selectedSlide = useMemo(() => materialSlides.find((slide) => slide.id === selectedSlideId) || materialSlides[0] || null, [materialSlides, selectedSlideId]);
+  const learnerPreviewSlides = useMemo(() => [...materialSlides].sort((a, b) => a.order_index - b.order_index), [materialSlides]);
+  const learnerPreviewQuestions = useMemo(() => {
+    const storedQuestions = selectedMaterial?.extraction?.learning_pack?.assessment?.question_pool || [];
+    if (storedQuestions.length) return storedQuestions.slice(0, 5).map((item, index) => ({ ...item, id: `assessment-${index}` }));
+    return learnerPreviewSlides.filter((slide) => slide.quiz_question).slice(0, 5).map((slide) => ({ id: slide.id, question: slide.quiz_question || '', type: 'slide_self_check', difficulty: 'easy' }));
+  }, [learnerPreviewSlides, selectedMaterial?.extraction?.learning_pack?.assessment?.question_pool]);
   const selectedProgramSubscribers = useMemo(() => {
     if (!selectedProgramSubscribersId) return [];
     return programAssignmentUsers
@@ -586,6 +645,19 @@ export default function ConsultantTrainingAdminPage() {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
+
+  useEffect(() => {
+    const traineeProgramId = programs.find((program) => program.code === 'trainee_base' && program.status === 'active')?.id;
+    if (!traineeProgramId) return;
+    setAssignmentForm((current) => current.program_id ? current : { ...current, program_id: traineeProgramId });
+  }, [programs]);
+
+  useEffect(() => {
+    if (!importingMaterials || !importStartedAt) return;
+    setImportElapsedSeconds(Math.max(0, Math.floor((Date.now() - importStartedAt) / 1000)));
+    const timer = window.setInterval(() => setImportElapsedSeconds(Math.max(0, Math.floor((Date.now() - importStartedAt) / 1000))), 1000);
+    return () => window.clearInterval(timer);
+  }, [importStartedAt, importingMaterials]);
 
   const createTopic = async () => {
     setError(null);
@@ -722,6 +794,9 @@ export default function ConsultantTrainingAdminPage() {
   const importMarkdownMaterials = async (dryRun = false) => {
     if (!importFiles.length) return;
     setError(null);
+    setImportOperation(dryRun ? 'preview' : 'import');
+    setImportStartedAt(Date.now());
+    setImportElapsedSeconds(0);
     setImportingMaterials(true);
     try {
       const response = await apiClient.post('/api/admin/consultant-training/materials/import-documents', {
@@ -743,6 +818,8 @@ export default function ConsultantTrainingAdminPage() {
       setError(e.response?.data?.detail || e.message || 'Не удалось импортировать документы');
     } finally {
       setImportingMaterials(false);
+      setImportOperation(null);
+      setImportStartedAt(null);
     }
   };
 
@@ -752,12 +829,15 @@ export default function ConsultantTrainingAdminPage() {
       const response = await apiClient.get(`/api/admin/consultant-training/materials/${material.id}`);
       const slidesResponse = await apiClient.get(`/api/admin/consultant-training/materials/${material.id}/slides`).catch(() => null);
       const visualAssetsResponse = await apiClient.get(`/api/admin/consultant-training/materials/${material.id}/visual-assets`).catch(() => null);
+      const stepLinksResponse = await apiClient.get('/api/admin/consultant-training/step-materials', { params: { material_id: material.id } }).catch(() => null);
       const detail: TrainingMaterial = response.data.material || material;
       setSelectedMaterial(detail);
       setMaterialHistory(response.data.history || []);
       setMaterialSlides(slidesResponse?.data?.slides || []);
       setMaterialVisualAssets(visualAssetsResponse?.data?.visual_assets || detail.visual_assets || []);
+      setMaterialStepLinks(stepLinksResponse?.data?.links || []);
       setSelectedSlideId((slidesResponse?.data?.slides || [])[0]?.id || null);
+      setShowLearnerSlidePreview(false);
       setEditingSlideId(null);
       setLearningPackPreview(null);
       setExtractionReviewNote('');
@@ -785,7 +865,10 @@ export default function ConsultantTrainingAdminPage() {
     setError(null);
     try {
       const response = await apiClient.get(`/api/admin/consultant-training/materials/${material.id}/source-file`, { responseType: 'blob' });
-      const blob = new Blob([response.data], { type: material.source_file?.mime_type || response.headers['content-type'] || 'application/octet-stream' });
+      const contentType = response.headers['content-type'];
+      const blob = new Blob([response.data], {
+        type: material.source_file?.mime_type || (typeof contentType === 'string' ? contentType : undefined) || 'application/octet-stream',
+      });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -943,6 +1026,24 @@ export default function ConsultantTrainingAdminPage() {
     });
   };
 
+  const openLearnerCoursePreview = (slideId?: string) => {
+    const startIndex = Math.max(0, learnerPreviewSlides.findIndex((slide) => slide.id === (slideId || selectedSlideId)));
+    if (slideId) setSelectedSlideId(slideId);
+    setLearnerPreviewSlideIndex(startIndex);
+    setLearnerPreviewStage('slides');
+    setLearnerPreviewAnswers({});
+    setShowLearnerSlidePreview(true);
+  };
+
+  const finishLearnerCoursePreview = () => {
+    if (learnerPreviewQuestions.some((question) => !learnerPreviewAnswers[question.id]?.trim())) {
+      setError('В симуляции нужно ответить на все вопросы опросника.');
+      return;
+    }
+    setError(null);
+    setLearnerPreviewStage('completed');
+  };
+
   const saveMaterialSlide = async () => {
     if (!selectedMaterial || !slideForm.title.trim()) return;
     setError(null);
@@ -965,6 +1066,95 @@ export default function ConsultantTrainingAdminPage() {
       await openMaterialEditor(selectedMaterial);
     } catch (e: any) {
       setError(e.response?.data?.detail || e.message || 'Не удалось сохранить слайд');
+    }
+  };
+
+  const generateSlideVisualWithContentmaker = async () => {
+    if (!selectedMaterial || !selectedSlide) return;
+    setError(null);
+    setGeneratingSlideVisual(true);
+    try {
+      const response = await apiClient.post(`/api/admin/consultant-training/materials/${selectedMaterial.id}/slides/${selectedSlide.id}/generate-visual`, {
+        prompt: slideForm.image_prompt.trim() || selectedSlide.image_prompt || null,
+        provider: 'hermes',
+      });
+      setMessage(response.data?.message || 'AI Contentmaker подготовил визуал для слайда.');
+      setSelectedSlideId(response.data?.slide?.id || selectedSlide.id);
+      await openMaterialEditor(selectedMaterial);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || e.message || 'Не удалось подготовить визуал через AI Contentmaker');
+    } finally {
+      setGeneratingSlideVisual(false);
+    }
+  };
+
+  const openMediaLibrary = async () => {
+    setShowMediaLibrary(true);
+    if (mediaLibraryAssets.length) return;
+    setMediaLibraryLoading(true);
+    try {
+      const response = await apiClient.get('/api/admin/consultant-training/media-library', { params: { limit: 180 } });
+      setMediaLibraryAssets(response.data?.assets || []);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || e.message || 'Не удалось открыть медиатеку платформы');
+    } finally {
+      setMediaLibraryLoading(false);
+    }
+  };
+
+  const applyMediaLibraryAsset = async (asset: TrainingMediaLibraryAsset) => {
+    if (!selectedMaterial || !selectedSlide) return;
+    setError(null);
+    try {
+      const response = await apiClient.patch(`/api/admin/consultant-training/materials/${selectedMaterial.id}/slides/${selectedSlide.id}`, {
+        title: selectedSlide.title,
+        body: selectedSlide.body || null,
+        image_url: asset.url,
+        image_prompt: `Выбрано из медиатеки платформы · ${asset.folder} · ${asset.path}`,
+        speaker_note: selectedSlide.speaker_note || null,
+        quiz_question: selectedSlide.quiz_question || null,
+        status: selectedSlide.status,
+        order_index: selectedSlide.order_index,
+        meta: { ...(selectedSlide.meta || {}), visual_source: 'platform_media_library', media_library_asset_id: asset.id, review_required: true },
+      });
+      setSelectedSlideId(response.data?.slide?.id || selectedSlide.id);
+      setShowMediaLibrary(false);
+      setMessage('Фото из медиатеки привязано к слайду. Проверьте его перед публикацией.');
+      await openMaterialEditor(selectedMaterial);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || e.message || 'Не удалось применить фото из медиатеки');
+    }
+  };
+
+  const uploadSlideImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !selectedMaterial || !selectedSlide) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('Для слайда можно загрузить JPG, PNG или WEBP.');
+      return;
+    }
+    setError(null);
+    setUploadingSlideImage(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('Не удалось прочитать фото'));
+        reader.readAsDataURL(file);
+      });
+      const response = await apiClient.post(`/api/admin/consultant-training/materials/${selectedMaterial.id}/slides/${selectedSlide.id}/upload-image`, {
+        filename: file.name,
+        content_base64: dataUrl,
+        mime_type: file.type,
+      });
+      setSelectedSlideId(response.data?.slide?.id || selectedSlide.id);
+      setMessage(response.data?.message || 'Фото добавлено к слайду.');
+      await openMaterialEditor(selectedMaterial);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || e.message || 'Не удалось загрузить фото');
+    } finally {
+      setUploadingSlideImage(false);
     }
   };
 
@@ -1056,6 +1246,21 @@ export default function ConsultantTrainingAdminPage() {
     }
   };
 
+  const rebuildLessonQuestionPool = async () => {
+    if (!selectedMaterial) return;
+    setError(null);
+    setGeneratingLearningPack(true);
+    try {
+      const response = await apiClient.post(`/api/admin/consultant-training/materials/${selectedMaterial.id}/lesson-quiz/rebuild`);
+      setMessage(response.data?.message || 'Опросник пересобран по слайдам урока.');
+      await openMaterialEditor(selectedMaterial);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || e.message || 'Не удалось пересобрать опросник урока');
+    } finally {
+      setGeneratingLearningPack(false);
+    }
+  };
+
   const attachMaterialToStep = async () => {
     if (!selectedMaterial || !stepMaterialForm.program_id || !stepMaterialForm.step_id) return;
     setError(null);
@@ -1069,6 +1274,7 @@ export default function ConsultantTrainingAdminPage() {
         order_index: Number(stepMaterialForm.order_index) || 100,
       });
       setMessage('Материал привязан к этапу обучения.');
+      await openMaterialEditor(selectedMaterial);
     } catch (e: any) {
       setError(e.response?.data?.detail || e.message || 'Не удалось привязать материал к этапу');
     }
@@ -1103,6 +1309,25 @@ export default function ConsultantTrainingAdminPage() {
       setProgramDetail(response.data);
     } catch (e: any) {
       setError(e.response?.data?.detail || e.message || 'Не удалось открыть структуру программы');
+    }
+  };
+
+  const openStepSlideEditor = async (step: { id: string; title: string }) => {
+    setError(null);
+    try {
+      const response = await apiClient.get('/api/admin/consultant-training/step-materials', { params: { step_id: step.id } });
+      const links = response.data?.links || [];
+      const primaryLink = links.find((link: { role?: string }) => link.role === 'primary_lesson') || links[0];
+      if (!primaryLink?.material) {
+        setWorkspace('sources');
+        setMessage(`Для урока «${step.title}» пока не привязан учебный материал. Выберите материал в библиотеке и привяжите его к этому уроку — после этого здесь появятся слайды.`);
+        return;
+      }
+      setWorkspace('sources');
+      await openMaterialEditor(primaryLink.material as TrainingMaterial);
+      window.setTimeout(() => document.getElementById('ai-trainer-material-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || e.message || 'Не удалось открыть слайды урока');
     }
   };
 
@@ -1227,36 +1452,56 @@ export default function ConsultantTrainingAdminPage() {
       return [material.title, material.topic, material.category, material.description || '', material.markdown_content, ...(material.tags || [])].join(' ').toLowerCase().includes(query);
     });
   }, [activeMaterialProgramCode, materialSearch, materialStatusFilter, materialTopicFilter, trainingMaterials]);
+  const traineeProgram = useMemo(() => programs.find((program) => program.code === 'trainee_base') || null, [programs]);
+  const traineeMaterials = useMemo(() => trainingMaterials.filter((material) => material.program_code === 'trainee_base'), [trainingMaterials]);
+  const traineePublishedMaterials = useMemo(() => traineeMaterials.filter((material) => material.status === 'published'), [traineeMaterials]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
       <header className="rounded-3xl bg-white p-6 shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">GLAME AI Trainer</p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-900">AI Тренер консультантов</h1>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-900">Конструктор обучения</h1>
         <p className="mt-3 max-w-3xl text-slate-600">
-          Доска тем, согласование материалов, прохождение в личном кабинете продавца и обратная связь только после проверки руководителем.
+          Создайте программу из исходных материалов, согласуйте AI-черновик, назначьте её сотрудникам и следите за результатами обучения.
         </p>
+        <div className="mt-5 flex flex-wrap gap-2" role="tablist" aria-label="Разделы AI Trainer">
+          {[
+            ['program', 'Программа стажёра'], ['sources', 'Исходники и AI'], ['assignments', 'Назначения'], ['results', 'Результаты и экзамены'],
+          ].map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={workspace === id} onClick={() => setWorkspace(id as typeof workspace)} className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${workspace === id ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{label}</button>)}
+        </div>
       </header>
 
       {error && <div className="rounded-2xl bg-red-50 p-4 text-red-700">{error}</div>}
       {message && <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-700">{message}</div>}
 
-      <section className="rounded-3xl bg-white p-5 shadow-sm">
+      {workspace === 'program' ? <section className="overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-lg sm:p-8">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Текущая программа</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-5"><div><h2 className="text-2xl font-semibold">{traineeProgram?.title || 'Программа стажёра GLAME'}</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Рабочий контур: загрузите методички, получите AI-структуру уроков и слайдов, согласуйте программу, затем назначьте стажёрам.</p></div><span className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold">{traineeProgram?.status === 'active' ? 'В работе' : 'Черновик'}</span></div>
+        <div className="mt-6 grid gap-3 md:grid-cols-4">{[
+          ['1', 'Исходники', `${traineeMaterials.length} загружено`, 'sources'], ['2', 'AI-черновик', 'уроки и слайды', 'sources'], ['3', 'Согласование', `${traineePublishedMaterials.length} опубликовано`, 'sources'], ['4', 'Назначение', `${materialProgressAnalytics?.summary.program_subscribed_sellers || 0} стажёров`, 'assignments'],
+        ].map(([number, label, detail, target]) => <button key={number} type="button" onClick={() => setWorkspace(target as typeof workspace)} className="rounded-2xl bg-white/10 p-4 text-left transition hover:bg-white/15"><span className="text-xs font-bold text-amber-300">ШАГ {number}</span><b className="mt-2 block text-sm">{label}</b><span className="mt-1 block text-xs text-slate-300">{detail}</span></button>)}</div>
+      </section> : null}
+
+      {workspace === 'sources' ? <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Библиотека материалов</p>
-            <h2 className="mt-1 text-xl font-semibold text-slate-900">Учебные материалы для продавцов</h2>
-            <p className="mt-1 text-sm text-slate-500">Материал можно писать в Markdown или загрузить PDF/DOC/DOCX/TXT. Документ конвертируется в draft Markdown, затем AI делает learning pack; публикация только после проверки.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Шаги 1–3 · подготовка программы</p>
+            <h2 className="mt-1 text-xl font-semibold text-slate-900">Исходники и AI-черновик программы стажёра</h2>
+            <p className="mt-1 text-sm text-slate-500">Загрузите методички → проверьте извлечённый текст → запустите AI-pack со слайдами и вопросами → согласуйте публикацию. Ученики увидят только опубликованный материал.</p>
           </div>
           <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">{visibleTrainingMaterials.length}/{trainingMaterials.length} материалов</div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {[
+            ['1. Загрузите исходники', 'PDF, DOCX или текстовые методички — в папку программы стажёра.'],
+            ['2. Проверьте AI-черновик', 'Агент извлечёт текст, создаст доступные слайды и пул проверочных вопросов.'],
+            ['3. Согласуйте публикацию', 'Перед запуском ученикам обязательно проверьте содержание, слайды и вопросы.'],
+          ].map(([title, text]) => <div key={title} className="rounded-2xl bg-slate-50 p-4"><h3 className="text-sm font-semibold text-slate-900">{title}</h3><p className="mt-1 text-xs leading-5 text-slate-600">{text}</p></div>)}
         </div>
         <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_360px]">
           <div className="rounded-2xl bg-slate-50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className="font-semibold text-slate-900">Папки программ обучения</h3>
-                <p className="mt-1 text-sm text-slate-500">Загружайте материалы сразу в нужную программу: стажер или GLAME Stylist Academy.</p>
-              </div>
+              <div><h3 className="font-semibold text-slate-900">Папка программы</h3><p className="mt-1 text-sm text-slate-500">Сейчас собираем программу стажёра. Другие программы можно открыть позже из этой же библиотеки.</p></div>
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => setShowNewProgramForm((value) => !value)} className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white">+ Добавить программу обучения</button>
                 <button onClick={() => { setActiveMaterialProgramCode(''); setMaterialForm((prev) => ({ ...prev, program_code: '' })); }} className={`rounded-xl px-3 py-2 text-sm font-semibold ${!activeMaterialProgramCode ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>Все папки</button>
@@ -1290,36 +1535,26 @@ export default function ConsultantTrainingAdminPage() {
               ))}
             </div>
           </div>
-          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
-            <h3 className="font-semibold text-slate-900">Назначить программу продавцу</h3>
-            <p className="mt-1 text-sm text-slate-600">При входе в обучение агент выберет назначенную администратором программу и поведет пользователя по ней.</p>
-            <div className="mt-3 space-y-2">
-              <select className="w-full rounded-xl border border-indigo-100 p-3" value={assignmentForm.seller_user_id} onChange={(e) => setAssignmentForm((prev) => ({ ...prev, seller_user_id: e.target.value }))}>
-                <option value="">Выберите пользователя</option>
-                {programAssignmentUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name || user.email || user.id}</option>)}
-              </select>
-              <select className="w-full rounded-xl border border-indigo-100 p-3" value={assignmentForm.program_id} onChange={(e) => setAssignmentForm((prev) => ({ ...prev, program_id: e.target.value }))}>
-                <option value="">Выберите программу</option>
-                {programs.filter((program) => program.status === 'active').map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
-              </select>
-              <input className="w-full rounded-xl border border-indigo-100 p-3" placeholder="Комментарий к назначению" value={assignmentForm.note} onChange={(e) => setAssignmentForm((prev) => ({ ...prev, note: e.target.value }))} />
-              <button onClick={assignTrainingProgram} disabled={assigningProgram || !assignmentForm.seller_user_id || !assignmentForm.program_id} className="w-full rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300">Назначить программу</button>
-            </div>
-          </div>
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4"><h3 className="font-semibold text-slate-900">Что делает AI</h3><p className="mt-1 text-sm leading-6 text-slate-600">AI не публикует курс сам: он готовит черновик структуры, понятные слайды и вопросы. Финальное содержание, порядок уроков и доступ ученикам подтверждает администратор.</p><button type="button" onClick={() => setWorkspace('program')} className="mt-4 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Открыть программу</button></div>
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-[420px_1fr]">
           <div className="space-y-3 rounded-2xl bg-slate-50 p-4">
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4">
-              <div className="font-semibold text-slate-900">AI-импорт исходников</div>
+              <div className="font-semibold text-slate-900">1. Исходные материалы · AI-импорт</div>
               <p className="mt-1 text-sm text-slate-500">Просто выберите PDF/DOC/DOCX/TXT. Агент сам извлечет текст, распознает тему, категорию, теги, компетенции, привяжет к выбранной папке программы и сформирует draft-слайды. Ручные поля ниже не нужны для загрузки.</p>
               <div className="mt-2 rounded-xl bg-slate-50 p-3 text-xs text-slate-600">Папка импорта: <b>{selectedMaterialFolder?.title || 'не выбрана — без программы'}</b></div>
               <input type="file" accept=".md,.markdown,.txt,.text,.pdf,.doc,.docx,text/plain,text/markdown,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple onChange={readMarkdownFiles} className="mt-3 w-full rounded-xl border p-3 text-sm" />
               {importFiles.length ? <div className="mt-2 text-sm text-slate-600">Выбрано файлов: {importFiles.length}</div> : null}
+              {importingMaterials ? <div role="status" aria-live="polite" className="mt-3 rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-sm text-indigo-950">
+                <div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{importOperation === 'preview' ? 'Проверяем исходники…' : 'Загружаем и готовим материал…'}</p><p className="mt-1 text-xs leading-5 text-indigo-700">{importOperation === 'preview' ? 'Сервер читает выбранные документы и проверяет возможность импорта.' : 'Файл отправлен в AI Trainer: извлекаем текст, определяем тему и создаём черновик слайдов.'} Не закрывайте страницу.</p></div><span className="shrink-0 rounded-full bg-white px-2 py-1 text-xs font-semibold text-indigo-700">{importElapsedSeconds} сек</span></div>
+                <div role="progressbar" aria-label="Обработка учебных материалов выполняется" aria-valuetext="Обработка выполняется, процент будет доступен после ответа сервера" className="mt-3 h-2 overflow-hidden rounded-full bg-indigo-100"><div className="h-full w-2/3 animate-pulse rounded-full bg-indigo-600" /></div>
+                <p className="mt-2 text-xs text-indigo-700">Файлов в операции: {importFiles.length} · программа: {selectedMaterialFolder?.title || 'без программы'}</p>
+              </div> : null}
               {importSummary ? <div className="mt-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">Готово: {importSummary.ready_to_import || 0} · пропущено: {importSummary.skipped || 0} · предупреждений: {importSummary.warnings || 0} · всего: {importSummary.total_files || 0}</div> : null}
               {importSummary?.warnings ? <div className="mt-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Есть файлы с низким качеством извлечения или PDF без текстового слоя. Они импортируются как черновики, но перед AI-pack/публикацией нужен OCR или ручная проверка текста.</div> : null}
               <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={() => importMarkdownMaterials(true)} disabled={!importFiles.length || importingMaterials} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 disabled:text-slate-300">Предпросмотр</button>
-                <button onClick={() => importMarkdownMaterials(false)} disabled={!importFiles.length || importingMaterials} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-300">Импортировать и сформировать материал</button>
+                <button onClick={() => importMarkdownMaterials(true)} disabled={!importFiles.length || importingMaterials} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 disabled:text-slate-300">{importingMaterials && importOperation === 'preview' ? 'Проверяем…' : 'Предпросмотр'}</button>
+                <button onClick={() => importMarkdownMaterials(false)} disabled={!importFiles.length || importingMaterials} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-300">{importingMaterials && importOperation === 'import' ? 'Обрабатываем…' : 'Импортировать и сформировать материал'}</button>
               </div>
             </div>
             {documentExtractorStatus ? (
@@ -1376,7 +1611,7 @@ export default function ConsultantTrainingAdminPage() {
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {selectedMaterial ? (
-              <div className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <div id="ai-trainer-material-editor" className="md:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Редактор материала</p>
@@ -1385,7 +1620,10 @@ export default function ConsultantTrainingAdminPage() {
                   </div>
                   <button onClick={() => setSelectedMaterial(null)} className="rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-600">Закрыть</button>
                 </div>
-                <div className="mt-4 rounded-2xl border border-dashed border-amber-200 bg-white/70 p-4">
+                <details open className="group mt-4 rounded-2xl border border-amber-200 bg-white/70 p-4">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-600">1. Исходные материалы и картинки</p><p className="mt-1 text-sm text-slate-600">Оригинал, качество извлечения и визуалы из PDF.</p></div><span className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-600 group-open:hidden">Открыть</span><span className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-600 group-open:inline hidden">Свернуть</span></summary>
+                  <div className="mt-4">
+                <div className="rounded-2xl border border-dashed border-amber-200 bg-white/70 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-600">Исходный файл администратора</p>
@@ -1406,17 +1644,12 @@ export default function ConsultantTrainingAdminPage() {
                 <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-500">Admin-only визуальные ассеты из PDF</p>
-                      <h4 className="mt-1 font-semibold text-slate-900">Кандидаты для учебных слайдов</h4>
-                      <p className="mt-1 text-sm text-slate-600">Изображения из исходника не попадают продавцам автоматически. Руководитель сначала подтверждает визуал, затем может прикрепить его к выбранному слайду.</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-500">Только для администратора · ассеты из PDF</p>
+                      <h4 className="mt-1 font-semibold text-slate-900">Исходные референсы, не визуалы для урока</h4>
+                      <p className="mt-1 text-sm text-slate-600">PDF‑страницы и скриншоты хранятся как справка для методиста. Они никогда не попадают к стажёру и не прикрепляются к учебному слайду.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-700">{materialVisualAssets.length} ассетов</span>
-                      {materialVisualAssets.length ? (
-                        <button onClick={attachAllVisualAssets} disabled={reviewingVisualAssetId === 'all'} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-300">
-                          {reviewingVisualAssetId === 'all' ? 'Добавляю…' : 'Добавить все'}
-                        </button>
-                      ) : null}
                     </div>
                   </div>
                   {materialVisualAssets.length ? (
@@ -1433,7 +1666,7 @@ export default function ConsultantTrainingAdminPage() {
                           {asset.review_note ? <p className="mt-2 text-xs text-slate-500">{asset.review_note}</p> : null}
                           <div className="mt-3 flex flex-wrap gap-2">
                             <button onClick={() => reviewVisualAsset(asset, 'approved')} disabled={reviewingVisualAssetId === asset.asset_id} className="rounded-lg bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:bg-slate-300">Подтвердить</button>
-                            <button onClick={() => reviewVisualAsset(asset, 'approved', true)} disabled={reviewingVisualAssetId === asset.asset_id || !selectedSlide} className="rounded-lg bg-indigo-600 px-2 py-1 text-xs font-semibold text-white disabled:bg-slate-300">В выбранный слайд</button>
+                            <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">только как референс</span>
                             <button onClick={() => reviewVisualAsset(asset, 'rejected')} disabled={reviewingVisualAssetId === asset.asset_id} className="rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 disabled:text-slate-300">Отклонить</button>
                           </div>
                         </div>
@@ -1443,6 +1676,8 @@ export default function ConsultantTrainingAdminPage() {
                     <div className="mt-3 rounded-xl bg-white/80 p-3 text-sm text-slate-500">В этом материале пока нет извлеченных PDF-изображений. Для новых PDF агент будет сохранять их здесь как pending_review.</div>
                   )}
                 </div>
+                  </div>
+                </details>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <input className="rounded-xl border p-3" value={materialEditorForm.title} onChange={(e) => setMaterialEditorForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="Название" />
                   <select className="rounded-xl border p-3" value={materialEditorForm.status} onChange={(e) => setMaterialEditorForm((prev) => ({ ...prev, status: e.target.value }))}>
@@ -1511,6 +1746,12 @@ export default function ConsultantTrainingAdminPage() {
                 <div className="mt-3 rounded-2xl bg-white p-4">
                   <h4 className="font-semibold text-slate-900">Привязка к учебному этапу</h4>
                   <p className="mt-1 text-sm text-slate-500">После привязки материал будет открываться продавцу по программе, шагу и статусу прохождения.</p>
+                  {materialStepLinks.length ? <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                    <p className="text-sm font-semibold text-emerald-950">Материал уже привязан</p>
+                    <div className="mt-2 space-y-2">
+                      {materialStepLinks.map((link) => <div key={link.id} className="rounded-lg bg-white px-3 py-2 text-sm text-slate-700"><b>{link.program_title || 'Программа'}</b><span className="px-1 text-slate-400">→</span>{link.module_title ? <><span>{link.module_title}</span><span className="px-1 text-slate-400">→</span></> : null}<span>{link.step_title || 'Этап'}</span><span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{link.role === 'primary_lesson' ? 'Основной урок' : link.role}</span>{link.required_to_complete ? <span className="ml-2 text-xs font-medium text-emerald-700">обязателен</span> : null}</div>)}
+                    </div>
+                  </div> : <div className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Этот исходник ещё не привязан ни к одному уроку.</div>}
                   <div className="mt-3 grid gap-2 md:grid-cols-2">
                     <select className="rounded-xl border p-3" value={stepMaterialForm.program_id} onChange={(e) => loadProgramDetailForMaterials(e.target.value)}>
                       <option value="">Выберите программу</option>
@@ -1579,14 +1820,17 @@ export default function ConsultantTrainingAdminPage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h4 className="font-semibold text-violet-950">Сохранённый пул проверочных вопросов</h4>
-                          <p className="mt-1 text-sm text-violet-700">Эти вопросы агент подготовил при последнем применении AI pack. Они хранятся как draft/admin-only и нужны для оценки знания после урока.</p>
+                          <p className="mt-1 text-sm text-violet-700">Короткий пул строится только из показанных слайдов этого урока. Следующий этап сформирует отдельный пул; итоговый экзамен остаётся проверкой по бланку стажёра.</p>
                         </div>
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-violet-700">{selectedMaterial.extraction.learning_pack.assessment.question_pool.length} вопросов</span>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-violet-700">{selectedMaterial.extraction.learning_pack.assessment.question_pool.length} вопросов</span>
+                          <button type="button" onClick={rebuildLessonQuestionPool} disabled={generatingLearningPack || !materialSlides.length} className="rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-semibold text-violet-800 disabled:cursor-not-allowed disabled:opacity-50">{generatingLearningPack ? 'Собираем…' : 'Пересобрать по слайдам'}</button>
+                        </div>
                       </div>
                       <div className="mt-3 grid gap-2 md:grid-cols-2">
                         {selectedMaterial.extraction.learning_pack.assessment.question_pool.slice(0, 12).map((item, index) => (
                           <div key={`${item.question}-${index}`} className="rounded-xl bg-white p-3 text-sm text-violet-950">
-                            <div className="text-xs font-bold uppercase tracking-[0.12em] text-violet-500">{item.type || 'question'} · {item.difficulty || 'medium'}</div>
+                            <div className="text-xs font-bold uppercase tracking-[0.12em] text-violet-500">Слайд {item.source_slide_order_index || index + 1} · {item.type || 'question'} · {item.difficulty || 'medium'}</div>
                             <div className="mt-1 font-semibold">{item.question}</div>
                             {item.expected_answer ? <div className="mt-1 text-xs text-violet-700">Ожидаемый ответ: {item.expected_answer}</div> : null}
                           </div>
@@ -1598,32 +1842,31 @@ export default function ConsultantTrainingAdminPage() {
                 <div className="mt-3 rounded-2xl bg-white p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h4 className="font-semibold text-slate-900">Слайдовый формат материала</h4>
-                      <p className="mt-1 text-sm text-slate-500">Полноценный редактор: просмотр выбранного слайда, ручное добавление, редактирование и удаление. При публикации всего материала все слайды и прикрепленные фото публикуются автоматически.</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">2. Подготовка слайдов</p>
+                      <h4 className="mt-1 font-semibold text-slate-900">AI- и ручное создание слайдов</h4>
+                      <p className="mt-1 text-sm text-slate-500">Сформируйте слайды AI или вручную, добавьте текст, картинку и самопроверку. Публикация отправляет стажёру только готовые материалы.</p>
                     </div>
-                    <button onClick={resetSlideForm} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">+ Новый слайд вручную</button>
+                    <div className="flex flex-wrap gap-2"><button type="button" onClick={() => openLearnerCoursePreview()} disabled={!selectedSlide} className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-300">3. Пройти как стажёр</button><button onClick={resetSlideForm} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">+ Новый слайд вручную</button></div>
                   </div>
                   {selectedSlide ? (
-                    <div className="mt-4 rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-indigo-50 p-5 shadow-sm">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">Полный просмотр слайда</div>
-                          <h3 className="mt-2 text-2xl font-semibold text-slate-950">{selectedSlide.title}</h3>
-                          <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                            <span className="rounded-full bg-white px-3 py-1 font-semibold text-slate-600">#{selectedSlide.order_index}</span>
-                            <span className="rounded-full bg-indigo-100 px-3 py-1 font-semibold text-indigo-700">{statusLabel(selectedSlide.status)}</span>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button onClick={() => startEditMaterialSlide(selectedSlide)} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white">Редактировать</button>
-                          <button onClick={() => deleteMaterialSlide(selectedSlide)} className="rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700">Удалить</button>
-                        </div>
+                    <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                      <div>
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-500">Предпросмотр для стажёра</p><p className="mt-1 text-xs text-slate-500">Эта карточка повторяет подачу слайда в учебном окне сотрудника.</p></div><span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">Слайд {selectedSlide.order_index}</span></div>
+                        <article className="overflow-hidden rounded-3xl bg-slate-950 p-7 text-white shadow-xl sm:p-10">
+                          {selectedSlide.image_url ? <img src={selectedSlide.image_url} alt="" className="mb-7 h-60 w-full rounded-2xl object-cover sm:h-72" /> : <div className="mb-7 flex h-32 items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/5 text-center text-sm text-slate-400">Добавьте изображение — стажёр увидит его здесь внутри слайда.</div>}
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Урок программы · слайд {selectedSlide.order_index}</p>
+                          <h3 className="mt-4 text-2xl font-semibold leading-tight sm:text-3xl">{selectedSlide.title}</h3>
+                          {selectedSlide.body ? <p className="mt-6 max-w-2xl whitespace-pre-wrap text-base leading-8 text-slate-200">{selectedSlide.body}</p> : <p className="mt-6 text-base text-slate-400">Добавьте понятный текст, который стажёр увидит на этом слайде.</p>}
+                          {selectedSlide.quiz_question ? <div className="mt-7 rounded-2xl bg-white/10 p-4 text-sm font-medium leading-6 text-white"><span className="text-amber-300">Самопроверка</span><br />{selectedSlide.quiz_question}</div> : null}
+                        </article>
                       </div>
-                      {selectedSlide.image_url ? <div role="img" aria-label={selectedSlide.title} className="mt-4 h-72 w-full rounded-2xl bg-cover bg-center" style={{ backgroundImage: `url(${selectedSlide.image_url})` }} /> : <div className="mt-4 rounded-2xl border border-dashed border-indigo-200 bg-white/70 p-8 text-center text-sm text-slate-400">Визуал не прикреплен. Можно указать image_url или подготовить prompt для генерации.</div>}
-                      {selectedSlide.body ? <div className="mt-4 whitespace-pre-wrap text-base leading-7 text-slate-700">{selectedSlide.body}</div> : null}
-                      {selectedSlide.quiz_question ? <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-semibold text-indigo-800">Самопроверка: {selectedSlide.quiz_question}</div> : null}
-                      {selectedSlide.speaker_note ? <div className="mt-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900"><b>Заметка методиста:</b><br />{selectedSlide.speaker_note}</div> : null}
-                      {selectedSlide.image_prompt ? <div className="mt-3 rounded-2xl bg-slate-100 p-4 text-xs text-slate-500"><b>AI visual prompt:</b> {selectedSlide.image_prompt}</div> : null}
+                      <aside className="rounded-3xl border border-indigo-100 bg-white p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-2"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-500">Редактор слайда</p><h3 className="mt-1 font-semibold text-slate-950">Только для администратора</h3></div><span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{statusLabel(selectedSlide.status)}</span></div>
+                        <p className="mt-3 text-sm leading-6 text-slate-600">PDF‑скриншоты сюда не попадают. Выберите готовое фото из медиатеки, загрузите своё или запросите брендовый визуал у AI Contentmaker.</p>
+                        <div className="mt-4 flex flex-wrap gap-2"><button onClick={openMediaLibrary} className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800">Выбрать из медиатеки</button><label className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700"><input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadSlideImage} className="hidden" />{uploadingSlideImage ? 'Загружаем…' : 'Загрузить фото'}</label><button onClick={generateSlideVisualWithContentmaker} disabled={generatingSlideVisual} className="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-300">{generatingSlideVisual ? 'Contentmaker готовит…' : 'Сгенерировать визуал AI'}</button><button onClick={() => startEditMaterialSlide(selectedSlide)} className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white">Редактировать</button><button onClick={() => deleteMaterialSlide(selectedSlide)} className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">Удалить</button></div>
+                        {selectedSlide.speaker_note ? <div className="mt-4 rounded-2xl bg-amber-50 p-3 text-xs leading-5 text-amber-900"><b>Заметка методиста</b><br />{selectedSlide.speaker_note}</div> : null}
+                        {selectedSlide.image_prompt ? <div className="mt-3 rounded-2xl bg-slate-50 p-3 text-xs leading-5 text-slate-500"><b>AI visual prompt</b><br />{selectedSlide.image_prompt}</div> : null}
+                      </aside>
                     </div>
                   ) : null}
                   <div className="mt-4 grid gap-2 md:grid-cols-2">
@@ -1641,21 +1884,19 @@ export default function ConsultantTrainingAdminPage() {
                     </select>
                     <button onClick={saveMaterialSlide} disabled={!selectedMaterial || !slideForm.title.trim()} className="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300">{editingSlideId ? 'Сохранить слайд' : 'Добавить слайд'}</button>
                   </div>
-                  <div className="mt-4 grid gap-2 md:grid-cols-2">
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
                     {materialSlides.map((slide) => (
-                      <div key={slide.id} onClick={() => setSelectedSlideId(slide.id)} className={`cursor-pointer rounded-xl border p-3 text-sm transition ${selectedSlide?.id === slide.id ? 'border-indigo-300 bg-indigo-50 text-slate-900' : 'border-slate-100 bg-slate-50 text-slate-700 hover:bg-white'}`}>
-                        <div className="flex items-start justify-between gap-2"><b>{slide.title}</b><span className="rounded-full bg-white px-2 py-1 text-xs">{slide.status}</span></div>
-                        {slide.body ? <p className="mt-2 line-clamp-3 whitespace-pre-wrap">{slide.body}</p> : null}
-                        {slide.quiz_question ? <p className="mt-2 rounded-lg bg-white p-2 text-xs text-indigo-700">Проверка: {slide.quiz_question}</p> : null}
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedSlideId(slide.id); }} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600">Смотреть</button>
-                          <button type="button" onClick={(event) => { event.stopPropagation(); startEditMaterialSlide(slide); }} className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-semibold text-white">Редактировать</button>
-                          <button type="button" onClick={(event) => { event.stopPropagation(); deleteMaterialSlide(slide); }} className="rounded-lg bg-red-50 px-2 py-1 text-xs font-semibold text-red-700">Удалить</button>
-                        </div>
-                      </div>
+                      <article key={slide.id} className={`overflow-hidden rounded-2xl border text-left transition ${selectedSlide?.id === slide.id ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-slate-200 hover:border-indigo-300'}`}>
+                        <button type="button" onClick={() => openLearnerCoursePreview(slide.id)} className="block w-full text-left">
+                          {slide.image_url ? <img src={slide.image_url} alt="" className="h-28 w-full object-cover" /> : <div className="h-20 bg-slate-950" />}
+                          <div className="bg-slate-950 p-4 text-white"><div className="flex items-start justify-between gap-2"><b className="line-clamp-2 text-sm">{slide.title}</b><span className="shrink-0 rounded-full bg-white/10 px-2 py-1 text-[10px] text-slate-300">{slide.order_index}</span></div>{slide.body ? <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-300">{slide.body}</p> : null}<span className="mt-3 block text-xs font-semibold text-amber-300">Открыть учебный просмотр →</span></div>
+                        </button>
+                        <div className="border-t border-white/10 bg-slate-950 px-4 pb-4"><button type="button" onClick={() => startEditMaterialSlide(slide)} className="text-xs font-semibold text-slate-300 hover:text-white">Редактировать этот слайд</button></div>
+                      </article>
                     ))}
                     {!materialSlides.length ? <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Слайдов пока нет. Материал будет показываться как Markdown.</div> : null}
                   </div>
+                  {selectedSlide && materialSlides.some((slide) => slide.id !== selectedSlide.id && slide.image_url) ? <div className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-600">Ранее сгенерированные визуалы</p><p className="mt-1 text-sm text-indigo-900">Выберите визуал из этого материала, если он подходит текущей учебной мысли. После выбора сохраните слайд.</p><div className="mt-3 flex flex-wrap gap-2">{materialSlides.filter((slide) => slide.id !== selectedSlide.id && slide.image_url).slice(0, 6).map((slide) => <button key={slide.id} type="button" onClick={() => { startEditMaterialSlide(selectedSlide); setSlideForm((current) => ({ ...current, image_url: slide.image_url || '', image_prompt: slide.image_prompt || current.image_prompt })); }} className="overflow-hidden rounded-xl border border-indigo-200 bg-white text-left text-xs font-semibold text-slate-700"><img src={slide.image_url || ''} alt="" className="h-16 w-24 object-cover" /><span className="block max-w-24 truncate p-2">{slide.title}</span></button>)}</div></div> : null}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button onClick={() => saveMaterialEditor()} disabled={savingMaterial || !materialEditorForm.title.trim() || !materialEditorForm.markdown_content.trim()} className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300">Сохранить</button>
@@ -1707,9 +1948,9 @@ export default function ConsultantTrainingAdminPage() {
             {!visibleTrainingMaterials.length ? <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Материалы не найдены. Измените поиск или добавьте первый .md материал.</div> : null}
           </div>
         </div>
-      </section>
+      </section> : null}
 
-      <section className="rounded-3xl bg-white p-5 shadow-sm">
+      {workspace === 'assignments' ? <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Программы обучения · аналитика</p>
@@ -1719,6 +1960,26 @@ export default function ConsultantTrainingAdminPage() {
           <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${materialProgressAnalytics?.summary.blocked_materials ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-emerald-800'}`}>
             {materialProgressAnalytics?.summary.blocked_materials || 0} блокировок
           </div>
+        </div>
+        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">Шаг 4 · запуск обучения</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">Назначить программу стажёру</h3>
+            <p className="mt-1 text-sm text-slate-600">Стажёр работает только с одной назначенной программой. При новом назначении текущая программа будет заменена.</p>
+            <div className="mt-4 grid gap-2 md:grid-cols-3">
+              <select className="rounded-xl border border-indigo-100 bg-white p-3 text-sm" value={assignmentForm.seller_user_id} onChange={(e) => setAssignmentForm((prev) => ({ ...prev, seller_user_id: e.target.value }))}>
+                <option value="">Выберите сотрудника</option>
+                {programAssignmentUsers.map((user) => <option key={user.id} value={user.id}>{user.full_name || user.email || user.id}</option>)}
+              </select>
+              <select className="rounded-xl border border-indigo-100 bg-white p-3 text-sm" value={assignmentForm.program_id} onChange={(e) => setAssignmentForm((prev) => ({ ...prev, program_id: e.target.value }))}>
+                <option value="">Выберите программу</option>
+                {programs.filter((program) => program.code === 'trainee_base' && program.status === 'active').map((program) => <option key={program.id} value={program.id}>{program.title}</option>)}
+              </select>
+              <input className="rounded-xl border border-indigo-100 bg-white p-3 text-sm" placeholder="Комментарий (необязательно)" value={assignmentForm.note} onChange={(e) => setAssignmentForm((prev) => ({ ...prev, note: e.target.value }))} />
+            </div>
+            <button onClick={assignTrainingProgram} disabled={assigningProgram || !assignmentForm.seller_user_id || !assignmentForm.program_id} className="mt-3 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white disabled:bg-slate-300">Назначить программу</button>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600"><b className="text-slate-900">После назначения</b><br />В этом разделе появится прогресс по урокам, результаты проверочных опросов и готовность к итоговому экзамену. Управляющий магазина видит только своих сотрудников и не меняет содержание программы.</div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-5">
           {[
@@ -1822,8 +2083,9 @@ export default function ConsultantTrainingAdminPage() {
             <div className="rounded-2xl bg-slate-50 p-4 text-xs leading-5 text-slate-500">Логика: блок считает назначения из consultant_training_enrollments. «Подписаны» — все продавцы с назначенной программой, «проходят» — назначение активно, «завершили» — completed/certified или есть completed_at. Среднее понимание берется из average_score назначения и оценок ответов по этапам.</div>
           </div>
         </div>
-      </section>
+      </section> : null}
 
+      {workspace === 'results' ? <>
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -2194,7 +2456,7 @@ export default function ConsultantTrainingAdminPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="font-semibold text-slate-900">{attestation.seller?.full_name || attestation.seller?.email || 'Сотрудник'}</div>
-                  <div className="text-sm text-slate-500">{attestation.attestation_type} · {attestation.status} · AI {attestation.ai_score ?? '—'}/10 · уровень {attestation.certified_level || attestation.recommended_level || '—'}</div>
+                  <div className="text-sm text-slate-500">{attestation.attestation_type} · {attestation.status} · AI {attestation.ai_score ?? '—'}/100 · уровень {attestation.certified_level || attestation.recommended_level || '—'}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => reviewAttestation(attestation, 'passed')} className="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">Сертифицировать</button>
@@ -2203,13 +2465,16 @@ export default function ConsultantTrainingAdminPage() {
                 </div>
               </div>
               {attestation.ai_evaluation?.review_comment ? <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">AI: {attestation.ai_evaluation.review_comment}</p> : null}
+              {attestation.ai_evaluation?.assessment_duration_seconds != null ? <p className={`mt-2 rounded-xl p-3 text-sm ${attestation.ai_evaluation.time_limit_exceeded ? 'bg-red-50 text-red-800' : 'bg-slate-50 text-slate-700'}`}>Экзамен: {lessonDurationLabel(attestation.ai_evaluation.assessment_duration_seconds)} из {attestation.ai_evaluation.time_limit_minutes || 45} мин. {attestation.ai_evaluation.time_limit_exceeded ? 'Лимит превышен — решение остаётся за управляющим.' : 'В лимит уложился.'}</p> : null}
             </article>
           ))}
         </div>
       </section>
+      </> : null}
 
+      {workspace === 'program' ? <>
       <section className="grid gap-4 md:grid-cols-2">
-        {programs.map((program) => (
+        {programs.filter((program) => program.code === 'trainee_base').map((program) => (
           <article key={program.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -2245,10 +2510,11 @@ export default function ConsultantTrainingAdminPage() {
                 {module.description ? <p className="mt-1 text-sm text-slate-500">{module.description}</p> : null}
                 <div className="mt-3 space-y-2">
                   {module.steps.map((step) => (
-                    <div key={step.id} className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
-                      <div className="font-medium text-slate-900">{step.title}</div>
+                    <button key={step.id} type="button" onClick={() => void openStepSlideEditor(step)} className="w-full rounded-xl bg-slate-50 p-3 text-left text-sm text-slate-700 transition hover:bg-indigo-50 hover:ring-1 hover:ring-indigo-200">
+                      <div className="flex items-center justify-between gap-3"><div className="font-medium text-slate-900">{step.title}</div><span className="shrink-0 text-xs font-semibold text-indigo-700">Слайды →</span></div>
                       <div className="mt-1 text-xs text-slate-500">{step.status} {step.competencies?.length ? `· ${step.competencies.join(' · ')}` : ''}</div>
-                    </div>
+                      {step.trainee_blank_coverage?.length ? <div className="mt-2 text-xs leading-5 text-violet-700">Бланк стажёра: {step.trainee_blank_coverage.length} тем — проверяются по слайдам этого урока.</div> : null}
+                    </button>
                   ))}
                 </div>
               </article>
@@ -2256,7 +2522,9 @@ export default function ConsultantTrainingAdminPage() {
           </div>
         </section>
       ) : null}
+      </> : null}
 
+      {workspace === 'results' ? <>
       <section className="grid gap-6 lg:grid-cols-[380px_1fr]">
         <div className="rounded-3xl bg-white p-5 shadow-sm">
           <h2 className="text-xl font-semibold text-slate-900">Тема на согласование</h2>
@@ -2331,6 +2599,7 @@ export default function ConsultantTrainingAdminPage() {
                 </div>
               </div>
               <p className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{submission.practice_answer}</p>
+              {submission.lesson_report ? <p className="mt-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">Квиз урока: {submission.lesson_report.passed ? 'пройден' : 'не пройден'} · {submission.lesson_report.correct_answers}/{submission.lesson_report.total_questions} правильных · время: {lessonDurationLabel(submission.lesson_report.duration_seconds)}</p> : null}
               {submission.evening_review ? <p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{submission.evening_review}</p> : null}
               {submission.ai_evaluation?.review_comment ? <p className="mt-2 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">Черновик AI: {submission.ai_evaluation.review_comment}</p> : null}
             </article>
@@ -2362,6 +2631,26 @@ export default function ConsultantTrainingAdminPage() {
           ))}
         </div>
       </section>
+      </> : null}
+
+      {showLearnerSlidePreview && learnerPreviewSlides.length ? <div role="dialog" aria-modal="true" aria-label="Симуляция урока для стажёра" className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-sm sm:p-8" onMouseDown={() => setShowLearnerSlidePreview(false)}>
+        <div className="mx-auto min-h-full max-w-4xl rounded-3xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="sticky top-0 z-10 flex items-start justify-between gap-4 rounded-t-3xl border-b border-slate-100 bg-white/95 px-5 py-5 backdrop-blur sm:px-7"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-700">Режим симуляции · как у стажёра</p><h2 className="mt-1 text-xl font-semibold text-slate-950 sm:text-2xl">{selectedMaterial?.title || 'Учебный урок'}</h2></div><button type="button" aria-label="Закрыть симуляцию" onClick={() => setShowLearnerSlidePreview(false)} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">Закрыть</button></div>
+          <div className="p-5 sm:p-7">
+            {learnerPreviewStage === 'slides' ? <div>{(() => { const slide = learnerPreviewSlides[learnerPreviewSlideIndex] || learnerPreviewSlides[0]; const isLast = learnerPreviewSlideIndex >= learnerPreviewSlides.length - 1; return <><div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.14em] text-slate-400"><span>Изучение материала</span><span>{learnerPreviewSlideIndex + 1} / {learnerPreviewSlides.length}</span></div><article className="mt-4 overflow-hidden rounded-3xl bg-slate-950 p-7 text-white shadow-xl sm:p-10">{slide.image_url ? <img src={slide.image_url} alt="" className="mb-7 h-56 w-full rounded-2xl object-cover sm:h-80" /> : <div className="mb-7 flex h-32 items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/5 text-center text-sm text-slate-400">На этом слайде пока нет изображения.</div>}<p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Урок программы · слайд {learnerPreviewSlideIndex + 1}</p><h3 className="mt-4 text-2xl font-semibold leading-tight sm:text-3xl">{slide.title}</h3><p className="mt-6 max-w-2xl whitespace-pre-wrap text-base leading-8 text-slate-200">{slide.body || 'Добавьте понятный текст учебного слайда.'}</p></article><div className="mt-5 flex flex-wrap justify-between gap-3"><button type="button" onClick={() => setLearnerPreviewSlideIndex((index) => Math.max(0, index - 1))} disabled={learnerPreviewSlideIndex === 0} className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 disabled:text-slate-300">← Назад</button><button type="button" onClick={() => isLast ? setLearnerPreviewStage('quiz') : setLearnerPreviewSlideIndex((index) => index + 1)} className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white">{isLast ? 'Перейти к опроснику →' : 'Следующий слайд →'}</button></div></>; })()}</div> : null}
+            {learnerPreviewStage === 'quiz' ? <div><div className="rounded-2xl bg-amber-50 p-5"><p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-800">Короткий опросник</p><h3 className="mt-1 text-xl font-semibold text-slate-950">Проверьте понимание урока</h3><p className="mt-2 text-sm leading-6 text-slate-600">Стажёр отвечает после всех слайдов. В симуляции ответы не сохраняются и не попадают в отчёт.</p></div>{learnerPreviewQuestions.length ? <div className="mt-5 space-y-4">{learnerPreviewQuestions.map((question, index) => <label key={question.id} className="block rounded-2xl border border-slate-200 p-4"><span className="text-sm font-semibold leading-6 text-slate-950">{index + 1}. {question.question}</span><textarea value={learnerPreviewAnswers[question.id] || ''} onChange={(event) => setLearnerPreviewAnswers((current) => ({ ...current, [question.id]: event.target.value }))} placeholder="Ответ стажёра…" className="mt-3 h-24 w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-slate-950" /></label>)}</div> : <div className="mt-5 rounded-2xl bg-slate-50 p-5 text-sm text-slate-600">Добавьте вопросы к слайдам или сформируйте AI learning pack — тогда здесь появится опросник.</div>}<div className="mt-5 flex flex-wrap justify-between gap-3"><button type="button" onClick={() => setLearnerPreviewStage('slides')} className="rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700">← К слайдам</button>{learnerPreviewQuestions.length ? <button type="button" onClick={finishLearnerCoursePreview} className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white">Завершить урок</button> : null}</div></div> : null}
+            {learnerPreviewStage === 'completed' ? <div className="rounded-3xl bg-emerald-50 p-7 text-emerald-950"><p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">Урок завершён</p><h3 className="mt-2 text-2xl font-semibold">Полный цикл пройден</h3><p className="mt-3 max-w-2xl text-sm leading-6">В реальном обучении ответы сохраняются, AI оценивает их, фиксируется время опросника и формируется отчёт для администратора и управляющего.</p><div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={() => openLearnerCoursePreview()} className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white">Пройти ещё раз</button><button type="button" onClick={() => setShowLearnerSlidePreview(false)} className="rounded-2xl border border-emerald-300 px-5 py-3 text-sm font-semibold text-emerald-900">Закрыть</button></div></div> : null}
+          </div>
+        </div>
+      </div> : null}
+
+      {showMediaLibrary ? <div role="dialog" aria-modal="true" aria-label="Медиатека платформы" className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950/70 p-4 backdrop-blur-sm sm:p-8" onMouseDown={() => setShowMediaLibrary(false)}>
+        <div className="mx-auto max-w-6xl rounded-3xl bg-white p-5 shadow-2xl sm:p-7" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">Медиатека платформы</p><h2 className="mt-1 text-xl font-semibold text-slate-950">Выберите фото для учебного слайда</h2><p className="mt-1 text-sm text-slate-600">Готовые брендовые фото, визуалы контента, образы и изображения для обучения. PDF‑страницы здесь не показываются.</p></div><button type="button" onClick={() => setShowMediaLibrary(false)} className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600">Закрыть</button></div>
+          <input value={mediaLibrarySearch} onChange={(event) => setMediaLibrarySearch(event.target.value)} placeholder="Поиск по папке или названию файла" className="mt-5 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-indigo-500" />
+          {mediaLibraryLoading ? <div className="mt-5 rounded-2xl bg-slate-50 p-5 text-sm text-slate-600">Собираем изображения из папок платформы…</div> : <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{mediaLibraryAssets.filter((asset) => `${asset.folder} ${asset.filename} ${asset.path}`.toLowerCase().includes(mediaLibrarySearch.trim().toLowerCase())).map((asset) => <button key={asset.id} type="button" onClick={() => void applyMediaLibraryAsset(asset)} className="overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-indigo-400 hover:shadow-md"><img src={asset.url} alt="" className="h-40 w-full bg-slate-100 object-cover" /><div className="p-3"><p className="text-xs font-semibold text-indigo-700">{asset.folder}</p><p className="mt-1 truncate text-sm font-semibold text-slate-900">{asset.filename}</p><p className="mt-2 text-xs text-slate-500">Выбрать для слайда →</p></div></button>)}{!mediaLibraryAssets.length ? <div className="col-span-full rounded-2xl bg-slate-50 p-5 text-sm text-slate-500">В доступных папках пока нет изображений. Можно загрузить своё фото или сгенерировать визуал AI.</div> : null}{mediaLibraryAssets.length && !mediaLibraryAssets.some((asset) => `${asset.folder} ${asset.filename} ${asset.path}`.toLowerCase().includes(mediaLibrarySearch.trim().toLowerCase())) ? <div className="col-span-full rounded-2xl bg-slate-50 p-5 text-sm text-slate-500">По этому запросу ничего не найдено.</div> : null}</div>}
+        </div>
+      </div> : null}
     </div>
   );
 }

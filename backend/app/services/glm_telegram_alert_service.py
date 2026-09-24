@@ -10,7 +10,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.glame_token import GlameTokenBridgeOperation
+from app.models.glame_token import GlameTokenBridgeOperation, GlameTokenTransaction
+from app.models.loyalty_transaction import LoyaltyTransaction
 from app.models.referral import ReferralProgramMember
 from app.models.user import User
 from app.services.onec_customers_service import OneCCustomersService
@@ -55,8 +56,14 @@ class GlmTelegramAlertService:
             "refill_escalation_enabled": _env_bool("TON_GLM_HOT_WALLET_REFILL_ESCALATION_ENABLED", "true"),
             "refill_escalation_minutes": _env_int("TON_GLM_HOT_WALLET_REFILL_ESCALATION_MINUTES", "120"),
             "loyalty_reconciliation_enabled": _env_bool("GLM_LOYALTY_RECONCILIATION_ALERTS_ENABLED", "true"),
+            "loyalty_reconciliation_auto_sync_enabled": _env_bool("GLM_LOYALTY_RECONCILIATION_AUTO_SYNC_ENABLED", "true"),
             "loyalty_lots_alerts_enabled": _env_bool("GLM_LOYALTY_LOTS_ALERTS_ENABLED", "false"),
             "loyalty_reconciliation_limit": _env_int("GLM_LOYALTY_RECONCILIATION_ALERTS_LIMIT", "50"),
+            "warning_digest_enabled": _env_bool("GLM_TELEGRAM_ALERTS_WARNING_DIGEST_ENABLED", "true"),
+            "warning_digest_minutes": _env_int("GLM_TELEGRAM_ALERTS_WARNING_DIGEST_MINUTES", "240"),
+            "warning_digest_max_items": _env_int("GLM_TELEGRAM_ALERTS_WARNING_DIGEST_MAX_ITEMS", "8"),
+            "operations_attention_digest_enabled": _env_bool("GLM_OPERATIONS_ATTENTION_DIGEST_ENABLED", "true"),
+            "operations_attention_digest_limit": _env_int("GLM_OPERATIONS_ATTENTION_DIGEST_LIMIT", "200"),
             "state_file": str(GlmTelegramAlertService.STATE_FILE),
             "partner_portal_url": partner_url,
             "admin_portal_url": admin_url,
@@ -106,6 +113,11 @@ class GlmTelegramAlertService:
             return {
                 "action_label": "Открыть 1C bonus reconciliation",
                 "action_url": cls._admin_url("#glm-bridge-reconciliation"),
+            }
+        if code == "glm_operations_attention_digest":
+            return {
+                "action_label": "Открыть очередь внимания GLM",
+                "action_url": cls._admin_url("#glm-operations-attention"),
             }
         return {
             "action_label": "Открыть CryptoGLAME admin",
@@ -198,7 +210,7 @@ class GlmTelegramAlertService:
         for base_code, (overdue_code, metric_label) in mapping.items():
             base_alert = active_low_alerts.get(base_code)
             previous = state_alerts.get(base_code) if isinstance(state_alerts.get(base_code), dict) else {}
-            first_warning_at = self._parse_datetime(previous.get("last_sent_at"))
+            first_warning_at = self._parse_datetime(previous.get("first_seen_at") or previous.get("last_sent_at"))
             if not base_alert or not first_warning_at:
                 continue
             elapsed = now - first_warning_at
@@ -260,6 +272,9 @@ class GlmTelegramAlertService:
         platform_working_issues: list[dict[str, Any]] = []
         working_lots_issues: list[dict[str, Any]] = []
         service_errors: list[str] = []
+        auto_sync_enabled = bool(config.get("loyalty_reconciliation_auto_sync_enabled"))
+        lots_alerts_enabled = bool(config.get("loyalty_lots_alerts_enabled"))
+        now = datetime.now(timezone.utc)
 
         async with OneCCustomersService() as onec:
             for member, user in rows:
@@ -269,17 +284,51 @@ class GlmTelegramAlertService:
                         getattr(user, "customer_id_1c", None),
                         getattr(user, "discount_card_id_1c", None),
                     )
-                    lots_payload = await onec.fetch_loyalty_lots_balance(
-                        getattr(user, "customer_id_1c", None),
-                        getattr(user, "discount_card_id_1c", None),
-                    )
                 except Exception as error:
                     service_errors.append(f"{partner_label}: {str(error)[:160]}")
                     continue
 
+                lots_payload: dict[str, Any] | None = None
+                if lots_alerts_enabled:
+                    try:
+                        lots_payload = await onec.fetch_loyalty_lots_balance(
+                            getattr(user, "customer_id_1c", None),
+                            getattr(user, "discount_card_id_1c", None),
+                        )
+                    except Exception as error:
+                        service_errors.append(f"{partner_label}: lots balance check failed: {str(error)[:160]}")
+                        continue
+
                 platform_points = int(getattr(user, "loyalty_points", 0) or 0)
+                working_balance_available = bool(working_payload and working_payload.get("balance") is not None)
                 working_points = int((working_payload or {}).get("balance") or 0)
-                lots_points = int((lots_payload or {}).get("balance") or 0)
+                lots_points = int((lots_payload or {}).get("balance") or 0) if lots_payload is not None else working_points
+                if auto_sync_enabled and working_balance_available and platform_points != working_points:
+                    delta = working_points - platform_points
+                    user.loyalty_points = working_points
+                    user.synced_at = now
+                    self.db.add(
+                        LoyaltyTransaction(
+                            user_id=user.id,
+                            transaction_type="sync_from_1c",
+                            points=delta,
+                            balance_after=working_points,
+                            reason="partner_loyalty_reconciliation",
+                            description=(
+                                "Автосинхронизация баланса партнера из 1С: "
+                                f"платформа {platform_points}, 1С {working_points}"
+                            ),
+                            source="1c",
+                            source_id=str(
+                                (working_payload or {}).get("source_id")
+                                or getattr(user, "discount_card_id_1c", None)
+                                or getattr(user, "customer_id_1c", None)
+                                or ""
+                            ),
+                        )
+                    )
+                    platform_points = working_points
+
                 if platform_points != working_points:
                     platform_working_issues.append(
                         {
@@ -358,6 +407,153 @@ class GlmTelegramAlertService:
                 }
             )
         return alerts
+
+    async def _collect_operations_attention_digest_alerts(self) -> list[dict[str, Any]]:
+        config = self.config_payload()
+        if not config.get("operations_attention_digest_enabled"):
+            return []
+
+        now = datetime.now(timezone.utc)
+        stale_minutes = int(config.get("stale_minutes") or 60)
+        stale_before = now - timedelta(minutes=max(1, stale_minutes))
+        limit = max(1, int(config.get("operations_attention_digest_limit") or 200))
+        closed_statuses = {"processed", "canceled", "cancelled", "superseded", "failed_reviewed", "manual_reviewed"}
+        ton_waiting_statuses = {
+            "sent",
+            "sent_waiting_settlement",
+            "wallet_request_prepared",
+            "waiting_for_deposit",
+            "not_found",
+        }
+        onec_issue_statuses = {
+            "failed",
+            "missing_discount_card",
+            "ready_for_1c",
+            "ready_for_1c_spend",
+            "posted_without_balance_change",
+            "created_without_ref_key",
+        }
+
+        def normalize_dt(value: datetime | None) -> datetime | None:
+            if value is None:
+                return None
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc)
+            return value
+
+        def age_minutes(value: datetime | None) -> int:
+            normalized = normalize_dt(value)
+            if normalized is None:
+                return 0
+            return max(0, int((now - normalized).total_seconds() // 60))
+
+        items: list[dict[str, Any]] = []
+        bridge_rows = (
+            await self.db.execute(
+                select(GlameTokenBridgeOperation, User)
+                .outerjoin(User, User.id == GlameTokenBridgeOperation.user_id)
+                .where(GlameTokenBridgeOperation.token_code == "GLM")
+                .order_by(GlameTokenBridgeOperation.updated_at.desc().nulls_last(), GlameTokenBridgeOperation.created_at.desc())
+                .limit(limit)
+            )
+        ).all()
+        for operation, user in bridge_rows:
+            op_status = str(operation.status or "")
+            ton_status = str(operation.ton_status or "")
+            onec_status = str(operation.onec_status or "")
+            requested_at = normalize_dt(operation.requested_at or operation.created_at)
+            is_open = op_status not in closed_statuses
+            is_stale = op_status == "pending" and requested_at is not None and requested_at < stale_before
+            is_ton_waiting = op_status == "pending" and ton_status in ton_waiting_statuses
+            is_onec_issue = is_open and onec_status in onec_issue_statuses
+            if not (is_stale or is_ton_waiting or is_onec_issue):
+                continue
+
+            kind = "stale"
+            severity = "warning"
+            if is_onec_issue:
+                kind = "1C"
+                severity = "critical"
+            elif is_ton_waiting:
+                kind = "TON"
+                severity = "critical" if age_minutes(requested_at) >= stale_minutes else "warning"
+            amount = int(operation.glm_amount or operation.points_amount or 0)
+            items.append(
+                {
+                    "id": str(operation.id),
+                    "kind": kind,
+                    "severity": severity,
+                    "partner": getattr(user, "full_name", None) or getattr(user, "phone", None) or "Партнер GLAME",
+                    "amount": amount,
+                    "age": age_minutes(requested_at),
+                    "direction": operation.direction,
+                    "status": op_status,
+                }
+            )
+
+        refund_rows = (
+            await self.db.execute(
+                select(GlameTokenTransaction, User)
+                .outerjoin(User, User.id == GlameTokenTransaction.user_id)
+                .where(
+                    GlameTokenTransaction.token_code == "GLM",
+                    GlameTokenTransaction.transaction_type == "redemption",
+                    GlameTokenTransaction.status.in_(("canceled", "cancelled", "failed", "refund_pending", "refund_required")),
+                )
+                .order_by(GlameTokenTransaction.created_at.desc())
+                .limit(limit)
+            )
+        ).all()
+        for tx, user in refund_rows:
+            meta = tx.meta if isinstance(tx.meta, dict) else {}
+            refund_required = bool(meta.get("ton_refund_required"))
+            refund_status = str(meta.get("ton_refund_status") or "")
+            if not refund_required and refund_status not in {"required", "submitted", "pending", "sent"}:
+                continue
+            items.append(
+                {
+                    "id": str(tx.id),
+                    "kind": "refund",
+                    "severity": "critical" if not meta.get("ton_refund_tx_hash") else "warning",
+                    "partner": getattr(user, "full_name", None) or getattr(user, "phone", None) or "Партнер GLAME",
+                    "amount": abs(int(tx.amount or 0)),
+                    "age": age_minutes(tx.created_at),
+                    "direction": "refund",
+                    "status": str(tx.status or ""),
+                }
+            )
+
+        if not items:
+            return []
+
+        items.sort(key=lambda item: (0 if item.get("severity") == "critical" else 1, -int(item.get("age") or 0)))
+        total = len(items)
+        critical = sum(1 for item in items if item.get("severity") == "critical")
+        by_kind: dict[str, int] = {}
+        amount_total = 0
+        for item in items:
+            by_kind[str(item.get("kind") or "unknown")] = by_kind.get(str(item.get("kind") or "unknown"), 0) + 1
+            amount_total += int(item.get("amount") or 0)
+        examples = "; ".join(
+            f"{item['kind']} {item['amount']} GLM {item['partner']} ({item['age']} мин)"
+            for item in items[:5]
+        )
+        fingerprint = ":".join(
+            f"{item['id']}:{item['kind']}:{item['status']}:{item['amount']}:{item['age'] // 60}"
+            for item in items[:20]
+        )
+        kind_text = ", ".join(f"{kind}: {count}" for kind, count in sorted(by_kind.items()))
+        return [
+            {
+                "code": "glm_operations_attention_digest",
+                "severity": "warning",
+                "fingerprint": f"glm_operations_attention:{total}:{critical}:{amount_total}:{fingerprint}",
+                "message": (
+                    f"Очередь внимания GLM: {total} unresolved операций, critical {critical}, "
+                    f"суммарно {amount_total} GLM. Типы: {kind_text}. Примеры: {examples}"
+                ),
+            }
+        ]
 
     async def collect_alerts(self) -> list[dict[str, Any]]:
         now = datetime.now(timezone.utc)
@@ -457,6 +653,7 @@ class GlmTelegramAlertService:
                 )
             )
         alerts.extend(await self._collect_loyalty_reconciliation_alerts())
+        alerts.extend(await self._collect_operations_attention_digest_alerts())
         return [self._decorate_alert(alert) for alert in alerts]
 
     async def run_once(self, *, force: bool = False) -> dict[str, Any]:
@@ -473,10 +670,15 @@ class GlmTelegramAlertService:
         state = self._read_state()
         state_alerts = state.setdefault("alerts", {})
         sendable: list[dict[str, Any]] = []
+        state_changed = False
 
         for alert in alerts:
             code = str(alert["code"])
             previous = state_alerts.get(code) if isinstance(state_alerts.get(code), dict) else {}
+            if not previous.get("first_seen_at"):
+                previous = {**previous, "first_seen_at": now.isoformat()}
+                state_alerts[code] = previous
+                state_changed = True
             last_sent_raw = previous.get("last_sent_at")
             last_fingerprint = previous.get("fingerprint")
             last_sent_at: datetime | None = None
@@ -493,36 +695,151 @@ class GlmTelegramAlertService:
                 sendable.append(alert)
 
         if not sendable:
+            if state_changed:
+                state["updated_at"] = now.isoformat()
+                self._write_state(state)
             return {"status": "cooldown", "alerts_count": len(alerts), "sent": 0}
 
-        severity = "critical" if any(item.get("severity") == "critical" for item in sendable) else "warning"
-        lines = []
-        for item in sendable:
-            lines.append(f"- [{item['severity']}] {item['message']}")
-            if item.get("action_url"):
-                lines.append(f"  → {item.get('action_label') or 'Открыть'}: {item['action_url']}")
-        result = await TelegramNotificationService().notify_admin(
-            title="CryptoGLAME bridge alerts",
-            lines=[*lines, "", self.config_payload()["admin_portal_url"]],
-            severity=severity,
-        )
+        digest_enabled = bool(config.get("warning_digest_enabled")) and not force
+        warning_digest_minutes = max(1, int(config.get("warning_digest_minutes") or 240))
+        warning_digest_window = timedelta(minutes=warning_digest_minutes)
+        warning_digest_state = state.setdefault("warning_digest", {})
+        if not isinstance(warning_digest_state, dict):
+            warning_digest_state = {}
+            state["warning_digest"] = warning_digest_state
 
-        if result.get("status") in {"success", "partial"}:
-            for alert in sendable:
+        immediate_alerts = [
+            item
+            for item in sendable
+            if not digest_enabled or str(item.get("severity") or "warning") == "critical"
+        ]
+        digest_alerts = [
+            item
+            for item in sendable
+            if digest_enabled and str(item.get("severity") or "warning") != "critical"
+        ]
+
+        digest_sendable: list[dict[str, Any]] = []
+        if digest_alerts:
+            digest_fingerprint = "|".join(
+                f"{item.get('code')}:{item.get('fingerprint')}"
+                for item in sorted(digest_alerts, key=lambda item: str(item.get("code") or ""))
+            )
+            last_digest_at = self._parse_datetime(warning_digest_state.get("last_sent_at"))
+            digest_due = last_digest_at is None or (now - last_digest_at) >= warning_digest_window
+            if digest_due:
+                digest_sendable = digest_alerts
+                warning_digest_state["fingerprint"] = digest_fingerprint
+                warning_digest_state["last_sent_at"] = now.isoformat()
+                warning_digest_state["alerts_count"] = len(digest_alerts)
+                state_changed = True
+
+        messages: list[dict[str, Any]] = []
+        if immediate_alerts:
+            severity = "critical" if any(item.get("severity") == "critical" for item in immediate_alerts) else "warning"
+            lines = []
+            for item in immediate_alerts:
+                lines.append(f"- [{item['severity']}] {item['message']}")
+                if item.get("action_url"):
+                    lines.append(f"  → {item.get('action_label') or 'Открыть'}: {item['action_url']}")
+            messages.append(
+                {
+                    "alerts": immediate_alerts,
+                    "result": await TelegramNotificationService().notify_admin(
+                        title="CryptoGLAME bridge alerts",
+                        lines=[*lines, "", self.config_payload()["admin_portal_url"]],
+                        severity=severity,
+                    ),
+                }
+            )
+
+        if digest_sendable:
+            max_items = max(1, int(config.get("warning_digest_max_items") or 8))
+            visible_alerts = digest_sendable[:max_items]
+            hidden_count = max(0, len(digest_sendable) - len(visible_alerts))
+            lines = [
+                f"Warning digest за последние {warning_digest_minutes} мин: {len(digest_sendable)} активных событий.",
+            ]
+            for item in visible_alerts:
+                lines.append(f"- [{item['severity']}] {item['message']}")
+                if item.get("action_url"):
+                    lines.append(f"  → {item.get('action_label') or 'Открыть'}: {item['action_url']}")
+            if hidden_count:
+                lines.append(f"... еще {hidden_count} warning-событий в админке.")
+            messages.append(
+                {
+                    "alerts": digest_sendable,
+                    "result": await TelegramNotificationService().notify_admin(
+                        title="CryptoGLAME warning digest",
+                        lines=[*lines, "", self.config_payload()["admin_portal_url"]],
+                        severity="warning",
+                    ),
+                }
+            )
+
+        if not messages:
+            if state_changed:
+                state["updated_at"] = now.isoformat()
+                self._write_state(state)
+            return {
+                "status": "digest_cooldown",
+                "alerts_count": len(alerts),
+                "sendable_count": len(sendable),
+                "sent": 0,
+                "digest": {
+                    "enabled": digest_enabled,
+                    "suppressed_count": len(digest_alerts),
+                    "window_minutes": warning_digest_minutes,
+                },
+                "alerts": alerts,
+            }
+
+        sent = 0
+        errors: list[str] = []
+        statuses: list[str] = []
+        delivered_alerts: list[dict[str, Any]] = []
+        for message in messages:
+            result = message["result"]
+            statuses.append(str(result.get("status") or "unknown"))
+            sent += int(result.get("sent") or 0)
+            errors.extend(result.get("errors") or [])
+            if result.get("status") in {"success", "partial"}:
+                delivered_alerts.extend(message["alerts"])
+
+        if delivered_alerts:
+            for alert in delivered_alerts:
+                previous = state_alerts.get(str(alert["code"]))
+                first_seen_at = previous.get("first_seen_at") if isinstance(previous, dict) else None
                 state_alerts[str(alert["code"])] = {
                     "fingerprint": alert.get("fingerprint"),
+                    "first_seen_at": first_seen_at or now.isoformat(),
                     "last_sent_at": now.isoformat(),
                     "severity": alert.get("severity"),
                     "message": alert.get("message"),
                 }
             state["updated_at"] = now.isoformat()
             self._write_state(state)
+        elif state_changed:
+            state["updated_at"] = now.isoformat()
+            self._write_state(state)
+
+        if not statuses:
+            status = "skipped"
+        elif all(item == "success" for item in statuses):
+            status = "success"
+        elif any(item in {"success", "partial"} for item in statuses):
+            status = "partial"
+        else:
+            status = statuses[0]
 
         return {
-            "status": result.get("status"),
+            "status": status,
             "alerts_count": len(alerts),
             "sendable_count": len(sendable),
-            "sent": result.get("sent", 0),
-            "errors": result.get("errors", []),
+            "immediate_count": len(immediate_alerts),
+            "digest_count": len(digest_sendable),
+            "digest_suppressed_count": max(0, len(digest_alerts) - len(digest_sendable)),
+            "sent": sent,
+            "errors": errors,
             "alerts": alerts,
         }

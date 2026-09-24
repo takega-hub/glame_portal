@@ -6,6 +6,8 @@
   "scripts": {
     "validate:env": "node scripts/validate-env.mjs",
     "validate:artifact": "node scripts/validate-artifact.mjs",
+    "validate:ton-assets": "node scripts/validate-ton-assets-package.mjs",
+    "validate:ton-assets:live": "node scripts/validate-ton-assets-package.mjs --live",
     "reference:status": "node scripts/reference-status.mjs",
     "reference:fetch": "node scripts/fetch-reference.mjs",
     "blueprint:prepare": "node scripts/prepare-blueprint-deploy.mjs",
@@ -21,6 +23,8 @@
     "mainnet:record-deploy": "node scripts/record-mainnet-deploy.mjs --allow-mainnet true",
     "mainnet:prepare-mint": "node scripts/prepare-mainnet-mint.mjs --allow-mainnet true --allow-large true",
     "mainnet:record-mint": "node scripts/record-mainnet-mint.mjs --allow-mainnet true",
+    "mainnet:prepare-content-update": "node scripts/prepare-mainnet-content-update.mjs --allow-mainnet true",
+    "mainnet:record-content-update": "node scripts/record-mainnet-content-update.mjs --allow-mainnet true",
     "prepare:claims": "node scripts/prepare-claim-plan.mjs",
     "prepare:claims:sample": "node scripts/prepare-claim-plan.mjs fixtures/pending-claims.sample.csv",
     "record:deploy": "node scripts/record-deploy.mjs"

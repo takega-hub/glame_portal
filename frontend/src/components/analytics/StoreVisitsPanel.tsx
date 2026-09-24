@@ -5,7 +5,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
 import { fetchJson } from '@/lib/utils';
-import * as XLSX from 'xlsx';
+import { downloadCsv } from '@/lib/csv-export';
+
+const normalizeStoreName = (name: string) =>
+  String(name || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-zа-я0-9]+/g, ' ')
+    .trim();
+
+const storeDisplayName = (name: string) => {
+  const normalized = normalizeStoreName(name);
+  if (normalized.includes('меганом') || normalized.includes('meganom') || normalized.includes('мрия') || normalized.includes('mriya')) {
+    return 'МРИЯ';
+  }
+  return String(name || '').trim();
+};
 
 export function StoreVisitsPanel() {
   const [status, setStatus] = useState<any>(null);
@@ -21,7 +36,10 @@ export function StoreVisitsPanel() {
   const fetchStores = async () => {
     try {
       const { data } = await fetchJson<{ stores?: any[] }>('/api/analytics/stores');
-      setStores(data.stores || []);
+      setStores((data.stores || []).map(store => ({
+        ...store,
+        name: storeDisplayName(String(store?.name || '')),
+      })));
     } catch (err) {
       console.error('Error fetching stores:', err);
     }
@@ -74,7 +92,10 @@ export function StoreVisitsPanel() {
         daily: Array<{ date: string; sources: Record<string, number> }>;
       }>(url);
       if (data.status === 'success') {
-        setLegend(data.legend || []);
+        setLegend((data.legend || []).map(item => ({
+          ...item,
+          name: storeDisplayName(item.name || item.id),
+        })));
         setDailySources(data.daily || []);
       } else {
         setLegend([]);
@@ -137,7 +158,7 @@ export function StoreVisitsPanel() {
     const storeDays = dailyData?.daily_data || [];
     for (const day of storeDays) {
       for (const s of (day.stores || [])) {
-        const name = s.name;
+        const name = storeDisplayName(s.name);
         visitorsByName[name] = (visitorsByName[name] || 0) + (s.visitors || 0);
       }
     }
@@ -146,7 +167,7 @@ export function StoreVisitsPanel() {
       const revenue = revenueBySource[l.id] || 0;
       const visitors = visitorsByName[l.name] || 0;
       const rpv = visitors > 0 ? revenue / visitors : 0;
-      return { id: l.id, name: l.name, revenue, visitors, rpv };
+      return { id: l.id, name: storeDisplayName(l.name), revenue, visitors, rpv };
     });
     // Фильтруем нулевые строки, сортируем по rpv
     return rows
@@ -400,22 +421,13 @@ export function StoreVisitsPanel() {
                   onClick={() => {
                     // Экспорт в Excel
                     const rows = computeRpvRows();
-                    const ws = XLSX.utils.json_to_sheet(rows.map(r => ({
+                    const data = rows.map(r => ({
                       Источник: r.name,
                       Выручка: r.revenue,
                       Посетители: r.visitors,
                       'Выручка на посетителя': r.rpv
-                    })));
-                    const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, 'RPV');
-                    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-                    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `rpv_${new Date().toISOString().slice(0,10)}.xlsx`;
-                    a.click();
-                    URL.revokeObjectURL(url);
+                    }));
+                    downloadCsv(`rpv_${new Date().toISOString().slice(0,10)}.csv`, [Object.keys(data[0] || {}), ...data.map(Object.values)]);
                   }}
                 >
                   Экспорт Excel

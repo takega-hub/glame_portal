@@ -145,10 +145,15 @@ High checks:
 - Admin pages show only boolean flags for secret configured/missing.
 - Error messages are actionable but do not include raw secret payloads.
 - Export files do not include secret values.
+- Runtime logs such as `nohup.out`, `*.log` and `*.out` are ignored and not tracked in Git.
+- High-confidence static secret scan passes without findings.
 
 Evidence to capture:
 
-- grep/security scan output for known secret key names;
+- `python3 scripts/security/run_crypto_glame_launch_checks.py` output for combined local launch checks;
+- `python3 scripts/security/build_crypto_glame_evidence_packet.py --skip-live --write <private-path>` output for policy hashes, approval state and launch-check evidence; do not write this packet under `/backend/static`.
+- `/api/referrals/admin/glm-launch-evidence` result or `/admin/crypto` Launch evidence screenshot for admin-collected signer, replay and local launch-check state;
+- `python3 scripts/security/check_secret_exposure.py` output for high-confidence secret exposure scan;
 - `python3 scripts/security/check_referrals_admin_routes.py` output for admin route protection;
 - screenshots of readiness secret flags;
 - sample failed signer request without secret leakage.
@@ -162,6 +167,7 @@ Before public launch, attach these artifacts to the internal launch decision:
 - treasury turnover CSV;
 - signer health/preflight result;
 - token verification/anti-spam package status;
+- combined local launch-check report;
 - legal/accounting approval;
 - treasury policy approval;
 - security approval with this checklist signed off.
