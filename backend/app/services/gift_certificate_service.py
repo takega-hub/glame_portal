@@ -63,7 +63,7 @@ class GiftCertificateService:
         recipient_phone: Optional[str] = None,
         recipient_email: Optional[str] = None,
         message: Optional[str] = None,
-        expires_in_days: int = 365,
+        expires_in_days: Optional[int] = None,
         meta: Optional[dict[str, Any]] = None,
     ) -> tuple[GiftCertificate, str]:
         nominal = _rub(nominal_amount)
@@ -128,7 +128,9 @@ class GiftCertificateService:
             message=message,
             order_id=order_id,
             onec_certificate_id=str(onec_series.get("Ref_Key")) if onec_series and onec_series.get("Ref_Key") else None,
-            expires_at=_now() + timedelta(days=max(1, int(expires_in_days or 365))),
+            # GLAME certificates are unlimited.  The parameter remains for
+            # compatibility with older mobile clients but must not set expiry.
+            expires_at=None,
             meta=cert_meta or None,
         )
         self.db.add(cert)

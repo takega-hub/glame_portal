@@ -35,7 +35,9 @@ class GiftCertificatePurchaseRequest(BaseModel):
     design: Optional[int] = None
     accent: Optional[int] = None
     texture_id: Optional[str] = None
-    expires_in_days: int = Field(default=365, ge=1, le=3650)
+    # Kept only so older mobile builds keep working. All GLAME certificates
+    # are unlimited and the value is intentionally ignored by the service.
+    expires_in_days: Optional[int] = Field(default=None, ge=1, le=3650)
     meta: Optional[dict[str, Any]] = None
 
 
@@ -114,7 +116,7 @@ async def purchase_gift_certificate(
         "design": body.design,
         "accent": body.accent,
         "texture_id": body.texture_id,
-        "expires_in_days": int(body.expires_in_days or 365),
+        "expires_in_days": None,
     }
 
     contact = {
@@ -146,7 +148,7 @@ async def purchase_gift_certificate(
         recipient_phone=recipient_phone,
         recipient_email=str(body.recipient_email) if body.recipient_email else None,
         message=body.message,
-        expires_in_days=int(body.expires_in_days or 365),
+        expires_in_days=None,
         meta={
             "purchase_order_id": str(order.id),
             "sender_name": body.sender_name,

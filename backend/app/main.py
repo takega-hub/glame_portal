@@ -30,6 +30,7 @@ from app.api import orders_payments
 from app.api import onec_orders_exchange
 from app.api import shipping_cdek
 from app.api import gift_certificates
+from app.api import tilda_gift_certificates
 from app.api import referrals
 from app.api.admin import customers as admin_customers, onec_customers, app_admin, live_stylist
 from app.api.admin import shipping_admin, access as admin_access, cron as admin_cron, system as admin_system
@@ -76,6 +77,10 @@ from app.services.glame_token_scheduler import (
     stop_glm_ton_settlement_scheduler,
 )
 from app.services.cron_registry import start_admin_cron_scheduler, stop_admin_cron_scheduler
+from app.services.tilda_gift_certificate_scheduler import (
+    start_tilda_gift_certificate_scheduler,
+    stop_tilda_gift_certificate_scheduler,
+)
 
 # Устанавливаем кодировку UTF-8 для всего приложения
 if sys.platform == 'win32':
@@ -164,6 +169,7 @@ async def startup_event():
     await start_glm_onec_bridge_retry_scheduler(app)
     await start_glm_telegram_alert_scheduler(app)
     await start_admin_cron_scheduler(app)
+    await start_tilda_gift_certificate_scheduler(app)
     from app.api.communication import start_generated_messages_sync
     # await start_generated_messages_sync(app)
 
@@ -186,6 +192,7 @@ async def shutdown_event():
     await stop_glm_ton_settlement_scheduler(app)
     await stop_glm_hold_release_scheduler(app)
     await stop_admin_cron_scheduler(app)
+    await stop_tilda_gift_certificate_scheduler(app)
     from app.api.communication import stop_generated_messages_sync
     # await stop_generated_messages_sync(app)
 
@@ -223,7 +230,10 @@ default_cors_origins = [
 env_cors = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
 env_cors_origins = [x.strip() for x in env_cors.split(",") if x.strip()] if env_cors else []
 
-allow_origins = list(dict.fromkeys([*default_cors_origins, *env_cors_origins]))
+tilda_gift_origins = os.getenv("TILDA_GIFT_CERTIFICATE_ALLOWED_ORIGINS", "").strip()
+tilda_gift_origin_list = [x.strip() for x in tilda_gift_origins.split(",") if x.strip()] if tilda_gift_origins else []
+
+allow_origins = list(dict.fromkeys([*default_cors_origins, *env_cors_origins, *tilda_gift_origin_list]))
 
 app.add_middleware(
     CORSMiddleware,
@@ -277,6 +287,7 @@ app.include_router(orders_payments.router, prefix="/api", tags=["orders"])
 app.include_router(onec_orders_exchange.router, prefix="/api", tags=["1c-orders"])
 app.include_router(shipping_cdek.router, prefix="/api", tags=["shipping"])
 app.include_router(gift_certificates.router, prefix="/api", tags=["gift-certificates"])
+app.include_router(tilda_gift_certificates.router, prefix="/api", tags=["tilda-gift-certificates"])
 app.include_router(referrals.router, prefix="/api/referrals", tags=["referrals"])
 app.include_router(director.router)
 
