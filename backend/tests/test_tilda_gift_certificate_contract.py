@@ -1,9 +1,11 @@
 import os
+import asyncio
 from uuid import uuid4
 
 from app.models.gift_certificate import GiftCertificate
 from app.models.tilda_gift_certificate_operation import TildaGiftCertificateOperation
 from app.services import tilda_gift_certificate_service as service
+from app.services.onec_gift_certificate_service import OneCGiftCertificateService
 from app.api import tilda_gift_certificates as routes
 
 
@@ -48,3 +50,95 @@ def test_tilda_checkout_requires_enabled_onec_accounting(monkeypatch):
         assert getattr(exc, "status_code", None) == 503
     else:
         raise AssertionError("Tilda checkout must stay disabled without 1C accounting")
+
+
+class OneCCancellationService(OneCGiftCertificateService):
+    def __init__(self):
+        super().__init__(api_url="https://onec.example.test")
+        self.calls = []
+        self.balances = [70.0, 100.0]
+
+    async def _request_json(self, method, endpoint, **kwargs):
+        self.calls.append((method, endpoint, kwargs))
+        if method == "GET":
+            return {
+                "Ref_Key": "document-1",
+                "Posted": True,
+                "Комментарий": "GLAME TILDA redeem operation-1",
+                "ПодарочныеСертификаты": [
+                    {"НомерСертификата_Key": "series-1", "Остаток": 30},
+                ],
+            }
+        if method == "POST" and endpoint.endswith("/Unpost"):
+            return {}
+        raise AssertionError(f"Unexpected 1C call: {method} {endpoint}")
+
+    async def get_series_balance(self, series_ref_key):
+        assert series_ref_key == "series-1"
+        return self.balances.pop(0)
+
+
+def test_onec_full_refund_unposts_original_debit():
+    async def run():
+        onec = OneCCancellationService()
+        try:
+            return await onec.cancel_certificate_debit(
+                original_operation_id="operation-1",
+                document_id="document-1",
+                series_ref="series-1",
+                amount_kopeks=3000,
+            ), onec.calls
+        finally:
+            await onec.close()
+
+    result, calls = asyncio.run(run())
+    assert result["document_id"] == "document-1"
+    assert result["balance_amount"] == 10000
+    assert any(method == "POST" and endpoint.endswith("/Unpost") for method, endpoint, _kwargs in calls)
+
+
+class OneCExistingDocumentService(OneCGiftCertificateService):
+    def __init__(self):
+        super().__init__(api_url="https://onec.example.test")
+        self.calls = []
+
+    async def _request_json(self, method, endpoint, **kwargs):
+        self.calls.append((method, endpoint, kwargs))
+        if method == "GET":
+            return {
+                "Ref_Key": "document-1",
+                "Posted": True,
+                "Комментарий": "GLAME TILDA redeem operation-1",
+                "ПодарочныеСертификаты": [
+                    {"НомерСертификата_Key": "series-1", "Остаток": 30},
+                ],
+            }
+        raise AssertionError(f"Unexpected 1C call: {method} {endpoint}")
+
+    async def get_series_balance(self, series_ref_key):
+        assert series_ref_key == "series-1"
+        return 70.0
+
+
+def test_onec_retry_with_document_reference_never_creates_second_debit(monkeypatch):
+    monkeypatch.setenv("ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY", "organization-1")
+
+    async def run():
+        onec = OneCExistingDocumentService()
+        try:
+            return await onec._post_certificate_operation_via_odata(
+                {
+                    "operation_id": "operation-1",
+                    "type": "redeem",
+                    "certificate_series_ref_key": "series-1",
+                    "gift_nomenclature_ref_key": "gift-1",
+                    "amount": 3000,
+                    "onec_document_id": "document-1",
+                }
+            ), onec.calls
+        finally:
+            await onec.close()
+
+    result, calls = asyncio.run(run())
+    assert result["balance_amount"] == 7000
+    assert not any(method == "POST" for method, _endpoint, _kwargs in calls)
