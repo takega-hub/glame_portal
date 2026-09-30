@@ -3,7 +3,10 @@ import asyncio
 import pytest
 from fastapi import HTTPException
 
-from app.services.gift_certificate_service import validate_gift_certificate_nominal
+from app.services.gift_certificate_service import (
+    generate_certificate_number,
+    validate_gift_certificate_nominal,
+)
 from app.services.onec_gift_certificate_service import OneCGiftCertificateService
 
 
@@ -99,6 +102,14 @@ def test_validate_custom_certificate_nominal_limits(monkeypatch):
 
     with pytest.raises(HTTPException):
         validate_gift_certificate_nominal(7_550_50)
+
+
+def test_certificate_number_ends_with_nominal_in_rubles():
+    number = generate_certificate_number(17_500_00)
+
+    assert number.endswith("-17500")
+    assert number.startswith("GLM-")
+    assert len(number) <= 32
 
 
 class FakeOneCProgramBalance(OneCGiftCertificateService):
