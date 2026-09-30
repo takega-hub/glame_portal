@@ -524,7 +524,9 @@ class TildaGiftCertificateService:
             await self.db.execute(
                 select(TildaGiftCertificateOperation)
                 .where(TildaGiftCertificateOperation.sync_status == "pending_sync")
-                .where(TildaGiftCertificateOperation.operation_type.in_(("reserve", "refund")))
+                # Direct OData retry is currently verified only for debits.
+                # Refunds need a reversal of the original 1C document.
+                .where(TildaGiftCertificateOperation.operation_type == "reserve")
                 .order_by(TildaGiftCertificateOperation.created_at)
                 .limit(max(1, min(limit, 500)))
                 .with_for_update(skip_locked=True)

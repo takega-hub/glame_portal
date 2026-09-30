@@ -263,9 +263,9 @@ class OneCGiftCertificateService:
     async def _post_certificate_operation_via_odata(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Use 1C:UNF's native write-off document for an online certificate payment.
 
-        The document stores the remaining balance of the series.  We read the
-        current register balance immediately before creating it and verify the
-        result after posting, so a partial payment cannot silently zero a card.
+        In GLAME's 1C:UNF configuration, the ``Остаток`` line field is the
+        amount to write off, not the future certificate balance. We therefore
+        verify the register balance after posting against current minus debit.
         """
         operation_id = str(payload.get("operation_id") or "").strip()
         action = str(payload.get("type") or "").strip().lower()
@@ -278,11 +278,17 @@ class OneCGiftCertificateService:
         if not series_ref or not gift_ref or not organization_ref or amount_kopeks <= 0:
             raise ValueError("Gift certificate accounting references are missing")
 
+        if action == "refund":
+            # A refund must revise the original debit document, not create a
+            # second write-off. Its OData flow is intentionally disabled until
+            # that document-level reversal is implemented and verified.
+            raise RuntimeError("Direct OData certificate refunds are not configured")
+
         current_rub = await self.get_series_balance(series_ref)
         amount_rub = amount_kopeks / 100
-        if action == "redeem" and current_rub + 0.005 < amount_rub:
+        if current_rub + 0.005 < amount_rub:
             raise ValueError("Insufficient gift certificate balance in 1C")
-        remaining_rub = current_rub - amount_rub if action == "redeem" else current_rub + amount_rub
+        expected_balance_rub = current_rub - amount_rub
         comment = f"GLAME TILDA {action} {operation_id}"
         document = await self._request_json(
             "POST",
@@ -297,7 +303,7 @@ class OneCGiftCertificateService:
                         "LineNumber": 1,
                         "ПодарочныйСертификат_Key": gift_ref,
                         "НомерСертификата_Key": series_ref,
-                        "Остаток": remaining_rub,
+                        "Остаток": amount_rub,
                     }
                 ],
             },
@@ -311,9 +317,9 @@ class OneCGiftCertificateService:
             json_body={"PostingModeOperational": True},
         )
         actual_rub = await self.get_series_balance(series_ref)
-        if abs(actual_rub - remaining_rub) > 0.005:
+        if abs(actual_rub - expected_balance_rub) > 0.005:
             raise RuntimeError(
-                f"1C gift certificate balance after {action} is {actual_rub} RUB, expected {remaining_rub} RUB"
+                f"1C gift certificate balance after {action} is {actual_rub} RUB, expected {expected_balance_rub} RUB"
             )
         return {
             "Ref_Key": document_ref,
