@@ -60,15 +60,6 @@ class OneCCancellationService(OneCGiftCertificateService):
 
     async def _request_json(self, method, endpoint, **kwargs):
         self.calls.append((method, endpoint, kwargs))
-        if method == "GET":
-            return {
-                "Ref_Key": "document-1",
-                "Posted": True,
-                "Комментарий": "GLAME TILDA redeem operation-1",
-                "ПодарочныеСертификаты": [
-                    {"НомерСертификата_Key": "series-1", "Остаток": 30},
-                ],
-            }
         if method == "POST" and endpoint.endswith("/Unpost"):
             return {}
         raise AssertionError(f"Unexpected 1C call: {method} {endpoint}")
@@ -104,15 +95,8 @@ class OneCExistingDocumentService(OneCGiftCertificateService):
 
     async def _request_json(self, method, endpoint, **kwargs):
         self.calls.append((method, endpoint, kwargs))
-        if method == "GET":
-            return {
-                "Ref_Key": "document-1",
-                "Posted": True,
-                "Комментарий": "GLAME TILDA redeem operation-1",
-                "ПодарочныеСертификаты": [
-                    {"НомерСертификата_Key": "series-1", "Остаток": 30},
-                ],
-            }
+        if method == "POST" and endpoint.endswith("/Post"):
+            return {}
         raise AssertionError(f"Unexpected 1C call: {method} {endpoint}")
 
     async def get_series_balance(self, series_ref_key):
@@ -141,4 +125,4 @@ def test_onec_retry_with_document_reference_never_creates_second_debit(monkeypat
 
     result, calls = asyncio.run(run())
     assert result["balance_amount"] == 7000
-    assert not any(method == "POST" for method, _endpoint, _kwargs in calls)
+    assert any(method == "POST" and endpoint.endswith("/Post") for method, endpoint, _kwargs in calls)

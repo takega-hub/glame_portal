@@ -288,16 +288,16 @@ class OneCGiftCertificateService:
         comment = f"GLAME TILDA {action} {operation_id}"
         existing_document_id = str(payload.get("onec_document_id") or "").strip()
         if existing_document_id:
-            document = await self._get_certificate_operation_document(existing_document_id)
-            self._ensure_certificate_document(document, comment, series_ref, amount_rub)
             document_ref = existing_document_id
-            if not bool(document.get("Posted")):
-                await self._request_json(
-                    "POST",
-                    f"/Document_СписаниеПроданныхПодарочныхСертификатов(guid'{document_ref}')/Post",
-                    json_body={"PostingModeOperational": True},
-                    max_retries=1,
-                )
+            # 1C:Fresh OData does not implement GET for this document type.
+            # Reposting a document already created by this platform is safe and
+            # avoids a second create request after a network interruption.
+            await self._request_json(
+                "POST",
+                f"/Document_СписаниеПроданныхПодарочныхСертификатов(guid'{document_ref}')/Post",
+                json_body={"PostingModeOperational": True},
+                max_retries=1,
+            )
             actual_rub = await self.get_series_balance(series_ref)
             return {
                 "Ref_Key": document_ref,
@@ -375,22 +375,16 @@ class OneCGiftCertificateService:
         if not document_ref or not operation_id or not series_ref or amount_rub <= 0:
             raise ValueError("Original 1C certificate debit is not available for cancellation")
 
-        document = await self._get_certificate_operation_document(document_ref)
-        self._ensure_certificate_document(
-            document,
-            f"GLAME TILDA redeem {operation_id}",
-            series_ref,
-            amount_rub,
-        )
         before_rub = await self.get_series_balance(series_ref)
-        if bool(document.get("Posted")):
-            await self._request_json(
-                "POST",
-                f"/Document_СписаниеПроданныхПодарочныхСертификатов(guid'{document_ref}')/Unpost",
-                max_retries=1,
-            )
+        # 1C:Fresh OData does not expose GET for this document type, but it
+        # accepts Unpost by the Ref_Key returned when the platform created it.
+        await self._request_json(
+            "POST",
+            f"/Document_СписаниеПроданныхПодарочныхСертификатов(guid'{document_ref}')/Unpost",
+            max_retries=1,
+        )
         actual_rub = await self.get_series_balance(series_ref)
-        if bool(document.get("Posted")) and abs(actual_rub - (before_rub + amount_rub)) > 0.005:
+        if abs(actual_rub - (before_rub + amount_rub)) > 0.005:
             raise RuntimeError(
                 f"1C gift certificate balance after cancellation is {actual_rub} RUB, expected {before_rub + amount_rub} RUB"
             )
@@ -401,33 +395,6 @@ class OneCGiftCertificateService:
             "balance_amount": int(round(actual_rub * 100)),
             "currency": "RUB",
         }
-
-    async def _get_certificate_operation_document(self, document_ref: str) -> dict[str, Any]:
-        return await self._request_json(
-            "GET",
-            f"/Document_СписаниеПроданныхПодарочныхСертификатов(guid'{document_ref}')",
-            params={"$expand": "ПодарочныеСертификаты"},
-        )
-
-    @staticmethod
-    def _ensure_certificate_document(
-        document: dict[str, Any], expected_comment: str, series_ref: str, amount_rub: float
-    ) -> None:
-        if bool(document.get("DeletionMark")):
-            raise RuntimeError("1C certificate document is marked for deletion")
-        if str(document.get("Комментарий") or "").strip() != expected_comment:
-            raise RuntimeError("1C certificate document does not match the GLAME operation")
-        for row in document.get("ПодарочныеСертификаты") or []:
-            if str(row.get("НомерСертификата_Key") or "").strip() != str(series_ref or "").strip():
-                continue
-            try:
-                actual_amount = float(row.get("Остаток"))
-            except (TypeError, ValueError):
-                break
-            if abs(actual_amount - amount_rub) <= 0.005:
-                return
-            raise RuntimeError("1C certificate document amount does not match the GLAME operation")
-        raise RuntimeError("1C certificate document has no matching certificate line")
 
     async def ensure_series_sold(self, series_ref_key: str) -> None:
         endpoint = f"/Catalog_СерииНоменклатуры(guid'{series_ref_key}')"
