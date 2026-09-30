@@ -90,6 +90,7 @@ from app.services.tilda_gift_certificate_scheduler import (
     stop_tilda_gift_certificate_scheduler,
 )
 from app.api import tilda_gift_certificates
+from app.api import tilda_gift_certificate_checkout
 
 # Устанавливаем кодировку UTF-8 для всего приложения
 if sys.platform == 'win32':
@@ -325,6 +326,7 @@ app.include_router(onec_orders_exchange.router, prefix="/api", tags=["1c-orders"
 app.include_router(shipping_cdek.router, prefix="/api", tags=["shipping"])
 app.include_router(gift_certificates.router, prefix="/api", tags=["gift-certificates"])
 app.include_router(tilda_gift_certificates.router, prefix="/api", tags=["tilda-gift-certificates"])
+app.include_router(tilda_gift_certificate_checkout.router, prefix="/api", tags=["tilda-gift-certificate-checkout"])
 app.include_router(referrals.router, prefix="/api/referrals", tags=["referrals"])
 app.include_router(director.router)
 

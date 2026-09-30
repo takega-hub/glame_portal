@@ -28,7 +28,7 @@ class TildaGiftCertificateOperation(Base):
     validation_token_hash = Column(String(64), nullable=True, unique=True, index=True)
 
     tilda_order_id = Column(String(128), nullable=True, index=True)
-    payment_id = Column(String(128), nullable=True)
+    payment_id = Column(String(128), nullable=True, index=True)
     refund_id = Column(String(128), nullable=True, index=True)
     original_operation_id = Column(UUID(as_uuid=True), ForeignKey("tilda_gift_certificate_operations.id"), nullable=True)
     amount = Column(Integer, nullable=False, default=0)
