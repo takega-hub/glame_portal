@@ -147,24 +147,37 @@ async def create_certificate_checkout(
     yookassa = await get_yookassa_service_for_db(db)
     if not yookassa:
         raise HTTPException(status_code=503, detail="Online payment is temporarily unavailable")
-    payment = await yookassa.create_payment(
-        amount_rub=_rub(due),
-        description=f"Заказ GLAME.JEWELRY {body.checkout_id}",
-        return_url=return_url,
-        metadata={
-            "source": "tilda_gift_certificate_checkout",
-            "certificate_operation_id": str(operation.id),
-            "checkout_id": body.checkout_id,
-            "order_amount": str(operation.cart_total or 0),
-            "certificate_amount": str(operation.amount or 0),
-        },
-        idempotence_key=body.checkout_id,
-    )
-    confirmation = payment.get("confirmation") or {}
-    confirmation_url = str(confirmation.get("confirmation_url") or "")
-    payment_id = str(payment.get("id") or "")
-    if not payment_id or not confirmation_url:
-        raise HTTPException(status_code=502, detail="Online payment is temporarily unavailable")
+    try:
+        payment = await yookassa.create_payment(
+            amount_rub=_rub(due),
+            description=f"Заказ GLAME.JEWELRY {body.checkout_id}",
+            return_url=return_url,
+            metadata={
+                "source": "tilda_gift_certificate_checkout",
+                "certificate_operation_id": str(operation.id),
+                "checkout_id": body.checkout_id,
+                "order_amount": str(operation.cart_total or 0),
+                "certificate_amount": str(operation.amount or 0),
+            },
+            idempotence_key=body.checkout_id,
+        )
+        confirmation = payment.get("confirmation") or {}
+        confirmation_url = str(confirmation.get("confirmation_url") or "")
+        payment_id = str(payment.get("id") or "")
+        if not payment_id or not confirmation_url:
+            raise RuntimeError("YooKassa did not return a payment confirmation URL")
+    except Exception as exc:
+        # A certificate is reserved before the outbound request by design.  If
+        # the payment provider is unavailable, return it immediately instead
+        # of making the buyer wait for the 30-minute expiry task.
+        await certificates.release(
+            operation_id=operation.id,
+            tilda_order_id=body.checkout_id,
+            reason="payment_failed",
+            idempotency_key=f"{idempotency_key}:payment-failed",
+        )
+        await db.commit()
+        raise HTTPException(status_code=503, detail="Online payment is temporarily unavailable") from exc
 
     # The YooKassa webhook locates this reservation using payment_id and only
     # then confirms the certificate and posts the debit to 1C.
