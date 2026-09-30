@@ -278,40 +278,53 @@ class OneCGiftCertificateService:
         if not series_ref or not gift_ref or not organization_ref or amount_kopeks <= 0:
             raise ValueError("Gift certificate accounting references are missing")
 
-        current_rub = await self.get_series_balance(series_ref)
-        amount_rub = amount_kopeks / 100
-        if action == "redeem" and current_rub + 0.005 < amount_rub:
-            raise ValueError("Insufficient gift certificate balance in 1C")
-        remaining_rub = current_rub - amount_rub if action == "redeem" else current_rub + amount_rub
         comment = f"GLAME TILDA {action} {operation_id}"
-        document = await self._request_json(
-            "POST",
-            "/Document_СписаниеПроданныхПодарочныхСертификатов",
-            json_body={
-                "Date": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-                "Posted": False,
-                "Организация_Key": organization_ref,
-                "Комментарий": comment,
-                "ПодарочныеСертификаты": [
-                    {
-                        "LineNumber": 1,
-                        "ПодарочныйСертификат_Key": gift_ref,
-                        "НомерСертификата_Key": series_ref,
-                        "Остаток": remaining_rub,
-                    }
-                ],
-            },
-        )
+        document = await self._find_certificate_operation_document(comment)
+        remaining_rub: Optional[float] = None
+
+        if document:
+            # A previous request may have created the 1C document and then
+            # timed out before GLAME received the response. Reusing that
+            # document is essential: creating another one would debit the
+            # certificate twice.
+            remaining_rub = self._document_remaining_balance(document, series_ref)
+            if remaining_rub is None:
+                raise RuntimeError("Existing 1C certificate document has no remaining balance")
+        else:
+            current_rub = await self.get_series_balance(series_ref)
+            amount_rub = amount_kopeks / 100
+            if action == "redeem" and current_rub + 0.005 < amount_rub:
+                raise ValueError("Insufficient gift certificate balance in 1C")
+            remaining_rub = current_rub - amount_rub if action == "redeem" else current_rub + amount_rub
+            document = await self._request_json(
+                "POST",
+                "/Document_СписаниеПроданныхПодарочныхСертификатов",
+                json_body={
+                    "Date": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                    "Posted": False,
+                    "Организация_Key": organization_ref,
+                    "Комментарий": comment,
+                    "ПодарочныеСертификаты": [
+                        {
+                            "LineNumber": 1,
+                            "ПодарочныйСертификат_Key": gift_ref,
+                            "НомерСертификата_Key": series_ref,
+                            "Остаток": remaining_rub,
+                        }
+                    ],
+                },
+            )
         document_ref = str(document.get("Ref_Key") or "").strip()
         if not document_ref:
             raise RuntimeError("1C did not return a gift certificate operation document")
-        await self._request_json(
-            "POST",
-            f"/Document_СписаниеПроданныхПодарочныхСертификатов(guid'{document_ref}')/Post",
-            json_body={"PostingModeOperational": True},
-        )
+        if not bool(document.get("Posted")):
+            await self._request_json(
+                "POST",
+                f"/Document_СписаниеПроданныхПодарочныхСертификатов(guid'{document_ref}')/Post",
+                json_body={"PostingModeOperational": True},
+            )
         actual_rub = await self.get_series_balance(series_ref)
-        if abs(actual_rub - remaining_rub) > 0.005:
+        if abs(actual_rub - float(remaining_rub)) > 0.005:
             raise RuntimeError(
                 f"1C gift certificate balance after {action} is {actual_rub} RUB, expected {remaining_rub} RUB"
             )
@@ -322,6 +335,42 @@ class OneCGiftCertificateService:
             "balance_amount": int(round(actual_rub * 100)),
             "currency": "RUB",
         }
+
+    async def _find_certificate_operation_document(self, comment: str) -> Optional[dict[str, Any]]:
+        """Return the 1C document previously created for an operation, if any."""
+        escaped_comment = str(comment or "").replace("'", "''")
+        data = await self._request_json(
+            "GET",
+            "/Document_СписаниеПроданныхПодарочныхСертификатов",
+            params={
+                "$top": 2,
+                "$filter": f"Комментарий eq '{escaped_comment}'",
+                "$select": "Ref_Key,Posted",
+            },
+        )
+        rows = data.get("value") or []
+        if not rows:
+            return None
+        document_ref = str(rows[0].get("Ref_Key") or "").strip()
+        if not document_ref:
+            raise RuntimeError("1C returned a certificate document without Ref_Key")
+        return await self._request_json(
+            "GET",
+            f"/Document_СписаниеПроданныхПодарочныхСертификатов(guid'{document_ref}')",
+            params={"$expand": "ПодарочныеСертификаты"},
+        )
+
+    @staticmethod
+    def _document_remaining_balance(document: dict[str, Any], series_ref: str) -> Optional[float]:
+        """Read the target balance stored in an existing 1C write-off document."""
+        for row in document.get("ПодарочныеСертификаты") or []:
+            if str(row.get("НомерСертификата_Key") or "").strip() != str(series_ref or "").strip():
+                continue
+            try:
+                return float(row.get("Остаток"))
+            except (TypeError, ValueError):
+                return None
+        return None
 
     async def ensure_series_sold(self, series_ref_key: str) -> None:
         endpoint = f"/Catalog_СерииНоменклатуры(guid'{series_ref_key}')"

@@ -1,9 +1,11 @@
 import os
+import asyncio
 from uuid import uuid4
 
 from app.models.gift_certificate import GiftCertificate
 from app.models.tilda_gift_certificate_operation import TildaGiftCertificateOperation
 from app.services import tilda_gift_certificate_service as service
+from app.services.onec_gift_certificate_service import OneCGiftCertificateService
 from app.api import tilda_gift_certificates as routes
 
 
@@ -48,3 +50,53 @@ def test_tilda_checkout_requires_enabled_onec_accounting(monkeypatch):
         assert getattr(exc, "status_code", None) == 503
     else:
         raise AssertionError("Tilda checkout must stay disabled without 1C accounting")
+
+
+class ExistingOneCDocumentService(OneCGiftCertificateService):
+    """1C test double: the document exists because a prior request timed out."""
+
+    def __init__(self):
+        super().__init__(api_url="https://onec.example.test")
+        self.calls = []
+
+    async def _request_json(self, method, endpoint, **kwargs):
+        self.calls.append((method, endpoint, kwargs))
+        if method == "GET" and endpoint == "/Document_СписаниеПроданныхПодарочныхСертификатов":
+            return {"value": [{"Ref_Key": "document-1", "Posted": True}]}
+        if method == "GET" and "Document_СписаниеПроданныхПодарочныхСертификатов(guid'document-1')" in endpoint:
+            return {
+                "Ref_Key": "document-1",
+                "Posted": True,
+                "ПодарочныеСертификаты": [
+                    {"НомерСертификата_Key": "series-1", "Остаток": 70},
+                ],
+            }
+        raise AssertionError(f"Unexpected 1C call: {method} {endpoint}")
+
+    async def get_series_balance(self, series_ref_key):
+        assert series_ref_key == "series-1"
+        return 70.0
+
+
+def test_onec_retry_reuses_existing_certificate_document(monkeypatch):
+    monkeypatch.setenv("ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY", "organization-1")
+
+    async def run():
+        onec = ExistingOneCDocumentService()
+        try:
+            return await onec._post_certificate_operation_via_odata(
+                {
+                    "operation_id": "operation-1",
+                    "type": "redeem",
+                    "certificate_series_ref_key": "series-1",
+                    "gift_nomenclature_ref_key": "gift-1",
+                    "amount": 3000,
+                }
+            ), onec.calls
+        finally:
+            await onec.close()
+
+    result, calls = asyncio.run(run())
+    assert result["document_id"] == "document-1"
+    assert result["balance_amount"] == 7000
+    assert not any(method == "POST" for method, _endpoint, _kwargs in calls)
