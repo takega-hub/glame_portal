@@ -9,9 +9,15 @@
 ## Архитектура и безопасность
 
 ```text
-Форма Tilda -> public API GLAME -> резерв
-Webhook Tilda/ЮKassa -> internal API GLAME -> штатный OData 1С
+Корзина Tilda -> public API GLAME -> резерв -> GLAME checkout -> ЮKassa
+Webhook ЮKassa -> GLAME -> штатный OData 1С
 ```
+
+Штатную интеграцию ЮKassa в Tilda не менять. Для сертификата в существующую
+корзину добавляется отдельная кнопка `Оплатить с сертификатом`; при частичной
+оплате она направляет покупателя в ЮKassa только на остаток. Не создавать в
+Tilda «Универсальную платежную систему»: этот экран предназначен для заявки
+разработчика отдельной платёжной системы и требует модерации.
 
 Не хранить секреты в JavaScript Tilda. Публичные `validate` и `reserve` доступны только для доменов из `TILDA_GIFT_CERTIFICATE_ALLOWED_ORIGINS`, ограничены rate limit и используют одноразовый короткоживущий `validation_token`. Внутренние методы вызываются только серверным мостом с заголовками:
 
@@ -98,6 +104,43 @@ Idempotency-Key: <UUID>
 ```
 
 Срок резерва — 30 минут (`GIFT_CERTIFICATE_RESERVATION_TTL_MINUTES`). Повторный запрос с тем же `tilda_order_id` возвращает существующий резерв. Параллельные резервы блокируются транзакционно. При изменении `cart_total` или `cart_fingerprint` токен и прежний резерв недействительны. Если в корзине есть подарочный сертификат как товар, его стоимость исключается из применяемой суммы.
+
+### Checkout GLAME для корзины Tilda
+
+Публичный маршрут объединяет резервирование и переход в ЮKassa. Доступен
+только с разрешённых доменов Tilda и не принимает номер или PIN: вместо них
+используется короткоживущий `validation_token` из предыдущей проверки.
+
+```http
+POST /public/tilda/gift-certificates/checkout
+Idempotency-Key: <UUID>
+```
+
+```json
+{
+  "validation_token": "short-lived-single-use-token",
+  "amount": 1000000,
+  "checkout_id": "a3a0420e-56cc-40ce-a955-8fb90c9a9b39",
+  "cart_total": 1250000,
+  "cart_fingerprint": "sha256:normalized-cart",
+  "return_url": "https://glamejewelry.ru/catalog?glame_certificate_checkout=...",
+  "items": [{"sku": "GL10050", "quantity": 1, "unit_price": 1250000}]
+}
+```
+
+Для частичной оплаты ответ содержит `confirmation_url` ЮKassa, созданный на
+`amount_due`. Для полной оплаты ответ возвращает `status: paid` без перехода
+в ЮKassa. Вебхук ЮKassa читает статус платежа через API ЮKassa, находит резерв
+по `payment_id` и вызывает подтверждение списания ровно один раз. Статус после
+возврата покупателя проверяется через:
+
+```http
+GET /public/tilda/gift-certificates/checkout/{checkout_id}
+```
+
+Готовый изолированный блок интерфейса: `docs/integrations/tilda-gift-certificate-cart.js`.
+Его добавляют в общий Footer Tilda только после теста на предпросмотре. Он не
+заменяет стандартную кнопку оформления и не меняет штатную ЮKassa.
 
 ### Подтверждение списания
 
