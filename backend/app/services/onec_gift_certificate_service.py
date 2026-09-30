@@ -116,3 +116,61 @@ class OneCGiftCertificateService:
         endpoint = f"/Catalog_СерииНоменклатуры(guid'{series_ref_key}')"
         return await self._request_json("PATCH", endpoint, json_body={"Продан": bool(sold)})
 
+    async def find_series_by_number(self, certificate_number: str) -> Optional[dict[str, Any]]:
+        """Find an existing certificate series without exposing it to clients.
+
+        1C OData in Fresh accepts a filter only after apostrophes are escaped.
+        We deliberately fetch the owner separately: the exact expanded owner
+        shape differs between UНФ updates.
+        """
+        number = str(certificate_number or "").strip()
+        if not number:
+            return None
+        escaped = number.replace("'", "''")
+        data = await self._request_json(
+            "GET",
+            "/Catalog_СерииНоменклатуры",
+            params={
+                "$top": 2,
+                "$filter": f"Description eq '{escaped}'",
+                "$select": "Ref_Key,Description,Owner,Owner_Type,Продан,DeletionMark",
+            },
+        )
+        rows = data.get("value") or []
+        for row in rows:
+            if not bool(row.get("DeletionMark")):
+                return row
+        return None
+
+    async def get_nomenclature(self, ref_key: str) -> Optional[dict[str, Any]]:
+        if not ref_key:
+            return None
+        endpoint = f"/Catalog_Номенклатура(guid'{ref_key}')"
+        data = await self._request_json(
+            "GET",
+            endpoint,
+            params={
+                "$select": (
+                    "Ref_Key,Code,Description,Артикул,ТипНоменклатуры,Номинал,"
+                    "ПроизвольныйНоминал,ИспользоватьСерииНоменклатуры,DeletionMark"
+                )
+            },
+        )
+        return data or None
+
+    async def post_certificate_operation(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Send an accounting movement to the configured 1C bridge.
+
+        Standard OData does not expose a stable, universal document for writing
+        off UНФ certificates.  The exact operation endpoint is supplied only
+        after the test-base metadata is approved; until then the portal keeps a
+        ``pending_sync`` operation and retries it safely.
+        """
+        endpoint = (os.getenv("ONEC_GIFT_CERTIFICATE_OPERATIONS_URL") or "").strip()
+        if not endpoint:
+            raise RuntimeError("ONEC_GIFT_CERTIFICATE_OPERATIONS_URL is not configured")
+        if endpoint.startswith("http://") or endpoint.startswith("https://"):
+            response = await self.client.post(endpoint, json=payload)
+            response.raise_for_status()
+            return response.json() if response.content else {}
+        return await self._request_json("POST", endpoint, json_body=payload)
