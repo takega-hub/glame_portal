@@ -79,11 +79,13 @@ def hash_certificate_pin(pin: str) -> str:
     return hmac.new(secret.encode("utf-8"), str(pin).encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def generate_certificate_number() -> str:
+def generate_certificate_number(nominal_amount: int) -> str:
+    """Generate a readable unique number ending with the nominal in whole RUB."""
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     part1 = "".join(secrets.choice(alphabet) for _ in range(4))
     part2 = "".join(secrets.choice(alphabet) for _ in range(4))
-    return f"GLM-{datetime.now(timezone.utc).year}-{part1}-{part2}"
+    nominal_rub = _rub(nominal_amount) // 100
+    return f"GLM-{datetime.now(timezone.utc).year}-{part1}-{part2}-{nominal_rub}"
 
 
 def generate_certificate_pin() -> str:
@@ -132,7 +134,7 @@ class GiftCertificateService:
         nominal = validate_gift_certificate_nominal(nominal_amount)
         pin = generate_certificate_pin()
         for _ in range(10):
-            number = generate_certificate_number()
+            number = generate_certificate_number(nominal)
             exists = (
                 await self.db.execute(select(GiftCertificate).where(GiftCertificate.number == number))
             ).scalar_one_or_none()
@@ -242,7 +244,7 @@ class GiftCertificateService:
         recipient_phone: Optional[str] = None,
         recipient_email: Optional[str] = None,
         message: Optional[str] = None,
-        expires_in_days: int = 365,
+        expires_in_days: Optional[int] = None,
         meta: Optional[dict[str, Any]] = None,
     ) -> tuple[GiftCertificate, str]:
         nominal = validate_gift_certificate_nominal(nominal_amount)
@@ -253,7 +255,7 @@ class GiftCertificateService:
 
         pin = generate_certificate_pin()
         for _ in range(10):
-            number = generate_certificate_number()
+            number = generate_certificate_number(nominal)
             exists = (
                 await self.db.execute(select(GiftCertificate).where(GiftCertificate.number == number))
             ).scalar_one_or_none()
@@ -326,7 +328,9 @@ class GiftCertificateService:
             message=message,
             order_id=order_id,
             onec_certificate_id=str(onec_series.get("Ref_Key")) if onec_series and onec_series.get("Ref_Key") else None,
-            expires_at=_now() + timedelta(days=max(1, int(expires_in_days or 365))),
+            # Purchased GLAME certificates are unlimited; keep the argument
+            # only for compatibility with earlier mobile clients.
+            expires_at=None,
             meta=cert_meta or None,
         )
         self.db.add(cert)

@@ -1,70 +1,52 @@
-# Интеграция подарочных сертификатов GLAME с Tilda
+# Подарочные сертификаты GLAME: интеграция с Tilda
 
 ## Назначение
 
-Документ задает контракт для подключения подарочных сертификатов GLAME к форме заказа на Tilda. Сертификат можно применить к заказу полностью или частично; неиспользованный остаток сохраняется для следующей покупки.
+Контракт позволяет сайту GLAME на Tilda проверить сертификат, оплатить им заказ полностью или частично, сохранить остаток, отменить резерв и вернуть сумму на сертификат.
 
-Денежные суммы во всех запросах и ответах передаются целым числом в **копейках**: `649000` означает `6 490 ₽`.
+Все суммы передаются в копейках: `930000` означает `9 300 ₽`. Production API: `https://portal.glamejewelry.ru/api`.
 
-Базовый production URL API: `https://portal.glamejewelry.ru/api`.
-
-## Важное ограничение Tilda
-
-Не вызывать API сертификатов непосредственно из JavaScript блока Tilda. В браузере нельзя безопасно хранить ключ интеграции, а PIN сертификата не должен попадать в сторонние скрипты или логи.
-
-Нужен небольшой серверный мост: Cloudflare Worker, серверная функция, свой backend или иной server-to-server сервис. Схема работы:
+## Архитектура и безопасность
 
 ```text
-Tilda checkout -> серверный мост -> GLAME API -> 1С
-                         ^              |
-                         +--- webhook --+
+Форма Tilda -> public API GLAME -> резерв
+Webhook Tilda/ЮKassa -> internal API GLAME -> штатный OData 1С
 ```
 
-Серверный мост хранит ключ интеграции, передает в GLAME API идентификатор заказа Tilda и принимает webhook об успешной либо отмененной оплате.
-
-## Авторизация и безопасность
-
-Для маршрутов ниже требуется отдельный ключ `TILDA_GIFT_CERTIFICATES_API_KEY`, выдаваемый администратором GLAME. Передавать его только между серверными системами:
+Не хранить секреты в JavaScript Tilda. Публичные `validate` и `reserve` доступны только для доменов из `TILDA_GIFT_CERTIFICATE_ALLOWED_ORIGINS`, ограничены rate limit и используют одноразовый короткоживущий `validation_token`. Внутренние методы вызываются только серверным мостом с заголовками:
 
 ```http
-Authorization: Bearer <TILDA_GIFT_CERTIFICATES_API_KEY>
+Authorization: Bearer <TILDA_GIFT_CERTIFICATE_INTERNAL_SECRET>
+Idempotency-Key: <UUID>
 Content-Type: application/json
-Idempotency-Key: <unique-request-id>
 ```
 
-- Для каждого изменения состояния нужен новый UUID в `Idempotency-Key`.
-- Повтор одного и того же запроса с тем же ключом обязан вернуть исходный результат и не создать второе списание.
-- В production разрешить CORS только для доменов Tilda, но не считать CORS механизмом авторизации.
-- Логировать номер сертификата только в маскированном виде, например `GLM-2026-****-VC7L`; PIN не логировать никогда.
+Номер и PIN нельзя передавать в заказ Tilda, письма, аналитику и логи. В ответах после проверки использовать только маску. PIN передается только по HTTPS и хранится в GLAME лишь как хеш. Для старых серий 1С без PIN проверка возможна только по номеру.
 
-## Состояния сертификата
+## Правила
 
-| Статус | Значение |
-| --- | --- |
-| `active` | Можно применять. |
-| `reserved` | Часть суммы временно удержана под заказ Tilda. Другие заказы не могут ее списать. |
-| `redeemed` | Остаток полностью списан. |
-| `pending` | Сертификат еще не оплачен покупателем; применять нельзя. |
-| `expired`, `canceled` | Применять нельзя. |
+1. 1С является источником истины для серий, признака продажи и остатка.
+2. Сертификаты бессрочные: `expires_at = null`.
+3. Допускается частичная оплата; сдача не выдается.
+4. Сертификатом нельзя купить другой подарочный сертификат.
+5. Применяемая сумма не превышает доступный остаток, сумму заказа после скидок и запрошенную сумму.
+6. Изменение корзины отменяет проверку и резерв.
+7. Повторный запрос или webhook не могут создать второе списание.
 
-`balance_amount` — доступный остаток, `reserved_amount` — уже удержанная сумма. Не следует рассчитывать доступный остаток на стороне Tilda: использовать значение из ответа API.
+## API
 
-## Контракт маршрутов для Tilda
-
-На момент подготовки документа в приложении GLAME есть внутренние JWT-маршруты проверки и кассового списания, но нет внешнего контура Tilda с резервированием и webhook-подтверждением. Агент должен реализовать перечисленные ниже маршруты под префиксом `/api/integrations/tilda/gift-certificates`.
-
-### 1. Проверить сертификат
+### Проверка сертификата
 
 ```http
-POST /integrations/tilda/gift-certificates/validate
+POST /public/tilda/gift-certificates/validate
 ```
 
 ```json
 {
-  "number": "GLM-2026-S3CS-VC7L",
-  "pin": "784902",
-  "order_total_amount": 649000,
-  "tilda_order_id": "1234567890"
+  "number": "GLM-2026-ABCD-EF12-10000",
+  "pin": "123456",
+  "cart_total": 1250000,
+  "cart_fingerprint": "sha256:normalized-cart"
 }
 ```
 
@@ -72,42 +54,33 @@ POST /integrations/tilda/gift-certificates/validate
 
 ```json
 {
-  "certificate": {
-    "number": "GLM-2026-S3CS-VC7L",
-    "status": "active",
-    "currency": "RUB",
-    "nominal_amount": 1750000,
-    "balance_amount": 1750000,
-    "reserved_amount": 0,
-    "expires_at": "2027-07-14T09:28:13+00:00"
-  },
-  "max_applicable_amount": 649000,
-  "currency": "RUB"
+  "valid": true,
+  "certificate_mask": "GLM-2026-****-10000",
+  "available_amount": 1000000,
+  "applicable_amount": 1000000,
+  "amount_due": 250000,
+  "currency": "RUB",
+  "validation_token": "short-lived-single-use-token",
+  "validation_expires_at": "2026-09-30T12:05:00Z"
 }
 ```
 
-`max_applicable_amount` равен минимуму из доступного остатка и суммы заказа. Маршрут ничего не списывает и не резервирует.
+Запрос не изменяет остаток. Неизвестный номер сначала ищется в 1С и импортируется либо обновляется локально. В ответ нельзя включать полный номер, PIN, `Ref_Key` 1С или необработанные ошибки инфраструктуры.
 
-### 2. Зарезервировать сумму для заказа
-
-Вызывать только после явного подтверждения покупателем применения сертификата и до перехода на оплату остатка.
+### Резервирование
 
 ```http
-POST /integrations/tilda/gift-certificates/reserve
+POST /public/tilda/gift-certificates/reserve
+Idempotency-Key: <UUID>
 ```
 
 ```json
 {
-  "number": "GLM-2026-S3CS-VC7L",
-  "pin": "784902",
-  "amount": 649000,
+  "validation_token": "short-lived-single-use-token",
+  "amount": 1000000,
   "tilda_order_id": "1234567890",
-  "order_total_amount": 649000,
-  "customer": {
-    "name": "Елена Орехникова",
-    "phone": "+79162668200",
-    "email": "client@example.com"
-  }
+  "cart_total": 1250000,
+  "cart_fingerprint": "sha256:normalized-cart"
 }
 ```
 
@@ -115,116 +88,85 @@ POST /integrations/tilda/gift-certificates/reserve
 
 ```json
 {
-  "reservation_id": "f4da3fd7-8b72-4dc5-a64b-5b64f2b76bfa",
-  "tilda_order_id": "1234567890",
-  "certificate_number": "GLM-2026-S3CS-VC7L",
-  "reserved_amount": 649000,
-  "certificate_balance_amount": 1101000,
-  "certificate_reserved_amount": 649000,
-  "amount_due": 0,
-  "expires_at": "2026-09-18T12:30:00+00:00"
+  "operation_id": "f4da3fd7-8b72-4dc5-a64b-5b64f2b76bfa",
+  "certificate_mask": "GLM-2026-****-10000",
+  "applied_amount": 1000000,
+  "amount_due": 250000,
+  "status": "reserved",
+  "reservation_expires_at": "2026-09-30T12:30:00Z"
 }
 ```
 
-Правила:
+Срок резерва — 30 минут (`GIFT_CERTIFICATE_RESERVATION_TTL_MINUTES`). Повторный запрос с тем же `tilda_order_id` возвращает существующий резерв. Параллельные резервы блокируются транзакционно. При изменении `cart_total` или `cart_fingerprint` токен и прежний резерв недействительны. Если в корзине есть подарочный сертификат как товар, его стоимость исключается из применяемой суммы.
 
-- Сервер ограничивает сумму: `min(requested_amount, доступный_остаток, сумма_заказа)`.
-- Повторный reserve для того же `tilda_order_id` должен вернуть существующий резерв, а не увеличивать его.
-- Резерв действует 30 минут. По истечении срока фоновая задача освобождает его автоматически.
-- Если заказ можно оплатить целиком сертификатом, Tilda не должна отправлять его в эквайринг: сразу вызвать `confirm` после создания подтвержденного заказа.
+### Подтверждение списания
 
-### 3. Подтвердить списание после успешного заказа
-
-Вызывать серверным webhook-обработчиком Tilda после статуса «оплачен» или после создания заказа с нулевой суммой к оплате.
+Вызывается серверным мостом только после webhook `succeeded` от ЮKassa либо после подтвержденного заказа с `amount_due = 0`.
 
 ```http
-POST /integrations/tilda/gift-certificates/confirm
+POST /internal/tilda/gift-certificates/confirm
+Authorization: Bearer <TILDA_GIFT_CERTIFICATE_INTERNAL_SECRET>
+Idempotency-Key: <UUID>
 ```
 
 ```json
 {
-  "reservation_id": "f4da3fd7-8b72-4dc5-a64b-5b64f2b76bfa",
+  "operation_id": "f4da3fd7-8b72-4dc5-a64b-5b64f2b76bfa",
   "tilda_order_id": "1234567890",
   "payment_status": "succeeded",
-  "payment_id": "tilda-payment-987654",
-  "paid_at": "2026-09-18T12:05:00Z",
-  "order_amount": 649000,
-  "payment_amount": 0,
-  "items": [
-    {
-      "sku": "GL10050",
-      "name": "Анклет Pearl",
-      "quantity": 1,
-      "unit_price": 649000
-    }
-  ]
+  "payment_id": "yookassa-or-tilda-payment-id",
+  "order_amount": 1250000,
+  "payment_amount": 250000,
+  "items": [{"sku": "GL10050", "quantity": 1, "unit_price": 1250000}]
 }
 ```
-
-Ответ `200`:
 
 ```json
 {
-  "operation_id": "8a24bdfb-8da4-42c0-a67e-40edb9982a00",
-  "tilda_order_id": "1234567890",
-  "certificate_number": "GLM-2026-S3CS-VC7L",
-  "redeemed_amount": 649000,
-  "balance_amount": 1101000,
-  "status": "active",
-  "one_c_document_id": "..."
+  "operation_id": "f4da3fd7-8b72-4dc5-a64b-5b64f2b76bfa",
+  "status": "confirmed",
+  "certificate_mask": "GLM-2026-****-10000",
+  "redeemed_amount": 1000000,
+  "balance_amount": 0,
+  "sync_status": "synced"
 }
 ```
 
-Обязательная последовательность на backend GLAME:
+Backend финализирует резерв ровно один раз, пишет журнал операции и через OData создаёт штатный документ `СписаниеПроданныхПодарочныхСертификатов` в 1С. В документ передаётся остаток после частичного списания, а платформа после проведения сверяет его с регистром 1С. Одного изменения флага `Продан` недостаточно. Если 1С недоступна после подтвержденной оплаты, заказ не отменяется: операция записывается как `pending_sync` и повторяется фоново без повторного списания.
 
-1. Найти резерв по `reservation_id` и сверить `tilda_order_id`, сумму и статус оплаты.
-2. Создать или найти по идемпотентному ключу движение списания в 1С по серии сертификата.
-3. Проверить, что остаток в регистре `ПодарочныеСертификаты` 1С уменьшился на `redeemed_amount`.
-4. Только после успешного проведения 1С окончательно списать резерв в базе GLAME и записать операцию.
+### Освобождение резерва
 
-При недоступности 1С вернуть `502` или `503` и не подтверждать списание локально. Повтор `confirm` с тем же `tilda_order_id` и `payment_id` должен безопасно завершить незаконченный процесс.
-
-### 4. Освободить резерв
-
-Вызывать, если покупатель отменил форму, оплата не прошла, заказ отменен либо истек срок резерва.
+Используется при отмене заказа, `canceled`/`failed` платеже или ошибке до подтверждения. Просроченные резервы освобождаются фоновым заданием.
 
 ```http
-POST /integrations/tilda/gift-certificates/release
+POST /internal/tilda/gift-certificates/release
+Authorization: Bearer <TILDA_GIFT_CERTIFICATE_INTERNAL_SECRET>
+Idempotency-Key: <UUID>
 ```
 
 ```json
 {
-  "reservation_id": "f4da3fd7-8b72-4dc5-a64b-5b64f2b76bfa",
+  "operation_id": "f4da3fd7-8b72-4dc5-a64b-5b64f2b76bfa",
   "tilda_order_id": "1234567890",
   "reason": "payment_canceled"
 }
 ```
 
-Допустимые `reason`: `checkout_abandoned`, `payment_canceled`, `payment_failed`, `order_canceled`, `reservation_expired`.
+Допустимые причины: `checkout_abandoned`, `payment_canceled`, `payment_failed`, `order_canceled`, `reservation_expired`. Движение в 1С при release не создается.
 
-Ответ `200`:
+### Возврат на сертификат
 
-```json
-{
-  "tilda_order_id": "1234567890",
-  "released_amount": 649000,
-  "balance_amount": 1750000,
-  "status": "active"
-}
-```
-
-Повторный release должен вернуть `200` с тем же результатом. После успешного release делать движение в 1С не нужно: итоговое списание еще не происходило.
-
-### 5. Вернуть сумму на сертификат после возврата заказа
-
-Этот маршрут нужен, когда ранее подтвержденный заказ полностью или частично возвращен. Не использовать `release`: он работает только с резервом до списания.
+Поддерживает полный и частичный возврат, всегда связан с исходным списанием.
 
 ```http
-POST /integrations/tilda/gift-certificates/refund
+POST /internal/tilda/gift-certificates/refund
+Authorization: Bearer <TILDA_GIFT_CERTIFICATE_INTERNAL_SECRET>
+Idempotency-Key: <UUID>
 ```
 
 ```json
 {
+  "original_operation_id": "f4da3fd7-8b72-4dc5-a64b-5b64f2b76bfa",
   "tilda_order_id": "1234567890",
   "refund_id": "tilda-refund-123",
   "amount": 200000,
@@ -232,92 +174,73 @@ POST /integrations/tilda/gift-certificates/refund
 }
 ```
 
-Ответ `200`:
+Платформа проводит возврат через OData 1С, сверяет новый остаток и затем увеличивает локальный остаток. `refund_id` и `Idempotency-Key` предотвращают двойное начисление.
 
-```json
-{
-  "operation_id": "7f673841-c621-447d-91dd-1751dcb33325",
-  "certificate_number": "GLM-2026-S3CS-VC7L",
-  "refunded_amount": 200000,
-  "balance_amount": 1301000,
-  "status": "active",
-  "one_c_document_id": "..."
-}
-```
-
-Сначала провести возвратный приход в 1С, затем увеличить остаток в GLAME. `refund_id` должен быть идемпотентным: один возврат нельзя начислить дважды.
-
-### 6. Получить статус операции
+### Статус операции
 
 ```http
-GET /integrations/tilda/gift-certificates/operations/{operation_id}
+GET /internal/tilda/gift-certificates/operations/{operation_id}
+Authorization: Bearer <TILDA_GIFT_CERTIFICATE_INTERNAL_SECRET>
 ```
-
-Ответ используется для повторной доставки webhook и диагностики:
 
 ```json
 {
-  "operation_id": "8a24bdfb-8da4-42c0-a67e-40edb9982a00",
+  "operation_id": "f4da3fd7-8b72-4dc5-a64b-5b64f2b76bfa",
   "type": "redeem",
-  "status": "completed",
+  "status": "confirmed",
+  "sync_status": "synced",
   "tilda_order_id": "1234567890",
-  "certificate_number": "GLM-2026-S3CS-VC7L",
-  "amount": 649000,
-  "one_c_document_id": "...",
-  "created_at": "2026-09-18T12:05:02Z"
+  "certificate_mask": "GLM-2026-****-10000",
+  "amount": 1000000,
+  "last_sync_attempt_at": "2026-09-30T12:05:03Z",
+  "error": null
 }
 ```
 
-## Сценарии оплаты
+## Сценарии Tilda
 
-### Сертификат покрывает заказ полностью
+**Полная оплата:** `validate` -> `reserve` -> создать заказ без ЮKassa -> `confirm` -> показать успех.
 
-1. `validate`.
-2. `reserve` на всю сумму заказа.
-3. Создать заказ в Tilda со способом оплаты «Подарочный сертификат» и суммой `0` к оплате.
-4. Сразу вызвать `confirm`.
-5. Показать покупателю подтверждение только после `200` от `confirm`.
+**Частичная оплата:** `validate` -> `reserve` -> отправить в ЮKassa только `amount_due` -> по webhook `succeeded` вызвать `confirm`; по `canceled`/`failed` вызвать `release`.
 
-### Сертификат покрывает заказ частично
+Не доверять редиректу покупателя из ЮKassa. Если платёж прошел, но `confirm` не ответил, серверный мост повторяет тот же запрос либо читает статус операции.
 
-1. `validate`.
-2. `reserve` на сумму, которую клиент применил.
-3. Передать в Tilda только остаток `amount_due` для банковской карты.
-4. После подтвержденного платежа вызвать `confirm`.
-5. При отмене или ошибке оплаты вызвать `release`.
+В заказ Tilda передавать только `gift_certificate_applied`, маску номера, примененную сумму, `operation_id` и статус.
 
-### Оплата карты прошла, а confirm временно не прошел
+## Учёт 1С и данные GLAME
 
-Не возвращать деньги автоматически и не выполнять второе списание. Повторять `confirm` с теми же `Idempotency-Key`, `tilda_order_id` и `payment_id` до статуса `completed`; маршрут должен быть идемпотентным.
+Для сертификата хранятся: нормализованный номер, хеш PIN, источник (`platform`/`onec`), ссылки на серию и номенклатуру 1С, номинал, доступный/зарезервированный остаток, дата последней синхронизации и `sync_status` (`synced`, `pending_sync`, `sync_error`).
 
-## Ошибки
+Журнал каждой операции хранит `operation_id`, `idempotency_key`, тип (`reserve`, `redeem`, `release`, `refund`), сумму, номер заказа Tilda, ссылку серии и документа 1С, статус синхронизации и безопасный текст ошибки. На идемпотентный ключ нужен уникальный индекс.
 
-| HTTP | Действие Tilda/сервера | Типовые причины |
-| --- | --- | --- |
-| `400` | Показать ошибку, не повторять автоматически. | Неверная сумма или состояние заказа. |
-| `401`, `403` | Не показывать детали клиенту, уведомить администратора. | Неверный ключ, PIN или нет доступа. |
-| `404` | Сообщить, что сертификат не найден. | Неверный номер либо идентификатор резерва. |
-| `409` | Получить статус операции и использовать его. | Повторная операция с другим содержимым. |
-| `410` | Попросить применить сертификат заново. | Резерв истек. |
-| `422` | Показать ответ API. | Сертификат уже погашен, отменен или истек. |
-| `502`, `503` | Не завершать заказ сертификатом; повторить `confirm` или `release`. | Нет связи с 1С. |
+Технические имена документов и регистров списания 1С определяются по актуальному `$metadata` рабочей базы. В текущей базе используется `Document_СписаниеПроданныхПодарочныхСертификатов`; необработанные ответы 1С не отдаются в Tilda.
 
-## Существующие внутренние маршруты GLAME
+## Ошибки и проверка
 
-Они полезны для мобильного приложения и кассы, но **не должны** вызываться из Tilda напрямую:
+| HTTP | Значение |
+| --- | --- |
+| `400`, `422` | Неверная сумма, корзина, PIN или статус сертификата. |
+| `401`, `403` | Нет доступа к внутреннему API. |
+| `404` | Не найдены серия, резерв или операция. |
+| `409` | Повтор с другим телом; запросить статус операции. |
+| `410` | Резерв или токен проверки истек. |
+| `429` | Превышен лимит проверок номера/PIN. |
+| `502`, `503` | 1С временно недоступна; не создавать новый резерв, проверить статус оплаченной операции. |
 
-| Маршрут | Назначение | Почему не подходит как Tilda API |
-| --- | --- | --- |
-| `POST /api/gift-certificates/validate` | Проверка номера и PIN. | Требует JWT авторизованного пользователя. |
-| `POST /api/checkout` с `gift_certificate` | Внутренний checkout GLAME резервирует и списывает сертификат. | Создает заказ в собственной корзине GLAME, а не заказ Tilda. |
-| `POST /api/admin/gift-certificates/redeem-offline` | Немедленное списание на кассе. | Требует JWT сотрудника, не имеет резерва и не предназначен для интернет-заказов. |
-| `GET /api/gift-certificates/my` | Личный кабинет владельца. | Требует JWT владельца. |
+Автотесты должны покрывать импорт серии 1С, старую серию без PIN, неверный PIN нового сертификата, полную/частичную оплату, запрет покупки сертификата сертификатом, отмену, истечение резерва, возврат, параллельные резервы, повтор webhook, `pending_sync` и отсутствие номера/PIN в открытых данных.
 
-## Критерии готовности
+## Конфигурация
 
-1. Агент реализовал все шесть внешних маршрутов и проверку server-to-server ключа.
-2. Для `reserve`, `confirm`, `release` и `refund` есть тесты на повторную доставку одного запроса.
-3. Финальное списание и возврат отражаются в регистре подарочных сертификатов 1С по серии; ответ `confirm`/`refund` содержит ссылку на документ 1С.
-4. При сбое 1С остатки в GLAME и 1С не расходятся: операция остается в состоянии `pending_sync` и безопасно повторяется.
-5. Резерв автоматически освобождается через 30 минут и не может быть списан чужим заказом.
-6. На форме Tilda отображаются примененная сумма и остаток к оплате, но номер и PIN не сохраняются в полях заказа Tilda, письмах и аналитике.
+```env
+ONEC_GIFT_CERTIFICATES_ENABLED=true
+ONEC_API_URL=
+ONEC_API_TOKEN=
+GIFT_CERTIFICATE_SECRET=
+GIFT_CERTIFICATE_RESERVATION_TTL_MINUTES=30
+GIFT_CERTIFICATE_PIN_REQUIRED_FOR_NEW=true
+TILDA_GIFT_CERTIFICATE_ALLOWED_ORIGINS=https://glamejewelry.ru,https://www.glamejewelry.ru
+TILDA_GIFT_CERTIFICATE_INTERNAL_SECRET=
+ONEC_GIFT_CERTIFICATE_OPERATIONS_URL=
+```
+
+`ONEC_GIFT_CERTIFICATE_OPERATIONS_URL` оставляем пустым: тогда платформа использует штатный OData 1С. Переменная нужна только если в будущем появится отдельный 1С HTTP-сервис.

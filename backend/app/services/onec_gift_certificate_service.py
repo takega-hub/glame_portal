@@ -24,6 +24,7 @@ class OneCGiftCertificateService:
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(connect=30.0, read=120.0, write=30.0, pool=30.0),
             headers=headers,
+            trust_env=False,
         )
 
     async def __aenter__(self) -> "OneCGiftCertificateService":
@@ -229,6 +230,98 @@ class OneCGiftCertificateService:
     async def mark_series_sold(self, series_ref_key: str, sold: bool = True) -> dict[str, Any]:
         endpoint = f"/Catalog_СерииНоменклатуры(guid'{series_ref_key}')"
         return await self._request_json("PATCH", endpoint, json_body={"Продан": bool(sold)})
+
+    async def find_series_by_number(self, certificate_number: str) -> Optional[dict[str, Any]]:
+        number = str(certificate_number or "").strip()
+        if not number:
+            return None
+        data = await self._request_json(
+            "GET",
+            "/Catalog_СерииНоменклатуры",
+            params={
+                "$top": 2,
+                "$filter": f"Description eq '{number.replace("'", "''")}'",
+                "$select": "Ref_Key,Description,Owner,Owner_Type,Продан,DeletionMark",
+            },
+        )
+        return next((row for row in (data.get("value") or []) if not row.get("DeletionMark")), None)
+
+    async def get_nomenclature(self, ref_key: str) -> Optional[dict[str, Any]]:
+        return await self.get_gift_nomenclature(ref_key)
+
+    async def post_certificate_operation(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Post a certificate movement through a custom bridge or standard 1C OData."""
+        endpoint = (os.getenv("ONEC_GIFT_CERTIFICATE_OPERATIONS_URL") or "").strip()
+        if endpoint:
+            if endpoint.startswith(("http://", "https://")):
+                response = await self.client.post(endpoint, json=payload)
+                response.raise_for_status()
+                return response.json() if response.content else {}
+            return await self._request_json("POST", endpoint, json_body=payload)
+        return await self._post_certificate_operation_via_odata(payload)
+
+    async def _post_certificate_operation_via_odata(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Use 1C:UNF's native write-off document for an online certificate payment.
+
+        The document stores the remaining balance of the series.  We read the
+        current register balance immediately before creating it and verify the
+        result after posting, so a partial payment cannot silently zero a card.
+        """
+        operation_id = str(payload.get("operation_id") or "").strip()
+        action = str(payload.get("type") or "").strip().lower()
+        series_ref = str(payload.get("certificate_series_ref_key") or "").strip()
+        gift_ref = str(payload.get("gift_nomenclature_ref_key") or "").strip()
+        organization_ref = str(os.getenv("ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY") or "").strip()
+        amount_kopeks = int(payload.get("amount") or 0)
+        if not operation_id or action not in {"redeem", "refund"}:
+            raise ValueError("Invalid gift certificate operation")
+        if not series_ref or not gift_ref or not organization_ref or amount_kopeks <= 0:
+            raise ValueError("Gift certificate accounting references are missing")
+
+        current_rub = await self.get_series_balance(series_ref)
+        amount_rub = amount_kopeks / 100
+        if action == "redeem" and current_rub + 0.005 < amount_rub:
+            raise ValueError("Insufficient gift certificate balance in 1C")
+        remaining_rub = current_rub - amount_rub if action == "redeem" else current_rub + amount_rub
+        comment = f"GLAME TILDA {action} {operation_id}"
+        document = await self._request_json(
+            "POST",
+            "/Document_СписаниеПроданныхПодарочныхСертификатов",
+            json_body={
+                "Date": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                "Posted": False,
+                "Организация_Key": organization_ref,
+                "Комментарий": comment,
+                "ПодарочныеСертификаты": [
+                    {
+                        "LineNumber": 1,
+                        "ПодарочныйСертификат_Key": gift_ref,
+                        "НомерСертификата_Key": series_ref,
+                        "Остаток": remaining_rub,
+                    }
+                ],
+            },
+        )
+        document_ref = str(document.get("Ref_Key") or "").strip()
+        if not document_ref:
+            raise RuntimeError("1C did not return a gift certificate operation document")
+        await self._request_json(
+            "POST",
+            f"/Document_СписаниеПроданныхПодарочныхСертификатов(guid'{document_ref}')/Post",
+            json_body={"PostingModeOperational": True},
+        )
+        actual_rub = await self.get_series_balance(series_ref)
+        if abs(actual_rub - remaining_rub) > 0.005:
+            raise RuntimeError(
+                f"1C gift certificate balance after {action} is {actual_rub} RUB, expected {remaining_rub} RUB"
+            )
+        return {
+            "Ref_Key": document_ref,
+            "document_id": document_ref,
+            "operation_id": operation_id,
+            "balance_amount": int(round(actual_rub * 100)),
+            "currency": "RUB",
+        }
 
     async def ensure_series_sold(self, series_ref_key: str) -> None:
         endpoint = f"/Catalog_СерииНоменклатуры(guid'{series_ref_key}')"

@@ -48,6 +48,7 @@ from app.models.order_item import OrderItem
 from app.models.payment import Payment
 from app.models.gift_certificate import GiftCertificate
 from app.models.gift_certificate_transaction import GiftCertificateTransaction
+from app.models.tilda_gift_certificate_operation import TildaGiftCertificateOperation
 from app.models.glame_token import GlameTokenAccount, GlameTokenBridgeOperation, GlameTokenDailyAuditHash, GlameTokenTransaction
 from app.models.reward_store import RewardStoreItem
 from app.models.referral import (
@@ -125,6 +126,7 @@ __all__ = [
     "Payment",
     "GiftCertificate",
     "GiftCertificateTransaction",
+    "TildaGiftCertificateOperation",
     "GlameTokenAccount",
     "GlameTokenBridgeOperation",
     "GlameTokenDailyAuditHash",
