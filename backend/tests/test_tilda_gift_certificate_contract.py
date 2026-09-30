@@ -31,12 +31,13 @@ def test_operation_response_never_contains_certificate_number():
     assert "GLM-2026-ABCD-EF12-10000" not in str(payload)
 
 
-def test_tilda_routes_are_present_without_exposing_pin():
+def test_tilda_routes_are_present_and_validate_does_not_accept_pin():
     source = open(os.path.join(os.path.dirname(__file__), "../app/api/tilda_gift_certificates.py"), encoding="utf-8").read()
     assert '/public/tilda/gift-certificates/validate' in source
     assert '/public/tilda/gift-certificates/reserve' in source
     assert '/internal/tilda/gift-certificates/confirm' in source
     assert 'TILDA_GIFT_CERTIFICATE_INTERNAL_SECRET' in source
+    assert 'pin' not in routes.ValidateRequest.model_fields
 
 
 def test_tilda_checkout_requires_enabled_onec_accounting(monkeypatch):

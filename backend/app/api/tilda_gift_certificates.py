@@ -30,7 +30,6 @@ class CartItem(BaseModel):
 
 class ValidateRequest(BaseModel):
     number: str = Field(min_length=3, max_length=64)
-    pin: Optional[str] = Field(default=None, max_length=32)
     cart_total: int = Field(gt=0)
     cart_fingerprint: str = Field(min_length=8, max_length=128)
     items: Optional[list[CartItem]] = None
@@ -118,7 +117,6 @@ async def validate_certificate(body: ValidateRequest, request: Request, db: Asyn
     _rate_limit(request, body.number)
     result = await TildaGiftCertificateService(db).validate(
         number=body.number,
-        pin=body.pin,
         cart_total=body.cart_total,
         cart_fingerprint=body.cart_fingerprint,
         items=[item.model_dump() for item in body.items] if body.items else None,

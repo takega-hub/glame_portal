@@ -95,7 +95,6 @@ class TildaGiftCertificateService:
         self,
         *,
         number: str,
-        pin: Optional[str],
         cart_total: int,
         cart_fingerprint: str,
         items: Optional[list[dict[str, Any]]] = None,
@@ -106,10 +105,10 @@ class TildaGiftCertificateService:
             raise HTTPException(status_code=422, detail="Invalid cart")
 
         certificate = await self._get_or_import_certificate(number)
-        # A legacy 1C series has no PIN; a platform-issued certificate requires it.
-        require_pin = bool(certificate.pin_hash)
+        # Tilda uses the certificate number as its sole credential. The PIN
+        # remains available for the native platform checkout and cashier flow.
         certificate = await self.certificates.get_valid_certificate(
-            number=certificate.number, pin=pin, require_pin=require_pin
+            number=certificate.number, pin=None, require_pin=False
         )
         applicable = min(_amount(certificate.balance_amount), self._non_certificate_total(total, items))
         if applicable <= 0:

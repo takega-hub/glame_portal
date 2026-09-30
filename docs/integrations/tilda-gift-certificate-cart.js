@@ -5,7 +5,7 @@
  * Tilda Preview.  This script does not replace or change the native YooKassa
  * method. It adds a separate "Оплатить с сертификатом" path.
  *
- * Important: no secret, 1C credential, certificate PIN or certificate number
+ * Important: no secret, 1C credential or certificate number
  * is persisted in localStorage/cookies or sent to YooKassa.
  */
 (function () {
@@ -18,7 +18,7 @@
     if (document.getElementById('glame-certificate-payment-styles')) return;
     var style = document.createElement('style');
     style.id = 'glame-certificate-payment-styles';
-    style.textContent = '.glame-certificate-payment{margin:20px 0 10px;padding:18px 0;border-top:1px solid #d8d8d8;border-bottom:1px solid #d8d8d8;color:#151515}.glame-certificate-payment__title{font-size:16px;font-weight:600;letter-spacing:.02em}.glame-certificate-payment__fields{display:grid;grid-template-columns:1fr 100px auto;gap:8px;margin-top:12px}.glame-certificate-payment input{min-width:0;height:42px;padding:0 12px;border:1px solid #b7b7b7;border-radius:0;background:#fff;color:#151515;font:14px Arial,sans-serif}.glame-certificate-payment button{min-height:42px;padding:0 16px;border:1px solid #151515;border-radius:0;background:#151515;color:#fff;font:13px Arial,sans-serif;cursor:pointer}.glame-certificate-payment button[disabled]{opacity:.55;cursor:wait}.glame-certificate-payment__message{min-height:18px;margin-top:10px;font-size:13px;line-height:1.4}.glame-certificate-payment__message.is-error{color:#a72626}.glame-certificate-payment__checkout{width:100%;margin-top:12px}@media(max-width:640px){.glame-certificate-payment__fields{grid-template-columns:1fr 88px}.glame-certificate-payment__apply{grid-column:1/-1}}';
+    style.textContent = '.glame-certificate-payment{margin:20px 0 10px;padding:18px 0;border-top:1px solid #d8d8d8;border-bottom:1px solid #d8d8d8;color:#151515}.glame-certificate-payment__title{font-size:16px;font-weight:600;letter-spacing:.02em}.glame-certificate-payment__fields{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:12px}.glame-certificate-payment input{min-width:0;height:42px;padding:0 12px;border:1px solid #b7b7b7;border-radius:0;background:#fff;color:#151515;font:14px Arial,sans-serif}.glame-certificate-payment button{min-height:42px;padding:0 16px;border:1px solid #151515;border-radius:0;background:#151515;color:#fff;font:13px Arial,sans-serif;cursor:pointer}.glame-certificate-payment button[disabled]{opacity:.55;cursor:wait}.glame-certificate-payment__message{min-height:18px;margin-top:10px;font-size:13px;line-height:1.4}.glame-certificate-payment__message.is-error{color:#a72626}.glame-certificate-payment__checkout{width:100%;margin-top:12px}@media(max-width:640px){.glame-certificate-payment__fields{grid-template-columns:1fr}.glame-certificate-payment__apply{grid-column:1/-1}}';
     document.head.appendChild(style);
   }
 
@@ -105,7 +105,6 @@
       '<div class="glame-certificate-payment__title">Подарочный сертификат</div>',
       '<div class="glame-certificate-payment__fields">',
       '<input class="glame-certificate-payment__number" inputmode="text" autocomplete="off" placeholder="Номер сертификата">',
-      '<input class="glame-certificate-payment__pin" inputmode="numeric" autocomplete="one-time-code" placeholder="PIN">',
       '<button type="button" class="glame-certificate-payment__apply">Применить</button>',
       '</div>',
       '<div class="glame-certificate-payment__message" aria-live="polite"></div>',
@@ -130,7 +129,6 @@
   function bind(panel) {
     panel.querySelector('.glame-certificate-payment__apply').addEventListener('click', function () {
       var number = panel.querySelector('.glame-certificate-payment__number').value.trim();
-      var pin = panel.querySelector('.glame-certificate-payment__pin').value.trim();
       if (!number) return message(panel, 'Введите номер сертификата', true);
       var button = this;
       button.disabled = true;
@@ -138,7 +136,6 @@
       freshSnapshot().then(function (snapshot) {
         return request('/public/tilda/gift-certificates/validate', {
           number: number,
-          pin: pin || null,
           cart_total: snapshot.total,
           cart_fingerprint: snapshot.fingerprint,
           items: snapshot.items
