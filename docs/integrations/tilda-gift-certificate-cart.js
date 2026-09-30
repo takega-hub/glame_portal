@@ -6,13 +6,15 @@
  * method. It adds a separate "Оплатить с сертификатом" path.
  *
  * Important: no secret, 1C credential or certificate number
- * is persisted in localStorage/cookies or sent to YooKassa.
+ * is persisted in localStorage/cookies or sent to YooKassa. An opaque
+ * checkout ID is kept in sessionStorage solely to resume a pending payment.
  */
 (function () {
   'use strict';
 
   var API = 'https://portal.glamejewelry.ru/api';
-  var state = { validation: null, checkoutId: null };
+  var CHECKOUT_STORAGE_KEY = 'glame_tilda_certificate_checkout_id';
+  var state = { validation: null, checkoutId: null, pendingConfirmationUrl: null };
 
   function styles() {
     if (document.getElementById('glame-certificate-payment-styles')) return;
@@ -81,6 +83,20 @@
     return url.toString();
   }
 
+  function savedCheckoutId() {
+    var fromUrl = new URL(window.location.href).searchParams.get('glame_certificate_checkout');
+    return fromUrl || window.sessionStorage.getItem(CHECKOUT_STORAGE_KEY) || '';
+  }
+
+  function clearSavedCheckout() {
+    window.sessionStorage.removeItem(CHECKOUT_STORAGE_KEY);
+    var url = new URL(window.location.href);
+    if (url.searchParams.has('glame_certificate_checkout')) {
+      url.searchParams.delete('glame_certificate_checkout');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
+
   function request(path, body, key) {
     return fetch(API + path, {
       method: body ? 'POST' : 'GET',
@@ -112,6 +128,7 @@
     ].join('');
     target.parentNode.insertBefore(panel, target.nextSibling);
     bind(panel);
+    restorePendingCheckout(panel);
   }
 
   function message(panel, text, error) {
@@ -123,7 +140,25 @@
   function invalidate(panel) {
     state.validation = null;
     state.checkoutId = null;
+    state.pendingConfirmationUrl = null;
     panel.querySelector('.glame-certificate-payment__checkout').hidden = true;
+  }
+
+  function restorePendingCheckout(panel) {
+    var id = savedCheckoutId();
+    if (!id) return;
+    request('/public/tilda/gift-certificates/checkout/' + encodeURIComponent(id)).then(function (checkout) {
+      if (checkout.status === 'reserved' && checkout.payment_required && checkout.confirmation_url) {
+        state.checkoutId = id;
+        state.pendingConfirmationUrl = checkout.confirmation_url;
+        var button = panel.querySelector('.glame-certificate-payment__checkout');
+        button.textContent = 'Продолжить оплату';
+        button.hidden = false;
+        message(panel, 'Сертификат зарезервирован для ожидающей оплаты.');
+        return;
+      }
+      clearSavedCheckout();
+    }).catch(function () { clearSavedCheckout(); });
   }
 
   function bind(panel) {
@@ -153,6 +188,10 @@
     });
 
     panel.querySelector('.glame-certificate-payment__checkout').addEventListener('click', function () {
+      if (state.pendingConfirmationUrl) {
+        window.location.assign(state.pendingConfirmationUrl);
+        return;
+      }
       if (!state.validation) return;
       var button = this;
       button.disabled = true;
@@ -173,9 +212,11 @@
         }, checkoutId());
       }).then(function (result) {
         if (result.payment_required && result.confirmation_url) {
+          window.sessionStorage.setItem(CHECKOUT_STORAGE_KEY, checkoutId());
           window.location.assign(result.confirmation_url);
           return;
         }
+        clearSavedCheckout();
         message(panel, 'Оплата принята. Заказ оформлен.');
         button.hidden = true;
       }).catch(function (error) {

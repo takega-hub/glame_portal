@@ -105,6 +105,17 @@ class TildaGiftCertificateService:
             raise HTTPException(status_code=422, detail="Invalid cart")
 
         certificate = await self._get_or_import_certificate(number)
+        pending_payment = (
+            await self.db.execute(
+                select(TildaGiftCertificateOperation)
+                .where(TildaGiftCertificateOperation.certificate_id == certificate.id)
+                .where(TildaGiftCertificateOperation.operation_type == "reserve")
+                .where(TildaGiftCertificateOperation.status == "reserved")
+                .where(TildaGiftCertificateOperation.payment_id.is_not(None))
+            )
+        ).scalar_one_or_none()
+        if pending_payment:
+            raise HTTPException(status_code=409, detail="Certificate is reserved for a pending payment")
         # Tilda uses the certificate number as its sole credential. The PIN
         # remains available for the native platform checkout and cashier flow.
         certificate = await self.certificates.get_valid_certificate(

@@ -220,4 +220,9 @@ async def get_certificate_checkout(
     """Status endpoint used by the cart when the buyer returns from YooKassa."""
     _require_tilda_origin(request)
     operation = await _operation_for_checkout(db, checkout_id)
-    return TildaGiftCertificateService.serialize(operation)
+    payload = TildaGiftCertificateService.serialize(operation)
+    meta = operation.meta if isinstance(operation.meta, dict) else {}
+    if operation.status == "reserved" and operation.payment_id:
+        payload["payment_required"] = True
+        payload["confirmation_url"] = meta.get("confirmation_url")
+    return payload
