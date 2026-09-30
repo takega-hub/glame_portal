@@ -440,8 +440,13 @@ class TildaGiftCertificateService:
             )
         ).scalars().all()
         refunded = sum(_amount(row) for row in refund_rows)
-        if value > max(0, _amount(original.amount) - refunded):
+        remaining = max(0, _amount(original.amount) - refunded)
+        if value > remaining:
             raise HTTPException(status_code=422, detail="Refund amount exceeds redeemed amount")
+        if value != remaining:
+            raise HTTPException(status_code=422, detail="Partial certificate refunds are not enabled yet")
+        if not str(original.onec_document_id or "").strip():
+            raise HTTPException(status_code=409, detail="Original 1C certificate document is not available for cancellation")
 
         operation = TildaGiftCertificateOperation(
             certificate_id=certificate.id,
@@ -460,7 +465,7 @@ class TildaGiftCertificateService:
         self.db.add(operation)
         await self.db.flush()
         try:
-            await self._post_to_one_c(operation, certificate, "refund")
+            await self._cancel_in_one_c(original, certificate)
         except Exception:
             operation.error = "1C synchronization is pending"
             return self.serialize(operation, certificate=certificate)
@@ -527,6 +532,10 @@ class TildaGiftCertificateService:
                 # Direct OData retry is currently verified only for debits.
                 # Refunds need a reversal of the original 1C document.
                 .where(TildaGiftCertificateOperation.operation_type == "reserve")
+                # Retrying an unknown 1C create can debit the certificate
+                # twice after a network failure. Only retry a document whose
+                # 1C reference was already persisted.
+                .where(TildaGiftCertificateOperation.onec_document_id.is_not(None))
                 .order_by(TildaGiftCertificateOperation.created_at)
                 .limit(max(1, min(limit, 500)))
                 .with_for_update(skip_locked=True)
@@ -689,10 +698,22 @@ class TildaGiftCertificateService:
             "tilda_order_id": operation.tilda_order_id,
             "payment_id": operation.payment_id,
             "refund_id": operation.refund_id,
+            "onec_document_id": operation.onec_document_id,
         }
         async with OneCGiftCertificateService() as onec:
             response = await onec.post_certificate_operation(payload)
         operation.onec_document_id = str(response.get("document_id") or response.get("Ref_Key") or "") or None
+
+    async def _cancel_in_one_c(
+        self, original: TildaGiftCertificateOperation, certificate: GiftCertificate
+    ) -> None:
+        async with OneCGiftCertificateService() as onec:
+            await onec.cancel_certificate_debit(
+                original_operation_id=str(original.id),
+                document_id=str(original.onec_document_id or ""),
+                series_ref=str(certificate.onec_certificate_id or ""),
+                amount_kopeks=_amount(original.amount),
+            )
 
     @staticmethod
     def _cart_contains_certificate(items: Optional[list[dict[str, Any]]]) -> bool:
