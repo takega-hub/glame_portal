@@ -294,7 +294,12 @@ class TildaGiftCertificateService:
             raise HTTPException(status_code=409, detail="Operation does not match the order")
         if operation.status == "confirmed":
             return self.serialize(operation, certificate=certificate)
-        if operation.status != "reserved" or operation.reservation_expires_at < _now():
+        # A hosted YooKassa payment can remain pending past the initial cart
+        # reservation TTL. Its status is verified by the webhook/scheduler, so
+        # it must keep the certificate locked until that status is final.
+        if operation.status != "reserved" or (
+            operation.reservation_expires_at < _now() and not operation.payment_id
+        ):
             raise HTTPException(status_code=410, detail="Reservation has expired")
         if str(payment_status).lower() != "succeeded":
             raise HTTPException(status_code=422, detail="Payment is not successful")
@@ -495,6 +500,7 @@ class TildaGiftCertificateService:
                 .where(TildaGiftCertificateOperation.operation_type == "reserve")
                 .where(TildaGiftCertificateOperation.status == "reserved")
                 .where(TildaGiftCertificateOperation.reservation_expires_at < _now())
+                .where(TildaGiftCertificateOperation.payment_id.is_(None))
                 .with_for_update(skip_locked=True)
             )
         ).scalars().all()
