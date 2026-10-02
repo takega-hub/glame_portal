@@ -39,6 +39,17 @@ def _stable_hash(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+def _require_full_tilda_purchase_redemption(certificate: GiftCertificate, requested: int) -> None:
+    """Tilda-purchased certificates are single-use and must be redeemed in full."""
+    meta = certificate.meta if isinstance(certificate.meta, dict) else {}
+    if meta.get("source") == "tilda_purchase" and _amount(requested) != _amount(certificate.balance_amount):
+        raise HTTPException(
+            status_code=422,
+            detail="Tilda-purchased certificates must be applied for their full available balance",
+        )
+
+
+
 
 def _token_secret() -> bytes:
     secret = os.getenv("GIFT_CERTIFICATE_SECRET") or os.getenv("JWT_SECRET_KEY")
@@ -238,12 +249,7 @@ class TildaGiftCertificateService:
         if not certificate:
             raise HTTPException(status_code=404, detail="Certificate not found")
         self.certificates._ensure_spendable(certificate)
-        meta = certificate.meta if isinstance(certificate.meta, dict) else {}
-        if meta.get("source") == "tilda_purchase" and requested != _amount(certificate.balance_amount):
-            raise HTTPException(
-                status_code=422,
-                detail="Tilda-purchased certificates must be applied for their full available balance",
-            )
+        _require_full_tilda_purchase_redemption(certificate, requested)
         maximum = min(
             _amount(certificate.balance_amount),
             _amount(token_data.get("applicable_amount")),
