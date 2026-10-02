@@ -33,4 +33,4 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt pytest
-      - run: pytest -q tests/test_tilda_gift_certificate_purchase_contract.py tests/test_tilda_gift_certificate_contract.py tests/test_tilda_gift_certificate_checkout_contract.py
+      - run: PYTHONPATH=. python -m pytest -q tests/test_tilda_gift_certificate_purchase_contract.py tests/test_tilda_gift_certificate_contract.py tests/test_tilda_gift_certificate_checkout_contract.py
