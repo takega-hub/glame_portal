@@ -121,6 +121,12 @@ class TildaGiftCertificateService:
         certificate = await self.certificates.get_valid_certificate(
             number=certificate.number, pin=None, require_pin=False
         )
+        meta = certificate.meta if isinstance(certificate.meta, dict) else {}
+        if meta.get("source") == "tilda_purchase" and total < _amount(certificate.balance_amount):
+            raise HTTPException(
+                status_code=422,
+                detail="A Tilda-purchased certificate must be used in full on an order of at least its nominal value",
+            )
         applicable = min(_amount(certificate.balance_amount), self._non_certificate_total(total, items))
         if applicable <= 0:
             raise HTTPException(status_code=422, detail="Certificate cannot be applied to this cart")
