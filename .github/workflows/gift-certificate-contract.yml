@@ -11,7 +11,7 @@ on:
       - "backend/tests/test_tilda_gift_certificate_purchase_contract.py"
       - ".github/workflows/gift-certificate-contract.yml"
   push:
-    branches: [main]
+    branches: [main, feature/seller-crm-mvp]
     paths:
       - "backend/app/api/tilda_gift_certificate_purchase.py"
       - "backend/app/services/gift_certificate_service.py"
