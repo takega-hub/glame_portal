@@ -10,6 +10,11 @@ from app.models.gift_certificate import GiftCertificate
 from app.models.tilda_gift_certificate_purchase import TildaGiftCertificatePurchase
 from app.services.gift_certificate_service import GiftCertificateService
 from app.services.tilda_gift_certificate_service import _require_full_tilda_purchase_redemption
+from app.services.tilda_gift_certificate_scheduler import (
+    _email_retry_delay,
+    _email_retry_is_due,
+    _record_email_retry,
+)
 
 
 def test_tilda_purchase_is_disabled_without_explicit_environment_flag(monkeypatch):
@@ -154,3 +159,14 @@ def test_tilda_purchase_marks_delivery_failed_when_email_is_not_sent(monkeypatch
     assert purchase.sent_at is None
     assert certificate.status == "active"
     assert db.commit.await_count >= 1
+
+
+def test_failed_delivery_is_retried_with_backoff_without_payment_changes():
+    now = datetime(2026, 10, 2, 12, 0, tzinfo=timezone.utc)
+    purchase = TildaGiftCertificatePurchase(status="failed", meta={})
+    _record_email_retry(purchase, now, "SMTP is unavailable")
+    assert purchase.status == "failed"
+    assert purchase.error == "Certificate email was not sent: SMTP is unavailable"
+    assert purchase.meta["email_retry_attempts"] == 1
+    assert _email_retry_is_due(purchase, now) is False
+    assert _email_retry_is_due(purchase, now + _email_retry_delay(1)) is True

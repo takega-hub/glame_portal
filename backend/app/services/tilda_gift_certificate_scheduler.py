@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI
 from sqlalchemy import select
@@ -20,6 +20,45 @@ from app.api.tilda_gift_certificate_purchase import process_purchase_payment
 
 logger = logging.getLogger(__name__)
 _TASK_NAME = "tilda_gift_certificate_maintenance_task"
+
+
+def _email_retry_limit() -> int:
+    return max(0, int(os.getenv("TILDA_GIFT_CERTIFICATE_EMAIL_RETRY_MAX_ATTEMPTS", "5")))
+
+
+def _email_retry_delay(attempt: int) -> timedelta:
+    """Back off failed mail delivery without ever touching payment or 1C state."""
+    minutes = min(24 * 60, 5 * (3 ** max(0, attempt - 1)))
+    return timedelta(minutes=minutes)
+
+
+def _email_retry_metadata(purchase: TildaGiftCertificatePurchase) -> dict:
+    return purchase.meta if isinstance(purchase.meta, dict) else {}
+
+
+def _email_retry_is_due(purchase: TildaGiftCertificatePurchase, now: datetime) -> bool:
+    value = _email_retry_metadata(purchase).get("email_retry_after")
+    if not value:
+        return True
+    try:
+        retry_after = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if retry_after.tzinfo is None:
+            retry_after = retry_after.replace(tzinfo=timezone.utc)
+        return retry_after <= now
+    except ValueError:
+        return True
+
+
+def _record_email_retry(purchase: TildaGiftCertificatePurchase, now: datetime, error: str) -> None:
+    meta = _email_retry_metadata(purchase)
+    attempts = int(meta.get("email_retry_attempts") or 0) + 1
+    purchase.meta = {
+        **meta,
+        "email_retry_attempts": attempts,
+        "email_retry_after": (now + _email_retry_delay(attempts)).isoformat(),
+    }
+    purchase.status = "failed"
+    purchase.error = f"Certificate email was not sent: {error}"
 
 
 async def _reconcile_expired_hosted_payments(db) -> int:
@@ -126,6 +165,42 @@ async def _retry_paid_purchase_issues(db) -> int:
     return retried
 
 
+async def _retry_failed_purchase_emails(db) -> int:
+    """Retry delivery only after payment and certificate issuance are complete."""
+    now = datetime.now(timezone.utc)
+    purchases = (
+        await db.execute(
+            select(TildaGiftCertificatePurchase)
+            .where(TildaGiftCertificatePurchase.status == "failed")
+            .where(TildaGiftCertificatePurchase.certificate_id.is_not(None))
+            .where(TildaGiftCertificatePurchase.error.like("Certificate email was not sent%"))
+            .with_for_update(skip_locked=True)
+        )
+    ).scalars().all()
+    retried = 0
+    mailer = GiftCertificateEmailService(db)
+    for purchase in purchases:
+        meta = _email_retry_metadata(purchase)
+        if int(meta.get("email_retry_attempts") or 0) >= _email_retry_limit() or not _email_retry_is_due(purchase, now):
+            continue
+        certificate = await db.get(GiftCertificate, purchase.certificate_id)
+        if not certificate or certificate.status != "active":
+            continue
+        try:
+            sent = await mailer.send_gift_certificate(certificate)
+        except Exception as exc:
+            _record_email_retry(purchase, now, str(exc))
+        else:
+            if sent:
+                purchase.status = "sent"
+                purchase.error = None
+                purchase.sent_at = now
+            else:
+                _record_email_retry(purchase, now, "SMTP delivery did not complete")
+        retried += 1
+    return retried
+
+
 async def _run_maintenance() -> None:
     interval = max(30, int(os.getenv("TILDA_GIFT_CERTIFICATE_MAINTENANCE_INTERVAL_SECONDS", "60")))
     while True:
@@ -135,6 +210,7 @@ async def _run_maintenance() -> None:
                 await _reconcile_expired_hosted_payments(db)
                 await _retry_paid_purchase_issues(db)
                 await _deliver_scheduled_purchases(db)
+                await _retry_failed_purchase_emails(db)
                 await service.release_expired_reservations()
                 await service.retry_pending_sync()
                 await db.commit()
