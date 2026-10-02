@@ -217,3 +217,8 @@ async def get_certificate_operation(
 ):
     _require_internal_secret(authorization)
     return await TildaGiftCertificateService(db).get_operation(operation_id)
+
+
+from app.api.tilda_gift_certificate_purchase import router as tilda_purchase_router
+
+router.include_router(tilda_purchase_router)

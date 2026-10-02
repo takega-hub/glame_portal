@@ -236,24 +236,25 @@ class GiftCertificateService:
     async def create_pending_certificate(
         self,
         *,
-        buyer_user_id: UUID,
+        buyer_user_id: Optional[UUID],
         recipient_user_id: Optional[UUID] = None,
         nominal_amount: int,
-        order_id: UUID,
+        order_id: Optional[UUID],
         recipient_name: Optional[str] = None,
         recipient_phone: Optional[str] = None,
         recipient_email: Optional[str] = None,
         message: Optional[str] = None,
         expires_in_days: Optional[int] = None,
+        pin_required: bool = True,
         meta: Optional[dict[str, Any]] = None,
-    ) -> tuple[GiftCertificate, str]:
+    ) -> tuple[GiftCertificate, Optional[str]]:
         nominal = validate_gift_certificate_nominal(nominal_amount)
         if os.getenv("ONEC_GIFT_CERTIFICATES_ENABLED", "true").lower() in {"0", "false", "no"}:
             raise HTTPException(status_code=503, detail="Electronic certificates require 1C gift certificate accounting")
         if not os.getenv("ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY"):
             raise HTTPException(status_code=503, detail="ONEC_GIFT_CERTIFICATE_ORGANIZATION_KEY is not configured")
 
-        pin = generate_certificate_pin()
+        pin = generate_certificate_pin() if pin_required else None
         for _ in range(10):
             number = generate_certificate_number(nominal)
             exists = (
@@ -265,7 +266,8 @@ class GiftCertificateService:
             raise HTTPException(status_code=500, detail="Could not generate certificate number")
 
         cert_meta = dict(meta or {})
-        cert_meta.setdefault("delivery_pin", pin)
+        if pin:
+            cert_meta.setdefault("delivery_pin", pin)
         onec_series = None
         onec_nomenclature = None
         onec_custom_nominal = False
@@ -314,7 +316,7 @@ class GiftCertificateService:
 
         cert = GiftCertificate(
             number=number,
-            pin_hash=hash_certificate_pin(pin),
+            pin_hash=hash_certificate_pin(pin) if pin else None,
             status="pending",
             currency="RUB",
             nominal_amount=nominal,
@@ -328,9 +330,7 @@ class GiftCertificateService:
             message=message,
             order_id=order_id,
             onec_certificate_id=str(onec_series.get("Ref_Key")) if onec_series and onec_series.get("Ref_Key") else None,
-            # Purchased GLAME certificates are unlimited; keep the argument
-            # only for compatibility with earlier mobile clients.
-            expires_at=None,
+            expires_at=_now() + timedelta(days=max(1, int(expires_in_days))) if expires_in_days else None,
             meta=cert_meta or None,
         )
         self.db.add(cert)

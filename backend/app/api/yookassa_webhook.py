@@ -13,6 +13,7 @@ from app.services.gift_certificate_email_service import GiftCertificateEmailServ
 from app.services.gift_certificate_service import GiftCertificateService
 from app.services.onec_order_xml_service import write_orders_xml_snapshot
 from app.services.tilda_gift_certificate_service import TildaGiftCertificateService
+from app.api.tilda_gift_certificate_purchase import process_purchase_payment
 from app.services.yookassa_service import get_yookassa_service_for_db
 
 
@@ -102,6 +103,9 @@ async def yookassa_webhook(
     if await _process_tilda_certificate_payment(
         db, payment_id=payment_external_id, yookassa_service=svc
     ):
+        return {"ok": True}
+
+    if await process_purchase_payment(db, payment_id=payment_external_id, yookassa_service=svc):
         return {"ok": True}
 
     payment = (

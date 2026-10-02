@@ -186,7 +186,7 @@ def _certificate_template_path(cert: GiftCertificate) -> Path:
     meta = cert.meta if isinstance(cert.meta, dict) else {}
     texture_id = str(meta.get("texture_id") or "").strip().lower()
     design = str(meta.get("design") if meta.get("design") is not None else "").strip()
-    if "dark" in texture_id or design == "1":
+    if "dark" in texture_id or design in {"1", "dark"}:
         return GIFT_CERTIFICATE_ASSET_DIR / "glame_gift_certificate_template_02.png"
     return GIFT_CERTIFICATE_ASSET_DIR / "glame_gift_certificate_template_01.png"
 
@@ -207,7 +207,7 @@ def _render_certificate_image(cert: GiftCertificate) -> bytes | None:
     meta = cert.meta if isinstance(cert.meta, dict) else {}
     texture_id = str(meta.get("texture_id") or "").strip().lower()
     design = str(meta.get("design") if meta.get("design") is not None else "").strip()
-    is_dark = "dark" in texture_id or design == "1"
+    is_dark = "dark" in texture_id or design in {"1", "dark"}
 
     amount = _certificate_amount_text(int(cert.nominal_amount or 0))
     draw = ImageDraw.Draw(image)
