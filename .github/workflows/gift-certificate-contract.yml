@@ -24,6 +24,9 @@ on:
 jobs:
   contract:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/glame_test
+      JWT_SECRET_KEY: gift-certificate-contract-test-secret
     defaults:
       run:
         working-directory: backend
