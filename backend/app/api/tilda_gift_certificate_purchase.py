@@ -80,7 +80,7 @@ def _enabled() -> bool:
 
 
 def _amounts() -> list[int]:
-    raw = os.getenv("TILDA_GIFT_CERTIFICATE_PURCHASE_ALLOWED_AMOUNTS", "300000,500000,1000000,2000000")
+    raw = os.getenv("TILDA_GIFT_CERTIFICATE_PURCHASE_ALLOWED_AMOUNTS", "500000,1000000,1500000,2000000,3000000,5000000")
     return sorted({int(value.strip()) for value in raw.split(",") if value.strip().isdigit() and int(value.strip()) > 0})
 
 
