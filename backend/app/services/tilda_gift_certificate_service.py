@@ -238,6 +238,12 @@ class TildaGiftCertificateService:
         if not certificate:
             raise HTTPException(status_code=404, detail="Certificate not found")
         self.certificates._ensure_spendable(certificate)
+        meta = certificate.meta if isinstance(certificate.meta, dict) else {}
+        if meta.get("source") == "tilda_purchase" and requested != _amount(certificate.balance_amount):
+            raise HTTPException(
+                status_code=422,
+                detail="Tilda-purchased certificates must be applied for their full available balance",
+            )
         maximum = min(
             _amount(certificate.balance_amount),
             _amount(token_data.get("applicable_amount")),

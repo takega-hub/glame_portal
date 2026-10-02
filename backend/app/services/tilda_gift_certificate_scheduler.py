@@ -90,8 +90,18 @@ async def _deliver_scheduled_purchases(db) -> int:
             purchase.status = "failed"
             purchase.error = "Issued certificate is missing"
             continue
-        await mailer.send_for_certificates([certificate])
+        try:
+            sent = await mailer.send_gift_certificate(certificate)
+        except Exception as exc:
+            purchase.status = "failed"
+            purchase.error = f"Certificate email was not sent: {exc}"
+            continue
+        if not sent:
+            purchase.status = "failed"
+            purchase.error = "Certificate email was not sent"
+            continue
         purchase.status = "sent"
+        purchase.error = None
         purchase.sent_at = now
         delivered += 1
     return delivered

@@ -76,7 +76,7 @@ class PurchaseRequest(BaseModel):
 
 
 def _enabled() -> bool:
-    return os.getenv("TILDA_GIFT_CERTIFICATE_PURCHASE_ENABLED", "true").lower() not in {"0", "false", "no"}
+    return os.getenv("TILDA_GIFT_CERTIFICATE_PURCHASE_ENABLED", "false").lower() in {"1", "true", "yes"}
 
 
 def _amounts() -> list[int]:
@@ -110,6 +110,33 @@ def _return_url(value: str) -> str:
     if parsed.scheme != "https" or origin not in _origins():
         raise HTTPException(status_code=422, detail="Invalid return URL")
     return value
+
+
+def _receipt(purchase: TildaGiftCertificatePurchase) -> dict:
+    vat_code = os.getenv("TILDA_GIFT_CERTIFICATE_RECEIPT_VAT_CODE", "").strip()
+    payment_subject = os.getenv("TILDA_GIFT_CERTIFICATE_RECEIPT_PAYMENT_SUBJECT", "").strip()
+    payment_mode = os.getenv("TILDA_GIFT_CERTIFICATE_RECEIPT_PAYMENT_MODE", "").strip()
+    if not vat_code or not payment_subject or not payment_mode:
+        raise HTTPException(status_code=503, detail="Gift certificate receipt configuration is unavailable")
+    contact = purchase.buyer_contact if isinstance(purchase.buyer_contact, dict) else {}
+    customer = {key: str(contact[key]).strip() for key in ("email", "phone") if contact.get(key)}
+    if len(customer) != 1:
+        raise HTTPException(status_code=422, detail="A receipt contact is required")
+    receipt = {
+        "customer": customer,
+        "items": [{
+            "description": "Электронный подарочный сертификат GLAME",
+            "quantity": "1.00",
+            "amount": {"value": f"{purchase.nominal_amount / 100:.2f}", "currency": "RUB"},
+            "vat_code": int(vat_code),
+            "payment_subject": payment_subject,
+            "payment_mode": payment_mode,
+        }],
+    }
+    tax_system_code = os.getenv("TILDA_GIFT_CERTIFICATE_RECEIPT_TAX_SYSTEM_CODE", "").strip()
+    if tax_system_code:
+        receipt["tax_system_code"] = int(tax_system_code)
+    return receipt
 
 
 def _public(purchase: TildaGiftCertificatePurchase) -> dict:
@@ -154,7 +181,14 @@ async def create_purchase(body: PurchaseRequest, request: Request, idempotency_k
     svc = await get_yookassa_service_for_db(db)
     if not svc:
         raise HTTPException(status_code=503, detail="Online payment is temporarily unavailable")
-    payment = await svc.create_payment(amount_rub=f"{purchase.nominal_amount / 100:.2f}", description="Электронный подарочный сертификат GLAME", return_url=purchase.return_url, metadata={"source": "tilda_gift_certificate_purchase", "purchase_id": str(purchase.id)}, idempotence_key=f"tilda-gift-purchase:{purchase.id}")
+    payment = await svc.create_payment(
+        amount_rub=f"{purchase.nominal_amount / 100:.2f}",
+        description="Электронный подарочный сертификат GLAME",
+        return_url=purchase.return_url,
+        metadata={"source": "tilda_gift_certificate_purchase", "purchase_id": str(purchase.id)},
+        receipt=_receipt(purchase),
+        idempotence_key=f"tilda-gift-purchase:{purchase.id}",
+    )
     purchase.payment_id = str(payment.get("id") or "") or None
     purchase.confirmation_url = str((payment.get("confirmation") or {}).get("confirmation_url") or "") or None
     if not purchase.payment_id or not purchase.confirmation_url:
@@ -210,7 +244,7 @@ async def process_purchase_payment(db: AsyncSession, *, payment_id: str, yookass
                 recipient_name=purchase.recipient_name,
                 recipient_email=purchase.recipient_email,
                 message=purchase.message,
-                expires_in_days=183,
+                expires_in_months=6,
                 pin_required=False,
                 meta={"source": "tilda_purchase", "purchase_id": str(purchase.id), "sender_name": purchase.sender_name, "design": purchase.design, "send_at": purchase.send_at.isoformat() if purchase.send_at else None},
             )
@@ -232,9 +266,20 @@ async def process_purchase_payment(db: AsyncSession, *, payment_id: str, yookass
         if purchase.delivery_mode == "scheduled":
             purchase.status = "scheduled"
         else:
-            await GiftCertificateEmailService(db).send_for_certificates([cert])
-            purchase.status = "sent"
-            purchase.sent_at = datetime.now(timezone.utc)
+            try:
+                sent = await GiftCertificateEmailService(db).send_gift_certificate(cert)
+            except Exception as exc:
+                purchase.status = "failed"
+                purchase.error = f"Certificate email was not sent: {exc}"
+                await db.commit()
+                return True
+            if not sent:
+                purchase.status = "failed"
+                purchase.error = "Certificate email was not sent"
+            else:
+                purchase.status = "sent"
+                purchase.error = None
+                purchase.sent_at = datetime.now(timezone.utc)
         await db.commit()
     except Exception:
         purchase.status = "paid_pending_issue"

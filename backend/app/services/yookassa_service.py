@@ -29,6 +29,7 @@ class YooKassaService:
         description: str,
         return_url: str,
         metadata: Optional[Dict[str, Any]] = None,
+        receipt: Optional[Dict[str, Any]] = None,
         idempotence_key: Optional[str] = None,
         capture: bool = True,
     ) -> Dict[str, Any]:
@@ -41,6 +42,8 @@ class YooKassaService:
         }
         if metadata:
             payload["metadata"] = metadata
+        if receipt:
+            payload["receipt"] = receipt
 
         async with httpx.AsyncClient(timeout=20.0) as client:
             resp = await client.post(

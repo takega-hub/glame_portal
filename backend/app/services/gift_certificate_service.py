@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import logging
 import os
+from calendar import monthrange
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
@@ -245,6 +246,7 @@ class GiftCertificateService:
         recipient_email: Optional[str] = None,
         message: Optional[str] = None,
         expires_in_days: Optional[int] = None,
+        expires_in_months: Optional[int] = None,
         pin_required: bool = True,
         meta: Optional[dict[str, Any]] = None,
     ) -> tuple[GiftCertificate, Optional[str]]:
@@ -330,13 +332,29 @@ class GiftCertificateService:
             message=message,
             order_id=order_id,
             onec_certificate_id=str(onec_series.get("Ref_Key")) if onec_series and onec_series.get("Ref_Key") else None,
-            expires_at=_now() + timedelta(days=max(1, int(expires_in_days))) if expires_in_days else None,
+            expires_at=self._expiry_date(
+                expires_in_days=expires_in_days,
+                expires_in_months=expires_in_months,
+            ),
             meta=cert_meta or None,
         )
         self.db.add(cert)
         await self.db.flush()
         self._add_tx(cert, "issue_pending", 0, order_id=order_id, source="platform")
         return cert, pin
+
+    @staticmethod
+    def _expiry_date(*, expires_in_days: Optional[int], expires_in_months: Optional[int]):
+        now = _now()
+        if expires_in_months:
+            months = max(1, int(expires_in_months))
+            month_index = now.month - 1 + months
+            year = now.year + month_index // 12
+            month = month_index % 12 + 1
+            return now.replace(year=year, month=month, day=min(now.day, monthrange(year, month)[1]))
+        if expires_in_days:
+            return now + timedelta(days=max(1, int(expires_in_days)))
+        return None
 
     async def activate_order_certificates(self, order_id: UUID, payment_id: Optional[UUID] = None) -> list[GiftCertificate]:
         rows = (

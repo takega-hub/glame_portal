@@ -1,0 +1,36 @@
+name: Gift certificate contract
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/api/tilda_gift_certificate_purchase.py"
+      - "backend/app/services/gift_certificate_service.py"
+      - "backend/app/services/tilda_gift_certificate_service.py"
+      - "backend/app/services/tilda_gift_certificate_scheduler.py"
+      - "backend/app/services/yookassa_service.py"
+      - "backend/tests/test_tilda_gift_certificate_purchase_contract.py"
+      - ".github/workflows/gift-certificate-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/app/api/tilda_gift_certificate_purchase.py"
+      - "backend/app/services/gift_certificate_service.py"
+      - "backend/app/services/tilda_gift_certificate_service.py"
+      - "backend/app/services/tilda_gift_certificate_scheduler.py"
+      - "backend/app/services/yookassa_service.py"
+      - "backend/tests/test_tilda_gift_certificate_purchase_contract.py"
+      - ".github/workflows/gift-certificate-contract.yml"
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q tests/test_tilda_gift_certificate_purchase_contract.py tests/test_tilda_gift_certificate_contract.py tests/test_tilda_gift_certificate_checkout_contract.py
