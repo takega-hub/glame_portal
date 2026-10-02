@@ -19,6 +19,18 @@ def test_tilda_purchase_is_disabled_without_explicit_environment_flag(monkeypatc
     assert purchase_api._enabled() is True
 
 
+def test_tilda_purchase_amounts_match_the_public_page(monkeypatch):
+    monkeypatch.delenv("TILDA_GIFT_CERTIFICATE_PURCHASE_ALLOWED_AMOUNTS", raising=False)
+    assert purchase_api._amounts() == [
+        500_000,
+        1_000_000,
+        1_500_000,
+        2_000_000,
+        3_000_000,
+        5_000_000,
+    ]
+
+
 def test_tilda_purchase_receipt_uses_the_buyer_contact(monkeypatch):
     monkeypatch.setenv("TILDA_GIFT_CERTIFICATE_RECEIPT_VAT_CODE", "1")
     monkeypatch.setenv("TILDA_GIFT_CERTIFICATE_RECEIPT_PAYMENT_SUBJECT", "payment")
