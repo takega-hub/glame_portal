@@ -17,7 +17,6 @@ from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.tilda_gift_certificates import _origins, _require_tilda_origin
 from app.database.connection import get_db
 from app.models.gift_certificate import GiftCertificate
 from app.models.tilda_gift_certificate_purchase import TildaGiftCertificatePurchase
@@ -27,6 +26,17 @@ from app.services.yookassa_service import get_yookassa_service_for_db
 
 
 router = APIRouter()
+
+
+def _origins() -> set[str]:
+    raw = os.getenv("TILDA_GIFT_CERTIFICATE_ALLOWED_ORIGINS", "")
+    return {value.strip().rstrip("/") for value in raw.split(",") if value.strip()}
+
+
+def _require_tilda_origin(request: Request) -> None:
+    origin = str(request.headers.get("origin") or "").strip().rstrip("/")
+    if not _origins() or origin not in _origins():
+        raise HTTPException(status_code=403, detail="Request origin is not allowed")
 
 
 class Recipient(BaseModel):
